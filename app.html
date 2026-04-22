@@ -501,48 +501,149 @@ async function loadContractChecks(sel=[]){
   $('contract-checks').innerHTML=cachedCons.map(c=>`<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--txt2);text-transform:none;letter-spacing:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 7px;cursor:pointer"><input type="checkbox" value="${c.id}" ${sel.includes(String(c.id))?'checked':''} style="width:auto;background:none;border:none;padding:0"/> ${c.name} <span style="color:var(--txt3);font-size:10px">(${c.funder})</span></label>`).join('');
 }
 
-// ── AI NEXT ACTION ENGINE ──
-async function getAIActions(pid){
+// ── AI NEXT ACTION ENGINE (rules-based, no API key needed) ──
+function getAIActions(pid){
   const p=cachedP.find(x=>x.id===pid);if(!p)return;
   const btn=document.getElementById('ai-btn-'+pid);
   const out=document.getElementById('ai-out-'+pid);
   if(!btn||!out)return;
   btn.disabled=true;btn.textContent='🤖 Thinking…';
   out.style.display='block';
-  out.innerHTML='<div style="color:var(--txt3);font-size:13px;padding:8px 0">Analysing participant data…</div>';
-  const lastNotes=(p.notes||[]).slice(-3).map(n=>n.t).join(' | ');
-  const prompt=`You are an expert employability advisor assistant for a UK charity CRM. Analyse this participant and suggest specific next actions.
 
-Participant: ${p.first_name} ${p.last_name}
-Stage: ${p.stage} | Risk: ${p.risk} | Last contact: ${p.last_contact} (${days(p.last_contact)} days ago)
-Barriers: ${(p.barriers||[]).join(', ')||'None recorded'}
-Outcomes achieved: ${(p.outcomes||[]).join(', ')||'None yet'}
-Safeguarding: ${p.safeguarding||'None'}
-Recent notes: ${lastNotes||'No notes recorded'}
-Distance travelled: ${p.scores?Object.entries(p.scores).filter(([,v])=>v).map(([k,v])=>k+':'+v+'/10').join(', '):'Not recorded'}
+  setTimeout(()=>{
+    const d=days(p.last_contact);
+    const barriers=p.barriers||[];
+    const outcomes=p.outcomes||[];
+    const stage=p.stage||'Referred';
+    const risk=p.risk||'Low';
+    const sc=p.scores||{};
+    const actions=[];
+    let riskFlag='',riskLevel='low';
 
-Respond ONLY with valid JSON, no markdown:
-{"actions":[{"title":"string","why":"string","steps":"string"},{"title":"string","why":"string","steps":"string"},{"title":"string","why":"string","steps":"string"}],"risk_flag":"string or empty","risk_level":"low|medium|high"}`;
-  try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,messages:[{role:'user',content:prompt}]})});
-    const data=await res.json();
-    const text=(data.content?.[0]?.text||'').replace(/```json|```/g,'').trim();
-    const parsed=JSON.parse(text);
-    const col={'high':'var(--red)','medium':'var(--amber)','low':'var(--em)'}[parsed.risk_level]||'var(--em)';
+    // Safeguarding
+    if(p.safeguarding){
+      riskFlag=`Safeguarding concern recorded: ${p.safeguarding}. Ensure this is reviewed at next contact and escalated if needed.`;
+      riskLevel='high';
+    }
+
+    // No contact flag
+    if(d>21&&stage!=='Closed'){
+      actions.push({
+        title:'Make urgent contact — overdue',
+        why:`No contact recorded for ${d} days. Participants disengaged for 21+ days are significantly less likely to achieve outcomes.`,
+        steps:'Call first, then try WhatsApp. If no response within 48hrs, contact their referral source. Log all attempts.'
+      });
+      if(riskLevel!=='high')riskLevel='medium';
+      if(!riskFlag)riskFlag=`No contact in ${d} days — participant at risk of disengagement.`;
+    }
+
+    // Stage-based actions
+    if(stage==='Referred'){
+      actions.push({
+        title:'Complete initial assessment',
+        why:'Participant is at referral stage and needs a full initial assessment to plan their support journey.',
+        steps:'Book a 1-hour initial assessment. Cover employment history, barriers, aspirations, and complete Distance Travelled scores (confidence, work readiness, wellbeing, skills 1-10).'
+      });
+    }
+    if(stage==='Engaged'){
+      actions.push({
+        title:'Build action plan and link to contract',
+        why:'Participant is engaged but not yet in active support. An action plan will drive progression.',
+        steps:'Create a written action plan with SMART goals. Link them to the relevant contract. Agree review date in 2 weeks.'
+      });
+    }
+    if(stage==='In Support'){
+      if(outcomes.length===0){
+        actions.push({
+          title:'Review progress toward first outcome',
+          why:'Participant is in support but no outcomes recorded yet. Early outcome achievement improves sustainment rates.',
+          steps:'Review action plan against original goals. Identify the nearest achievable outcome (training course, job application, volunteering). Set a target date.'
+        });
+      }
+    }
+    if(stage==='Job Ready'){
+      actions.push({
+        title:'Connect with employer partners now',
+        why:'Participant is job ready — this is the critical moment. Every week without employment placement reduces sustainment likelihood.',
+        steps:`Check the Employer CRM for open vacancies matching their skills. Make direct introduction to at least 2 employers this week. Support with CV and interview prep.`
+      });
+    }
+    if(stage==='Outcome Achieved'){
+      actions.push({
+        title:'Set up 4-week sustainment check-in',
+        why:'Outcome achieved but not yet sustained. 12-week sustainment is required for most funder payment milestones.',
+        steps:'Schedule calls at 4, 8, and 12 weeks. Log each contact as a WhatsApp or case note. Ask about hours, pay, and any issues at work.'
+      });
+    }
+
+    // Barrier-based actions
+    if(barriers.includes('Housing')&&actions.length<3){
+      actions.push({
+        title:'Refer to housing support urgently',
+        why:'Housing instability is the single biggest predictor of programme dropout. This needs to be addressed in parallel with employment support.',
+        steps:'Refer to local authority housing team or housing association. Log referral in case notes. Follow up within 7 days to confirm referral was received.'
+      });
+    }
+    if(barriers.includes('Mental health')&&actions.length<3){
+      actions.push({
+        title:'Connect with mental health support',
+        why:'Mental health barriers, if unaddressed, significantly reduce engagement and outcome rates.',
+        steps:'Ask participant if they are currently receiving support. If not, refer to IAPT or local VCSE mental health service. Adjust contact frequency to reduce pressure.'
+      });
+    }
+    if(barriers.includes('Confidence')&&actions.length<3&&!outcomes.includes('Employment')){
+      actions.push({
+        title:'Enrol in confidence-building activity',
+        why:`Confidence scored ${sc.confidence||'low'}/10. Low confidence is a direct barrier to job applications and interviews.`,
+        steps:'Identify a short group programme, volunteering opportunity, or peer mentoring. Even 4-6 hours of structured activity can significantly improve confidence scores.'
+      });
+    }
+    if(barriers.includes('Skills gap')&&actions.length<3){
+      actions.push({
+        title:'Identify and book relevant training',
+        why:'Skills gap is a recorded barrier. Addressing this directly leads to better job match quality and sustainment.',
+        steps:'Review job market for roles they are targeting. Identify 1 qualification or short course that closes the gap. Check if funded through contract or free via local college.'
+      });
+    }
+
+    // Distance travelled prompts
+    if(sc.work_readiness&&sc.work_readiness<5&&actions.length<3){
+      actions.push({
+        title:'Intensive work readiness support needed',
+        why:`Work readiness scored ${sc.work_readiness}/10 — below the threshold for job applications. Submitting applications too early leads to rejection and demotivation.`,
+        steps:'Focus on CV, mock interviews, and employer expectations before job searching. Target 7/10 work readiness before first employer introduction.'
+      });
+    }
+
+    // Fallback if fewer than 3 actions
+    if(actions.length<3){
+      actions.push({
+        title:'Update case notes and review action plan',
+        why:'Regular case note updates ensure continuity of support and provide evidence for funder reporting.',
+        steps:'Log a case note summarising current status, progress since last contact, and next agreed steps. Update stage if it has changed.'
+      });
+    }
+    if(actions.length<3){
+      actions.push({
+        title:'Complete Distance Travelled assessment',
+        why:'Distance Travelled scores (confidence, work readiness, wellbeing, skills) are required for CBF and GLA reporting and help tailor support.',
+        steps:'Go to Edit Participant and complete all four Distance Travelled scores (1-10). Compare with intake scores to evidence progress.'
+      });
+    }
+
+    const col={'high':'var(--red)','medium':'var(--amber)','low':'var(--em)'}[riskLevel];
     out.innerHTML=`<div class="ai-panel">
       <div style="font-size:11px;font-weight:700;color:var(--em);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">🤖 AI Suggested Next Actions</div>
-      ${(parsed.actions||[]).map((a,i)=>`<div style="margin-bottom:10px;padding:10px;background:var(--card);border-radius:8px;border-left:3px solid var(--em)">
+      ${actions.slice(0,3).map((a,i)=>`<div style="margin-bottom:10px;padding:10px;background:var(--card);border-radius:8px;border-left:3px solid var(--em)">
         <div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:3px">${i+1}. ${a.title}</div>
         <div style="font-size:12px;color:var(--txt2);margin-bottom:2px"><strong>Why:</strong> ${a.why}</div>
         <div style="font-size:12px;color:var(--txt3)"><strong>How:</strong> ${a.steps}</div>
       </div>`).join('')}
-      ${parsed.risk_flag?`<div style="background:rgba(248,113,113,.1);border:1px solid ${col};border-radius:7px;padding:9px;margin-top:6px"><span style="font-size:12px;color:${col};font-weight:600">⚠ ${parsed.risk_flag}</span></div>`:''}
-      <div style="font-size:10px;color:var(--txt3);margin-top:8px;text-align:right">AI suggestions · Always use professional judgement</div>
+      ${riskFlag?`<div style="background:rgba(248,113,113,.1);border:1px solid ${col};border-radius:7px;padding:9px;margin-top:6px"><span style="font-size:12px;color:${col};font-weight:600">⚠ ${riskFlag}</span></div>`:''}
+      <div style="font-size:10px;color:var(--txt3);margin-top:8px;text-align:right">Generated from participant data · Always use professional judgement</div>
     </div>`;
-  }catch(e){
-    out.innerHTML=`<div style="color:var(--red);font-size:13px;padding:8px">Could not generate suggestions. Please try again.</div>`;
-  }
-  btn.disabled=false;btn.textContent='🤖 AI actions';
+    btn.disabled=false;btn.textContent='🤖 AI actions';
+  },800);
 }
 
 // ── PARTICIPANTS ──
