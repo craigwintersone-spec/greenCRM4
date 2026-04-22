@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>GreenCRM — Sign in</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0a0f0a;--surface:#111811;--card:#182018;--border:#2a3a2a;--em:#10b981;--em2:#059669;--txt:#e2f5eb;--txt2:#9ab8a4;--txt3:#6a8f76;--red:#f87171;--radius:10px}
+body{background:var(--bg);color:var(--txt);font-family:system-ui,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+.logo{font-size:28px;font-weight:800;color:var(--em);letter-spacing:-.5px;margin-bottom:8px}
+.logo span{color:var(--txt2);font-weight:400}
+.tagline{font-size:13px;color:var(--txt3);margin-bottom:32px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:32px;width:100%;max-width:400px}
+.tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:24px}
+.tab{flex:1;background:none;color:var(--txt2);padding:10px;font-size:14px;font-weight:600;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all .2s}
+.tab.active{color:var(--em);border-bottom-color:var(--em)}
+.pane{display:none}.pane.active{display:block}
+.form-row{margin-bottom:14px}
+label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
+input,select{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--txt);border-radius:var(--radius);padding:10px 13px;font-size:14px;font-family:inherit;outline:none;transition:border-color .2s}
+input:focus,select:focus{border-color:var(--em)}
+.btn{width:100%;background:var(--em);color:#fff;padding:12px;border-radius:var(--radius);font-size:15px;font-weight:700;cursor:pointer;border:none;margin-top:6px;transition:background .2s}
+.btn:hover{background:var(--em2)}
+.btn:disabled{opacity:.6;cursor:not-allowed}
+.msg{padding:10px 13px;border-radius:var(--radius);font-size:13px;margin-bottom:14px;display:none}
+.msg-err{background:#2a1a1a;border:1px solid #5a2a2a;color:var(--red)}
+.msg-ok{background:#1a3a2a;border:1px solid #2a5a3a;color:#34d399}
+.hint{font-size:12px;color:var(--txt3);text-align:center;margin-top:14px}
+.hint a{color:var(--em);cursor:pointer;text-decoration:none}
+.hint a:hover{text-decoration:underline}
+.section-label{font-size:10px;font-weight:700;color:var(--em);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px}
+.divider{height:1px;background:var(--border);margin:16px 0}
+</style>
+</head>
+<body>
+
+<div class="logo">Green<span>CRM</span></div>
+<div class="tagline">Built for outcomes. Not admin.</div>
+
+<div class="card">
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('signin')">Sign in</button>
+    <button class="tab" onclick="showTab('signup')">Create account</button>
+  </div>
+
+  <!-- SIGN IN -->
+  <div id="pane-signin" class="pane active">
+    <div class="msg msg-err" id="si-err"></div>
+    <div class="msg msg-ok" id="si-ok"></div>
+    <div class="form-row">
+      <label>Email</label>
+      <input type="email" id="si-email" placeholder="you@charity.org"/>
+    </div>
+    <div class="form-row">
+      <label>Password</label>
+      <input type="password" id="si-pass" placeholder="Your password"/>
+    </div>
+    <button class="btn" id="si-btn" onclick="doSignIn()">Sign in</button>
+    <div class="hint">No account? <a onclick="showTab('signup')">Create one free →</a></div>
+  </div>
+
+  <!-- SIGN UP -->
+  <div id="pane-signup" class="pane">
+    <div class="msg msg-err" id="su-err"></div>
+    <div class="msg msg-ok" id="su-ok"></div>
+    <div class="section-label">Your organisation</div>
+    <div class="form-row">
+      <label>Organisation name</label>
+      <input type="text" id="su-org" placeholder="e.g. Waltham Forest CVS"/>
+    </div>
+    <div class="form-row">
+      <label>Organisation type</label>
+      <select id="su-type">
+        <option>Employability charity</option>
+        <option>Circular economy / repair</option>
+        <option>Community organisation</option>
+        <option>Housing support</option>
+        <option>Other charity / VCSE</option>
+      </select>
+    </div>
+    <div class="divider"></div>
+    <div class="section-label">Your details</div>
+    <div class="form-row">
+      <label>Your name</label>
+      <input type="text" id="su-name" placeholder="Jane Smith"/>
+    </div>
+    <div class="form-row">
+      <label>Email</label>
+      <input type="email" id="su-email" placeholder="you@charity.org"/>
+    </div>
+    <div class="form-row">
+      <label>Password (min 8 characters)</label>
+      <input type="password" id="su-pass" placeholder="Create a password"/>
+    </div>
+    <button class="btn" id="su-btn" onclick="doSignUp()">Create free account</button>
+    <div class="hint">Already have an account? <a onclick="showTab('signin')">Sign in →</a></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SURL='https://nznfrxzgvcjhfsdaphyp.supabase.co';
+const SKEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw';
+const sb=supabase.createClient(SURL,SKEY);
+
+// Redirect if already logged in
+(async()=>{
+  const{data:{session}}=await sb.auth.getSession();
+  if(session)window.location.href='app.html';
+})();
+
+function showTab(t){
+  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',['signin','signup'][i]===t));
+  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
+  document.getElementById('pane-'+t).classList.add('active');
+}
+function showErr(id,msg){const e=document.getElementById(id);e.textContent=msg;e.style.display='block';}
+function showOk(id,msg){const e=document.getElementById(id);e.textContent=msg;e.style.display='block';}
+function hideAll(...ids){ids.forEach(id=>document.getElementById(id).style.display='none');}
+function setLoading(id,on){const b=document.getElementById(id);b.disabled=on;b.textContent=on?'Please wait…':b.id==='si-btn'?'Sign in':'Create free account';}
+
+async function doSignIn(){
+  const email=document.getElementById('si-email').value.trim();
+  const pass=document.getElementById('si-pass').value;
+  hideAll('si-err','si-ok');
+  if(!email||!pass){showErr('si-err','Please enter your email and password.');return;}
+  setLoading('si-btn',true);
+  const{error}=await sb.auth.signInWithPassword({email,password:pass});
+  setLoading('si-btn',false);
+  if(error){showErr('si-err',error.message);return;}
+  window.location.href='app.html';
+}
+
+async function doSignUp(){
+  const org=document.getElementById('su-org').value.trim();
+  const orgType=document.getElementById('su-type').value;
+  const name=document.getElementById('su-name').value.trim();
+  const email=document.getElementById('su-email').value.trim();
+  const pass=document.getElementById('su-pass').value;
+  hideAll('su-err','su-ok');
+
+  if(!org||!name||!email||!pass){showErr('su-err','Please fill in all fields.');return;}
+  if(pass.length<8){showErr('su-err','Password must be at least 8 characters.');return;}
+
+  setLoading('su-btn',true);
+
+  // Step 1: Create auth user
+  const{data,error}=await sb.auth.signUp({
+    email,password:pass,
+    options:{data:{full_name:name,org_name:org,org_type:orgType}}
+  });
+
+  if(error){setLoading('su-btn',false);showErr('su-err',error.message);return;}
+
+  const uid=data?.user?.id;
+  if(!uid){setLoading('su-btn',false);showErr('su-err','Signup failed. Please try again.');return;}
+
+  // Step 2: Create org + profile (ignore errors if tables don't exist yet)
+  try{
+    await sb.from('organisations').insert({id:uid,name:org,type:orgType,owner_id:uid,plan:'free'});
+    await sb.from('profiles').insert({id:uid,full_name:name,email,org_id:uid,role:'admin'});
+  }catch(e){console.log('Tables not set up yet:',e);}
+
+  setLoading('su-btn',false);
+  showOk('su-ok','✓ Account created! You can now sign in.');
+  
+  // Auto sign in
+  setTimeout(async()=>{
+    const{error:signInErr}=await sb.auth.signInWithPassword({email,password:pass});
+    if(!signInErr)window.location.href='app.html';
+  },1500);
+}
+
+// Enter key
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Enter')return;
+  if(document.getElementById('pane-signin').classList.contains('active'))doSignIn();
+  else doSignUp();
+});
+</script>
+</body>
+</html>
