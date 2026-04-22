@@ -150,8 +150,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <div class="nav-section">Settings</div>
   <button class="nav-btn" onclick="go('safeguarding')"><span class="icon">🔐</span><span>Safeguarding</span></button>
   <button class="nav-btn" id="nav-team" onclick="window.location.href='invite.html'" style="display:none"><span class="icon">👥</span><span>Team Management</span></button>
-  <button class="nav-btn" id="nav-settings-ext" onclick="window.location.href='settings.html'" style="display:none"><span class="icon">⚙️</span><span>Settings</span></button>
-  <button class="nav-btn" id="nav-settings-int" onclick="go('settings')"><span class="icon">⚙️</span><span>Settings</span></button>
+  <button class="nav-btn" onclick="go('settings')"><span class="icon">⚙️</span><span>Settings</span></button>
   <div class="sidebar-bottom">
     <div id="sb-free"><p style="font-size:11px;color:var(--txt3);margin-bottom:4px" id="sb-plan-label">Free plan</p><button class="upgrade-sidebar" onclick="openUpgrade()">Upgrade to Pro</button></div>
     <div id="sb-pro" style="display:none"><span class="pro-badge-sm">PRO</span><p style="font-size:11px;color:var(--txt3);margin-top:4px" id="sb-org-name"></p></div>
@@ -215,7 +214,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
 <!-- VOLUNTEERS -->
 <div id="page-volunteers" class="page">
   <div class="page-header"><div><div class="page-title">Volunteers & Staff</div></div><button class="btn btn-p btn-sm" onclick="openAddV()">+ Add</button></div>
-  <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>Skills</th><th>Hours</th><th>Status</th><th></th></tr></thead><tbody id="vol-table"></tbody></table></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>Skills</th><th>Hours</th><th>Status</th></tr></thead><tbody id="vol-table"></tbody></table></div>
 </div>
 
 <!-- EMPLOYERS -->
@@ -280,7 +279,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <div class="page-header"><div><div class="page-title">Circular Economy & Repair</div><div class="page-sub">Items · Carbon calculator · Environmental impact</div></div><button class="btn btn-p btn-sm" onclick="openAddItem()">+ Log item</button></div>
   <div class="stats-grid" id="eco-stats"></div>
   <div class="card"><div class="card-title">Environmental impact</div><div id="eco-impact" style="display:flex;flex-wrap:wrap;gap:6px"></div></div>
-  <div class="tbl-wrap"><table><thead><tr><th>Item</th><th>Category</th><th>Weight</th><th>Status</th><th>Fixer</th><th>Cohort</th><th>Outcome</th><th></th></tr></thead><tbody id="eco-table"></tbody></table></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Item</th><th>Category</th><th>Weight</th><th>Status</th><th>Fixer</th><th>Cohort</th><th>Outcome</th></tr></thead><tbody id="eco-table"></tbody></table></div>
 </div>
 
 <!-- OUTCOMES -->
@@ -518,8 +517,6 @@ async function init(){
 
   if(ROLE==='admin'){
     document.getElementById('nav-team').style.display='flex';
-    document.getElementById('nav-settings-ext').style.display='flex';
-    document.getElementById('nav-settings-int').style.display='none';
   }
 
   if(ORG){
@@ -892,23 +889,10 @@ async function renderVolunteers(){
   const{data}=await sb.from('volunteers').select('*').eq('org_id',ORG.id);
   $('vol-table').innerHTML=(data||[]).length?(data||[]).map(v=>`<tr><td class="cn">${v.first_name||''} ${v.last_name||''}</td><td><span class="badge b-vol">${v.role||''}</span></td><td style="font-size:12px;color:var(--txt2)">${v.skills||''}</td><td style="color:var(--em);font-weight:600">${v.hours||0}</td><td><span class="badge b-active">${v.status||'Active'}</span></td></tr>`).join(''):`<tr><td colspan="5" style="text-align:center;color:var(--txt3);padding:24px">No volunteers yet.</td></tr>`;
 }
-function openAddV(){editVolId=null;document.getElementById('modal-v').querySelector('h2').textContent='Add volunteer / staff';['vf-fn','vf-ln','vf-sk'].forEach(f=>$(f).value='');$('vf-role').value='Volunteer';$('modal-v').classList.add('open');}
-async function openEditV(id){
-  const{data}=await sb.from('volunteers').select('*').eq('id',id).single();
-  if(!data)return;editVolId=id;
-  document.getElementById('modal-v').querySelector('h2').textContent='Edit volunteer / staff';
-  $('vf-fn').value=data.first_name||'';$('vf-ln').value=data.last_name||'';
-  $('vf-role').value=data.role||'Volunteer';$('vf-sk').value=data.skills||'';
-  $('modal-v').classList.add('open');
-}
-async function saveV(){
-  const d={org_id:ORG.id,first_name:$('vf-fn').value,last_name:$('vf-ln').value,role:$('vf-role').value,skills:$('vf-sk').value};
-  if(editVolId)await sb.from('volunteers').update(d).eq('id',editVolId);
-  else await sb.from('volunteers').insert({...d,hours:0,status:'Active'});
-  closeModal('modal-v');renderVolunteers();
-}
+function openAddV(){['vf-fn','vf-ln','vf-sk'].forEach(f=>$(f).value='');$('modal-v').classList.add('open');}
+async function saveV(){await sb.from('volunteers').insert({org_id:ORG.id,first_name:$('vf-fn').value,last_name:$('vf-ln').value,role:$('vf-role').value,skills:$('vf-sk').value,hours:0,status:'Active'});closeModal('modal-v');renderVolunteers();}
 
-let cachedEmp=[],editVolId=null,editItemId=null;
+let cachedEmp=[];
 async function renderEmployers(){
   const{data}=await sb.from('employers').select('*').eq('org_id',ORG.id);
   cachedEmp=data||[];
@@ -962,22 +946,8 @@ async function renderCircular(){
   const sc={Collected:'b-prospect','In repair':'b-engaged',Repaired:'b-active',Resold:'b-active',Donated:'b-vol','Beyond repair':'b-lapsed'};
   $('eco-table').innerHTML=items.length?items.map(i=>`<tr><td class="cn">${i.name||''}</td><td><span class="badge b-part">${i.category||''}</span></td><td style="color:var(--em)">${i.weight_kg||0}kg</td><td><span class="badge ${sc[i.status]||''}">${i.status||''}</span></td><td style="font-size:12px">${i.fixer||'—'}</td><td style="font-size:12px">${i.cohort||'—'}</td><td><span class="badge ${i.outcome?'b-active':'b-prospect'}">${i.outcome||'Pending'}</span></td></tr>`).join(''):`<tr><td colspan="7" style="text-align:center;color:var(--txt3);padding:24px">No items yet.</td></tr>`;
 }
-function openAddItem(){editItemId=null;document.getElementById('modal-item').querySelector('h2').textContent='Log item';['it-name','it-kg','it-fixer','it-cohort'].forEach(f=>$(f).value='');$('it-st').value='Collected';$('modal-item').classList.add('open');}
-async function openEditItem(id){
-  const{data}=await sb.from('circular_items').select('*').eq('id',id).single();
-  if(!data)return;editItemId=id;
-  document.getElementById('modal-item').querySelector('h2').textContent='Edit item';
-  $('it-name').value=data.name||'';$('it-cat').value=data.category||'Small electrical';
-  $('it-kg').value=data.weight_kg||'';$('it-st').value=data.status||'Collected';
-  $('it-fixer').value=data.fixer||'';$('it-cohort').value=data.cohort||'';
-  $('modal-item').classList.add('open');
-}
-async function saveItem(){
-  const d={org_id:ORG.id,name:$('it-name').value,category:$('it-cat').value,weight_kg:parseFloat($('it-kg').value)||0,status:$('it-st').value,fixer:$('it-fixer').value,cohort:$('it-cohort').value};
-  if(editItemId)await sb.from('circular_items').update(d).eq('id',editItemId);
-  else await sb.from('circular_items').insert({...d,outcome:''});
-  closeModal('modal-item');renderCircular();
-}
+function openAddItem(){['it-name','it-kg','it-fixer','it-cohort'].forEach(f=>$(f).value='');$('modal-item').classList.add('open');}
+async function saveItem(){await sb.from('circular_items').insert({org_id:ORG.id,name:$('it-name').value,category:$('it-cat').value,weight_kg:parseFloat($('it-kg').value)||0,status:$('it-st').value,fixer:$('it-fixer').value,cohort:$('it-cohort').value,outcome:''});closeModal('modal-item');renderCircular();}
 
 async function renderRAG(){
   if(!cachedCons.length)await loadCons();
