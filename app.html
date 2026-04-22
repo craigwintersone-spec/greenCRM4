@@ -150,7 +150,8 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <div class="nav-section">Settings</div>
   <button class="nav-btn" onclick="go('safeguarding')"><span class="icon">🔐</span><span>Safeguarding</span></button>
   <button class="nav-btn" id="nav-team" onclick="window.location.href='invite.html'" style="display:none"><span class="icon">👥</span><span>Team Management</span></button>
-  <button class="nav-btn" onclick="go('settings')"><span class="icon">⚙️</span><span>Settings</span></button>
+  <button class="nav-btn" id="nav-settings-ext" onclick="window.location.href='settings.html'" style="display:none"><span class="icon">⚙️</span><span>Settings</span></button>
+  <button class="nav-btn" id="nav-settings-int" onclick="go('settings')"><span class="icon">⚙️</span><span>Settings</span></button>
   <div class="sidebar-bottom">
     <div id="sb-free"><p style="font-size:11px;color:var(--txt3);margin-bottom:4px" id="sb-plan-label">Free plan</p><button class="upgrade-sidebar" onclick="openUpgrade()">Upgrade to Pro</button></div>
     <div id="sb-pro" style="display:none"><span class="pro-badge-sm">PRO</span><p style="font-size:11px;color:var(--txt3);margin-top:4px" id="sb-org-name"></p></div>
@@ -517,6 +518,8 @@ async function init(){
 
   if(ROLE==='admin'){
     document.getElementById('nav-team').style.display='flex';
+    document.getElementById('nav-settings-ext').style.display='flex';
+    document.getElementById('nav-settings-int').style.display='none';
   }
 
   if(ORG){
