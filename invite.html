@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>GreenCRM — Team Management</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0a0f0a;--surface:#111811;--card:#182018;--border:#2a3a2a;--em:#10b981;--em2:#059669;--txt:#e2f5eb;--txt2:#9ab8a4;--txt3:#6a8f76;--red:#f87171;--amber:#f59e0b;--blue:#60a5fa;--purple:#a78bfa;--radius:10px;--radiuslg:14px}
+body{background:var(--bg);color:var(--txt);font-family:system-ui,sans-serif;font-size:14px;min-height:100vh;display:none}
+body.ready{display:block}
+button{cursor:pointer;border:none;font-family:inherit}
+input,select{font-family:inherit;font-size:13px;background:var(--card);border:1px solid var(--border);color:var(--txt);border-radius:var(--radius);padding:8px 12px;width:100%;outline:none}
+input:focus,select:focus{border-color:var(--em)}
+label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 28px;display:flex;align-items:center;justify-content:space-between}
+.logo{font-size:17px;font-weight:700;color:var(--em);letter-spacing:-.5px}
+.logo span{color:var(--txt2);font-weight:400}
+.main{max-width:900px;margin:0 auto;padding:28px}
+.btn{padding:8px 16px;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s}
+.btn-p{background:var(--em);color:#fff}.btn-p:hover{background:var(--em2)}
+.btn-ghost{background:var(--card);color:var(--txt2);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--em);color:var(--em)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-danger{background:none;color:var(--red);border:1px solid var(--border)}.btn-danger:hover{border-color:var(--red)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:20px;margin-bottom:20px}
+.card-title{font-size:13px;font-weight:700;color:var(--txt);margin-bottom:16px}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;padding:9px 12px;border-bottom:1px solid var(--border)}
+td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;color:var(--txt2);vertical-align:middle}
+tr:hover td{background:rgba(16,185,129,.03)}
+.badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px}
+.r-admin{background:#1a3a2a;color:#34d399}
+.r-manager{background:#1a2a3a;color:#60a5fa}
+.r-advisor{background:#2a1a3a;color:#a78bfa}
+.r-readonly{background:#2a2a1a;color:#f59e0b}
+.r-pending{background:#2a2a2a;color:#9ca3af}
+.form-row{margin-bottom:12px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end}
+.msg{padding:10px 13px;border-radius:var(--radius);font-size:13px;margin-bottom:14px;display:none}
+.msg-err{background:#2a1a1a;border:1px solid #5a2a2a;color:var(--red)}
+.msg-ok{background:#1a3a2a;border:1px solid #2a5a3a;color:#34d399}
+.role-desc{font-size:11px;color:var(--txt3);margin-top:4px}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;text-align:center}
+.stat-val{font-size:22px;font-weight:700;color:var(--em)}
+.stat-lbl{font-size:11px;color:var(--txt3);margin-top:2px;text-transform:uppercase;letter-spacing:.5px}
+.invite-link{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-size:12px;color:var(--txt3);font-family:monospace;word-break:break-all;margin-top:8px}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:500;align-items:center;justify-content:center;padding:16px}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radiuslg);padding:24px;width:100%;max-width:460px}
+.modal h2{font-size:17px;font-weight:700;color:var(--txt);margin-bottom:16px}
+.modal-footer{display:flex;gap:8px;margin-top:18px;justify-content:flex-end}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">Green<span>CRM</span> <span style="font-size:12px;color:var(--txt3);font-weight:400">— Team Management</span></div>
+  <div style="display:flex;gap:10px;align-items:center">
+    <span id="header-role" style="font-size:12px;color:var(--txt3)"></span>
+    <button class="btn btn-ghost btn-sm" onclick="window.location.href='app.html'">← Back to app</button>
+    <button class="btn btn-ghost btn-sm" onclick="signOut()">Sign out</button>
+  </div>
+</div>
+
+<div class="main">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+    <div>
+      <div style="font-size:20px;font-weight:700;color:var(--txt)" id="org-name">Team Management</div>
+      <div style="font-size:13px;color:var(--txt3);margin-top:2px">Invite team members · Manage roles · Track licences</div>
+    </div>
+    <button class="btn btn-p" onclick="openInvite()">+ Invite team member</button>
+  </div>
+
+  <div class="stats-row" id="stats-row"></div>
+
+  <!-- ROLE GUIDE -->
+  <div class="card">
+    <div class="card-title">Role permissions</div>
+    <table>
+      <thead><tr><th>Role</th><th>Participants</th><th>Reports & RAG</th><th>Contracts</th><th>Team mgmt</th><th>Billing</th></tr></thead>
+      <tbody>
+        <tr><td><span class="badge r-admin">Admin</span></td><td style="color:#34d399">All participants</td><td style="color:#34d399">Full access</td><td style="color:#34d399">Full access</td><td style="color:#34d399">Full access</td><td style="color:#34d399">Full access</td></tr>
+        <tr><td><span class="badge r-manager">Manager</span></td><td style="color:#60a5fa">All participants</td><td style="color:#60a5fa">Full access</td><td style="color:#60a5fa">View only</td><td style="color:#f59e0b">View only</td><td style="color:#f87171">No access</td></tr>
+        <tr><td><span class="badge r-advisor">Advisor</span></td><td style="color:#a78bfa">Own caseload only</td><td style="color:#f87171">No access</td><td style="color:#f87171">No access</td><td style="color:#f87171">No access</td><td style="color:#f87171">No access</td></tr>
+        <tr><td><span class="badge r-readonly">Read-only</span></td><td style="color:#f87171">No access</td><td style="color:#f59e0b">Reports & impact only</td><td style="color:#f87171">No access</td><td style="color:#f87171">No access</td><td style="color:#f87171">No access</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- TEAM MEMBERS -->
+  <div class="card">
+    <div class="card-title">Active team members</div>
+    <div id="team-table"><div style="color:var(--txt3);font-size:13px">Loading…</div></div>
+  </div>
+
+  <!-- PENDING INVITES -->
+  <div class="card">
+    <div class="card-title">Pending invites</div>
+    <div id="invites-table"><div style="color:var(--txt3);font-size:13px">Loading…</div></div>
+  </div>
+</div>
+
+<!-- INVITE MODAL -->
+<div class="modal-overlay" id="modal-invite">
+<div class="modal">
+  <h2>Invite team member</h2>
+  <div class="msg msg-err" id="inv-err"></div>
+  <div class="msg msg-ok" id="inv-ok"></div>
+  <div class="form-row"><label>Email address</label><input type="email" id="inv-email" placeholder="advisor@charity.org"/></div>
+  <div class="form-row">
+    <label>Role</label>
+    <select id="inv-role" onchange="updateRoleDesc()">
+      <option value="advisor">Advisor</option>
+      <option value="manager">Manager</option>
+      <option value="read-only">Read-only (funder / trustee)</option>
+      <option value="admin">Admin</option>
+    </select>
+    <div class="role-desc" id="role-desc">Can view and manage their own caseload only.</div>
+  </div>
+  <div id="invite-result" style="display:none">
+    <div style="font-size:13px;color:var(--txt2);margin-bottom:6px">Share this invite link with them:</div>
+    <div class="invite-link" id="invite-link-text"></div>
+    <button class="btn btn-ghost btn-sm" style="margin-top:8px;width:100%" onclick="copyLink()">📋 Copy link</button>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeInvite()">Close</button>
+    <button class="btn btn-p" id="inv-btn" onclick="sendInvite()">Generate invite link</button>
+  </div>
+</div></div>
+
+<!-- CHANGE ROLE MODAL -->
+<div class="modal-overlay" id="modal-role">
+<div class="modal">
+  <h2>Change role</h2>
+  <div class="form-row"><label>New role</label>
+    <select id="change-role">
+      <option value="advisor">Advisor</option>
+      <option value="manager">Manager</option>
+      <option value="read-only">Read-only</option>
+      <option value="admin">Admin</option>
+    </select>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="document.getElementById('modal-role').classList.remove('open')">Cancel</button>
+    <button class="btn btn-p" onclick="saveRoleChange()">Save</button>
+  </div>
+</div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SURL='https://nznfrxzgvcjhfsdaphyp.supabase.co';
+const SKEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw';
+const sb=supabase.createClient(SURL,SKEY);
+let USER=null,ORG=null,PROFILE=null,editingMemberId=null;
+const $=id=>document.getElementById(id);
+const roleBadge=r=>`<span class="badge r-${r?.replace('-','')}">${r||'advisor'}</span>`;
+const roleDescs={advisor:'Can view and manage their own caseload only.',manager:'Can view all participants and reports. Cannot manage billing or team.',admin:'Full access to everything including billing and team management.','read-only':'Can view reports and impact wall only. Ideal for funders and trustees.'};
+
+async function init(){
+  const{data:{session}}=await sb.auth.getSession();
+  if(!session){window.location.href='login.html';return;}
+  USER=session.user;
+  const{data:p}=await sb.from('profiles').select('*,organisations(*)').eq('id',USER.id).single();
+  if(p){PROFILE=p;ORG=p.organisations;}
+  if(PROFILE?.role!=='admin'){
+    document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#f87171;font-size:15px">Access denied — Admin only</div>';
+    return;
+  }
+  $('org-name').textContent=ORG?.name+' — Team';
+  $('header-role').textContent=`${PROFILE.full_name} · Admin`;
+  document.body.classList.add('ready');
+  loadTeam();
+}
+
+async function loadTeam(){
+  const{data:members}=await sb.from('profiles').select('*').eq('org_id',ORG.id).order('created_at');
+  const{data:invites}=await sb.from('invites').select('*').eq('org_id',ORG.id).eq('accepted',false).order('created_at',{ascending:false});
+  const all=members||[];
+  const roleCount={admin:0,manager:0,advisor:0,'read-only':0};
+  all.forEach(m=>roleCount[m.role]=(roleCount[m.role]||0)+1);
+  $('stats-row').innerHTML=[
+    {l:'Total seats',v:all.length},
+    {l:'Advisors',v:roleCount.advisor||0},
+    {l:'Managers',v:roleCount.manager||0},
+    {l:'Pending invites',v:(invites||[]).length}
+  ].map(s=>`<div class="stat"><div class="stat-val">${s.v}</div><div class="stat-lbl">${s.l}</div></div>`).join('');
+
+  $('team-table').innerHTML=all.length?`<table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>${all.map(m=>`<tr>
+    <td style="color:var(--txt);font-weight:500">${m.full_name||'—'}</td>
+    <td style="font-size:12px">${m.email||''}</td>
+    <td>${roleBadge(m.role)}</td>
+    <td><span class="badge" style="background:#1a3a2a;color:#34d399">${m.status||'active'}</span></td>
+    <td><div style="display:flex;gap:6px">
+      ${m.id!==USER.id?`<button class="btn btn-ghost btn-sm" onclick="openRoleChange('${m.id}','${m.role}')">Change role</button>
+      <button class="btn btn-danger btn-sm" onclick="removeMember('${m.id}','${m.full_name}')">Remove</button>`:'<span style="font-size:12px;color:var(--txt3)">You</span>'}
+    </div></td>
+  </tr>`).join('')}</tbody></table>`:'<div style="color:var(--txt3);font-size:13px">No team members yet.</div>';
+
+  $('invites-table').innerHTML=(invites||[]).length?`<table><thead><tr><th>Email</th><th>Role</th><th>Invited</th><th></th></tr></thead><tbody>${(invites||[]).map(inv=>`<tr>
+    <td style="color:var(--txt)">${inv.email}</td>
+    <td>${roleBadge(inv.role)}</td>
+    <td style="font-size:12px;color:var(--txt3)">${new Date(inv.created_at).toLocaleDateString('en-GB')}</td>
+    <td><div style="display:flex;gap:6px">
+      <button class="btn btn-ghost btn-sm" onclick="copyToken('${inv.token}')">Copy link</button>
+      <button class="btn btn-danger btn-sm" onclick="cancelInvite('${inv.id}')">Cancel</button>
+    </div></td>
+  </tr>`).join('')}</tbody></table>`:'<div style="color:var(--txt3);font-size:13px">No pending invites.</div>';
+}
+
+function updateRoleDesc(){$('role-desc').textContent=roleDescs[$('inv-role').value]||'';}
+function openInvite(){
+  $('inv-email').value='';$('inv-role').value='advisor';updateRoleDesc();
+  $('invite-result').style.display='none';$('inv-btn').style.display='inline-block';
+  ['inv-err','inv-ok'].forEach(id=>$(id).style.display='none');
+  $('modal-invite').classList.add('open');
+}
+function closeInvite(){$('modal-invite').classList.remove('open');loadTeam();}
+
+function genToken(){return Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);}
+
+async function sendInvite(){
+  const email=$('inv-email').value.trim(),role=$('inv-role').value;
+  ['inv-err','inv-ok'].forEach(id=>$(id).style.display='none');
+  if(!email){$('inv-err').textContent='Please enter an email.';$('inv-err').style.display='block';return;}
+  $('inv-btn').disabled=true;$('inv-btn').textContent='Generating…';
+  const token=genToken();
+  const{error}=await sb.from('invites').insert({org_id:ORG.id,email,role,invited_by:USER.id,token,accepted:false});
+  $('inv-btn').disabled=false;$('inv-btn').textContent='Generate invite link';
+  if(error){$('inv-err').textContent='Error: '+error.message;$('inv-err').style.display='block';return;}
+  const link=`${window.location.origin}/login.html?invite=${token}`;
+  $('invite-link-text').textContent=link;
+  $('invite-result').style.display='block';
+  $('inv-btn').style.display='none';
+  $('inv-ok').textContent=`✓ Invite created for ${email} as ${role}`;$('inv-ok').style.display='block';
+}
+
+function copyLink(){navigator.clipboard.writeText($('invite-link-text').textContent);$('invite-link-text').textContent='✓ Copied!';setTimeout(()=>loadTeam(),1500);}
+function copyToken(token){const link=`${window.location.origin}/login.html?invite=${token}`;navigator.clipboard.writeText(link).then(()=>alert('Invite link copied!'));}
+
+async function cancelInvite(id){
+  if(!confirm('Cancel this invite?'))return;
+  await sb.from('invites').delete().eq('id',id);
+  loadTeam();
+}
+
+let roleChangeId=null;
+function openRoleChange(id,currentRole){roleChangeId=id;$('change-role').value=currentRole;$('modal-role').classList.add('open');}
+async function saveRoleChange(){
+  if(!roleChangeId)return;
+  await sb.from('profiles').update({role:$('change-role').value}).eq('id',roleChangeId);
+  $('modal-role').classList.remove('open');loadTeam();
+}
+
+async function removeMember(id,name){
+  if(!confirm(`Remove ${name} from the team? This cannot be undone.`))return;
+  await sb.from('profiles').delete().eq('id',id);
+  loadTeam();
+}
+
+async function signOut(){await sb.auth.signOut();window.location.href='login.html';}
+init();
+</script>
+</body>
+</html>
