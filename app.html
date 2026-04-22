@@ -59,6 +59,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
 .btn-p{background:var(--em);color:#fff}.btn-p:hover{background:var(--em2)}
 .btn-ghost{background:var(--card);color:var(--txt2);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--em);color:var(--em)}
 .btn-sm{padding:5px 10px;font-size:12px}
+.btn-danger{background:none;color:var(--red);border:1px solid var(--border)}.btn-danger:hover{border-color:var(--red)}
 .sbar{display:flex;align-items:center;gap:6px}
 .strack{flex:1;height:4px;background:var(--border);border-radius:3px;max-width:55px}
 .sfill{height:100%;border-radius:3px;background:var(--em)}
@@ -149,8 +150,8 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <button class="nav-btn" onclick="go('evidence')"><span class="icon">🗂️</span><span>Evidence Hub</span></button>
   <div class="nav-section">Settings</div>
   <button class="nav-btn" onclick="go('safeguarding')"><span class="icon">🔐</span><span>Safeguarding</span></button>
-  <button class="nav-btn" id="nav-team" onclick="window.location.href='invite.html'" style="display:none"><span class="icon">👥</span><span>Team Management</span></button>
-  <button class="nav-btn" id="nav-settings-ext" onclick="window.location.href='settings.html'" style="display:none"><span class="icon">⚙️</span><span>Settings</span></button>
+  <button class="nav-btn" id="nav-team" style="display:none" onclick="window.location.href='invite.html'"><span class="icon">👥</span><span>Team Management</span></button>
+  <button class="nav-btn" id="nav-settings-ext" style="display:none" onclick="window.location.href='settings.html'"><span class="icon">⚙️</span><span>Settings</span></button>
   <button class="nav-btn" id="nav-settings-int" onclick="go('settings')"><span class="icon">⚙️</span><span>Settings</span></button>
   <div class="sidebar-bottom">
     <div id="sb-free"><p style="font-size:11px;color:var(--txt3);margin-bottom:4px" id="sb-plan-label">Free plan</p><button class="upgrade-sidebar" onclick="openUpgrade()">Upgrade to Pro</button></div>
@@ -215,7 +216,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
 <!-- VOLUNTEERS -->
 <div id="page-volunteers" class="page">
   <div class="page-header"><div><div class="page-title">Volunteers & Staff</div></div><button class="btn btn-p btn-sm" onclick="openAddV()">+ Add</button></div>
-  <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>Skills</th><th>Hours</th><th>Status</th></tr></thead><tbody id="vol-table"></tbody></table></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>Skills</th><th>Hours</th><th>Status</th><th></th></tr></thead><tbody id="vol-table"></tbody></table></div>
 </div>
 
 <!-- EMPLOYERS -->
@@ -232,41 +233,25 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <div class="kanban" id="kanban"></div>
 </div>
 
-<!-- PARTNER REFERRALS -->
-<div id="page-partnerrefs" class="page">
-  <div class="page-header">
-    <div><div class="page-title">Partner Referrals</div><div class="page-sub">Referrals submitted via the Partner Portal</div></div>
-    <a href="partner.html" target="_blank" class="btn btn-ghost btn-sm">Open Partner Portal →</a>
-  </div>
-  <div id="pref-alerts"></div>
-  <div class="toolbar">
-    <select id="pref-status" onchange="renderPartnerRefs()" style="max-width:180px">
-      <option value="">All statuses</option>
-      <option>Referred</option>
-      <option>Engaged</option>
-      <option>In delivery</option>
-      <option>Outcome achieved</option>
-      <option>Closed</option>
-    </select>
-    <select id="pref-urgency" onchange="renderPartnerRefs()" style="max-width:160px">
-      <option value="">All urgency</option>
-      <option>Crisis</option>
-      <option>Urgent</option>
-      <option>Standard</option>
-    </select>
-  </div>
-  <div class="tbl-wrap">
-    <table><thead><tr>
-      <th>Name</th><th>From</th><th>Need</th><th>Urgency</th><th>Safeguarding</th><th>Submitted</th><th>Status</th><th>Actions</th>
-    </tr></thead><tbody id="pref-table"></tbody></table>
-  </div>
-</div>
-
 <!-- REFERRALS -->
 <div id="page-referrals" class="page">
   <div class="page-header"><div><div class="page-title">Referrals</div></div><button class="btn btn-p btn-sm" onclick="openAddR()">+ New referral</button></div>
   <div id="ref-alerts"></div>
   <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Source</th><th>Status</th><th>Date</th><th>Advisor</th><th>Flag</th></tr></thead><tbody id="ref-table"></tbody></table></div>
+</div>
+
+<!-- PARTNER REFERRALS -->
+<div id="page-partnerrefs" class="page">
+  <div class="page-header">
+    <div><div class="page-title">Partner Referrals</div><div class="page-sub">Submitted via the Partner Portal</div></div>
+    <a href="partner.html" target="_blank" class="btn btn-ghost btn-sm">Open Partner Portal →</a>
+  </div>
+  <div id="pref-alerts"></div>
+  <div class="toolbar">
+    <select id="pref-status" onchange="renderPartnerRefs()" style="max-width:180px"><option value="">All statuses</option><option>Referred</option><option>Engaged</option><option>In delivery</option><option>Outcome achieved</option><option>Closed</option></select>
+    <select id="pref-urgency" onchange="renderPartnerRefs()" style="max-width:160px"><option value="">All urgency</option><option>Crisis</option><option>Urgent</option><option>Standard</option></select>
+  </div>
+  <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>From</th><th>Need</th><th>Urgency</th><th>Safeguarding</th><th>Submitted</th><th>Status</th><th>Actions</th></tr></thead><tbody id="pref-table"></tbody></table></div>
 </div>
 
 <!-- EVENTS -->
@@ -280,7 +265,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <div class="page-header"><div><div class="page-title">Circular Economy & Repair</div><div class="page-sub">Items · Carbon calculator · Environmental impact</div></div><button class="btn btn-p btn-sm" onclick="openAddItem()">+ Log item</button></div>
   <div class="stats-grid" id="eco-stats"></div>
   <div class="card"><div class="card-title">Environmental impact</div><div id="eco-impact" style="display:flex;flex-wrap:wrap;gap:6px"></div></div>
-  <div class="tbl-wrap"><table><thead><tr><th>Item</th><th>Category</th><th>Weight</th><th>Status</th><th>Fixer</th><th>Cohort</th><th>Outcome</th></tr></thead><tbody id="eco-table"></tbody></table></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Item</th><th>Category</th><th>Weight</th><th>Status</th><th>Fixer</th><th>Cohort</th><th>Outcome</th><th></th></tr></thead><tbody id="eco-table"></tbody></table></div>
 </div>
 
 <!-- OUTCOMES -->
@@ -306,30 +291,10 @@ tr:hover td{background:rgba(16,185,129,.03)}
 <div id="page-reports" class="page">
   <div class="page-header"><div><div class="page-title">Funder Report Generator</div><div class="page-sub">One-click reports · MoJ · GLA · CBF · UKSPF</div></div></div>
   <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:20px">
-    <div class="report-card card" onclick="generateReport('moj')">
-      <div style="font-size:28px;margin-bottom:8px">⚖️</div>
-      <div style="font-size:15px;font-weight:700;color:var(--txt);margin-bottom:4px">MoJ Report</div>
-      <div style="font-size:12px;color:var(--txt3);margin-bottom:12px">Ministry of Justice · Employment & desistance · Payment by results</div>
-      <button class="btn btn-p btn-sm" onclick="event.stopPropagation();generateReport('moj')">Generate →</button>
-    </div>
-    <div class="report-card card" onclick="generateReport('gla')">
-      <div style="font-size:28px;margin-bottom:8px">🏙️</div>
-      <div style="font-size:15px;font-weight:700;color:var(--txt);margin-bottom:4px">GLA Report</div>
-      <div style="font-size:12px;color:var(--txt3);margin-bottom:12px">Greater London Authority · Good jobs · Skills & training · LLW</div>
-      <button class="btn btn-p btn-sm" onclick="event.stopPropagation();generateReport('gla')">Generate →</button>
-    </div>
-    <div class="report-card card" onclick="generateReport('cbf')">
-      <div style="font-size:28px;margin-bottom:8px">🌉</div>
-      <div style="font-size:15px;font-weight:700;color:var(--txt);margin-bottom:4px">CBF Report</div>
-      <div style="font-size:12px;color:var(--txt3);margin-bottom:12px">City Bridge Foundation · Wellbeing · Distance travelled · Community impact</div>
-      <button class="btn btn-p btn-sm" onclick="event.stopPropagation();generateReport('cbf')">Generate →</button>
-    </div>
-    <div class="report-card card" onclick="generateReport('ukspf')">
-      <div style="font-size:28px;margin-bottom:8px">🇬🇧</div>
-      <div style="font-size:15px;font-weight:700;color:var(--txt);margin-bottom:4px">UKSPF Report</div>
-      <div style="font-size:12px;color:var(--txt3);margin-bottom:12px">UK Shared Prosperity Fund · Outputs · Outcomes · Circular economy</div>
-      <button class="btn btn-p btn-sm" onclick="event.stopPropagation();generateReport('ukspf')">Generate →</button>
-    </div>
+    <div class="report-card card" onclick="generateReport('moj')"><div style="font-size:28px;margin-bottom:8px">⚖️</div><div style="font-size:15px;font-weight:700;color:var(--txt);margin-bottom:4px">MoJ Report</div><div style="font-size:12px;color:var(--txt3);margin-bottom:12px">Ministry of Justice · Employment & desistance · Payment by results</div><button class="btn btn-p btn-sm" onclick="event.stopPropagation();generateReport('moj')">Generate →</button></div>
+    <div class="report-card card" onclick="generateReport('gla')"><div style="font-size:28px;margin-bottom:8px">🏙️</div><div style="font-size:15px;font-weight:700;color:var(--txt);margin-bottom:4px">GLA Report</div><div style="font-size:12px;color:var(--txt3);margin-bottom:12px">Greater London Authority · Good jobs · Skills & training · LLW</div><button class="btn btn-p btn-sm" onclick="event.stopPropagation();generateReport('gla')">Generate →</button></div>
+    <div class="report-card card" onclick="generateReport('cbf')"><div style="font-size:28px;margin-bottom:8px">🌉</div><div style="font-size:15px;font-weight:700;color:var(--txt);margin-bottom:4px">CBF Report</div><div style="font-size:12px;color:var(--txt3);margin-bottom:12px">City Bridge Foundation · Wellbeing · Distance travelled · Community</div><button class="btn btn-p btn-sm" onclick="event.stopPropagation();generateReport('cbf')">Generate →</button></div>
+    <div class="report-card card" onclick="generateReport('ukspf')"><div style="font-size:28px;margin-bottom:8px">🇬🇧</div><div style="font-size:15px;font-weight:700;color:var(--txt);margin-bottom:4px">UKSPF Report</div><div style="font-size:12px;color:var(--txt3);margin-bottom:12px">UK Shared Prosperity Fund · Outputs · Outcomes · Circular economy</div><button class="btn btn-p btn-sm" onclick="event.stopPropagation();generateReport('ukspf')">Generate →</button></div>
   </div>
   <div id="report-output" style="display:none"></div>
 </div>
@@ -366,34 +331,18 @@ tr:hover td{background:rgba(16,185,129,.03)}
 <div class="modal-overlay" id="modal-p">
 <div class="modal"><h2 id="mp-title">Add participant</h2>
   <div class="form-grid-2"><div class="form-row"><label>First name</label><input id="mp-fn"/></div><div class="form-row"><label>Last name</label><input id="mp-ln"/></div></div>
-  <div class="form-grid-2">
-    <div class="form-row"><label>Referral source</label><select id="mp-rs"><option>Self-referral</option><option>Probation</option><option>Jobcentre Plus</option><option>Community org</option><option>School / college</option></select></div>
-    <div class="form-row"><label>Advisor</label><select id="mp-adv"><option>Sarah T.</option><option>Marcus O.</option><option>Priya S.</option><option>Unassigned</option></select></div>
-  </div>
-  <div class="form-grid-2">
-    <div class="form-row"><label>Stage</label><select id="mp-st"><option>Referred</option><option>Engaged</option><option>In Support</option><option>Job Ready</option><option>Outcome Achieved</option><option>Sustained</option><option>Closed</option></select></div>
-    <div class="form-row"><label>Risk level</label><select id="mp-risk"><option>Low</option><option>Medium</option><option>High</option></select></div>
-  </div>
+  <div class="form-grid-2"><div class="form-row"><label>Referral source</label><select id="mp-rs"><option>Self-referral</option><option>Probation</option><option>Jobcentre Plus</option><option>Community org</option><option>School / college</option></select></div><div class="form-row"><label>Advisor</label><select id="mp-adv"><option>Sarah T.</option><option>Marcus O.</option><option>Priya S.</option><option>Unassigned</option></select></div></div>
+  <div class="form-grid-2"><div class="form-row"><label>Stage</label><select id="mp-st"><option>Referred</option><option>Engaged</option><option>In Support</option><option>Job Ready</option><option>Outcome Achieved</option><option>Sustained</option><option>Closed</option></select></div><div class="form-row"><label>Risk level</label><select id="mp-risk"><option>Low</option><option>Medium</option><option>High</option></select></div></div>
   <div class="form-row"><label>Linked contracts</label><div id="contract-checks" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px"></div></div>
   <div class="form-row"><label>Barriers</label><div id="barrier-checks" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px"></div></div>
   <div class="form-row"><label>Outcomes achieved</label><div id="outcome-checks" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px"></div></div>
   <div class="form-row"><label>Safeguarding flag</label><select id="mp-safe"><option value="">None</option><option>Domestic abuse</option><option>Mental health</option><option>Substance misuse</option><option>Homelessness risk</option></select></div>
-  <div class="score-box">
-    <div class="score-label">Distance Travelled (1–10)</div>
-    <div class="form-grid-2">
-      <div class="form-row"><label>Confidence</label><input type="number" id="mp-conf" min="1" max="10" placeholder="1–10"/></div>
-      <div class="form-row"><label>Work readiness</label><input type="number" id="mp-work" min="1" max="10" placeholder="1–10"/></div>
-    </div>
-    <div class="form-grid-2">
-      <div class="form-row"><label>Wellbeing</label><input type="number" id="mp-well" min="1" max="10" placeholder="1–10"/></div>
-      <div class="form-row"><label>Skills</label><input type="number" id="mp-skills" min="1" max="10" placeholder="1–10"/></div>
-    </div>
+  <div class="score-box"><div class="score-label">Distance Travelled (1–10)</div>
+    <div class="form-grid-2"><div class="form-row"><label>Confidence</label><input type="number" id="mp-conf" min="1" max="10" placeholder="1–10"/></div><div class="form-row"><label>Work readiness</label><input type="number" id="mp-work" min="1" max="10" placeholder="1–10"/></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Wellbeing</label><input type="number" id="mp-well" min="1" max="10" placeholder="1–10"/></div><div class="form-row"><label>Skills</label><input type="number" id="mp-skills" min="1" max="10" placeholder="1–10"/></div></div>
   </div>
   <div class="form-row"><label>Case note</label><textarea id="mp-note" placeholder="Initial assessment…"></textarea></div>
-  <div class="score-box">
-    <div class="score-label">📱 WhatsApp / SMS log</div>
-    <textarea id="mp-whatsapp" placeholder="Paste or summarise WhatsApp / SMS exchange…" style="min-height:60px"></textarea>
-  </div>
+  <div class="score-box"><div class="score-label">📱 WhatsApp / SMS log</div><textarea id="mp-whatsapp" placeholder="Paste or summarise WhatsApp / SMS exchange…" style="min-height:60px"></textarea></div>
   <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-p')">Cancel</button><button class="btn btn-p" id="save-p-btn" onclick="saveP()">Save</button></div>
 </div></div>
 
@@ -406,9 +355,11 @@ tr:hover td{background:rgba(16,185,129,.03)}
 </div></div>
 
 <div class="modal-overlay" id="modal-v">
-<div class="modal"><h2>Add volunteer / staff</h2>
+<div class="modal"><h2 id="vol-title">Add volunteer / staff</h2>
   <div class="form-grid-2"><div class="form-row"><label>First name</label><input id="vf-fn"/></div><div class="form-row"><label>Last name</label><input id="vf-ln"/></div></div>
-  <div class="form-grid-2"><div class="form-row"><label>Role</label><select id="vf-role"><option>Volunteer</option><option>Fixer</option><option>Advisor</option><option>Manager</option></select></div><div class="form-row"><label>Skills</label><input id="vf-sk" placeholder="e.g. Electrical, CV writing"/></div></div>
+  <div class="form-grid-2"><div class="form-row"><label>Role</label><select id="vf-role"><option>Volunteer</option><option>Fixer</option><option>Advisor</option><option>Manager</option><option>Admin</option></select></div><div class="form-row"><label>Skills</label><input id="vf-sk" placeholder="e.g. Electrical, CV writing"/></div></div>
+  <div class="form-grid-2"><div class="form-row"><label>Hours logged</label><input type="number" id="vf-hours" placeholder="0"/></div><div class="form-row"><label>Status</label><select id="vf-status"><option>Active</option><option>Inactive</option><option>On leave</option></select></div></div>
+  <div class="form-row"><label>Notes</label><textarea id="vf-notes" placeholder="Any notes about this person…" style="min-height:60px"></textarea></div>
   <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-v')">Cancel</button><button class="btn btn-p" onclick="saveV()">Save</button></div>
 </div></div>
 
@@ -438,10 +389,11 @@ tr:hover td{background:rgba(16,185,129,.03)}
 </div></div>
 
 <div class="modal-overlay" id="modal-item">
-<div class="modal"><h2>Log item</h2>
+<div class="modal"><h2 id="item-title">Log item</h2>
   <div class="form-grid-2"><div class="form-row"><label>Item</label><input id="it-name" placeholder="Toaster, drill…"/></div><div class="form-row"><label>Category</label><select id="it-cat"><option>Small electrical</option><option>Clothing</option><option>Furniture</option><option>Bike</option><option>Electronics</option></select></div></div>
   <div class="form-grid-2"><div class="form-row"><label>Weight (kg)</label><input type="number" id="it-kg"/></div><div class="form-row"><label>Status</label><select id="it-st"><option>Collected</option><option>In repair</option><option>Repaired</option><option>Resold</option><option>Donated</option><option>Beyond repair</option></select></div></div>
   <div class="form-grid-2"><div class="form-row"><label>Fixer</label><input id="it-fixer"/></div><div class="form-row"><label>Cohort</label><input id="it-cohort"/></div></div>
+  <div class="form-row"><label>Outcome</label><select id="it-outcome"><option value="">Pending</option><option>Resold</option><option>Donated</option><option>Returned to owner</option><option>Scrapped</option></select></div>
   <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-item')">Cancel</button><button class="btn btn-p" onclick="saveItem()">Save</button></div>
 </div></div>
 
@@ -470,7 +422,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
     <li><span style="color:var(--em)">✓</span> AI Next Action Engine</li>
     <li><span style="color:var(--em)">✓</span> RAG dashboard & carbon calculator</li>
     <li><span style="color:var(--em)">✓</span> Evidence hub & audit trail</li>
-    <li><span style="color:var(--em)">✓</span> Partner portal access</li>
+    <li><span style="color:var(--em)">✓</span> Partner portal & team management</li>
   </ul>
   <button class="up-cta" onclick="closeModal('modal-upgrade')">Contact us — hello@greencrm.co.uk</button>
   <div style="text-align:center;margin-top:10px"><button class="btn btn-ghost btn-sm" onclick="closeModal('modal-upgrade')">Maybe later</button></div>
@@ -485,43 +437,35 @@ const sb=supabase.createClient(SURL,SKEY);
 const BARRIERS=['Housing','Confidence','Skills gap','Transport','Childcare','Mental health','Substance misuse','Criminal record','Language','Benefits'];
 const OUT_TYPES=['Employment','Training','Qualification','Volunteering','Wellbeing','Housing secured'];
 const P_STAGES=['Referred','Engaged','In Support','Job Ready','Outcome Achieved','Sustained','Closed'];
-let USER=null,ORG=null,PROFILE=null,ROLE=null,dChart=null,iChart=null,editPId=null,editEmpId=null,caseNoteId=null;
+let USER=null,ORG=null,PROFILE=null,ROLE=null;
+let dChart=null,iChart=null,editPId=null,editEmpId=null,editVolId=null,editItemId=null,caseNoteId=null;
+let cachedP=[],cachedCons=[],cachedEmp=[],cachedPRefs=[];
+
 const $=id=>document.getElementById(id);
 const days=d=>d?Math.floor((Date.now()-new Date(d))/86400000):9999;
 const fmtD=d=>d?new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}):'—';
 const ini=(f,l)=>(f?.[0]||'')+(l?.[0]||'');
 const rCls=r=>r==='High'?'risk-hi':r==='Medium'?'risk-med':'risk-lo';
 const chks=cid=>[...document.querySelectorAll(`#${cid} input[type=checkbox]:checked`)].map(x=>x.value);
+const calcCarbon=kg=>(kg*2.5).toFixed(1);
 function mkChks(cid,items,sel=[]){$(cid).innerHTML=items.map(b=>`<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--txt2);text-transform:none;letter-spacing:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 7px;cursor:pointer"><input type="checkbox" value="${b}" ${sel.includes(b)?'checked':''} style="width:auto;background:none;border:none;padding:0"/> ${b}</label>`).join('');}
 function setBtn(id,on,lbl){const b=$(id);if(!b)return;b.disabled=on;b.textContent=on?'Saving…':lbl;}
 function closeModal(id){$(id).classList.remove('open');}
 function openUpgrade(){$('modal-upgrade').classList.add('open');}
-function calcCarbon(kg){return(kg*2.5).toFixed(1);}
 
+// ── INIT ──
 async function init(){
   const{data:{session}}=await sb.auth.getSession();
   if(!session){window.location.href='login.html';return;}
   USER=session.user;
   const{data:p}=await sb.from('profiles').select('*,organisations(*)').eq('id',USER.id).single();
   if(p){PROFILE=p;ORG=p.organisations;ROLE=p.role||'advisor';}
-
-  // Role-based UI
-  if(ROLE==='read-only'){
-    // Read-only: only reports and impact
-    document.querySelectorAll('.nav-btn').forEach(b=>b.style.display='none');
-    document.querySelectorAll('.nav-section').forEach(s=>s.style.display='none');
-    document.getElementById('sidebar').innerHTML+=`
-      <div style="padding:10px 18px 4px;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px">Reports</div>
-      <button class="nav-btn active" onclick="go('reports')" style="display:flex"><span class="icon">📄</span><span>Funder Reports</span></button>
-      <button class="nav-btn" onclick="go('impact')" style="display:flex"><span class="icon">🌿</span><span>Impact Wall</span></button>`;
-  }
-
+  if(ROLE==='read-only'){window.location.href='reports.html';return;}
   if(ROLE==='admin'){
-    document.getElementById('nav-team').style.display='flex';
-    document.getElementById('nav-settings-ext').style.display='flex';
-    document.getElementById('nav-settings-int').style.display='none';
+    $('nav-team').style.display='flex';
+    $('nav-settings-ext').style.display='flex';
+    $('nav-settings-int').style.display='none';
   }
-
   if(ORG){
     $('sb-org-name').textContent=ORG.name;
     $('dash-org-name').textContent=ORG.name;
@@ -529,127 +473,30 @@ async function init(){
     else $('sb-plan-label').textContent=`${ROLE} · ${ORG.name}`;
   }
   document.body.classList.add('ready');
-
-  // Role-based default page
-  if(ROLE==='read-only')go('reports');
-  else go('participants');
+  go('participants');
 }
 async function signOut(){await sb.auth.signOut();window.location.href='login.html';}
 
+// ── NAV ──
 function go(page){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   $('page-'+page).classList.add('active');
-  const lbl={dashboard:'Dashboard',rag:'RAG Dashboard',impact:'Impact',participants:'Participants',contacts:'Contacts',volunteers:'Volunteers',employers:'Employers',pipeline:'Pipeline',referrals:'Referrals',events:'Events',circular:'Circular',outcomes:'Outcomes',funding:'Funding',reports:'Funder Reports',evidence:'Evidence Hub',safeguarding:'Safeguarding',settings:'Settings'};
+  const lbl={dashboard:'Dashboard',rag:'RAG Dashboard',impact:'Impact Wall',participants:'Participants',contacts:'Contacts & Donors',volunteers:'Volunteers & Staff',employers:'Employers',pipeline:'Caseload Pipeline',referrals:'Referrals',partnerrefs:'Partner Referrals',events:'Events & Workshops',circular:'Circular Economy',outcomes:'Outcomes',funding:'Funding & Contracts',reports:'Funder Reports',evidence:'Evidence Hub',safeguarding:'Safeguarding',settings:'Settings'};
   document.querySelectorAll('.nav-btn').forEach(b=>{if(b.querySelector('span:not(.icon)')?.textContent===lbl[page])b.classList.add('active');});
   ({dashboard:renderDashboard,rag:renderRAG,impact:renderImpact,participants:renderParticipants,contacts:renderContacts,volunteers:renderVolunteers,employers:renderEmployers,pipeline:renderPipeline,referrals:renderReferrals,partnerrefs:renderPartnerRefs,events:renderEvents,circular:renderCircular,outcomes:renderOutcomes,funding:renderFunding,reports:()=>{},evidence:renderEvidence,safeguarding:renderSafeguarding,settings:renderSettings})[page]?.();
 }
 
-let cachedP=[],cachedCons=[];
+// ── DATA LOADERS ──
 async function loadP(){const{data}=await sb.from('participants').select('*').eq('org_id',ORG.id).order('created_at',{ascending:false});cachedP=data||[];return cachedP;}
 async function loadCons(){const{data}=await sb.from('contracts').select('*').eq('org_id',ORG.id);cachedCons=data||[];return cachedCons;}
-
 async function loadContractChecks(sel=[]){
   if(!cachedCons.length)await loadCons();
   if(!cachedCons.length){$('contract-checks').innerHTML='<span style="font-size:12px;color:var(--txt3)">Add contracts first in Funding & Contracts</span>';return;}
   $('contract-checks').innerHTML=cachedCons.map(c=>`<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--txt2);text-transform:none;letter-spacing:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 7px;cursor:pointer"><input type="checkbox" value="${c.id}" ${sel.includes(String(c.id))?'checked':''} style="width:auto;background:none;border:none;padding:0"/> ${c.name} <span style="color:var(--txt3);font-size:10px">(${c.funder})</span></label>`).join('');
 }
 
-// ── PARTNER REFERRALS ──
-let cachedPRefs=[];
-async function renderPartnerRefs(){
-  if(!cachedPRefs.length){
-    const{data}=await sb.from('partner_referrals').select('*').order('created_at',{ascending:false});
-    cachedPRefs=data||[];
-  }
-  const sf=($('pref-status')||{}).value||'';
-  const uf=($('pref-urgency')||{}).value||'';
-  const flt=cachedPRefs.filter(r=>(!sf||r.status===sf)&&(!uf||r.urgency===uf));
-
-  // Urgent alerts
-  const crisis=cachedPRefs.filter(r=>r.urgency==='Crisis'&&r.status==='Referred');
-  const urgent=cachedPRefs.filter(r=>r.urgency==='Urgent'&&r.status==='Referred');
-  let alerts='';
-  if(crisis.length)alerts+=`<div class="alert alert-danger">🚨 ${crisis.length} CRISIS referral(s) requiring same-day response: ${crisis.map(r=>r.first_name+' '+r.last_name).join(', ')}</div>`;
-  if(urgent.length)alerts+=`<div class="alert alert-warn">⚠ ${urgent.length} URGENT referral(s) requiring 48hr response: ${urgent.map(r=>r.first_name+' '+r.last_name).join(', ')}</div>`;
-  $('pref-alerts').innerHTML=alerts;
-
-  const urgColor={'Crisis':'var(--red)','Urgent':'var(--amber)','Standard':'var(--txt3)'};
-  const stBadge={'Referred':'b-ref','Engaged':'b-engaged','In delivery':'b-inprog','Outcome achieved':'b-active','Closed':'b-closed'};
-
-  $('pref-table').innerHTML=flt.length?flt.map(r=>`<tr>
-    <td><div class="cn">${r.first_name||''} ${r.last_name||''}</div>${r.partner_ref?`<div style="font-size:11px;color:var(--txt3)">Ref: ${r.partner_ref}</div>`:''}</td>
-    <td style="font-size:12px;color:var(--txt2)">${r.partner_name||'Partner'}</td>
-    <td style="font-size:12px">${r.primary_need||'—'}</td>
-    <td><span style="font-size:12px;font-weight:600;color:${urgColor[r.urgency]||'var(--txt3)'}">${r.urgency||'Standard'}</span></td>
-    <td>${r.safeguarding?`<span class="safe-flag">🔐 ${r.safeguarding}</span>`:'—'}</td>
-    <td style="font-size:11px;color:var(--txt3)">${fmtD(r.created_at)}</td>
-    <td><span class="badge ${stBadge[r.status]||'b-ref'}">${r.status||'Referred'}</span></td>
-    <td><div style="display:flex;gap:4px">
-      <button class="btn btn-ghost btn-sm" onclick="viewPartnerRef(${r.id})">View</button>
-      <button class="btn btn-p btn-sm" onclick="convertToParticipant(${r.id})">+ Add to CRM</button>
-    </div></td>
-  </tr>`).join(''):`<tr><td colspan="8" style="text-align:center;color:var(--txt3);padding:24px">No partner referrals yet. Share the partner portal link with referral partners.</td></tr>`;
-}
-
-function viewPartnerRef(id){
-  const r=cachedPRefs.find(x=>x.id===id);if(!r)return;
-  const m=document.createElement('div');m.className='modal-overlay open';
-  m.innerHTML=`<div class="modal" style="max-width:540px">
-    <h2>${r.first_name||''} ${r.last_name||''} — Partner Referral</h2>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-      <div style="background:var(--card);padding:10px;border-radius:var(--radius)"><div style="font-size:11px;color:var(--txt3)">FROM</div><div style="font-size:13px;color:var(--txt)">${r.partner_name||'—'}</div></div>
-      <div style="background:var(--card);padding:10px;border-radius:var(--radius)"><div style="font-size:11px;color:var(--txt3)">SUBMITTED</div><div style="font-size:13px;color:var(--txt)">${fmtD(r.created_at)}</div></div>
-      <div style="background:var(--card);padding:10px;border-radius:var(--radius)"><div style="font-size:11px;color:var(--txt3)">PRIMARY NEED</div><div style="font-size:13px;color:var(--txt)">${r.primary_need||'—'}</div></div>
-      <div style="background:var(--card);padding:10px;border-radius:var(--radius)"><div style="font-size:11px;color:var(--txt3)">URGENCY</div><div style="font-size:13px;color:var(--txt);font-weight:600">${r.urgency||'Standard'}</div></div>
-      <div style="background:var(--card);padding:10px;border-radius:var(--radius)"><div style="font-size:11px;color:var(--txt3)">PHONE</div><div style="font-size:13px;color:var(--txt)">${r.phone||'—'}</div></div>
-      <div style="background:var(--card);padding:10px;border-radius:var(--radius)"><div style="font-size:11px;color:var(--txt3)">EMAIL</div><div style="font-size:13px;color:var(--txt)">${r.email||'—'}</div></div>
-    </div>
-    ${r.notes?`<div style="background:var(--card);padding:12px;border-radius:var(--radius);margin-bottom:10px"><div style="font-size:11px;color:var(--txt3);margin-bottom:4px">BACKGROUND & REASON</div><div style="font-size:13px;color:var(--txt2);line-height:1.6">${r.notes}</div></div>`:''}
-    ${r.barriers?.length?`<div style="background:var(--card);padding:12px;border-radius:var(--radius);margin-bottom:10px"><div style="font-size:11px;color:var(--txt3);margin-bottom:6px">BARRIERS</div><div style="display:flex;flex-wrap:wrap;gap:4px">${r.barriers.map(b=>`<span class="badge b-flag">${b}</span>`).join('')}</div></div>`:''}
-    ${r.safeguarding?`<div style="background:#2a1a2a;border:1px solid #5a2a3a;padding:12px;border-radius:var(--radius);margin-bottom:10px"><div style="font-size:12px;color:#f9a8d4;font-weight:600">🔐 Safeguarding concern: ${r.safeguarding}</div></div>`:''}
-    <div style="margin-bottom:14px">
-      <label style="margin-bottom:6px">Update status</label>
-      <select id="pref-status-update" style="max-width:250px">
-        <option ${r.status==='Referred'?'selected':''}>Referred</option>
-        <option ${r.status==='Engaged'?'selected':''}>Engaged</option>
-        <option ${r.status==='In delivery'?'selected':''}>In delivery</option>
-        <option ${r.status==='Outcome achieved'?'selected':''}>Outcome achieved</option>
-        <option ${r.status==='Closed'?'selected':''}>Closed</option>
-      </select>
-    </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-p btn-sm" onclick="updatePartnerRefStatus(${r.id},document.getElementById('pref-status-update').value);this.closest('.modal-overlay').remove()">Save status</button>
-      <button class="btn btn-p btn-sm" onclick="convertToParticipant(${r.id});this.closest('.modal-overlay').remove()">+ Add to CRM</button>
-      <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-overlay').remove()">Close</button>
-    </div>
-  </div>`;
-  document.body.appendChild(m);
-}
-
-async function updatePartnerRefStatus(id,status){
-  await sb.from('partner_referrals').update({status}).eq('id',id);
-  cachedPRefs=[];renderPartnerRefs();
-}
-
-function convertToParticipant(id){
-  const r=cachedPRefs.find(x=>x.id===id);if(!r)return;
-  // Pre-fill participant modal with partner referral data
-  openAddP();
-  setTimeout(()=>{
-    $('mp-fn').value=r.first_name||'';
-    $('mp-ln').value=r.last_name||'';
-    $('mp-rs').value='Community org';
-    $('mp-note').value=`Referred by ${r.partner_name||'partner'}. ${r.notes||''}`.trim();
-    if(r.safeguarding)$('mp-safe').value=r.safeguarding;
-    // Pre-tick barriers
-    if(r.barriers?.length){
-      document.querySelectorAll('#barrier-checks input[type=checkbox]').forEach(cb=>{
-        if(r.barriers.includes(cb.value))cb.checked=true;
-      });
-    }
-  },100);
-}
+// ── AI NEXT ACTION ENGINE ──
 function getAIActions(pid){
   const p=cachedP.find(x=>x.id===pid);if(!p)return;
   const btn=document.getElementById('ai-btn-'+pid);
@@ -657,175 +504,56 @@ function getAIActions(pid){
   if(!btn||!out)return;
   btn.disabled=true;btn.textContent='🤖 Thinking…';
   out.style.display='block';
-
   setTimeout(()=>{
-    const d=days(p.last_contact);
-    const barriers=p.barriers||[];
-    const outcomes=p.outcomes||[];
-    const stage=p.stage||'Referred';
-    const risk=p.risk||'Low';
-    const sc=p.scores||{};
-    const actions=[];
-    let riskFlag='',riskLevel='low';
-
-    // Safeguarding
-    if(p.safeguarding){
-      riskFlag=`Safeguarding concern recorded: ${p.safeguarding}. Ensure this is reviewed at next contact and escalated if needed.`;
-      riskLevel='high';
-    }
-
-    // No contact flag
-    if(d>21&&stage!=='Closed'){
-      actions.push({
-        title:'Make urgent contact — overdue',
-        why:`No contact recorded for ${d} days. Participants disengaged for 21+ days are significantly less likely to achieve outcomes.`,
-        steps:'Call first, then try WhatsApp. If no response within 48hrs, contact their referral source. Log all attempts.'
-      });
-      if(riskLevel!=='high')riskLevel='medium';
-      if(!riskFlag)riskFlag=`No contact in ${d} days — participant at risk of disengagement.`;
-    }
-
-    // Stage-based actions
-    if(stage==='Referred'){
-      actions.push({
-        title:'Complete initial assessment',
-        why:'Participant is at referral stage and needs a full initial assessment to plan their support journey.',
-        steps:'Book a 1-hour initial assessment. Cover employment history, barriers, aspirations, and complete Distance Travelled scores (confidence, work readiness, wellbeing, skills 1-10).'
-      });
-    }
-    if(stage==='Engaged'){
-      actions.push({
-        title:'Build action plan and link to contract',
-        why:'Participant is engaged but not yet in active support. An action plan will drive progression.',
-        steps:'Create a written action plan with SMART goals. Link them to the relevant contract. Agree review date in 2 weeks.'
-      });
-    }
-    if(stage==='In Support'){
-      if(outcomes.length===0){
-        actions.push({
-          title:'Review progress toward first outcome',
-          why:'Participant is in support but no outcomes recorded yet. Early outcome achievement improves sustainment rates.',
-          steps:'Review action plan against original goals. Identify the nearest achievable outcome (training course, job application, volunteering). Set a target date.'
-        });
-      }
-    }
-    if(stage==='Job Ready'){
-      actions.push({
-        title:'Connect with employer partners now',
-        why:'Participant is job ready — this is the critical moment. Every week without employment placement reduces sustainment likelihood.',
-        steps:`Check the Employer CRM for open vacancies matching their skills. Make direct introduction to at least 2 employers this week. Support with CV and interview prep.`
-      });
-    }
-    if(stage==='Outcome Achieved'){
-      actions.push({
-        title:'Set up 4-week sustainment check-in',
-        why:'Outcome achieved but not yet sustained. 12-week sustainment is required for most funder payment milestones.',
-        steps:'Schedule calls at 4, 8, and 12 weeks. Log each contact as a WhatsApp or case note. Ask about hours, pay, and any issues at work.'
-      });
-    }
-
-    // Barrier-based actions
-    if(barriers.includes('Housing')&&actions.length<3){
-      actions.push({
-        title:'Refer to housing support urgently',
-        why:'Housing instability is the single biggest predictor of programme dropout. This needs to be addressed in parallel with employment support.',
-        steps:'Refer to local authority housing team or housing association. Log referral in case notes. Follow up within 7 days to confirm referral was received.'
-      });
-    }
-    if(barriers.includes('Mental health')&&actions.length<3){
-      actions.push({
-        title:'Connect with mental health support',
-        why:'Mental health barriers, if unaddressed, significantly reduce engagement and outcome rates.',
-        steps:'Ask participant if they are currently receiving support. If not, refer to IAPT or local VCSE mental health service. Adjust contact frequency to reduce pressure.'
-      });
-    }
-    if(barriers.includes('Confidence')&&actions.length<3&&!outcomes.includes('Employment')){
-      actions.push({
-        title:'Enrol in confidence-building activity',
-        why:`Confidence scored ${sc.confidence||'low'}/10. Low confidence is a direct barrier to job applications and interviews.`,
-        steps:'Identify a short group programme, volunteering opportunity, or peer mentoring. Even 4-6 hours of structured activity can significantly improve confidence scores.'
-      });
-    }
-    if(barriers.includes('Skills gap')&&actions.length<3){
-      actions.push({
-        title:'Identify and book relevant training',
-        why:'Skills gap is a recorded barrier. Addressing this directly leads to better job match quality and sustainment.',
-        steps:'Review job market for roles they are targeting. Identify 1 qualification or short course that closes the gap. Check if funded through contract or free via local college.'
-      });
-    }
-
-    // Distance travelled prompts
-    if(sc.work_readiness&&sc.work_readiness<5&&actions.length<3){
-      actions.push({
-        title:'Intensive work readiness support needed',
-        why:`Work readiness scored ${sc.work_readiness}/10 — below the threshold for job applications. Submitting applications too early leads to rejection and demotivation.`,
-        steps:'Focus on CV, mock interviews, and employer expectations before job searching. Target 7/10 work readiness before first employer introduction.'
-      });
-    }
-
-    // Fallback if fewer than 3 actions
-    if(actions.length<3){
-      actions.push({
-        title:'Update case notes and review action plan',
-        why:'Regular case note updates ensure continuity of support and provide evidence for funder reporting.',
-        steps:'Log a case note summarising current status, progress since last contact, and next agreed steps. Update stage if it has changed.'
-      });
-    }
-    if(actions.length<3){
-      actions.push({
-        title:'Complete Distance Travelled assessment',
-        why:'Distance Travelled scores (confidence, work readiness, wellbeing, skills) are required for CBF and GLA reporting and help tailor support.',
-        steps:'Go to Edit Participant and complete all four Distance Travelled scores (1-10). Compare with intake scores to evidence progress.'
-      });
-    }
-
+    const d=days(p.last_contact),barriers=p.barriers||[],outcomes=p.outcomes||[],stage=p.stage||'Referred',risk=p.risk||'Low',sc=p.scores||{};
+    const actions=[];let riskFlag='',riskLevel='low';
+    if(p.safeguarding){riskFlag=`Safeguarding concern: ${p.safeguarding}. Review at next contact and escalate if needed.`;riskLevel='high';}
+    if(d>21&&stage!=='Closed'){actions.push({title:'Make urgent contact — overdue',why:`No contact for ${d} days. Participants disengaged 21+ days are significantly less likely to achieve outcomes.`,steps:'Call first, then try WhatsApp. If no response within 48hrs, contact referral source. Log all attempts.'});if(riskLevel!=='high')riskLevel='medium';if(!riskFlag)riskFlag=`No contact in ${d} days — at risk of disengagement.`;}
+    if(stage==='Referred')actions.push({title:'Complete initial assessment',why:'Participant needs a full initial assessment to plan their support journey.',steps:'Book a 1-hour initial assessment. Cover employment history, barriers, aspirations, and complete Distance Travelled scores (1-10).'});
+    if(stage==='Engaged')actions.push({title:'Build action plan and link to contract',why:'Participant is engaged but needs a structured action plan to drive progression.',steps:'Create a written action plan with SMART goals. Link them to the relevant contract. Agree review date in 2 weeks.'});
+    if(stage==='In Support'&&outcomes.length===0)actions.push({title:'Review progress toward first outcome',why:'In support but no outcomes recorded yet. Early outcome achievement improves sustainment rates.',steps:'Review action plan against goals. Identify the nearest achievable outcome. Set a target date.'});
+    if(stage==='Job Ready')actions.push({title:'Connect with employer partners now',why:'Participant is job ready — every week without placement reduces sustainment likelihood.',steps:'Check Employer CRM for open vacancies. Make direct introduction to at least 2 employers this week. Support with CV and interview prep.'});
+    if(stage==='Outcome Achieved')actions.push({title:'Set up 4-week sustainment check-in',why:'Outcome achieved but not yet sustained. 12-week sustainment is required for most funder milestones.',steps:'Schedule calls at 4, 8, and 12 weeks. Log each contact. Ask about hours, pay, and any issues at work.'});
+    if(barriers.includes('Housing')&&actions.length<3)actions.push({title:'Refer to housing support urgently',why:'Housing instability is the single biggest predictor of programme dropout.',steps:'Refer to local authority housing team. Log referral in case notes. Follow up within 7 days.'});
+    if(barriers.includes('Mental health')&&actions.length<3)actions.push({title:'Connect with mental health support',why:'Unaddressed mental health barriers significantly reduce engagement and outcome rates.',steps:'Ask if currently receiving support. If not, refer to IAPT or local VCSE. Adjust contact frequency to reduce pressure.'});
+    if(barriers.includes('Confidence')&&actions.length<3&&!outcomes.includes('Employment'))actions.push({title:'Enrol in confidence-building activity',why:`Confidence scored ${sc.confidence||'low'}/10. Low confidence blocks job applications.`,steps:'Identify a short group programme, volunteering opportunity, or peer mentoring.'});
+    if(sc.work_readiness&&sc.work_readiness<5&&actions.length<3)actions.push({title:'Intensive work readiness support needed',why:`Work readiness scored ${sc.work_readiness}/10 — below the threshold for job applications.`,steps:'Focus on CV, mock interviews, and employer expectations before job searching. Target 7/10 before first employer introduction.'});
+    if(actions.length<3)actions.push({title:'Update case notes and review action plan',why:'Regular case note updates ensure continuity of support and funder evidence.',steps:'Log a case note summarising current status and next agreed steps. Update stage if changed.'});
+    if(actions.length<3)actions.push({title:'Complete Distance Travelled assessment',why:'Distance Travelled scores are required for CBF and GLA reporting.',steps:'Edit participant and complete all four scores (1-10). Compare with intake scores to evidence progress.'});
     const col={'high':'var(--red)','medium':'var(--amber)','low':'var(--em)'}[riskLevel];
-    out.innerHTML=`<div class="ai-panel">
-      <div style="font-size:11px;font-weight:700;color:var(--em);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">🤖 AI Suggested Next Actions</div>
-      ${actions.slice(0,3).map((a,i)=>`<div style="margin-bottom:10px;padding:10px;background:var(--card);border-radius:8px;border-left:3px solid var(--em)">
-        <div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:3px">${i+1}. ${a.title}</div>
-        <div style="font-size:12px;color:var(--txt2);margin-bottom:2px"><strong>Why:</strong> ${a.why}</div>
-        <div style="font-size:12px;color:var(--txt3)"><strong>How:</strong> ${a.steps}</div>
-      </div>`).join('')}
-      ${riskFlag?`<div style="background:rgba(248,113,113,.1);border:1px solid ${col};border-radius:7px;padding:9px;margin-top:6px"><span style="font-size:12px;color:${col};font-weight:600">⚠ ${riskFlag}</span></div>`:''}
-      <div style="font-size:10px;color:var(--txt3);margin-top:8px;text-align:right">Generated from participant data · Always use professional judgement</div>
-    </div>`;
+    out.innerHTML=`<div class="ai-panel"><div style="font-size:11px;font-weight:700;color:var(--em);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">🤖 AI Suggested Next Actions</div>${actions.slice(0,3).map((a,i)=>`<div style="margin-bottom:10px;padding:10px;background:var(--card);border-radius:8px;border-left:3px solid var(--em)"><div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:3px">${i+1}. ${a.title}</div><div style="font-size:12px;color:var(--txt2);margin-bottom:2px"><strong>Why:</strong> ${a.why}</div><div style="font-size:12px;color:var(--txt3)"><strong>How:</strong> ${a.steps}</div></div>`).join('')}${riskFlag?`<div style="background:rgba(248,113,113,.1);border:1px solid ${col};border-radius:7px;padding:9px;margin-top:6px"><span style="font-size:12px;color:${col};font-weight:600">⚠ ${riskFlag}</span></div>`:''}.<div style="font-size:10px;color:var(--txt3);margin-top:8px;text-align:right">Generated from participant data · Always use professional judgement</div></div>`;
     btn.disabled=false;btn.textContent='🤖 AI actions';
-  },800);
+  },600);
 }
 
 // ── PARTICIPANTS ──
 async function renderParticipants(){
   if(!cachedP.length)await loadP();
+  let pool=cachedP;
+  if(ROLE==='advisor')pool=cachedP.filter(p=>p.advisor===PROFILE?.full_name||p.advisor==='Unassigned');
   const q=($('p-search')||{}).value||'',sf=($('p-stage')||{}).value||'',rf=($('p-risk')||{}).value||'';
-  const flt=cachedP.filter(p=>{const nm=((p.first_name||'')+' '+(p.last_name||'')).toLowerCase();return(!q||nm.includes(q.toLowerCase()))&&(!sf||p.stage===sf)&&(!rf||p.risk===rf);});
-  const stale=cachedP.filter(p=>days(p.last_contact)>21&&p.stage!=='Closed');
+  const flt=pool.filter(p=>{const nm=((p.first_name||'')+' '+(p.last_name||'')).toLowerCase();return(!q||nm.includes(q.toLowerCase()))&&(!sf||p.stage===sf)&&(!rf||p.risk===rf);});
+  const stale=pool.filter(p=>days(p.last_contact)>21&&p.stage!=='Closed');
   const al=$('p-alert');
   if(stale.length){al.style.display='flex';al.textContent=`⚠ ${stale.length} participant(s) no contact 21+ days: ${stale.map(p=>p.first_name).join(', ')}`;}
   else al.style.display='none';
   $('p-table').innerHTML=flt.length?flt.map(p=>{
     const d=days(p.last_contact),ov=d>21;
-    return`<tr>
-      <td><div style="display:flex;align-items:center;gap:8px">
-        <div style="width:28px;height:28px;border-radius:50%;background:rgba(16,185,129,.15);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--em);flex-shrink:0">${ini(p.first_name,p.last_name)}</div>
-        <div><div class="cn">${p.first_name||''} ${p.last_name||''}</div>${p.safeguarding?`<span class="safe-flag">🔐 ${p.safeguarding}</span>`:''}</div></div></td>
-      <td style="font-size:11px;color:var(--txt3)">GC-${String(p.id).padStart(4,'0')}</td>
-      <td><span class="badge" style="background:rgba(16,185,129,.12);color:var(--em3)">${p.stage||'Referred'}</span></td>
-      <td style="font-size:12px">${p.advisor||'—'}</td>
-      <td>${(p.outcomes||[]).map(o=>`<span class="badge b-active" style="margin:1px">${o}</span>`).join('')||'<span style="font-size:11px;color:var(--txt3)">None yet</span>'}</td>
-      <td><span class="badge ${rCls(p.risk)}">${p.risk||'Low'}</span></td>
-      <td style="font-size:11px;color:${ov?'var(--amber)':'var(--txt3)'}">${fmtD(p.last_contact)}${ov?` ⚠ ${d}d`:''}</td>
-      <td>
-        <div style="display:flex;gap:4px;flex-wrap:wrap">
-          <button class="btn btn-ghost btn-sm" onclick="openEditP(${p.id})">Edit</button>
-          <button class="btn btn-ghost btn-sm" onclick="openNotes(${p.id})">Notes</button>
-          <button class="btn btn-ghost btn-sm" id="ai-btn-${p.id}" onclick="getAIActions(${p.id})" style="color:var(--em);border-color:rgba(16,185,129,.4)">🤖 AI</button>
-        </div>
-        <div id="ai-out-${p.id}" style="display:none"></div>
-      </td></tr>`;
+    return`<tr><td><div style="display:flex;align-items:center;gap:8px"><div style="width:28px;height:28px;border-radius:50%;background:rgba(16,185,129,.15);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--em);flex-shrink:0">${ini(p.first_name,p.last_name)}</div><div><div class="cn">${p.first_name||''} ${p.last_name||''}</div>${p.safeguarding?`<span class="safe-flag">🔐 ${p.safeguarding}</span>`:''}</div></div></td>
+    <td style="font-size:11px;color:var(--txt3)">GC-${String(p.id).padStart(4,'0')}</td>
+    <td><span class="badge" style="background:rgba(16,185,129,.12);color:var(--em3)">${p.stage||'Referred'}</span></td>
+    <td style="font-size:12px">${p.advisor||'—'}</td>
+    <td>${(p.outcomes||[]).map(o=>`<span class="badge b-active" style="margin:1px">${o}</span>`).join('')||'<span style="font-size:11px;color:var(--txt3)">None yet</span>'}</td>
+    <td><span class="badge ${rCls(p.risk)}">${p.risk||'Low'}</span></td>
+    <td style="font-size:11px;color:${ov?'var(--amber)':'var(--txt3)'}">${fmtD(p.last_contact)}${ov?` ⚠ ${d}d`:''}</td>
+    <td><div style="display:flex;gap:4px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="openEditP(${p.id})">Edit</button>
+      <button class="btn btn-ghost btn-sm" onclick="openNotes(${p.id})">Notes</button>
+      <button class="btn btn-ghost btn-sm" id="ai-btn-${p.id}" onclick="getAIActions(${p.id})" style="color:var(--em);border-color:rgba(16,185,129,.4)">🤖 AI</button>
+    </div>
+    <div id="ai-out-${p.id}" style="display:none"></div></td></tr>`;
   }).join(''):`<tr><td colspan="8" style="text-align:center;color:var(--txt3);padding:24px">No participants yet.</td></tr>`;
 }
-
 function openAddP(){editPId=null;$('mp-title').textContent='Add participant';['mp-fn','mp-ln','mp-note','mp-whatsapp','mp-conf','mp-work','mp-well','mp-skills'].forEach(f=>$(f).value='');$('mp-safe').value='';mkChks('barrier-checks',BARRIERS);mkChks('outcome-checks',OUT_TYPES);loadContractChecks();$('modal-p').classList.add('open');}
 async function openEditP(id){
   const p=cachedP.find(x=>x.id===id);if(!p)return;editPId=id;
@@ -856,7 +584,6 @@ async function saveP(){
   }
   cachedP=[];closeModal('modal-p');setBtn('save-p-btn',false,'Save');renderParticipants();
 }
-
 function openNotes(id){
   caseNoteId=id;const p=cachedP.find(x=>x.id===id);if(!p)return;
   const notes=(p.notes||[]).slice().reverse();
@@ -880,6 +607,7 @@ async function addNote(){
   cachedP=[];$('modal-notes').remove();renderParticipants();
 }
 
+// ── CONTACTS ──
 async function renderContacts(){
   const{data}=await sb.from('contacts').select('*').eq('org_id',ORG.id);
   const rc={'Donor':'b-vol','Partner':'b-part'},sc={'Active Supporter':'b-active','Prospect':'b-prospect','Lapsed':'b-lapsed','Engaged':'b-engaged'};
@@ -888,34 +616,53 @@ async function renderContacts(){
 function openAddC(){['cf-fn','cf-ln','cf-em'].forEach(f=>$(f).value='');$('modal-c').classList.add('open');}
 async function saveC(){await sb.from('contacts').insert({org_id:ORG.id,first_name:$('cf-fn').value,last_name:$('cf-ln').value,email:$('cf-em').value,role:$('cf-role').value,status:$('cf-st').value,engagements:[]});closeModal('modal-c');renderContacts();}
 
+// ── VOLUNTEERS ──
 async function renderVolunteers(){
-  const{data}=await sb.from('volunteers').select('*').eq('org_id',ORG.id);
-  $('vol-table').innerHTML=(data||[]).length?(data||[]).map(v=>`<tr><td class="cn">${v.first_name||''} ${v.last_name||''}</td><td><span class="badge b-vol">${v.role||''}</span></td><td style="font-size:12px;color:var(--txt2)">${v.skills||''}</td><td style="color:var(--em);font-weight:600">${v.hours||0}</td><td><span class="badge b-active">${v.status||'Active'}</span></td></tr>`).join(''):`<tr><td colspan="5" style="text-align:center;color:var(--txt3);padding:24px">No volunteers yet.</td></tr>`;
+  const{data}=await sb.from('volunteers').select('*').eq('org_id',ORG.id).order('created_at',{ascending:false});
+  $('vol-table').innerHTML=(data||[]).length?(data||[]).map(v=>`<tr>
+    <td class="cn">${v.first_name||''} ${v.last_name||''}</td>
+    <td><span class="badge b-vol">${v.role||''}</span></td>
+    <td style="font-size:12px;color:var(--txt2)">${v.skills||''}</td>
+    <td style="color:var(--em);font-weight:600">${v.hours||0}</td>
+    <td><span class="badge ${v.status==='Active'?'b-active':'b-lapsed'}">${v.status||'Active'}</span></td>
+    <td><div style="display:flex;gap:5px">
+      <button class="btn btn-ghost btn-sm" onclick="openEditV(${v.id})">Edit</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteVol(${v.id})">Delete</button>
+    </div></td>
+  </tr>`).join(''):`<tr><td colspan="6" style="text-align:center;color:var(--txt3);padding:24px">No volunteers yet.</td></tr>`;
 }
-function openAddV(){editVolId=null;document.getElementById('modal-v').querySelector('h2').textContent='Add volunteer / staff';['vf-fn','vf-ln','vf-sk'].forEach(f=>$(f).value='');$('vf-role').value='Volunteer';$('modal-v').classList.add('open');}
+function openAddV(){
+  editVolId=null;$('vol-title').textContent='Add volunteer / staff';
+  ['vf-fn','vf-ln','vf-sk','vf-notes'].forEach(f=>$(f).value='');
+  $('vf-role').value='Volunteer';$('vf-status').value='Active';$('vf-hours').value='0';
+  $('modal-v').classList.add('open');
+}
 async function openEditV(id){
   const{data}=await sb.from('volunteers').select('*').eq('id',id).single();
   if(!data)return;editVolId=id;
-  document.getElementById('modal-v').querySelector('h2').textContent='Edit volunteer / staff';
+  $('vol-title').textContent='Edit volunteer / staff';
   $('vf-fn').value=data.first_name||'';$('vf-ln').value=data.last_name||'';
   $('vf-role').value=data.role||'Volunteer';$('vf-sk').value=data.skills||'';
+  $('vf-hours').value=data.hours||0;$('vf-status').value=data.status||'Active';
+  $('vf-notes').value=data.notes||'';
   $('modal-v').classList.add('open');
 }
 async function saveV(){
-  const d={org_id:ORG.id,first_name:$('vf-fn').value,last_name:$('vf-ln').value,role:$('vf-role').value,skills:$('vf-sk').value};
+  const d={org_id:ORG.id,first_name:$('vf-fn').value,last_name:$('vf-ln').value,role:$('vf-role').value,skills:$('vf-sk').value,hours:parseInt($('vf-hours').value)||0,status:$('vf-status').value,notes:$('vf-notes').value};
   if(editVolId)await sb.from('volunteers').update(d).eq('id',editVolId);
-  else await sb.from('volunteers').insert({...d,hours:0,status:'Active'});
+  else await sb.from('volunteers').insert(d);
   closeModal('modal-v');renderVolunteers();
 }
+async function deleteVol(id){if(!confirm('Delete this volunteer?'))return;await sb.from('volunteers').delete().eq('id',id);renderVolunteers();}
 
-let cachedEmp=[],editVolId=null,editItemId=null;
+// ── EMPLOYERS ──
 async function renderEmployers(){
   const{data}=await sb.from('employers').select('*').eq('org_id',ORG.id);
   cachedEmp=data||[];
   const rc={'Active partner':'b-active','Engaged':'b-engaged','Prospecting':'b-prospect','Dormant':'b-lapsed'};
-  $('emp-table').innerHTML=cachedEmp.length?cachedEmp.map(e=>`<tr><td class="cn">${e.name||''}</td><td><span class="badge b-part">${e.sector||''}</span></td><td style="font-size:12px">${e.contact_name||'—'}<br/><span style="color:var(--txt3)">${e.contact_email||''}</span></td><td style="color:var(--em);font-weight:600">${e.vacancies||0}</td><td style="color:var(--em3);font-weight:600">${e.placements||0}</td><td><span class="badge ${rc[e.relationship]||'b-prospect'}">${e.relationship||''}</span></td><td><button class="btn btn-ghost btn-sm" onclick="openEditEmployer(${e.id})">Edit</button></td></tr>`).join(''):`<tr><td colspan="7" style="text-align:center;color:var(--txt3);padding:24px">No employers yet.</td></tr>`;
+  $('emp-table').innerHTML=cachedEmp.length?cachedEmp.map(e=>`<tr><td class="cn">${e.name||''}</td><td><span class="badge b-part">${e.sector||''}</span></td><td style="font-size:12px">${e.contact_name||'—'}<br/><span style="color:var(--txt3)">${e.contact_email||''}</span></td><td style="color:var(--em);font-weight:600">${e.vacancies||0}</td><td style="color:var(--em3);font-weight:600">${e.placements||0}</td><td><span class="badge ${rc[e.relationship]||'b-prospect'}">${e.relationship||''}</span></td><td><div style="display:flex;gap:5px"><button class="btn btn-ghost btn-sm" onclick="openEditEmployer(${e.id})">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteEmployer(${e.id})">Delete</button></div></td></tr>`).join(''):`<tr><td colspan="7" style="text-align:center;color:var(--txt3);padding:24px">No employers yet.</td></tr>`;
 }
-function openAddEmployer(){editEmpId=null;$('emp-title').textContent='Add employer';['ef-nm','ef-con','ef-cem','ef-notes'].forEach(f=>$(f).value='');$('ef-vac').value='0';$('modal-emp').classList.add('open');}
+function openAddEmployer(){editEmpId=null;$('emp-title').textContent='Add employer';['ef-nm','ef-con','ef-cem','ef-notes'].forEach(f=>$(f).value='');$('ef-vac').value='0';$('ef-rel').value='Prospecting';$('modal-emp').classList.add('open');}
 function openEditEmployer(id){
   const e=cachedEmp.find(x=>x.id===id);if(!e)return;editEmpId=id;
   $('emp-title').textContent='Edit employer';$('ef-nm').value=e.name||'';$('ef-sec').value=e.sector||'Retail';
@@ -927,13 +674,16 @@ async function saveEmployer(){
   else await sb.from('employers').insert(d);
   closeModal('modal-emp');renderEmployers();
 }
+async function deleteEmployer(id){if(!confirm('Delete this employer?'))return;await sb.from('employers').delete().eq('id',id);renderEmployers();}
 
+// ── PIPELINE ──
 async function renderPipeline(){
   if(!cachedP.length)await loadP();
   const sel=($('pipe-adv')||{}).value||'',flt=sel?cachedP.filter(p=>p.advisor===sel):cachedP;
   $('kanban').innerHTML=P_STAGES.map(stage=>{const cards=flt.filter(p=>p.stage===stage);return`<div class="k-col"><div class="k-col-hd">${stage}<span class="k-cnt">${cards.length}</span></div>${cards.map(p=>{const d=days(p.last_contact),fl=d>21;return`<div class="k-card" onclick="openEditP(${p.id})"><div class="k-name">${p.first_name||''} ${p.last_name||''}</div><div class="k-meta">${p.advisor||'Unassigned'}</div>${fl?`<div class="k-flag">⚠ No contact ${d}d</div>`:''}${p.safeguarding?`<div class="k-flag">🔐 Safeguarding</div>`:''}</div>`;}).join('')||'<div style="font-size:11px;color:var(--txt3);text-align:center;padding:8px 0">Empty</div>'}</div>`;}).join('');
 }
 
+// ── REFERRALS ──
 async function renderReferrals(){
   const{data}=await sb.from('referrals').select('*').eq('org_id',ORG.id);
   const refs=data||[],stale=refs.filter(r=>r.status==='Referred'&&days(r.referred_date)>14);
@@ -944,6 +694,69 @@ async function renderReferrals(){
 function openAddR(){$('rf-date').value=new Date().toISOString().split('T')[0];['rf-fn','rf-ln'].forEach(f=>$(f).value='');$('modal-r').classList.add('open');}
 async function saveR(){await sb.from('referrals').insert({org_id:ORG.id,first_name:$('rf-fn').value,last_name:$('rf-ln').value,source:$('rf-src').value,status:'Referred',referred_date:$('rf-date').value,advisor:$('rf-adv').value});closeModal('modal-r');renderReferrals();}
 
+// ── PARTNER REFERRALS ──
+async function renderPartnerRefs(){
+  if(!cachedPRefs.length){const{data}=await sb.from('partner_referrals').select('*').order('created_at',{ascending:false});cachedPRefs=data||[];}
+  const sf=($('pref-status')||{}).value||'',uf=($('pref-urgency')||{}).value||'';
+  const flt=cachedPRefs.filter(r=>(!sf||r.status===sf)&&(!uf||r.urgency===uf));
+  const crisis=cachedPRefs.filter(r=>r.urgency==='Crisis'&&r.status==='Referred');
+  const urgent=cachedPRefs.filter(r=>r.urgency==='Urgent'&&r.status==='Referred');
+  let alerts='';
+  if(crisis.length)alerts+=`<div class="alert alert-danger">🚨 ${crisis.length} CRISIS referral(s) — same-day response needed: ${crisis.map(r=>r.first_name+' '+r.last_name).join(', ')}</div>`;
+  if(urgent.length)alerts+=`<div class="alert alert-warn">⚠ ${urgent.length} URGENT referral(s) — 48hr response needed</div>`;
+  $('pref-alerts').innerHTML=alerts;
+  const urgColor={'Crisis':'var(--red)','Urgent':'var(--amber)','Standard':'var(--txt3)'};
+  const stBadge={'Referred':'b-ref','Engaged':'b-engaged','In delivery':'b-inprog','Outcome achieved':'b-active','Closed':'b-closed'};
+  $('pref-table').innerHTML=flt.length?flt.map(r=>`<tr>
+    <td><div class="cn">${r.first_name||''} ${r.last_name||''}</div>${r.partner_ref?`<div style="font-size:11px;color:var(--txt3)">Ref: ${r.partner_ref}</div>`:''}</td>
+    <td style="font-size:12px;color:var(--txt2)">${r.partner_name||'Partner'}</td>
+    <td style="font-size:12px">${r.primary_need||'—'}</td>
+    <td><span style="font-size:12px;font-weight:600;color:${urgColor[r.urgency]||'var(--txt3)'}">${r.urgency||'Standard'}</span></td>
+    <td>${r.safeguarding?`<span class="safe-flag">🔐 ${r.safeguarding}</span>`:'—'}</td>
+    <td style="font-size:11px;color:var(--txt3)">${fmtD(r.created_at)}</td>
+    <td><span class="badge ${stBadge[r.status]||'b-ref'}">${r.status||'Referred'}</span></td>
+    <td><div style="display:flex;gap:4px">
+      <button class="btn btn-ghost btn-sm" onclick="viewPartnerRef(${r.id})">View</button>
+      <button class="btn btn-p btn-sm" onclick="convertToParticipant(${r.id})">+ Add to CRM</button>
+    </div></td>
+  </tr>`).join(''):`<tr><td colspan="8" style="text-align:center;color:var(--txt3);padding:24px">No partner referrals yet.</td></tr>`;
+}
+function viewPartnerRef(id){
+  const r=cachedPRefs.find(x=>x.id===id);if(!r)return;
+  const m=document.createElement('div');m.className='modal-overlay open';
+  m.innerHTML=`<div class="modal" style="max-width:540px"><h2>${r.first_name||''} ${r.last_name||''} — Partner Referral</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div style="background:var(--card);padding:10px;border-radius:var(--radius)"><div style="font-size:11px;color:var(--txt3)">FROM</div><div style="font-size:13px;color:var(--txt)">${r.partner_name||'—'}</div></div>
+      <div style="background:var(--card);padding:10px;border-radius:var(--radius)"><div style="font-size:11px;color:var(--txt3)">SUBMITTED</div><div style="font-size:13px;color:var(--txt)">${fmtD(r.created_at)}</div></div>
+      <div style="background:var(--card);padding:10px;border-radius:var(--radius)"><div style="font-size:11px;color:var(--txt3)">PRIMARY NEED</div><div style="font-size:13px;color:var(--txt)">${r.primary_need||'—'}</div></div>
+      <div style="background:var(--card);padding:10px;border-radius:var(--radius)"><div style="font-size:11px;color:var(--txt3)">URGENCY</div><div style="font-size:13px;color:var(--txt);font-weight:600">${r.urgency||'Standard'}</div></div>
+      <div style="background:var(--card);padding:10px;border-radius:var(--radius)"><div style="font-size:11px;color:var(--txt3)">PHONE</div><div style="font-size:13px;color:var(--txt)">${r.phone||'—'}</div></div>
+      <div style="background:var(--card);padding:10px;border-radius:var(--radius)"><div style="font-size:11px;color:var(--txt3)">EMAIL</div><div style="font-size:13px;color:var(--txt)">${r.email||'—'}</div></div>
+    </div>
+    ${r.notes?`<div style="background:var(--card);padding:12px;border-radius:var(--radius);margin-bottom:10px"><div style="font-size:11px;color:var(--txt3);margin-bottom:4px">BACKGROUND</div><div style="font-size:13px;color:var(--txt2);line-height:1.6">${r.notes}</div></div>`:''}
+    ${r.safeguarding?`<div style="background:#2a1a2a;border:1px solid #5a2a3a;padding:10px;border-radius:var(--radius);margin-bottom:10px;font-size:13px;color:#f9a8d4">🔐 Safeguarding: ${r.safeguarding}</div>`:''}
+    <div class="form-row"><label>Update status</label><select id="pref-status-update" style="max-width:250px"><option ${r.status==='Referred'?'selected':''}>Referred</option><option ${r.status==='Engaged'?'selected':''}>Engaged</option><option ${r.status==='In delivery'?'selected':''}>In delivery</option><option ${r.status==='Outcome achieved'?'selected':''}>Outcome achieved</option><option ${r.status==='Closed'?'selected':''}>Closed</option></select></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-p btn-sm" onclick="updatePartnerRefStatus(${r.id},document.getElementById('pref-status-update').value);this.closest('.modal-overlay').remove()">Save status</button>
+      <button class="btn btn-p btn-sm" onclick="convertToParticipant(${r.id});this.closest('.modal-overlay').remove()">+ Add to CRM</button>
+      <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-overlay').remove()">Close</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+async function updatePartnerRefStatus(id,status){await sb.from('partner_referrals').update({status}).eq('id',id);cachedPRefs=[];renderPartnerRefs();}
+function convertToParticipant(id){
+  const r=cachedPRefs.find(x=>x.id===id);if(!r)return;
+  openAddP();
+  setTimeout(()=>{
+    $('mp-fn').value=r.first_name||'';$('mp-ln').value=r.last_name||'';$('mp-rs').value='Community org';
+    $('mp-note').value=`Referred by ${r.partner_name||'partner'}. ${r.notes||''}`.trim();
+    if(r.safeguarding)$('mp-safe').value=r.safeguarding;
+    if(r.barriers?.length){document.querySelectorAll('#barrier-checks input[type=checkbox]').forEach(cb=>{if(r.barriers.includes(cb.value))cb.checked=true;});}
+  },100);
+}
+
+// ── EVENTS ──
 async function renderEvents(){
   const{data}=await sb.from('events').select('*').eq('org_id',ORG.id);
   $('ev-list').innerHTML=(data||[]).length?(data||[]).map(e=>{const p=Math.round((e.attendees||0)/(e.capacity||1)*100);return`<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px"><div><div style="font-size:14px;font-weight:600;color:var(--txt)">${e.name}</div><div style="font-size:12px;color:var(--txt3)">${fmtD(e.event_date)} · ${e.type||''} · ${e.location||''}</div></div><span class="badge b-vol">${e.attendees||0}/${e.capacity||0}</span></div><div class="fund-track"><div class="fund-fill" style="width:${p}%"></div></div></div>`;}).join(''):'<div style="color:var(--txt3);font-size:13px;padding:12px">No events yet.</div>';
@@ -951,6 +764,7 @@ async function renderEvents(){
 function openAddEv(){$('ef-date').value=new Date().toISOString().split('T')[0];['ef-name','ef-loc'].forEach(f=>$(f).value='');$('modal-ev').classList.add('open');}
 async function saveEv(){await sb.from('events').insert({org_id:ORG.id,name:$('ef-name').value,event_date:$('ef-date').value,type:$('ef-type').value,capacity:parseInt($('ef-cap').value)||20,location:$('ef-loc').value,attendees:0});closeModal('modal-ev');renderEvents();}
 
+// ── CIRCULAR ECONOMY ──
 async function renderCircular(){
   const{data}=await sb.from('circular_items').select('*').eq('org_id',ORG.id);
   const items=data||[],totalKg=items.reduce((a,i)=>a+parseFloat(i.weight_kg||0),0);
@@ -960,11 +774,40 @@ async function renderCircular(){
   $('eco-stats').innerHTML=[{l:'Items logged',v:items.length},{l:'Repaired/resold',v:repaired},{l:'Kg diverted',v:diverted.toFixed(1)+'kg'},{l:'CO₂ saved',v:co2+'kg'}].map(s=>`<div class="stat-card"><div class="stat-lbl">${s.l}</div><div class="stat-val">${s.v}</div></div>`).join('');
   $('eco-impact').innerHTML=[`♻️ ${items.filter(i=>i.status==='Resold').length} resold`,`🎁 ${items.filter(i=>i.status==='Donated').length} donated`,`🗑️ ${diverted.toFixed(1)}kg diverted`,`🌍 ${co2}kg CO₂ saved`,`🌳 ~${(parseFloat(co2)/21).toFixed(1)} trees equivalent`].map(t=>`<span class="eco-stat">${t}</span>`).join('');
   const sc={Collected:'b-prospect','In repair':'b-engaged',Repaired:'b-active',Resold:'b-active',Donated:'b-vol','Beyond repair':'b-lapsed'};
-  $('eco-table').innerHTML=items.length?items.map(i=>`<tr><td class="cn">${i.name||''}</td><td><span class="badge b-part">${i.category||''}</span></td><td style="color:var(--em)">${i.weight_kg||0}kg</td><td><span class="badge ${sc[i.status]||''}">${i.status||''}</span></td><td style="font-size:12px">${i.fixer||'—'}</td><td style="font-size:12px">${i.cohort||'—'}</td><td><span class="badge ${i.outcome?'b-active':'b-prospect'}">${i.outcome||'Pending'}</span></td></tr>`).join(''):`<tr><td colspan="7" style="text-align:center;color:var(--txt3);padding:24px">No items yet.</td></tr>`;
+  $('eco-table').innerHTML=items.length?items.map(i=>`<tr>
+    <td class="cn">${i.name||''}</td>
+    <td><span class="badge b-part">${i.category||''}</span></td>
+    <td style="color:var(--em)">${i.weight_kg||0}kg</td>
+    <td><span class="badge ${sc[i.status]||''}">${i.status||''}</span></td>
+    <td style="font-size:12px">${i.fixer||'—'}</td>
+    <td style="font-size:12px">${i.cohort||'—'}</td>
+    <td><span class="badge ${i.outcome?'b-active':'b-prospect'}">${i.outcome||'Pending'}</span></td>
+    <td><div style="display:flex;gap:5px">
+      <button class="btn btn-ghost btn-sm" onclick="openEditItem(${i.id})">Edit</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteItem(${i.id})">Delete</button>
+    </div></td>
+  </tr>`).join(''):`<tr><td colspan="8" style="text-align:center;color:var(--txt3);padding:24px">No items yet.</td></tr>`;
 }
-function openAddItem(){['it-name','it-kg','it-fixer','it-cohort'].forEach(f=>$(f).value='');$('modal-item').classList.add('open');}
-async function saveItem(){await sb.from('circular_items').insert({org_id:ORG.id,name:$('it-name').value,category:$('it-cat').value,weight_kg:parseFloat($('it-kg').value)||0,status:$('it-st').value,fixer:$('it-fixer').value,cohort:$('it-cohort').value,outcome:''});closeModal('modal-item');renderCircular();}
+function openAddItem(){editItemId=null;$('item-title').textContent='Log item';['it-name','it-kg','it-fixer','it-cohort'].forEach(f=>$(f).value='');$('it-st').value='Collected';$('it-cat').value='Small electrical';$('it-outcome').value='';$('modal-item').classList.add('open');}
+async function openEditItem(id){
+  const{data}=await sb.from('circular_items').select('*').eq('id',id).single();
+  if(!data)return;editItemId=id;
+  $('item-title').textContent='Edit item';
+  $('it-name').value=data.name||'';$('it-cat').value=data.category||'Small electrical';
+  $('it-kg').value=data.weight_kg||'';$('it-st').value=data.status||'Collected';
+  $('it-fixer').value=data.fixer||'';$('it-cohort').value=data.cohort||'';
+  $('it-outcome').value=data.outcome||'';
+  $('modal-item').classList.add('open');
+}
+async function saveItem(){
+  const d={org_id:ORG.id,name:$('it-name').value,category:$('it-cat').value,weight_kg:parseFloat($('it-kg').value)||0,status:$('it-st').value,fixer:$('it-fixer').value,cohort:$('it-cohort').value,outcome:$('it-outcome').value};
+  if(editItemId)await sb.from('circular_items').update(d).eq('id',editItemId);
+  else await sb.from('circular_items').insert(d);
+  closeModal('modal-item');renderCircular();
+}
+async function deleteItem(id){if(!confirm('Delete this item?'))return;await sb.from('circular_items').delete().eq('id',id);renderCircular();}
 
+// ── RAG ──
 async function renderRAG(){
   if(!cachedCons.length)await loadCons();
   if(!cachedP.length)await loadP();
@@ -972,8 +815,7 @@ async function renderRAG(){
   $('rag-list').innerHTML=cachedCons.map(c=>{
     const linked=cachedP.filter(p=>(p.contract_ids||[]).includes(String(c.id)));
     const starts=linked.length,outcomes=linked.filter(p=>(p.outcomes||[]).length>0).length;
-    const sp=c.target_starts?Math.round(starts/c.target_starts*100):0;
-    const op=c.target_outcomes?Math.round(outcomes/c.target_outcomes*100):0;
+    const sp=c.target_starts?Math.round(starts/c.target_starts*100):0,op=c.target_outcomes?Math.round(outcomes/c.target_outcomes*100):0;
     const avg=(sp+op)/2,rag=avg>=80?'green':avg>=50?'amber':'red';
     const col={green:'#10b981',amber:'#f59e0b',red:'#f87171'}[rag];
     const bg={green:'#1a3a2a',amber:'#2a2a1a',red:'#2a1a1a'}[rag];
@@ -998,7 +840,6 @@ async function renderRAG(){
     </div>`;
   }).join('');
 }
-
 function showContractP(cid,cname){
   const linked=cachedP.filter(p=>(p.contract_ids||[]).includes(String(cid)));
   const m=document.createElement('div');m.className='modal-overlay open';
@@ -1009,6 +850,7 @@ function showContractP(cid,cname){
   document.body.appendChild(m);
 }
 
+// ── OUTCOMES ──
 async function renderOutcomes(){
   if(!cachedP.length)await loadP();
   const tot=cachedP.length,wo=cachedP.filter(p=>(p.outcomes||[]).length>0).length,jobs=cachedP.filter(p=>(p.outcomes||[]).includes('Employment')).length,sus=cachedP.filter(p=>p.stage==='Sustained').length;
@@ -1018,6 +860,7 @@ async function renderOutcomes(){
   $('job-table').innerHTML=cachedP.filter(p=>(p.outcomes||[]).includes('Employment')).map(p=>`<tr><td class="cn">${p.first_name||''} ${p.last_name||''}</td><td>${fmtD(p.last_contact)}</td><td style="color:var(--em)">25+</td><td><span class="badge b-active">Yes</span></td><td>${p.stage==='Sustained'?'12+':'1-11'}</td><td><span class="badge ${p.stage==='Sustained'?'b-active':'b-engaged'}">${p.stage==='Sustained'?'Sustained':'In progress'}</span></td></tr>`).join('')||`<tr><td colspan="6" style="text-align:center;color:var(--txt3);padding:16px">No employment outcomes yet.</td></tr>`;
 }
 
+// ── FUNDING ──
 async function renderFunding(){
   if(!cachedCons.length)await loadCons();
   if(!cachedP.length)await loadP();
@@ -1029,19 +872,18 @@ async function renderFunding(){
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><span class="eco-stat">👤 ${starts} participants</span><span class="eco-stat">🎯 ${outcomes} outcomes</span></div>
     <div class="fund-bar-wrap"><div class="fund-top"><span>Starts: ${starts}/${c.target_starts||0}</span><span>${sp}%</span></div><div class="fund-track"><div class="fund-fill ${sp<60?'danger':sp<80?'warn':''}" style="width:${Math.min(sp,100)}%"></div></div></div>
     <div class="fund-bar-wrap"><div class="fund-top"><span>Outcomes: ${outcomes}/${c.target_outcomes||0}</span><span>${op}%</span></div><div class="fund-track"><div class="fund-fill ${op<60?'danger':op<80?'warn':''}" style="width:${Math.min(op,100)}%"></div></div></div>
-    <div style="margin-top:10px"><button class="btn btn-ghost btn-sm" onclick="showContractP('${c.id}','${c.name}')">View ${starts} participant(s) →</button></div></div>`;
+    <div style="margin-top:10px;display:flex;gap:8px"><button class="btn btn-ghost btn-sm" onclick="showContractP('${c.id}','${c.name}')">View ${starts} participant(s) →</button><button class="btn btn-danger btn-sm" onclick="deleteCon(${c.id})">Delete</button></div></div>`;
   }).join(''):'<div style="color:var(--txt3);font-size:13px;padding:12px">No contracts yet.</div>';
 }
 function openAddCon(){['con-name','con-funder','con-val','con-ts','con-to'].forEach(f=>$(f).value='');$('modal-con').classList.add('open');}
 async function saveCon(){await sb.from('contracts').insert({org_id:ORG.id,name:$('con-name').value,funder:$('con-funder').value,value:parseInt($('con-val').value)||0,target_starts:parseInt($('con-ts').value)||0,actual_starts:0,target_outcomes:parseInt($('con-to').value)||0,actual_outcomes:0});cachedCons=[];closeModal('modal-con');renderFunding();}
+async function deleteCon(id){if(!confirm('Delete this contract?'))return;await sb.from('contracts').delete().eq('id',id);cachedCons=[];renderFunding();}
 
-// ── FUNDER REPORT GENERATOR ──
+// ── FUNDER REPORTS ──
 async function generateReport(type){
   if(!cachedP.length)await loadP();
   if(!cachedCons.length)await loadCons();
-  const out=$('report-output');
-  out.style.display='block';
-  out.innerHTML='<div style="color:var(--txt3);font-size:13px;padding:12px">Generating report…</div>';
+  const out=$('report-output');out.style.display='block';out.innerHTML='<div style="color:var(--txt3);font-size:13px;padding:12px">Generating report…</div>';
   const today=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
   const qtr=`Q${Math.ceil((new Date().getMonth()+1)/3)} ${new Date().getFullYear()}`;
   const tot=cachedP.length,active=cachedP.filter(p=>p.stage!=='Closed').length;
@@ -1055,39 +897,27 @@ async function generateReport(type){
   const barriers={};cachedP.forEach(p=>(p.barriers||[]).forEach(b=>barriers[b]=(barriers[b]||0)+1));
   const topBarriers=Object.entries(barriers).sort((a,b)=>b[1]-a[1]).slice(0,5);
   const cfgs={
-    moj:{title:'MoJ Programme Performance Report',funder:'Ministry of Justice',icon:'⚖️',metrics:[{l:'Total referrals/starts',v:tot},{l:'Active participants',v:active},{l:'Employment outcomes',v:jobs},{l:'Sustained 12 weeks+',v:sustained},{l:'High risk cases managed',v:hi}],narrative:`During ${qtr}, ${ORG?.name||'our organisation'} supported <strong style="color:#10b981">${tot} participants</strong> referred primarily through probation and Jobcentre Plus. Of these, <strong style="color:#10b981">${active} are actively engaged</strong>. We achieved <strong style="color:#10b981">${jobs} employment outcomes</strong>, with <strong style="color:#10b981">${sustained} sustained for 12+ weeks</strong> (good job standard). ${hi>0?`We are managing <strong style="color:#f87171">${hi} high-risk cases</strong> with enhanced support and safeguarding protocols in place.`:''}`},
-    gla:{title:'GLA Skills & Employment Report',funder:'Greater London Authority',icon:'🏙️',metrics:[{l:'Total participants',v:tot},{l:'Good jobs (LLW 16hrs+)',v:jobs},{l:'Training outcomes',v:training},{l:'Qualifications achieved',v:qual},{l:'Active in programme',v:active}],narrative:`During ${qtr}, ${ORG?.name||'our organisation'} delivered against GLA Skills for Londoners targets, supporting <strong style="color:#10b981">${tot} participants</strong>. We achieved <strong style="color:#10b981">${jobs} good job outcomes</strong> meeting the London Living Wage standard at 16hrs+ per week. <strong style="color:#10b981">${training} participants</strong> completed accredited training and <strong style="color:#10b981">${qual} gained qualifications</strong>.`},
-    cbf:{title:'CBF Impact & Wellbeing Report',funder:'City Bridge Foundation',icon:'🌉',metrics:[{l:'Beneficiaries supported',v:tot},{l:'Wellbeing outcomes',v:wellbeing},{l:'Volunteering outcomes',v:vol},{l:'Community engagement',v:active},{l:'Training completed',v:training}],narrative:`During ${qtr}, ${ORG?.name||'our organisation'} supported <strong style="color:#10b981">${tot} beneficiaries</strong> from underserved communities across London. Our holistic approach delivered <strong style="color:#10b981">${wellbeing} wellbeing outcomes</strong> and <strong style="color:#10b981">${vol} volunteering outcomes</strong>, demonstrating meaningful distance travelled for each individual.`},
-    ukspf:{title:'UKSPF Outputs & Outcomes Report',funder:'UK Shared Prosperity Fund',icon:'🇬🇧',metrics:[{l:'Total outputs (starts)',v:tot},{l:'Employment outcomes',v:jobs},{l:'Training outcomes',v:training},{l:'Volunteering outcomes',v:vol},{l:'Active participants',v:active}],narrative:`During ${qtr}, ${ORG?.name||'our organisation'} delivered against UKSPF targets, generating <strong style="color:#10b981">${tot} individual participant outputs</strong>. Employment outcomes: <strong style="color:#10b981">${jobs}</strong>. Training outcomes: <strong style="color:#10b981">${training}</strong>. The programme also contributed to circular economy objectives through our repair and reuse activities.`}
+    moj:{title:'MoJ Programme Performance Report',funder:'Ministry of Justice',icon:'⚖️',metrics:[{l:'Total referrals/starts',v:tot},{l:'Active participants',v:active},{l:'Employment outcomes',v:jobs},{l:'Sustained 12 weeks+',v:sustained},{l:'High risk cases managed',v:hi}],narrative:`During ${qtr}, ${ORG?.name||'our organisation'} supported <strong style="color:#10b981">${tot} participants</strong> referred primarily through probation and Jobcentre Plus. Of these, <strong style="color:#10b981">${active} are actively engaged</strong>. We achieved <strong style="color:#10b981">${jobs} employment outcomes</strong>, with <strong style="color:#10b981">${sustained} sustained for 12+ weeks</strong>.${hi>0?` We are managing <strong style="color:#f87171">${hi} high-risk cases</strong> with enhanced support.`:''}`},
+    gla:{title:'GLA Skills & Employment Report',funder:'Greater London Authority',icon:'🏙️',metrics:[{l:'Total participants',v:tot},{l:'Good jobs (LLW 16hrs+)',v:jobs},{l:'Training outcomes',v:training},{l:'Qualifications achieved',v:qual},{l:'Active in programme',v:active}],narrative:`During ${qtr}, ${ORG?.name||'our organisation'} delivered against GLA targets, supporting <strong style="color:#10b981">${tot} participants</strong>. We achieved <strong style="color:#10b981">${jobs} good job outcomes</strong> meeting the London Living Wage standard. <strong style="color:#10b981">${training} participants</strong> completed accredited training and <strong style="color:#10b981">${qual} gained qualifications</strong>.`},
+    cbf:{title:'CBF Impact & Wellbeing Report',funder:'City Bridge Foundation',icon:'🌉',metrics:[{l:'Beneficiaries supported',v:tot},{l:'Wellbeing outcomes',v:wellbeing},{l:'Volunteering outcomes',v:vol},{l:'Community engagement',v:active},{l:'Training completed',v:training}],narrative:`During ${qtr}, ${ORG?.name||'our organisation'} supported <strong style="color:#10b981">${tot} beneficiaries</strong> from underserved communities. Our holistic approach delivered <strong style="color:#10b981">${wellbeing} wellbeing outcomes</strong> and <strong style="color:#10b981">${vol} volunteering outcomes</strong>.`},
+    ukspf:{title:'UKSPF Outputs & Outcomes Report',funder:'UK Shared Prosperity Fund',icon:'🇬🇧',metrics:[{l:'Total outputs (starts)',v:tot},{l:'Employment outcomes',v:jobs},{l:'Training outcomes',v:training},{l:'Volunteering outcomes',v:vol},{l:'Active participants',v:active}],narrative:`During ${qtr}, ${ORG?.name||'our organisation'} generated <strong style="color:#10b981">${tot} individual participant outputs</strong>. Employment: <strong style="color:#10b981">${jobs}</strong>. Training: <strong style="color:#10b981">${training}</strong>. The programme also contributed to circular economy objectives through repair and reuse activities.`}
   };
   const cfg=cfgs[type];
-  out.innerHTML=`
-    <div id="printable-report" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radiuslg);padding:28px;margin-bottom:16px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:18px;border-bottom:2px solid var(--em)">
-        <div>
-          <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--txt3);margin-bottom:4px">${cfg.funder}</div>
-          <div style="font-size:22px;font-weight:800;color:var(--txt)">${cfg.icon} ${cfg.title}</div>
-          <div style="font-size:13px;color:var(--txt3);margin-top:4px">${ORG?.name||'Organisation'} · ${qtr} · Generated ${today}</div>
-        </div>
-        <div style="text-align:right"><div style="font-size:11px;color:var(--txt3)">Prepared by</div><div style="font-size:13px;color:var(--txt);font-weight:600">${PROFILE?.full_name||'Staff'}</div></div>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:22px">
-        ${cfg.metrics.map(m=>`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;text-align:center"><div style="font-size:26px;font-weight:800;color:var(--em)">${m.v}</div><div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-top:2px">${m.l}</div></div>`).join('')}
-      </div>
-      ${cachedCons.length?`<div style="margin-bottom:22px"><div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:10px">Contract performance</div>${cachedCons.map(c=>{const lnk=cachedP.filter(p=>(p.contract_ids||[]).includes(String(c.id)));const s=lnk.length,o=lnk.filter(p=>(p.outcomes||[]).length>0).length;const sp=c.target_starts?Math.round(s/c.target_starts*100):0,op=c.target_outcomes?Math.round(o/c.target_outcomes*100):0;return`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:13px;font-weight:600;color:var(--txt)">${c.name}</span><span style="font-size:12px;color:var(--txt3)">${c.funder}</span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div><div style="font-size:11px;color:var(--txt3);margin-bottom:3px">Starts: ${s}/${c.target_starts||0} (${sp}%)</div><div style="height:5px;background:var(--border);border-radius:3px"><div style="height:100%;background:${sp>=80?'#10b981':sp>=50?'#f59e0b':'#f87171'};width:${Math.min(sp,100)}%;border-radius:3px"></div></div></div><div><div style="font-size:11px;color:var(--txt3);margin-bottom:3px">Outcomes: ${o}/${c.target_outcomes||0} (${op}%)</div><div style="height:5px;background:var(--border);border-radius:3px"><div style="height:100%;background:${op>=80?'#10b981':op>=50?'#f59e0b':'#f87171'};width:${Math.min(op,100)}%;border-radius:3px"></div></div></div></div></div>`;}).join('')}</div>`:''}
-      ${topBarriers.length?`<div style="margin-bottom:22px"><div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:10px">Top barriers faced</div>${topBarriers.map(([b,c])=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)"><span style="font-size:13px;color:var(--txt2)">${b}</span><span style="font-size:13px;font-weight:600;color:var(--em)">${c} participants</span></div>`).join('')}</div>`:''}
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:18px">
-        <div style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:8px">Narrative summary</div>
-        <p style="font-size:13px;color:var(--txt2);line-height:1.8">${cfg.narrative}</p>
-      </div>
-      <div style="font-size:11px;color:var(--txt3);text-align:center;border-top:1px solid var(--border);padding-top:14px">${ORG?.name||'Organisation'} · ${cfg.funder} · ${qtr} · Confidential</div>
+  out.innerHTML=`<div id="printable-report" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radiuslg);padding:28px;margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:18px;border-bottom:2px solid var(--em)">
+      <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--txt3);margin-bottom:4px">${cfg.funder}</div><div style="font-size:22px;font-weight:800;color:var(--txt)">${cfg.icon} ${cfg.title}</div><div style="font-size:13px;color:var(--txt3);margin-top:4px">${ORG?.name||'Organisation'} · ${qtr} · Generated ${today}</div></div>
+      <div style="text-align:right"><div style="font-size:11px;color:var(--txt3)">Prepared by</div><div style="font-size:13px;color:var(--txt);font-weight:600">${PROFILE?.full_name||'Staff'}</div></div>
     </div>
-    <div style="display:flex;gap:10px;margin-bottom:24px">
-      <button class="btn btn-p" onclick="window.print()">🖨️ Print / Save as PDF</button>
-      <button class="btn btn-ghost" onclick="document.getElementById('report-output').style.display='none'">Close</button>
-    </div>`;
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:22px">${cfg.metrics.map(m=>`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;text-align:center"><div style="font-size:26px;font-weight:800;color:var(--em)">${m.v}</div><div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-top:2px">${m.l}</div></div>`).join('')}</div>
+    ${cachedCons.length?`<div style="margin-bottom:22px"><div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:10px">Contract performance</div>${cachedCons.map(c=>{const lnk=cachedP.filter(p=>(p.contract_ids||[]).includes(String(c.id)));const s=lnk.length,o=lnk.filter(p=>(p.outcomes||[]).length>0).length;const sp=c.target_starts?Math.round(s/c.target_starts*100):0,op=c.target_outcomes?Math.round(o/c.target_outcomes*100):0;return`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:13px;font-weight:600;color:var(--txt)">${c.name}</span><span style="font-size:12px;color:var(--txt3)">${c.funder}</span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div><div style="font-size:11px;color:var(--txt3);margin-bottom:3px">Starts: ${s}/${c.target_starts||0} (${sp}%)</div><div style="height:5px;background:var(--border);border-radius:3px"><div style="height:100%;background:${sp>=80?'#10b981':sp>=50?'#f59e0b':'#f87171'};width:${Math.min(sp,100)}%;border-radius:3px"></div></div></div><div><div style="font-size:11px;color:var(--txt3);margin-bottom:3px">Outcomes: ${o}/${c.target_outcomes||0} (${op}%)</div><div style="height:5px;background:var(--border);border-radius:3px"><div style="height:100%;background:${op>=80?'#10b981':op>=50?'#f59e0b':'#f87171'};width:${Math.min(op,100)}%;border-radius:3px"></div></div></div></div></div>`;}).join('')}</div>`:''}
+    ${topBarriers.length?`<div style="margin-bottom:22px"><div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:10px">Top barriers</div>${topBarriers.map(([b,c])=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)"><span style="font-size:13px;color:var(--txt2)">${b}</span><span style="font-size:13px;font-weight:600;color:var(--em)">${c} participants</span></div>`).join('')}</div>`:''}
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:18px"><div style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:8px">Narrative summary</div><p style="font-size:13px;color:var(--txt2);line-height:1.8">${cfg.narrative}</p></div>
+    <div style="font-size:11px;color:var(--txt3);text-align:center;border-top:1px solid var(--border);padding-top:14px">${ORG?.name||'Organisation'} · ${cfg.funder} · ${qtr} · Confidential</div>
+  </div>
+  <div style="display:flex;gap:10px;margin-bottom:24px"><button class="btn btn-p" onclick="window.print()">🖨️ Print / Save as PDF</button><button class="btn btn-ghost" onclick="document.getElementById('report-output').style.display='none'">Close</button></div>`;
 }
 
+// ── EVIDENCE ──
 async function renderEvidence(){
   const{data}=await sb.from('evidence').select('*').eq('org_id',ORG.id);
   const evid=data||[],miss=evid.filter(e=>e.status==='Missing');
@@ -1098,6 +928,7 @@ async function renderEvidence(){
 function openAddEvid(){$('evid-p').value='';$('modal-evid').classList.add('open');}
 async function saveEvid(){await sb.from('evidence').insert({org_id:ORG.id,participant_name:$('evid-p').value,type:$('evid-type').value,linked_outcome:$('evid-out').value,staff:PROFILE?.full_name||'Staff',evidence_date:new Date().toISOString().split('T')[0],status:'Pending'});closeModal('modal-evid');renderEvidence();}
 
+// ── SAFEGUARDING ──
 async function renderSafeguarding(){
   if(!cachedP.length)await loadP();
   const fl=cachedP.filter(p=>p.safeguarding);
@@ -1105,19 +936,21 @@ async function renderSafeguarding(){
   $('consent-list').innerHTML=cachedP.map(p=>`<div class="tl-entry"><div class="tl-dot ${(p.notes||[]).length?'':'amber'}"></div><div><div class="tl-lbl">${p.first_name||''} ${p.last_name||''}</div><div class="tl-meta">Consent: ${(p.notes||[]).length?'Recorded':'Pending'} · GDPR active</div></div></div>`).join('');
 }
 
+// ── DASHBOARD ──
 async function renderDashboard(){
   if(!cachedP.length)await loadP();
   if(!cachedCons.length)await loadCons();
   const tot=cachedP.length,act=cachedP.filter(p=>p.stage!=='Closed').length,hi=cachedP.filter(p=>p.risk==='High').length,outs=cachedP.filter(p=>(p.outcomes||[]).length>0).length;
   $('dash-stats').innerHTML=[{l:'Active participants',v:act,s:'Across all stages'},{l:'Outcomes achieved',v:outs,s:Math.round(outs/Math.max(tot,1)*100)+'% rate'},{l:'High risk',v:hi,s:'Need attention',c:'color:var(--red)'},{l:'Active contracts',v:cachedCons.length,s:'Funding contracts'}].map(s=>`<div class="stat-card"><div class="stat-lbl">${s.l}</div><div class="stat-val" style="${s.c||''}">${s.v}</div><div class="stat-sub">${s.s}</div></div>`).join('');
   const risk=cachedP.filter(p=>p.risk==='High'||days(p.last_contact)>21);
-  $('dash-risk').innerHTML=risk.length?risk.map(p=>{const d=days(p.last_contact);return`<div class="tl-entry"><div class="tl-dot ${p.risk==='High'?'red':'amber'}"></div><div><div class="tl-lbl">${p.first_name||''} ${p.last_name||''} <span class="badge ${rCls(p.risk)}">${p.risk}</span></div><div class="tl-meta">${d>21?`No contact ${d}d · `:''}${p.advisor||''}${p.safeguarding?' · 🔐 '+p.safeguarding:''}</div></div></div>`;}).join(''):'<div style="color:var(--txt3);font-size:13px">No at-risk participants. Great work!</div>';
+  $('dash-risk').innerHTML=risk.length?risk.map(p=>{const d=days(p.last_contact);return`<div class="tl-entry"><div class="tl-dot ${p.risk==='High'?'red':'amber'}"></div><div><div class="tl-lbl">${p.first_name||''} ${p.last_name||''} <span class="badge ${rCls(p.risk)}">${p.risk}</span></div><div class="tl-meta">${d>21?`No contact ${d}d · `:''}${p.advisor||''}${p.safeguarding?' · 🔐 '+p.safeguarding:''}</div></div></div>`;}).join(''):'<div style="color:var(--txt3);font-size:13px">No at-risk participants.</div>';
   const recent=cachedP.flatMap(p=>(p.notes||[]).map(n=>({...n,who:(p.first_name||'')+' '+(p.last_name||'')}))).sort((a,b)=>new Date(b.d)-new Date(a.d)).slice(0,4);
   $('dash-activity').innerHTML=recent.length?recent.map(n=>`<div class="tl-entry"><div class="tl-dot ${n.type==='whatsapp'?'blue':''}"></div><div><div class="tl-lbl">${n.type==='whatsapp'?'📱 ':''}${n.who}</div><div class="tl-meta">${(n.t||'').slice(0,55)}… · ${fmtD(n.d)}</div></div></div>`).join(''):'<div style="color:var(--txt3);font-size:13px">No activity yet.</div>';
   if(dChart)dChart.destroy();
   dChart=new Chart($('dash-chart'),{type:'bar',data:{labels:['Oct','Nov','Dec','Jan','Feb','Mar'],datasets:[{label:'Starts',data:[0,0,0,0,0,tot],backgroundColor:'#10b981',borderRadius:3},{label:'Outcomes',data:[0,0,0,0,0,outs],backgroundColor:'#059669',borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#6a8f76'},grid:{color:'#1a2a1a'}},y:{ticks:{color:'#6a8f76'},grid:{color:'#1a2a1a'}}}}});
 }
 
+// ── IMPACT ──
 function anim(id,v){let c=0;const el=$(id),s=Math.ceil(v/50)||1,iv=setInterval(()=>{c=Math.min(c+s,v);el.textContent=c.toLocaleString();if(c>=v)clearInterval(iv);},25);}
 async function renderImpact(){
   if(!cachedP.length)await loadP();
@@ -1128,12 +961,14 @@ async function renderImpact(){
   iChart=new Chart($('impact-chart'),{type:'line',data:{labels:['Oct','Nov','Dec','Jan','Feb','Mar'],datasets:[{label:'Engagements',data:[0,0,0,0,0,cachedP.reduce((a,p)=>a+(p.notes||[]).length,0)],borderColor:'#10b981',backgroundColor:'rgba(16,185,129,.1)',fill:true,tension:.4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#6a8f76'},grid:{color:'#1a2a1a'}},y:{ticks:{color:'#6a8f76'},grid:{color:'#1a2a1a'}}}}});
 }
 
+// ── SETTINGS ──
 function renderSettings(){
   if(ORG)$('settings-org').innerHTML=`<strong style="color:var(--txt)">${ORG.name}</strong><br/>${ORG.type||''}`;
-  if(USER)$('settings-user').innerHTML=`<strong style="color:var(--txt)">${PROFILE?.full_name||''}</strong><br/>${USER.email}`;
+  if(USER)$('settings-user').innerHTML=`<strong style="color:var(--txt)">${PROFILE?.full_name||''}</strong><br/>${USER.email}<br/><span style="color:var(--em);font-size:12px">${ROLE}</span>`;
   if(ORG)$('settings-plan').innerHTML=`Current plan: <strong style="color:var(--em)">${(ORG.plan||'free').toUpperCase()}</strong>`;
 }
 
+// ── CSV EXPORT ──
 async function exportCSV(){
   if(!cachedP.length)await loadP();
   const rows=[['ID','Name','Stage','Advisor','Outcomes','Barriers','Risk','Last Contact','Contracts'],...cachedP.map(p=>[`GC-${String(p.id).padStart(4,'0')}`,`${p.first_name||''} ${p.last_name||''}`,p.stage||'',p.advisor||'',(p.outcomes||[]).join(';'),(p.barriers||[]).join(';'),p.risk||'',p.last_contact||'',(p.contract_ids||[]).join(';')])];
