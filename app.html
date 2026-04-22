@@ -463,8 +463,6 @@ async function init(){
   if(ROLE==='read-only'){window.location.href='reports.html';return;}
   if(ROLE==='admin'){
     $('nav-team').style.display='flex';
-    $('nav-settings-ext').style.display='flex';
-    $('nav-settings-int').style.display='none';
   }
   if(ORG){
     $('sb-org-name').textContent=ORG.name;
