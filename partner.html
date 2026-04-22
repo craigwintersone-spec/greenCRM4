@@ -6,217 +6,395 @@
 <title>GreenCRM — Partner Portal</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#0a0f0a;--surface:#111811;--card:#182018;--border:#2a3a2a;--em:#10b981;--em2:#059669;--txt:#e2f5eb;--txt2:#9ab8a4;--txt3:#6a8f76;--red:#f87171;--amber:#f59e0b;--radius:10px;--radiuslg:14px}
+:root{--bg:#0a0f0a;--surface:#111811;--card:#182018;--border:#2a3a2a;--em:#10b981;--em2:#059669;--em3:#34d399;--txt:#e2f5eb;--txt2:#9ab8a4;--txt3:#6a8f76;--red:#f87171;--amber:#f59e0b;--blue:#60a5fa;--radius:10px;--radiuslg:14px}
 body{background:var(--bg);color:var(--txt);font-family:system-ui,sans-serif;font-size:14px;line-height:1.6;min-height:100vh}
 button{cursor:pointer;border:none;font-family:inherit}
-input,select,textarea{font-family:inherit;font-size:13px;background:var(--card);border:1px solid var(--border);color:var(--txt);border-radius:var(--radius);padding:8px 12px;width:100%;outline:none}
+input,select,textarea{font-family:inherit;font-size:13px;background:var(--card);border:1px solid var(--border);color:var(--txt);border-radius:var(--radius);padding:8px 12px;width:100%;outline:none;transition:border-color .2s}
 input:focus,select:focus,textarea:focus{border-color:var(--em)}
-textarea{resize:vertical;min-height:70px}
+textarea{resize:vertical;min-height:80px}
 label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
-.btn{padding:8px 16px;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s}
+.btn{padding:9px 18px;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
 .btn-p{background:var(--em);color:#fff}.btn-p:hover{background:var(--em2)}
 .btn-ghost{background:var(--card);color:var(--txt2);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--em);color:var(--em)}
-.btn-sm{padding:5px 10px;font-size:12px}
-.badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;white-space:nowrap}
-.b-ref{background:#2a1a3a;color:#c4b5fd}.b-inprog{background:#1a2a1a;color:#6ee7b7}.b-closed{background:#2a2a2a;color:#9ca3af}.b-active{background:#1a3a2a;color:#34d399}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn:disabled{opacity:.6;cursor:not-allowed}
+.badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;white-space:nowrap}
+.b-referred{background:#2a1a3a;color:#c4b5fd}
+.b-engaged{background:#1a2a3a;color:#60a5fa}
+.b-indelivery{background:#1a2a1a;color:#6ee7b7}
+.b-outcome{background:#1a3a2a;color:#34d399}
+.b-closed{background:#2a2a2a;color:#9ca3af}
+.b-urgent{background:#3a1a1a;color:#f87171}
+.b-standard{background:#1a2a3a;color:#60a5fa}
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:20px;margin-bottom:16px}
-.form-row{margin-bottom:12px}
-.form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.alert{padding:10px 14px;border-radius:var(--radius);font-size:13px;margin-bottom:12px}
-.alert-warn{background:#2a2a1a;border:1px solid #3a3a1a;color:var(--amber)}
-.alert-ok{background:#1a3a2a;border:1px solid #2a5a3a;color:#34d399}
-.alert-err{background:#2a1a1a;border:1px solid #3a2a2a;color:var(--red)}
-.msg{padding:10px 14px;border-radius:var(--radius);font-size:13px;margin-bottom:14px;display:none}
+.form-row{margin-bottom:13px}
+.form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.msg{padding:10px 13px;border-radius:var(--radius);font-size:13px;margin-bottom:13px;display:none}
 .msg-err{background:#2a1a1a;border:1px solid #5a2a2a;color:var(--red)}
 .msg-ok{background:#1a3a2a;border:1px solid #2a5a3a;color:#34d399}
 table{width:100%;border-collapse:collapse}
 th{text-align:left;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;padding:9px 12px;border-bottom:1px solid var(--border)}
 td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;color:var(--txt2);vertical-align:middle}
+tr:hover td{background:rgba(16,185,129,.03)}
 
-/* Layout */
-#auth-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:20px}
-#app-screen{display:none;max-width:900px;margin:0 auto;padding:24px}
-.logo{font-size:22px;font-weight:800;color:var(--em);letter-spacing:-.5px;margin-bottom:4px}
-.logo span{color:var(--txt2);font-weight:400}
-.portal-badge{font-size:11px;color:var(--txt3);margin-bottom:28px}
-.auth-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:28px;width:100%;max-width:400px}
+/* AUTH SCREEN */
+#auth-screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+#app-screen{display:none}
+
+/* AUTH CARD */
+.auth-logo{font-size:26px;font-weight:800;color:var(--em);letter-spacing:-.5px;margin-bottom:4px}
+.auth-logo span{color:var(--txt2);font-weight:400}
+.auth-sub{font-size:13px;color:var(--txt3);margin-bottom:28px;text-align:center}
+.auth-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:28px;width:100%;max-width:420px}
 .tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:20px}
-.tab{flex:1;background:none;color:var(--txt2);padding:9px;font-size:13px;font-weight:600;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all .2s}
+.tab{flex:1;background:none;color:var(--txt2);padding:9px;font-size:13px;font-weight:600;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all .2s;font-family:inherit}
 .tab.active{color:var(--em);border-bottom-color:var(--em)}
 .pane{display:none}.pane.active{display:block}
-.portal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--border)}
-.portal-logo{font-size:18px;font-weight:800;color:var(--em)}
-.portal-logo span{color:var(--txt2);font-weight:400}
-.portal-user{font-size:12px;color:var(--txt3)}
-.section-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:20px}
-.stab{background:none;color:var(--txt2);padding:10px 18px;font-size:13px;border-bottom:2px solid transparent;cursor:pointer;border-top:none;border-left:none;border-right:none;transition:all .2s}
-.stab:hover{color:var(--txt)}
-.stab.active{color:var(--em);border-bottom-color:var(--em)}
-.spane{display:none}.spane.active{display:block}
-.stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
-.stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;text-align:center}
-.stat-val{font-size:28px;font-weight:700;color:var(--em)}
-.stat-lbl{font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+.section-title{font-size:11px;font-weight:700;color:var(--em);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+.divider{height:1px;background:var(--border);margin:14px 0}
+
+/* APP LAYOUT */
+.app-header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.app-logo{font-size:17px;font-weight:700;color:var(--em);letter-spacing:-.5px}
+.app-logo span{color:var(--txt2);font-weight:400}
+.app-logo .portal-tag{font-size:11px;color:var(--txt3);font-weight:400;margin-left:6px}
+.user-info{font-size:12px;color:var(--txt3)}
+.app-main{max-width:900px;margin:0 auto;padding:28px}
+
+/* NAV TABS */
+.nav-tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:24px}
+.nav-tab{background:none;color:var(--txt2);padding:10px 20px;font-size:13px;font-weight:600;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all .2s;font-family:inherit}
+.nav-tab:hover{color:var(--txt)}
+.nav-tab.active{color:var(--em);border-bottom-color:var(--em)}
+.nav-pane{display:none}.nav-pane.active{display:block}
+
+/* STATS */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;text-align:center}
+.stat-val{font-size:26px;font-weight:700;color:var(--em)}
+.stat-lbl{font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-top:3px}
+
+/* STATUS TIMELINE */
+.timeline-step{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--radius);margin-bottom:8px;background:var(--surface);border:1px solid var(--border)}
+.timeline-step.done{border-color:var(--em);background:rgba(16,185,129,.06)}
+.timeline-step.current{border-color:var(--amber);background:rgba(245,158,11,.06)}
+.step-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.step-done{background:var(--em)}
+.step-current{background:var(--amber)}
+.step-pending{background:var(--border)}
+.step-label{font-size:13px;font-weight:500;color:var(--txt)}
+.step-sub{font-size:11px;color:var(--txt3)}
+
+/* HOW IT WORKS */
+.how-step{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--border)}
+.how-num{width:28px;height:28px;border-radius:50%;background:rgba(16,185,129,.15);color:var(--em);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+
+@media(max-width:600px){
+  .stats-row{grid-template-columns:repeat(2,1fr)}
+  .form-grid-2{grid-template-columns:1fr}
+  .app-header{padding:12px 16px}
+  .app-main{padding:16px}
+}
 </style>
 </head>
 <body>
 
-<!-- AUTH -->
+<!-- ═══ AUTH SCREEN ═══ -->
 <div id="auth-screen">
-  <div class="logo">Green<span>CRM</span></div>
-  <div class="portal-badge">Partner Portal — Referral & tracking access</div>
+  <div class="auth-logo">Green<span>CRM</span></div>
+  <div class="auth-sub">Partner Portal — Referral & tracking access</div>
+
   <div class="auth-card">
     <div class="tabs">
       <button class="tab active" onclick="showTab('signin')">Sign in</button>
-      <button class="tab" onclick="showTab('signup')">Register as partner</button>
+      <button class="tab" onclick="showTab('signup')">Register</button>
     </div>
+
+    <!-- SIGN IN -->
     <div id="pane-signin" class="pane active">
       <div class="msg msg-err" id="si-err"></div>
       <div class="form-row"><label>Email</label><input type="email" id="si-email" placeholder="you@probation.gov.uk"/></div>
-      <div class="form-row"><label>Password</label><input type="password" id="si-pass"/></div>
-      <button class="btn btn-p" style="width:100%;margin-top:6px" id="si-btn" onclick="doSignIn()">Sign in</button>
+      <div class="form-row"><label>Password</label><input type="password" id="si-pass" placeholder="••••••••"/></div>
+      <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" id="si-btn" onclick="doSignIn()">Sign in</button>
+      <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--txt3)">No account? <a onclick="showTab('signup')" style="color:var(--em);cursor:pointer">Register as partner →</a></div>
     </div>
+
+    <!-- SIGN UP -->
     <div id="pane-signup" class="pane">
       <div class="msg msg-err" id="su-err"></div>
       <div class="msg msg-ok" id="su-ok"></div>
+      <div class="section-title">Your organisation</div>
       <div class="form-row"><label>Organisation name</label><input id="su-org" placeholder="e.g. London Probation Service"/></div>
       <div class="form-row"><label>Organisation type</label>
         <select id="su-type">
-          <option>Probation</option><option>Jobcentre Plus</option><option>Local authority</option>
-          <option>Housing provider</option><option>Community organisation</option><option>School / college</option><option>Other</option>
+          <option>Probation</option>
+          <option>Jobcentre Plus</option>
+          <option>Local authority</option>
+          <option>Housing provider</option>
+          <option>Community organisation</option>
+          <option>School / college</option>
+          <option>Healthcare</option>
+          <option>Other</option>
         </select>
       </div>
-      <div class="form-row"><label>Your name</label><input id="su-name" placeholder="Jane Smith"/></div>
-      <div class="form-row"><label>Email</label><input type="email" id="su-email" placeholder="you@org.gov.uk"/></div>
-      <div class="form-row"><label>Password</label><input type="password" id="su-pass" placeholder="Min 8 characters"/></div>
-      <div class="alert alert-warn" style="margin-bottom:12px;font-size:12px">Your account will be reviewed before you can submit referrals.</div>
-      <button class="btn btn-p" style="width:100%" id="su-btn" onclick="doSignUp()">Request access</button>
+      <div class="divider"></div>
+      <div class="section-title">Your details</div>
+      <div class="form-row"><label>Your full name</label><input id="su-name" placeholder="Jane Smith"/></div>
+      <div class="form-row"><label>Work email</label><input type="email" id="su-email" placeholder="jane.smith@probation.gov.uk"/></div>
+      <div class="form-row"><label>Password (min 8 characters)</label><input type="password" id="su-pass"/></div>
+      <div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:var(--radius);padding:10px 12px;font-size:12px;color:var(--amber);margin-bottom:13px">
+        ⚠ Your account will be reviewed before you can submit referrals.
+      </div>
+      <button class="btn btn-p" style="width:100%;justify-content:center" id="su-btn" onclick="doSignUp()">Request access</button>
+      <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--txt3)">Already registered? <a onclick="showTab('signin')" style="color:var(--em);cursor:pointer">Sign in →</a></div>
     </div>
   </div>
 </div>
 
-<!-- APP -->
+<!-- ═══ APP SCREEN ═══ -->
 <div id="app-screen">
-  <div class="portal-header">
+
+  <!-- HEADER -->
+  <div class="app-header">
     <div>
-      <div class="portal-logo">Green<span>CRM</span> <span style="font-size:12px;color:var(--txt3);font-weight:400">Partner Portal</span></div>
-      <div class="portal-user" id="portal-user-info">Loading…</div>
+      <div class="app-logo">Green<span>CRM</span><span class="portal-tag">Partner Portal</span></div>
+      <div class="user-info" id="user-info">Loading…</div>
     </div>
     <button class="btn btn-ghost btn-sm" onclick="doSignOut()">Sign out</button>
   </div>
 
-  <div class="section-tabs">
-    <button class="stab active" onclick="showSection('overview')">Overview</button>
-    <button class="stab" onclick="showSection('new-referral')">+ New referral</button>
-    <button class="stab" onclick="showSection('my-referrals')">My referrals</button>
-  </div>
+  <div class="app-main">
 
-  <!-- OVERVIEW -->
-  <div id="spane-overview" class="spane active">
-    <div class="stat-row">
-      <div class="stat-card"><div class="stat-val" id="ov-total">—</div><div class="stat-lbl">Total referrals</div></div>
-      <div class="stat-card"><div class="stat-val" id="ov-active">—</div><div class="stat-lbl">In delivery</div></div>
-      <div class="stat-card"><div class="stat-val" id="ov-outcomes">—</div><div class="stat-lbl">Outcomes achieved</div></div>
+    <!-- NAV TABS -->
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="showNav('overview')">📊 Overview</button>
+      <button class="nav-tab" onclick="showNav('new-referral')">➕ New referral</button>
+      <button class="nav-tab" onclick="showNav('my-referrals')">📋 My referrals</button>
+      <button class="nav-tab" onclick="showNav('how-it-works')">ℹ️ How it works</button>
     </div>
-    <div class="card">
-      <div style="font-size:13px;font-weight:600;color:var(--txt);margin-bottom:14px">Recent referral updates</div>
-      <div id="ov-recent"></div>
-    </div>
-    <div class="card">
-      <div style="font-size:13px;font-weight:600;color:var(--txt);margin-bottom:8px">How to use this portal</div>
-      <p style="font-size:13px;color:var(--txt2);line-height:1.8">
-        1. Click <strong style="color:var(--em)">New referral</strong> to submit someone to the programme<br/>
-        2. Track their progress under <strong style="color:var(--em)">My referrals</strong><br/>
-        3. You'll see when they're engaged, in support, and when outcomes are achieved<br/>
-        4. Contact your programme advisor for any urgent queries
-      </p>
-    </div>
-  </div>
 
-  <!-- NEW REFERRAL -->
-  <div id="spane-new-referral" class="spane">
-    <div class="card">
-      <div style="font-size:15px;font-weight:700;color:var(--txt);margin-bottom:16px">Submit a new referral</div>
-      <div class="msg msg-err" id="ref-err"></div>
-      <div class="msg msg-ok" id="ref-ok"></div>
-      <div class="form-grid-2">
-        <div class="form-row"><label>First name</label><input id="r-fn" placeholder="Jane"/></div>
-        <div class="form-row"><label>Last name</label><input id="r-ln" placeholder="Smith"/></div>
+    <!-- OVERVIEW -->
+    <div id="nav-overview" class="nav-pane active">
+      <div class="stats-row" id="overview-stats">
+        <div class="stat"><div class="stat-val" id="st-total">—</div><div class="stat-lbl">Total referrals</div></div>
+        <div class="stat"><div class="stat-val" id="st-active">—</div><div class="stat-lbl">In delivery</div></div>
+        <div class="stat"><div class="stat-val" id="st-outcomes">—</div><div class="stat-lbl">Outcomes achieved</div></div>
+        <div class="stat"><div class="stat-val" id="st-pending">—</div><div class="stat-lbl">Awaiting allocation</div></div>
       </div>
-      <div class="form-grid-2">
-        <div class="form-row"><label>Date of birth</label><input type="date" id="r-dob"/></div>
-        <div class="form-row"><label>Phone / contact</label><input id="r-phone" placeholder="07700 900000"/></div>
+      <div class="card">
+        <div style="font-size:14px;font-weight:700;color:var(--txt);margin-bottom:14px">Recent referral updates</div>
+        <div id="recent-list"></div>
       </div>
-      <div class="form-grid-2">
-        <div class="form-row"><label>Primary need</label>
-          <select id="r-need">
-            <option>Employment support</option><option>Training / skills</option>
-            <option>Housing support</option><option>Wellbeing / mental health</option>
-            <option>Multiple / complex needs</option>
-          </select>
-        </div>
-        <div class="form-row"><label>Urgency</label>
-          <select id="r-urgency">
-            <option>Standard</option><option>Urgent — within 48hrs</option><option>Crisis — same day</option>
-          </select>
+      <div class="card">
+        <div style="font-size:14px;font-weight:700;color:var(--txt);margin-bottom:14px">Quick actions</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+          <button class="btn btn-p" style="justify-content:center" onclick="showNav('new-referral')">➕ New referral</button>
+          <button class="btn btn-ghost" style="justify-content:center" onclick="showNav('my-referrals')">📋 View all referrals</button>
+          <button class="btn btn-ghost" style="justify-content:center" onclick="showNav('how-it-works')">ℹ️ How it works</button>
         </div>
       </div>
-      <div class="form-row"><label>Background & reason for referral</label>
-        <textarea id="r-notes" placeholder="Brief background, why you're referring, any relevant history…"></textarea>
-      </div>
-      <div class="form-row"><label>Any safeguarding concerns?</label>
-        <select id="r-safe"><option value="">None known</option><option>Domestic abuse</option><option>Mental health risk</option><option>Substance misuse</option><option>Homelessness risk</option><option>Other — noted in background</option></select>
-      </div>
-      <div class="form-row"><label>Consent confirmed?</label>
-        <select id="r-consent"><option value="yes">Yes — person has consented to this referral</option><option value="no">No — consent not yet confirmed</option></select>
-      </div>
-      <div style="margin-top:16px">
-        <button class="btn btn-p" id="ref-btn" onclick="submitReferral()">Submit referral</button>
+    </div>
+
+    <!-- NEW REFERRAL -->
+    <div id="nav-new-referral" class="nav-pane">
+      <div class="card">
+        <div style="font-size:16px;font-weight:700;color:var(--txt);margin-bottom:4px">Submit a new referral</div>
+        <div style="font-size:13px;color:var(--txt3);margin-bottom:20px">Complete all required fields. The team will respond within 2 working days.</div>
+        <div class="msg msg-err" id="ref-err"></div>
+        <div class="msg msg-ok" id="ref-ok"></div>
+
+        <div class="section-title">Personal details</div>
+        <div class="form-grid-2">
+          <div class="form-row"><label>First name *</label><input id="r-fn" placeholder="Jane"/></div>
+          <div class="form-row"><label>Last name *</label><input id="r-ln" placeholder="Smith"/></div>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-row"><label>Date of birth</label><input type="date" id="r-dob"/></div>
+          <div class="form-row"><label>Phone / contact number</label><input id="r-phone" placeholder="07700 900000"/></div>
+        </div>
+        <div class="form-row"><label>Email address</label><input type="email" id="r-email" placeholder="jane@example.com"/></div>
+
+        <div class="divider"></div>
+        <div class="section-title">Referral details</div>
+        <div class="form-grid-2">
+          <div class="form-row"><label>Primary need *</label>
+            <select id="r-need">
+              <option>Employment support</option>
+              <option>Training / skills</option>
+              <option>Housing support</option>
+              <option>Wellbeing / mental health</option>
+              <option>Multiple / complex needs</option>
+              <option>Circular economy / repair training</option>
+            </select>
+          </div>
+          <div class="form-row"><label>Urgency *</label>
+            <select id="r-urgency">
+              <option value="Standard">Standard — within 5 working days</option>
+              <option value="Urgent">Urgent — within 48 hours</option>
+              <option value="Crisis">Crisis — same day response needed</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row"><label>Background & reason for referral *</label>
+          <textarea id="r-notes" placeholder="Brief background about this person, why you're referring them, any relevant history or context the team should know…"></textarea>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-row"><label>Key barriers (if known)</label>
+            <select id="r-barriers" multiple style="min-height:100px">
+              <option>Housing</option><option>Confidence</option><option>Skills gap</option>
+              <option>Transport</option><option>Childcare</option><option>Mental health</option>
+              <option>Substance misuse</option><option>Criminal record</option>
+              <option>Language barrier</option><option>Benefits</option>
+            </select>
+            <div style="font-size:11px;color:var(--txt3);margin-top:3px">Hold Ctrl/Cmd to select multiple</div>
+          </div>
+          <div class="form-row"><label>Safeguarding concerns</label>
+            <select id="r-safe">
+              <option value="">None known</option>
+              <option>Domestic abuse</option>
+              <option>Mental health risk</option>
+              <option>Substance misuse</option>
+              <option>Homelessness risk</option>
+              <option>Child safeguarding</option>
+              <option>Other — noted in background</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+        <div class="section-title">Consent & compliance</div>
+        <div class="form-row">
+          <label>Consent confirmed *</label>
+          <select id="r-consent">
+            <option value="yes">✓ Yes — person has given informed consent to this referral</option>
+            <option value="no">✗ No — consent not yet confirmed</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Your reference number (optional)</label>
+          <input id="r-ref" placeholder="Your internal case/ref number"/>
+        </div>
+
+        <div style="margin-top:18px;display:flex;gap:10px">
+          <button class="btn btn-p" id="ref-btn" onclick="submitReferral()">Submit referral</button>
+          <button class="btn btn-ghost" onclick="clearReferralForm()">Clear form</button>
+        </div>
       </div>
     </div>
-  </div>
 
-  <!-- MY REFERRALS -->
-  <div id="spane-my-referrals" class="spane">
-    <div id="my-ref-list"></div>
+    <!-- MY REFERRALS -->
+    <div id="nav-my-referrals" class="nav-pane">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div style="font-size:16px;font-weight:700;color:var(--txt)">My referrals</div>
+        <select id="ref-filter" onchange="filterReferrals()" style="width:auto;max-width:180px">
+          <option value="">All statuses</option>
+          <option value="Referred">Referred</option>
+          <option value="Engaged">Engaged</option>
+          <option value="In delivery">In delivery</option>
+          <option value="Outcome achieved">Outcome achieved</option>
+          <option value="Closed">Closed</option>
+        </select>
+      </div>
+      <div id="referrals-list"></div>
+    </div>
+
+    <!-- HOW IT WORKS -->
+    <div id="nav-how-it-works" class="nav-pane">
+      <div class="card">
+        <div style="font-size:16px;font-weight:700;color:var(--txt);margin-bottom:16px">How the referral process works</div>
+        <div class="how-step">
+          <div class="how-num">1</div>
+          <div><div style="font-size:13px;font-weight:600;color:var(--txt)">Submit a referral</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">Complete the New referral form with the person's details, primary need, and confirm consent. Urgent referrals are flagged for same-day or 48-hour response.</div></div>
+        </div>
+        <div class="how-step">
+          <div class="how-num">2</div>
+          <div><div style="font-size:13px;font-weight:600;color:var(--txt)">Allocation</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">The programme team reviews the referral and allocates an advisor within the agreed timeframe. Status changes to Engaged once contact is made.</div></div>
+        </div>
+        <div class="how-step">
+          <div class="how-num">3</div>
+          <div><div style="font-size:13px;font-weight:600;color:var(--txt)">Delivery & support</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">The participant receives tailored support. You can track their progress under My referrals. Status updates in real time as they move through the programme.</div></div>
+        </div>
+        <div class="how-step">
+          <div class="how-num">4</div>
+          <div><div style="font-size:13px;font-weight:600;color:var(--txt)">Outcome achieved</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">When an outcome is achieved (employment, training, housing etc.) the status updates. You'll see this reflected in your referral dashboard.</div></div>
+        </div>
+        <div class="how-step" style="border:none">
+          <div class="how-num">5</div>
+          <div><div style="font-size:13px;font-weight:600;color:var(--txt)">Sustainment & closure</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">The team supports sustainment for 12+ weeks where possible. Cases are closed when support ends or the person exits the programme.</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div style="font-size:14px;font-weight:700;color:var(--txt);margin-bottom:12px">Referral status guide</div>
+        ${[
+          {s:'Referred',c:'b-referred',d:'Referral received — awaiting allocation to an advisor'},
+          {s:'Engaged',c:'b-engaged',d:'Advisor has made contact — person is engaged'},
+          {s:'In delivery',c:'b-indelivery',d:'Actively receiving support — working toward outcomes'},
+          {s:'Outcome achieved',c:'b-outcome',d:'Positive outcome recorded (employment, training etc.)'},
+          {s:'Closed',c:'b-closed',d:'Support has ended — case closed'},
+        ].map(x=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)"><span class="badge ${x.c}">${x.s}</span><span style="font-size:12px;color:var(--txt2)">${x.d}</span></div>`).join('')}
+      </div>
+      <div class="card">
+        <div style="font-size:14px;font-weight:700;color:var(--txt);margin-bottom:10px">Need help?</div>
+        <p style="font-size:13px;color:var(--txt2);line-height:1.8">For urgent queries about a referral, contact your programme liaison directly. For technical issues with the portal, email <a href="mailto:hello@greencrm.co.uk" style="color:var(--em)">hello@greencrm.co.uk</a></p>
+      </div>
+    </div>
+
   </div>
 </div>
+
+<!-- REFERRAL DETAIL MODAL -->
+<div id="modal-ref" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:500;align-items:center;justify-content:center;padding:16px">
+<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radiuslg);padding:24px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto">
+  <h2 style="font-size:17px;font-weight:700;color:var(--txt);margin-bottom:18px" id="modal-ref-title">Referral detail</h2>
+  <div id="modal-ref-body"></div>
+  <div style="margin-top:18px;text-align:right"><button class="btn btn-ghost" onclick="document.getElementById('modal-ref').style.display='none'">Close</button></div>
+</div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const SURL='https://nznfrxzgvcjhfsdaphyp.supabase.co';
 const SKEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw';
 const sb=supabase.createClient(SURL,SKEY);
-let USER=null,PARTNER=null;
-
+let USER=null,PARTNER=null,allRefs=[];
 const $=id=>document.getElementById(id);
-function showTab(t){document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',['signin','signup'][i]===t));document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));$('pane-'+t).classList.add('active');}
-function showSection(s){document.querySelectorAll('.stab').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.spane').forEach(p=>p.classList.remove('active'));$('spane-'+s).classList.add('active');document.querySelectorAll('.stab').forEach(b=>{if(b.textContent.replace('+ ','').trim().toLowerCase().replace(/ /g,'-')===s)b.classList.add('active');});if(s==='my-referrals')loadMyReferrals();if(s==='overview')loadOverview();}
-function showMsg(id,msg){const e=$(id);e.textContent=msg;e.style.display='block';}
-function hideMsg(...ids){ids.forEach(id=>$(id).style.display='none');}
-function setLoading(id,on,lbl){const b=$(id);b.disabled=on;b.textContent=on?'Please wait…':lbl;}
-function fmtD(d){return d?new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}):'—';}
+const fmtD=d=>d?new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}):'—';
+const fmtDT=d=>d?new Date(d).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'—';
 
+// ── AUTH ──
 async function init(){
   const{data:{session}}=await sb.auth.getSession();
-  if(!session)return;
-  USER=session.user;
+  if(session){USER=session.user;await loadPartner();}
+}
+
+async function loadPartner(){
   const{data:p}=await sb.from('partner_profiles').select('*').eq('id',USER.id).single();
   PARTNER=p;
   $('auth-screen').style.display='none';
   $('app-screen').style.display='block';
-  $('portal-user-info').textContent=`${PARTNER?.full_name||USER.email} · ${PARTNER?.org_name||'Partner organisation'}`;
+  $('user-info').textContent=`${PARTNER?.full_name||USER.email} · ${PARTNER?.org_name||'Partner'}`;
   loadOverview();
 }
 
+function showTab(t){
+  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',['signin','signup'][i]===t));
+  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
+  $('pane-'+t).classList.add('active');
+}
+
+function showMsg(id,msg){const e=$(id);e.textContent=msg;e.style.display='block';}
+function hideMsg(...ids){ids.forEach(id=>$(id).style.display='none');}
+function setLoad(id,on,lbl){const b=$(id);b.disabled=on;b.textContent=on?'Please wait…':lbl;}
+
 async function doSignIn(){
   const email=$('si-email').value.trim(),pass=$('si-pass').value;
-  hideMsg('si-err');if(!email||!pass){showMsg('si-err','Please enter email and password.');return;}
-  setLoading('si-btn',true,'Sign in');
+  hideMsg('si-err');
+  if(!email||!pass){showMsg('si-err','Please enter your email and password.');return;}
+  setLoad('si-btn',true,'Sign in');
   const{error}=await sb.auth.signInWithPassword({email,password:pass});
-  setLoading('si-btn',false,'Sign in');
+  setLoad('si-btn',false,'Sign in');
   if(error){showMsg('si-err',error.message);return;}
-  init();
+  const{data:{session}}=await sb.auth.getSession();
+  if(session){USER=session.user;await loadPartner();}
 }
 
 async function doSignUp(){
@@ -224,68 +402,158 @@ async function doSignUp(){
   hideMsg('su-err','su-ok');
   if(!org||!name||!email||!pass){showMsg('su-err','Please fill in all fields.');return;}
   if(pass.length<8){showMsg('su-err','Password must be at least 8 characters.');return;}
-  setLoading('su-btn',true,'Request access');
-  const{data,error}=await sb.auth.signUp({email,password:pass,options:{data:{full_name:name,org_name:org,org_type:type,role:'partner'}}});
-  if(error){setLoading('su-btn',false,'Request access');showMsg('su-err',error.message);return;}
+  setLoad('su-btn',true,'Request access');
+  const{data,error}=await sb.auth.signUp({email,password:pass,options:{data:{full_name:name,org_name:org}}});
+  if(error){setLoad('su-btn',false,'Request access');showMsg('su-err',error.message);return;}
   const uid=data?.user?.id;
   if(uid){await sb.from('partner_profiles').insert({id:uid,full_name:name,email,org_name:org,org_type:type,status:'active'});}
-  setLoading('su-btn',false,'Request access');
-  showMsg('su-ok','✓ Account created! You can now sign in.');
-  setTimeout(async()=>{const{error:e}=await sb.auth.signInWithPassword({email,password:pass});if(!e)init();},1500);
+  setLoad('su-btn',false,'Request access');
+  showMsg('su-ok','✓ Account created! Signing you in…');
+  setTimeout(async()=>{
+    const{error:e}=await sb.auth.signInWithPassword({email,password:pass});
+    if(!e){const{data:{session}}=await sb.auth.getSession();if(session){USER=session.user;await loadPartner();}}
+  },1200);
 }
 
 async function doSignOut(){await sb.auth.signOut();$('app-screen').style.display='none';$('auth-screen').style.display='flex';USER=null;PARTNER=null;}
 
+// ── NAV ──
+function showNav(n){
+  document.querySelectorAll('.nav-tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.nav-pane').forEach(p=>p.classList.remove('active'));
+  $('nav-'+n).classList.add('active');
+  document.querySelectorAll('.nav-tab').forEach(b=>{if(b.textContent.toLowerCase().includes(n.replace('-',' ').toLowerCase().slice(0,4)))b.classList.add('active');});
+  if(n==='my-referrals')loadReferrals();
+  if(n==='overview')loadOverview();
+}
+
+// ── OVERVIEW ──
 async function loadOverview(){
-  const{data:refs}=await sb.from('partner_referrals').select('*').eq('partner_id',USER.id).order('created_at',{ascending:false});
-  const all=refs||[];
-  $('ov-total').textContent=all.length;
-  $('ov-active').textContent=all.filter(r=>r.status==='In delivery'||r.status==='Engaged').length;
-  $('ov-outcomes').textContent=all.filter(r=>r.status==='Outcome achieved').length;
-  const sc={'Referred':'b-ref','Engaged':'b-active','In delivery':'b-inprog','Outcome achieved':'b-active','Closed':'b-closed'};
-  $('ov-recent').innerHTML=all.slice(0,5).map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
-    <div><div style="font-size:13px;font-weight:500;color:var(--txt)">${r.first_name||''} ${r.last_name||''}</div><div style="font-size:11px;color:var(--txt3)">${fmtD(r.created_at)} · ${r.primary_need||''}</div></div>
-    <span class="badge ${sc[r.status]||'b-ref'}">${r.status||'Referred'}</span>
-  </div>`).join('')||'<div style="color:var(--txt3);font-size:13px">No referrals submitted yet.</div>';
+  const{data}=await sb.from('partner_referrals').select('*').eq('partner_id',USER.id).order('created_at',{ascending:false});
+  allRefs=data||[];
+  const total=allRefs.length;
+  const active=allRefs.filter(r=>r.status==='In delivery'||r.status==='Engaged').length;
+  const outcomes=allRefs.filter(r=>r.status==='Outcome achieved').length;
+  const pending=allRefs.filter(r=>r.status==='Referred').length;
+  $('st-total').textContent=total;
+  $('st-active').textContent=active;
+  $('st-outcomes').textContent=outcomes;
+  $('st-pending').textContent=pending;
+
+  const statusBadge=s=>{
+    const m={'Referred':'b-referred','Engaged':'b-engaged','In delivery':'b-indelivery','Outcome achieved':'b-outcome','Closed':'b-closed'};
+    return`<span class="badge ${m[s]||'b-referred'}">${s}</span>`;
+  };
+  $('recent-list').innerHTML=allRefs.slice(0,5).map(r=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="viewRef(${r.id})">
+      <div>
+        <div style="font-size:13px;font-weight:500;color:var(--txt)">${r.first_name||''} ${r.last_name||''}</div>
+        <div style="font-size:11px;color:var(--txt3)">${fmtD(r.created_at)} · ${r.primary_need||''} · ${r.urgency||'Standard'}</div>
+      </div>
+      ${statusBadge(r.status||'Referred')}
+    </div>`).join('')||'<div style="color:var(--txt3);font-size:13px;padding:12px 0">No referrals yet. Submit your first referral above.</div>';
 }
 
-async function submitReferral(){
-  const fn=$('r-fn').value.trim(),ln=$('r-ln').value.trim(),notes=$('r-notes').value.trim(),consent=$('r-consent').value;
-  hideMsg('ref-err','ref-ok');
-  if(!fn||!ln){showMsg('ref-err','First name and last name are required.');return;}
-  if(consent==='no'){showMsg('ref-err','Please confirm consent before submitting.');return;}
-  setLoading('ref-btn',true,'Submit referral');
-  const{error}=await sb.from('partner_referrals').insert({
-    partner_id:USER.id,partner_name:PARTNER?.org_name||'Partner',
-    first_name:fn,last_name:ln,dob:$('r-dob').value||null,
-    phone:$('r-phone').value,primary_need:$('r-need').value,
-    urgency:$('r-urgency').value,notes,
-    safeguarding:$('r-safe').value||null,
-    consent:true,status:'Referred',
-    created_at:new Date().toISOString()
-  });
-  setLoading('ref-btn',false,'Submit referral');
-  if(error){showMsg('ref-err','Error: '+error.message);return;}
-  ['r-fn','r-ln','r-dob','r-phone','r-notes'].forEach(f=>$(f).value='');
-  $('r-safe').value='';$('r-urgency').value='Standard';
-  showMsg('ref-ok','✓ Referral submitted successfully. The team will be in touch within 2 working days.');
-  loadOverview();
+// ── REFERRALS ──
+async function loadReferrals(){
+  const{data}=await sb.from('partner_referrals').select('*').eq('partner_id',USER.id).order('created_at',{ascending:false});
+  allRefs=data||[];
+  renderReferrals(allRefs);
 }
 
-async function loadMyReferrals(){
-  const{data:refs}=await sb.from('partner_referrals').select('*').eq('partner_id',USER.id).order('created_at',{ascending:false});
-  const all=refs||[];
-  const sc={'Referred':'b-ref','Engaged':'b-active','In delivery':'b-inprog','Outcome achieved':'b-active','Closed':'b-closed'};
-  $('my-ref-list').innerHTML=all.length?`<div class="card"><table><thead><tr><th>Name</th><th>Referred</th><th>Need</th><th>Urgency</th><th>Status</th></tr></thead><tbody>
-    ${all.map(r=>`<tr>
+function filterReferrals(){
+  const f=($('ref-filter')||{}).value||'';
+  renderReferrals(f?allRefs.filter(r=>r.status===f):allRefs);
+}
+
+function renderReferrals(refs){
+  const statusBadge=s=>{
+    const m={'Referred':'b-referred','Engaged':'b-engaged','In delivery':'b-indelivery','Outcome achieved':'b-outcome','Closed':'b-closed'};
+    return`<span class="badge ${m[s]||'b-referred'}">${s||'Referred'}</span>`;
+  };
+  const urgBadge=u=>`<span class="badge ${u==='Crisis'?'b-urgent':u==='Urgent'?'b-referred':'b-standard'}">${u||'Standard'}</span>`;
+  $('referrals-list').innerHTML=refs.length?`
+    <div class="card" style="padding:0;overflow:hidden">
+    <table><thead><tr><th>Name</th><th>Submitted</th><th>Need</th><th>Urgency</th><th>Status</th><th></th></tr></thead>
+    <tbody>${refs.map(r=>`<tr>
       <td style="color:var(--txt);font-weight:500">${r.first_name||''} ${r.last_name||''}</td>
       <td style="font-size:12px">${fmtD(r.created_at)}</td>
       <td style="font-size:12px;color:var(--txt2)">${r.primary_need||''}</td>
-      <td><span class="badge ${r.urgency==='Crisis — same day'?'b-flag':r.urgency==='Urgent — within 48hrs'?'b-ref':'b-closed'}">${r.urgency||'Standard'}</span></td>
-      <td><span class="badge ${sc[r.status]||'b-ref'}">${r.status||'Referred'}</span></td>
-    </tr>`).join('')}
-  </tbody></table></div>`:'<div class="card" style="color:var(--txt3);font-size:13px">No referrals submitted yet. Use the New referral tab to get started.</div>';
+      <td>${urgBadge(r.urgency)}</td>
+      <td>${statusBadge(r.status)}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="viewRef(${r.id})">View →</button></td>
+    </tr>`).join('')}</tbody></table></div>`
+    :'<div style="text-align:center;padding:40px 20px;color:var(--txt3)"><div style="font-size:32px;margin-bottom:8px">📋</div><div>No referrals yet.</div><div style="margin-top:8px"><button class="btn btn-p btn-sm" onclick="showNav(\'new-referral\')">Submit your first referral →</button></div></div>';
 }
+
+function viewRef(id){
+  const r=allRefs.find(x=>x.id===id);if(!r)return;
+  const stages=['Referred','Engaged','In delivery','Outcome achieved','Closed'];
+  const currentIdx=stages.indexOf(r.status||'Referred');
+  $('modal-ref-title').textContent=`${r.first_name||''} ${r.last_name||''}`;
+  $('modal-ref-body').innerHTML=`
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;color:var(--txt3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Journey progress</div>
+      ${stages.map((s,i)=>`<div class="timeline-step ${i<currentIdx?'done':i===currentIdx?'current':''}">
+        <div class="step-dot ${i<currentIdx?'step-done':i===currentIdx?'step-current':'step-pending'}"></div>
+        <div><div class="step-label">${s}</div>${i===currentIdx?'<div class="step-sub">Current status</div>':i<currentIdx?'<div class="step-sub" style="color:var(--em3)">Completed</div>':''}</div>
+      </div>`).join('')}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div style="background:var(--card);padding:10px;border-radius:var(--radius)"><div style="font-size:11px;color:var(--txt3)">SUBMITTED</div><div style="font-size:13px;color:var(--txt);margin-top:2px">${fmtDT(r.created_at)}</div></div>
+      <div style="background:var(--card);padding:10px;border-radius:var(--radius)"><div style="font-size:11px;color:var(--txt3)">PRIMARY NEED</div><div style="font-size:13px;color:var(--txt);margin-top:2px">${r.primary_need||'—'}</div></div>
+      <div style="background:var(--card);padding:10px;border-radius:var(--radius)"><div style="font-size:11px;color:var(--txt3)">URGENCY</div><div style="font-size:13px;color:var(--txt);margin-top:2px">${r.urgency||'Standard'}</div></div>
+      <div style="background:var(--card);padding:10px;border-radius:var(--radius)"><div style="font-size:11px;color:var(--txt3)">YOUR REF</div><div style="font-size:13px;color:var(--txt);margin-top:2px">${r.partner_ref||'—'}</div></div>
+    </div>
+    ${r.notes?`<div style="background:var(--card);padding:12px;border-radius:var(--radius);margin-bottom:10px"><div style="font-size:11px;color:var(--txt3);margin-bottom:4px">BACKGROUND NOTES</div><div style="font-size:13px;color:var(--txt2)">${r.notes}</div></div>`:''}
+    ${r.safeguarding?`<div style="background:#2a1a2a;border:1px solid #5a2a3a;padding:10px;border-radius:var(--radius);font-size:13px;color:#f9a8d4">🔐 Safeguarding: ${r.safeguarding}</div>`:''}`;
+  $('modal-ref').style.display='flex';
+}
+
+// ── SUBMIT REFERRAL ──
+async function submitReferral(){
+  const fn=$('r-fn').value.trim(),ln=$('r-ln').value.trim();
+  const notes=$('r-notes').value.trim(),consent=$('r-consent').value;
+  hideMsg('ref-err','ref-ok');
+  if(!fn||!ln){showMsg('ref-err','First name and last name are required.');return;}
+  if(!notes){showMsg('ref-err','Please provide background and reason for referral.');return;}
+  if(consent==='no'){showMsg('ref-err','Consent must be confirmed before submitting a referral.');return;}
+  const barriers=[...$('r-barriers').selectedOptions].map(o=>o.value);
+  setLoad('ref-btn',true,'Submitting…');
+  const{error}=await sb.from('partner_referrals').insert({
+    partner_id:USER.id,
+    partner_name:PARTNER?.org_name||'Partner',
+    first_name:fn,last_name:ln,
+    dob:$('r-dob').value||null,
+    phone:$('r-phone').value,
+    email:$('r-email').value,
+    primary_need:$('r-need').value,
+    urgency:$('r-urgency').value,
+    notes,barriers,
+    safeguarding:$('r-safe').value||null,
+    partner_ref:$('r-ref').value,
+    consent:true,
+    status:'Referred',
+    created_at:new Date().toISOString()
+  });
+  setLoad('ref-btn',false,'Submit referral');
+  if(error){showMsg('ref-err','Error submitting referral: '+error.message);return;}
+  showMsg('ref-ok',`✓ Referral for ${fn} ${ln} submitted successfully. The team will be in touch within ${$('r-urgency').value==='Crisis'?'a few hours':$('r-urgency').value==='Urgent'?'48 hours':'2 working days'}.`);
+  clearReferralForm();
+  loadOverview();
+}
+
+function clearReferralForm(){
+  ['r-fn','r-ln','r-dob','r-phone','r-email','r-notes','r-ref'].forEach(f=>$(f).value='');
+  $('r-safe').value='';$('r-urgency').value='Standard';$('r-need').value='Employment support';
+  $('r-consent').value='yes';
+  // Deselect multi-select
+  [...$('r-barriers').options].forEach(o=>o.selected=false);
+}
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&$('pane-signin').classList.contains('active'))doSignIn();
+});
 
 init();
 </script>
