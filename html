@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>GreenCRM</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0a0f0a;--surface:#111811;--card:#182018;--border:#2a3a2a;--em:#10b981;--em2:#059669;--em3:#34d399;--txt:#e2f5eb;--txt2:#9ab8a4;--txt3:#6a8f76;--amber:#f59e0b;--red:#f87171;--blue:#60a5fa;--radius:10px;--radiuslg:14px}
+body{background:var(--bg);color:var(--txt);font-family:system-ui,sans-serif;font-size:14px;line-height:1.6;min-height:100vh;display:none}
+body.ready{display:flex;flex-direction:column}
+button{cursor:pointer;border:none;font-family:inherit}
+input,select,textarea{font-family:inherit;font-size:13px;background:var(--card);border:1px solid var(--border);color:var(--txt);border-radius:var(--radius);padding:7px 11px;width:100%;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--em)}
+textarea{resize:vertical;min-height:70px}
+label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+#shell{display:flex;flex:1;min-height:0}
+#sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:14px 0;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto}
+#main{flex:1;overflow-y:auto;padding:24px}
+.logo{font-size:17px;font-weight:700;color:var(--em);padding:4px 18px 16px;border-bottom:1px solid var(--border);margin-bottom:10px;letter-spacing:-.5px}
+.logo span{color:var(--txt2);font-weight:400}
+.nav-section{font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;padding:10px 18px 4px}
+.nav-btn{display:flex;align-items:center;gap:8px;background:none;color:var(--txt2);padding:8px 18px;font-size:13px;width:100%;text-align:left;border-left:2px solid transparent;transition:all .15s}
+.nav-btn:hover{color:var(--txt);background:rgba(16,185,129,.06)}
+.nav-btn.active{color:var(--em);background:rgba(16,185,129,.1);border-left-color:var(--em)}
+.nav-btn .icon{font-size:14px;width:18px;text-align:center}
+.sidebar-bottom{margin-top:auto;padding:12px 18px;border-top:1px solid var(--border)}
+.pro-badge-sm{background:linear-gradient(135deg,var(--em),var(--em2));color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px}
+.upgrade-sidebar{background:var(--em);color:#fff;padding:8px 12px;border-radius:var(--radius);font-size:12px;font-weight:600;width:100%;text-align:center;margin-top:8px;cursor:pointer;border:none}
+.upgrade-sidebar:hover{background:var(--em2)}
+.page{display:none}.page.active{display:block}
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.page-title{font-size:20px;font-weight:700;color:var(--txt)}
+.page-sub{font-size:13px;color:var(--txt3);margin-top:2px}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
+.stat-lbl{font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.stat-val{font-size:24px;font-weight:700;color:var(--em)}
+.stat-sub{font-size:11px;color:var(--txt3);margin-top:2px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:18px;margin-bottom:16px}
+.card-title{font-size:12px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;font-weight:600}
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;color:var(--txt2);vertical-align:middle}
+tr:hover td{background:rgba(16,185,129,.03)}
+.cn{color:var(--txt);font-weight:500}
+.badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;white-space:nowrap}
+.b-active{background:#1a3a2a;color:#34d399}.b-prospect{background:#2a2a1a;color:#f59e0b}
+.b-lapsed{background:#2a1a1a;color:#f87171}.b-engaged{background:#1a2a3a;color:#60a5fa}
+.b-vol{background:#1a2a3a;color:#60a5fa}.b-part{background:#2a1a3a;color:#a78bfa}
+.b-ref{background:#2a1a3a;color:#c4b5fd}.b-inprog{background:#1a2a1a;color:#6ee7b7}
+.b-closed{background:#2a2a2a;color:#9ca3af}.b-flag{background:#2a1a1a;color:#f87171}
+.risk-hi{background:#3a1a1a;color:#f87171}.risk-med{background:#2a2a1a;color:#fbbf24}.risk-lo{background:#1a3a2a;color:#34d399}
+.toolbar{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+.toolbar input{max-width:220px}.toolbar select{max-width:150px}
+.ml-auto{margin-left:auto}
+.btn{padding:7px 14px;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s}
+.btn-p{background:var(--em);color:#fff}.btn-p:hover{background:var(--em2)}
+.btn-ghost{background:var(--card);color:var(--txt2);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--em);color:var(--em)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.sbar{display:flex;align-items:center;gap:6px}
+.strack{flex:1;height:4px;background:var(--border);border-radius:3px;max-width:55px}
+.sfill{height:100%;border-radius:3px;background:var(--em)}
+.tl-entry{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.tl-dot{width:9px;height:9px;border-radius:50%;background:var(--em);flex-shrink:0;margin-top:4px}
+.tl-dot.amber{background:var(--amber)}.tl-dot.blue{background:var(--blue)}.tl-dot.red{background:var(--red)}
+.tl-lbl{font-size:13px;color:var(--txt);font-weight:500}
+.tl-meta{font-size:11px;color:var(--txt3)}
+.kanban{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;overflow-x:auto;padding-bottom:6px}
+.k-col{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;min-width:150px}
+.k-col-hd{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+.k-cnt{background:var(--border);color:var(--txt2);font-size:10px;padding:1px 5px;border-radius:10px}
+.k-card{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:9px 10px;margin-bottom:7px;cursor:pointer;transition:border-color .2s}
+.k-card:hover{border-color:var(--em)}
+.k-name{font-size:12px;font-weight:600;color:var(--txt)}
+.k-meta{font-size:11px;color:var(--txt3);margin-top:2px}
+.k-flag{font-size:10px;color:var(--red);margin-top:3px}
+.impact-wall{background:var(--card);border:1px solid var(--em);border-radius:var(--radiuslg);padding:32px;text-align:center;margin-bottom:20px}
+.iw-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.iw-val{font-size:32px;font-weight:800;color:var(--em)}
+.iw-lbl{font-size:11px;color:var(--txt2);margin-top:2px}
+.fund-bar-wrap{margin-bottom:12px}
+.fund-top{display:flex;justify-content:space-between;font-size:12px;color:var(--txt2);margin-bottom:4px}
+.fund-track{height:7px;background:var(--border);border-radius:4px}
+.fund-fill{height:100%;border-radius:4px;background:var(--em);transition:width .6s}
+.fund-fill.warn{background:var(--amber)}.fund-fill.danger{background:var(--red)}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:500;align-items:center;justify-content:center;padding:16px}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radiuslg);padding:24px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto}
+.modal h2{font-size:17px;font-weight:700;color:var(--txt);margin-bottom:18px}
+.form-row{margin-bottom:12px}
+.form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.modal-footer{display:flex;gap:8px;margin-top:18px;justify-content:flex-end}
+.alert{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--radius);font-size:13px;margin-bottom:12px}
+.alert-warn{background:#2a2a1a;border:1px solid #3a3a1a;color:#fbbf24}
+.alert-info{background:#1a2a3a;border:1px solid #1a3a5a;color:#60a5fa}
+.alert-danger{background:#2a1a1a;border:1px solid #3a2a2a;color:#f87171}
+.eco-stat{display:inline-flex;align-items:center;gap:6px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);border-radius:8px;padding:6px 12px;font-size:13px;color:var(--em);margin:3px}
+.safe-flag{display:inline-flex;align-items:center;gap:5px;background:#3a1a2a;border:1px solid #5a2a3a;border-radius:6px;padding:3px 9px;font-size:11px;color:#f9a8d4}
+.spinner-full{display:flex;align-items:center;justify-content:center;height:200px;font-size:13px;color:var(--txt3)}
+.uplist{list-style:none;margin-bottom:20px}
+.uplist li{padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;color:var(--txt2);display:flex;align-items:center;gap:8px}
+.up-cta{width:100%;background:var(--em);color:#fff;padding:13px;border-radius:var(--radius);font-size:15px;font-weight:700;cursor:pointer;border:none}.up-cta:hover{background:var(--em2)}
+@media(max-width:900px){
+  #sidebar{width:52px}
+  .nav-btn span,.nav-section,.logo span,.sidebar-bottom p,.upgrade-sidebar{display:none}
+  .logo{padding:4px 12px 16px;font-size:14px}
+  .nav-btn{padding:10px 14px;justify-content:center}
+  .stats-grid{grid-template-columns:repeat(2,1fr)}
+  .kanban{grid-template-columns:repeat(3,1fr)}
+  .iw-grid{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+
+<div id="shell">
+<div id="sidebar">
+  <div class="logo">Green<span>CRM</span></div>
+  <div class="nav-section">Overview</div>
+  <button class="nav-btn" onclick="go('dashboard')"><span class="icon">📊</span><span>Dashboard</span></button>
+  <button class="nav-btn" onclick="go('impact')"><span class="icon">🌿</span><span>Impact Wall</span></button>
+  <div class="nav-section">People</div>
+  <button class="nav-btn active" onclick="go('participants')"><span class="icon">👤</span><span>Participants</span></button>
+  <button class="nav-btn" onclick="go('contacts')"><span class="icon">📋</span><span>Contacts & Donors</span></button>
+  <button class="nav-btn" onclick="go('volunteers')"><span class="icon">🤝</span><span>Volunteers & Staff</span></button>
+  <div class="nav-section">Delivery</div>
+  <button class="nav-btn" onclick="go('pipeline')"><span class="icon">🔁</span><span>Caseload Pipeline</span></button>
+  <button class="nav-btn" onclick="go('referrals')"><span class="icon">📨</span><span>Referrals</span></button>
+  <button class="nav-btn" onclick="go('events')"><span class="icon">📅</span><span>Events</span></button>
+  <button class="nav-btn" onclick="go('circular')"><span class="icon">♻️</span><span>Circular Economy</span></button>
+  <div class="nav-section">Reporting</div>
+  <button class="nav-btn" onclick="go('outcomes')"><span class="icon">🎯</span><span>Outcomes</span></button>
+  <button class="nav-btn" onclick="go('funding')"><span class="icon">💰</span><span>Funding & Contracts</span></button>
+  <button class="nav-btn" onclick="go('evidence')"><span class="icon">🗂️</span><span>Evidence Hub</span></button>
+  <div class="nav-section">Settings</div>
+  <button class="nav-btn" onclick="go('safeguarding')"><span class="icon">🔐</span><span>Safeguarding</span></button>
+  <button class="nav-btn" onclick="go('settings')"><span class="icon">⚙️</span><span>Settings</span></button>
+  <div class="sidebar-bottom">
+    <div id="sb-free">
+      <p style="font-size:11px;color:var(--txt3);margin-bottom:4px" id="sb-plan-label">Free plan</p>
+      <button class="upgrade-sidebar" onclick="openUpgrade()">Upgrade to Pro</button>
+    </div>
+    <div id="sb-pro" style="display:none">
+      <span class="pro-badge-sm">PRO</span>
+      <p style="font-size:11px;color:var(--txt3);margin-top:4px" id="sb-org-name"></p>
+    </div>
+    <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:10px" onclick="signOut()">Sign out</button>
+  </div>
+</div>
+
+<div id="main">
+
+<!-- DASHBOARD -->
+<div id="page-dashboard" class="page">
+  <div class="page-header"><div><div class="page-title">Dashboard</div><div class="page-sub" id="dash-org-name">Loading…</div></div><button class="btn btn-ghost btn-sm" onclick="renderDashboard()">↻ Refresh</button></div>
+  <div class="stats-grid" id="dash-stats"><div class="spinner-full">Loading…</div></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div class="card"><div class="card-title">At-risk — chase today</div><div id="dash-risk"></div></div>
+    <div class="card"><div class="card-title">Recent activity</div><div id="dash-activity"></div></div>
+  </div>
+  <div class="card"><div class="card-title">Starts vs outcomes (6 months)</div><div style="position:relative;height:190px"><canvas id="dash-chart"></canvas></div></div>
+</div>
+
+<!-- PARTICIPANTS -->
+<div id="page-participants" class="page active">
+  <div class="page-header"><div><div class="page-title">Participants & Beneficiaries</div><div class="page-sub">Profiles, journeys, outcomes, case notes</div></div><button class="btn btn-p btn-sm" onclick="openAddP()">+ Add participant</button></div>
+  <div class="toolbar">
+    <input id="p-search" placeholder="Search name, ref…" oninput="renderParticipants()"/>
+    <select id="p-stage" onchange="renderParticipants()"><option value="">All stages</option><option>Referred</option><option>Engaged</option><option>In Support</option><option>Job Ready</option><option>Outcome Achieved</option><option>Sustained</option><option>Closed</option></select>
+    <select id="p-risk" onchange="renderParticipants()"><option value="">All risk</option><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option></select>
+    <button class="btn btn-ghost btn-sm ml-auto" onclick="exportCSV()">Export CSV</button>
+  </div>
+  <div id="p-alert" class="alert alert-warn" style="display:none"></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Participant</th><th>Ref</th><th>Stage</th><th>Advisor</th><th>Outcomes</th><th>Risk</th><th>Last contact</th><th></th></tr></thead><tbody id="p-table"><tr><td colspan="8" class="spinner-full">Loading…</td></tr></tbody></table></div>
+</div>
+
+<!-- CONTACTS -->
+<div id="page-contacts" class="page">
+  <div class="page-header"><div><div class="page-title">Contacts & Donors</div></div><button class="btn btn-p btn-sm" onclick="openAddC()">+ Add</button></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Status</th><th>Engagements</th></tr></thead><tbody id="c-table"></tbody></table></div>
+</div>
+
+<!-- VOLUNTEERS -->
+<div id="page-volunteers" class="page">
+  <div class="page-header"><div><div class="page-title">Volunteers & Staff</div></div><button class="btn btn-p btn-sm" onclick="openAddV()">+ Add</button></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>Skills</th><th>Hours</th><th>Status</th></tr></thead><tbody id="vol-table"></tbody></table></div>
+</div>
+
+<!-- PIPELINE -->
+<div id="page-pipeline" class="page">
+  <div class="page-header"><div><div class="page-title">Caseload Pipeline</div><div class="page-sub">Who do I need to chase today?</div></div>
+    <select id="pipe-adv" onchange="renderPipeline()" style="width:auto;max-width:180px"><option value="">All advisors</option></select>
+  </div>
+  <div class="kanban" id="kanban"></div>
+</div>
+
+<!-- REFERRALS -->
+<div id="page-referrals" class="page">
+  <div class="page-header"><div><div class="page-title">Referrals</div></div><button class="btn btn-p btn-sm" onclick="openAddR()">+ New referral</button></div>
+  <div id="ref-alerts"></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Source</th><th>Status</th><th>Date</th><th>Advisor</th><th>Flag</th></tr></thead><tbody id="ref-table"></tbody></table></div>
+</div>
+
+<!-- EVENTS -->
+<div id="page-events" class="page">
+  <div class="page-header"><div><div class="page-title">Events & Workshops</div></div><button class="btn btn-p btn-sm" onclick="openAddEv()">+ Create event</button></div>
+  <div id="ev-list"></div>
+</div>
+
+<!-- CIRCULAR -->
+<div id="page-circular" class="page">
+  <div class="page-header"><div><div class="page-title">Circular Economy & Repair</div></div><button class="btn btn-p btn-sm" onclick="openAddItem()">+ Log item</button></div>
+  <div class="stats-grid" id="eco-stats"></div>
+  <div class="card"><div class="card-title">Environmental impact</div><div id="eco-impact" style="display:flex;flex-wrap:wrap;gap:6px"></div></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Item</th><th>Category</th><th>Weight</th><th>Status</th><th>Fixer</th><th>Cohort</th><th>Outcome</th></tr></thead><tbody id="eco-table"></tbody></table></div>
+</div>
+
+<!-- OUTCOMES -->
+<div id="page-outcomes" class="page">
+  <div class="page-header"><div><div class="page-title">Outcomes & Impact Reporting</div><div class="page-sub">MoJ / GLA / CBF / UKSPF</div></div><button class="btn btn-ghost btn-sm" onclick="exportCSV()">Export report</button></div>
+  <div class="stats-grid" id="out-stats"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div class="card"><div class="card-title">Outcomes by type</div><div id="out-by-type"></div></div>
+    <div class="card"><div class="card-title">Barriers</div><div id="out-barriers"></div></div>
+  </div>
+  <div class="card"><div class="card-title">Good job tracker — LLW · 16hrs+ · 12 weeks</div>
+    <div class="tbl-wrap"><table><thead><tr><th>Participant</th><th>Start date</th><th>Hours/wk</th><th>LLW</th><th>Weeks</th><th>Status</th></tr></thead><tbody id="job-table"></tbody></table></div>
+  </div>
+</div>
+
+<!-- FUNDING -->
+<div id="page-funding" class="page">
+  <div class="page-header"><div><div class="page-title">Funding & Contracts</div></div><button class="btn btn-p btn-sm" onclick="openAddCon()">+ Add contract</button></div>
+  <div id="fund-list"></div>
+</div>
+
+<!-- EVIDENCE -->
+<div id="page-evidence" class="page">
+  <div class="page-header"><div><div class="page-title">Evidence & Compliance Hub</div><div class="page-sub">PIP-proof · Always audit-ready</div></div><button class="btn btn-p btn-sm" onclick="openAddEvid()">+ Upload evidence</button></div>
+  <div id="evid-alerts"></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Participant</th><th>Type</th><th>Outcome</th><th>Staff</th><th>Date</th><th>Status</th></tr></thead><tbody id="evid-table"></tbody></table></div>
+</div>
+
+<!-- SAFEGUARDING -->
+<div id="page-safeguarding" class="page">
+  <div class="page-header"><div><div class="page-title">Safeguarding & Permissions</div></div></div>
+  <div class="alert alert-info" style="margin-bottom:14px">Role-based access active · GDPR compliant · Consent tracked</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div class="card"><div class="card-title">Flagged cases</div><div id="safe-flags"></div></div>
+    <div class="card"><div class="card-title">Consent tracker</div><div id="consent-list"></div></div>
+  </div>
+</div>
+
+<!-- IMPACT -->
+<div id="page-impact" class="page">
+  <div class="page-header"><div><div class="page-title">Impact Wall</div><div class="page-sub">Board-ready · Funder presentations</div></div></div>
+  <div class="impact-wall">
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--em);margin-bottom:6px">Your organisation's impact</div>
+    <div style="font-size:22px;font-weight:700;color:var(--txt);margin-bottom:24px">Numbers that move funders</div>
+    <div class="iw-grid">
+      <div><div class="iw-val" id="iw-p">—</div><div class="iw-lbl">Participants supported</div></div>
+      <div><div class="iw-val" id="iw-o">—</div><div class="iw-lbl">Positive outcomes</div></div>
+      <div><div class="iw-val" id="iw-j">—</div><div class="iw-lbl">Jobs achieved</div></div>
+      <div><div class="iw-val" id="iw-kg">—</div><div class="iw-lbl">Kg waste diverted</div></div>
+    </div>
+  </div>
+  <div class="card"><div class="card-title">Engagement trend</div><div style="position:relative;height:190px"><canvas id="impact-chart"></canvas></div></div>
+</div>
+
+<!-- SETTINGS -->
+<div id="page-settings" class="page">
+  <div class="page-header"><div><div class="page-title">Settings</div></div></div>
+  <div class="card">
+    <div class="card-title">Organisation</div>
+    <div id="settings-org" style="font-size:13px;color:var(--txt2)">Loading…</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Your account</div>
+    <div id="settings-user" style="font-size:13px;color:var(--txt2)">Loading…</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Plan</div>
+    <div id="settings-plan" style="font-size:13px;color:var(--txt2)">Loading…</div>
+    <button class="btn btn-p btn-sm" style="margin-top:12px" onclick="openUpgrade()">Upgrade to Pro — £9/mo</button>
+  </div>
+  <div class="card">
+    <div class="card-title" style="color:var(--red)">Danger zone</div>
+    <button class="btn btn-ghost btn-sm" onclick="signOut()" style="color:var(--red);border-color:var(--red)">Sign out</button>
+  </div>
+</div>
+
+</div><!-- /main -->
+</div><!-- /shell -->
+
+<!-- MODALS -->
+<!-- Participant -->
+<div class="modal-overlay" id="modal-p">
+<div class="modal"><h2 id="mp-title">Add participant</h2>
+  <div class="form-grid-2"><div class="form-row"><label>First name</label><input id="mp-fn"/></div><div class="form-row"><label>Last name</label><input id="mp-ln"/></div></div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Referral source</label><select id="mp-rs"><option>Self-referral</option><option>Probation</option><option>Jobcentre Plus</option><option>Community org</option><option>School / college</option></select></div>
+    <div class="form-row"><label>Advisor</label><select id="mp-adv"><option>Sarah T.</option><option>Marcus O.</option><option>Priya S.</option><option>Unassigned</option></select></div>
+  </div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Stage</label><select id="mp-st"><option>Referred</option><option>Engaged</option><option>In Support</option><option>Job Ready</option><option>Outcome Achieved</option><option>Sustained</option><option>Closed</option></select></div>
+    <div class="form-row"><label>Risk level</label><select id="mp-risk"><option>Low</option><option>Medium</option><option>High</option></select></div>
+  </div>
+  <div class="form-row"><label>Barriers</label><div id="barrier-checks" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px"></div></div>
+  <div class="form-row"><label>Outcomes achieved</label><div id="outcome-checks" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px"></div></div>
+  <div class="form-row"><label>Safeguarding flag</label><select id="mp-safe"><option value="">None</option><option>Domestic abuse</option><option>Mental health</option><option>Substance misuse</option><option>Homelessness risk</option></select></div>
+  <div class="form-row"><label>Case note</label><textarea id="mp-note" placeholder="Initial assessment…"></textarea></div>
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-p')">Cancel</button><button class="btn btn-p" id="save-p-btn" onclick="saveP()">Save</button></div>
+</div></div>
+
+<!-- Contact -->
+<div class="modal-overlay" id="modal-c">
+<div class="modal"><h2>Add contact</h2>
+  <div class="form-grid-2"><div class="form-row"><label>First name</label><input id="cf-fn"/></div><div class="form-row"><label>Last name</label><input id="cf-ln"/></div></div>
+  <div class="form-row"><label>Email</label><input id="cf-em" type="email"/></div>
+  <div class="form-grid-2"><div class="form-row"><label>Role</label><select id="cf-role"><option>Donor</option><option>Partner</option></select></div><div class="form-row"><label>Status</label><select id="cf-st"><option>Prospect</option><option>Engaged</option><option>Active Supporter</option><option>Lapsed</option></select></div></div>
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-c')">Cancel</button><button class="btn btn-p" onclick="saveC()">Save</button></div>
+</div></div>
+
+<!-- Volunteer -->
+<div class="modal-overlay" id="modal-v">
+<div class="modal"><h2>Add volunteer / staff</h2>
+  <div class="form-grid-2"><div class="form-row"><label>First name</label><input id="vf-fn"/></div><div class="form-row"><label>Last name</label><input id="vf-ln"/></div></div>
+  <div class="form-grid-2"><div class="form-row"><label>Role</label><select id="vf-role"><option>Volunteer</option><option>Fixer</option><option>Advisor</option><option>Manager</option></select></div><div class="form-row"><label>Skills</label><input id="vf-sk" placeholder="e.g. Electrical, CV writing"/></div></div>
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-v')">Cancel</button><button class="btn btn-p" onclick="saveV()">Save</button></div>
+</div></div>
+
+<!-- Referral -->
+<div class="modal-overlay" id="modal-r">
+<div class="modal"><h2>New referral</h2>
+  <div class="form-grid-2"><div class="form-row"><label>First name</label><input id="rf-fn"/></div><div class="form-row"><label>Last name</label><input id="rf-ln"/></div></div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Source</label><select id="rf-src"><option>Probation</option><option>Jobcentre Plus</option><option>Community org</option><option>Self-referral</option></select></div>
+    <div class="form-row"><label>Advisor</label><select id="rf-adv"><option>Sarah T.</option><option>Marcus O.</option><option>Priya S.</option></select></div>
+  </div>
+  <div class="form-row"><label>Date referred</label><input type="date" id="rf-date"/></div>
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-r')">Cancel</button><button class="btn btn-p" onclick="saveR()">Save</button></div>
+</div></div>
+
+<!-- Event -->
+<div class="modal-overlay" id="modal-ev">
+<div class="modal"><h2>Create event</h2>
+  <div class="form-row"><label>Event name</label><input id="ef-name" placeholder="Repair Workshop — Walthamstow"/></div>
+  <div class="form-grid-2"><div class="form-row"><label>Date</label><input type="date" id="ef-date"/></div><div class="form-row"><label>Capacity</label><input type="number" id="ef-cap" placeholder="20"/></div></div>
+  <div class="form-grid-2"><div class="form-row"><label>Type</label><select id="ef-type"><option>Repair workshop</option><option>Training</option><option>Employer event</option><option>Drop-in</option></select></div><div class="form-row"><label>Location</label><input id="ef-loc"/></div></div>
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-ev')">Cancel</button><button class="btn btn-p" onclick="saveEv()">Save</button></div>
+</div></div>
+
+<!-- Circular item -->
+<div class="modal-overlay" id="modal-item">
+<div class="modal"><h2>Log item</h2>
+  <div class="form-grid-2"><div class="form-row"><label>Item</label><input id="it-name" placeholder="Toaster, drill…"/></div><div class="form-row"><label>Category</label><select id="it-cat"><option>Small electrical</option><option>Clothing</option><option>Furniture</option><option>Bike</option><option>Electronics</option></select></div></div>
+  <div class="form-grid-2"><div class="form-row"><label>Weight (kg)</label><input type="number" id="it-kg"/></div><div class="form-row"><label>Status</label><select id="it-st"><option>Collected</option><option>In repair</option><option>Repaired</option><option>Resold</option><option>Donated</option><option>Beyond repair</option></select></div></div>
+  <div class="form-grid-2"><div class="form-row"><label>Fixer</label><input id="it-fixer"/></div><div class="form-row"><label>Linked cohort</label><input id="it-cohort"/></div></div>
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-item')">Cancel</button><button class="btn btn-p" onclick="saveItem()">Save</button></div>
+</div></div>
+
+<!-- Contract -->
+<div class="modal-overlay" id="modal-con">
+<div class="modal"><h2>Add funding contract</h2>
+  <div class="form-row"><label>Contract name</label><input id="con-name" placeholder="MoJ PRSM 2024-25"/></div>
+  <div class="form-grid-2"><div class="form-row"><label>Funder</label><input id="con-funder"/></div><div class="form-row"><label>Value (£)</label><input type="number" id="con-val"/></div></div>
+  <div class="form-grid-2"><div class="form-row"><label>Target starts</label><input type="number" id="con-ts"/></div><div class="form-row"><label>Target outcomes</label><input type="number" id="con-to"/></div></div>
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-con')">Cancel</button><button class="btn btn-p" onclick="saveCon()">Save</button></div>
+</div></div>
+
+<!-- Evidence -->
+<div class="modal-overlay" id="modal-evid">
+<div class="modal"><h2>Upload evidence</h2>
+  <div class="form-row"><label>Participant name</label><input id="evid-p" placeholder="Full name"/></div>
+  <div class="form-grid-2"><div class="form-row"><label>Type</label><select id="evid-type"><option>Payslip</option><option>Contract</option><option>Certificate</option><option>ID document</option><option>Consent form</option></select></div><div class="form-row"><label>Linked outcome</label><select id="evid-out"><option>Employment</option><option>Training</option><option>Qualification</option><option>Volunteering</option></select></div></div>
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-evid')">Cancel</button><button class="btn btn-p" onclick="saveEvid()">Save</button></div>
+</div></div>
+
+<!-- Upgrade -->
+<div class="modal-overlay" id="modal-upgrade">
+<div class="modal" style="max-width:400px">
+  <h2 style="text-align:center">GreenCRM Pro</h2>
+  <div style="text-align:center;margin-bottom:18px">
+    <div style="font-size:36px;font-weight:800;color:var(--em)">£9 <span style="font-size:14px;color:var(--txt2);font-weight:400">/ month</span></div>
+    <div style="font-size:12px;color:var(--txt3)">Purpose-built for employability & circular economy charities</div>
+  </div>
+  <ul class="uplist">
+    <li><span style="color:var(--em)">✓</span> Unlimited participants & contacts</li>
+    <li><span style="color:var(--em)">✓</span> MoJ / GLA / UKSPF funder reports</li>
+    <li><span style="color:var(--em)">✓</span> Evidence hub & audit trail</li>
+    <li><span style="color:var(--em)">✓</span> Funding contracts & targets vs actuals</li>
+    <li><span style="color:var(--em)">✓</span> Circular economy & repair tracking</li>
+    <li><span style="color:var(--em)">✓</span> Safeguarding & role-based access</li>
+    <li><span style="color:var(--em)">✓</span> CSV exports — funder-ready</li>
+  </ul>
+  <button class="up-cta" onclick="closeModal('modal-upgrade')">Contact us to upgrade — hello@greencrm.co.uk</button>
+  <div style="text-align:center;margin-top:10px"><button class="btn btn-ghost btn-sm" onclick="closeModal('modal-upgrade')">Maybe later</button></div>
+</div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const SUPABASE_URL='https://nznfrxzgvcjhfsdaphyp.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+
+const BARRIERS=['Housing','Confidence','Skills gap','Transport','Childcare','Mental health','Substance misuse','Criminal record','Language','Benefits'];
+const OUT_TYPES=['Employment','Training','Qualification','Volunteering','Wellbeing','Housing secured'];
+const P_STAGES=['Referred','Engaged','In Support','Job Ready','Outcome Achieved','Sustained','Closed'];
+
+let USER=null,ORG=null,PROFILE=null;
+let dChart=null,iChart=null,editPId=null,caseNoteId=null;
+
+const $=id=>document.getElementById(id);
+const days=d=>d?Math.floor((Date.now()-new Date(d))/86400000):9999;
+const fmtD=d=>d?new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}):'—';
+const ini=(f,l)=>(f?.[0]||'')+(l?.[0]||'');
+const rCls=r=>r==='High'?'risk-hi':r==='Medium'?'risk-med':'risk-lo';
+const chks=cid=>[...document.querySelectorAll(`#${cid} input[type=checkbox]:checked`)].map(x=>x.value);
+function mkChks(cid,items,sel=[]){$(cid).innerHTML=items.map(b=>`<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--txt2);text-transform:none;letter-spacing:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 7px;cursor:pointer"><input type="checkbox" value="${b}" ${sel.includes(b)?'checked':''} style="width:auto;background:none;border:none;padding:0"/> ${b}</label>`).join('');}
+function setBtn(id,loading,label){const b=$(id);if(!b)return;b.disabled=loading;b.textContent=loading?'Saving…':label;}
+function closeModal(id){$(id).classList.remove('open');}
+function openUpgrade(){$('modal-upgrade').classList.add('open');}
+
+// ── AUTH ──
+async function init(){
+  const{data:{session}}=await sb.auth.getSession();
+  if(!session){window.location.href='login.html';return;}
+  USER=session.user;
+  const{data:profile}=await sb.from('profiles').select('*,organisations(*)').eq('id',USER.id).single();
+  if(profile){PROFILE=profile;ORG=profile.organisations;}
+  if(ORG){
+    $('sb-org-name').textContent=ORG.name;
+    $('dash-org-name').textContent=ORG.name;
+    if(ORG.plan==='pro'){$('sb-free').style.display='none';$('sb-pro').style.display='block';}
+    else{$('sb-plan-label').textContent=`Free plan · ${ORG.name}`;}
+  }
+  document.body.classList.add('ready');
+  go('participants');
+}
+
+async function signOut(){await sb.auth.signOut();window.location.href='login.html';}
+
+// ── NAV ──
+function go(page){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  $('page-'+page).classList.add('active');
+  const labels={dashboard:'Dashboard',impact:'Impact',participants:'Participants',contacts:'Contacts',volunteers:'Volunteers',pipeline:'Pipeline',referrals:'Referrals',events:'Events',circular:'Circular',outcomes:'Outcomes',funding:'Funding',evidence:'Evidence',safeguarding:'Safeguarding',settings:'Settings'};
+  document.querySelectorAll('.nav-btn').forEach(b=>{if(b.querySelector('span:not(.icon)')?.textContent===labels[page])b.classList.add('active');});
+  const renders={dashboard:renderDashboard,participants:renderParticipants,contacts:renderContacts,volunteers:renderVolunteers,pipeline:renderPipeline,referrals:renderReferrals,events:renderEvents,circular:renderCircular,outcomes:renderOutcomes,funding:renderFunding,evidence:renderEvidence,safeguarding:renderSafeguarding,impact:renderImpact,settings:renderSettings};
+  if(renders[page])renders[page]();
+}
+
+// ── PARTICIPANTS ──
+let cachedP=[];
+async function loadParticipants(){
+  const{data}=await sb.from('participants').select('*').eq('org_id',ORG.id).order('created_at',{ascending:false});
+  cachedP=data||[];return cachedP;
+}
+async function renderParticipants(){
+  if(!cachedP.length)await loadParticipants();
+  const q=($('p-search')||{}).value||'';
+  const sf=($('p-stage')||{}).value||'';
+  const rf=($('p-risk')||{}).value||'';
+  const flt=cachedP.filter(p=>{
+    const nm=((p.first_name||'')+' '+(p.last_name||'')).toLowerCase();
+    return(!q||nm.includes(q.toLowerCase()))&&(!sf||p.stage===sf)&&(!rf||p.risk===rf);
+  });
+  const stale=cachedP.filter(p=>days(p.last_contact)>21&&p.stage!=='Closed');
+  const al=$('p-alert');
+  if(stale.length){al.style.display='flex';al.textContent=`⚠ ${stale.length} participant(s) with no contact in 21+ days: ${stale.map(p=>p.first_name).join(', ')}`;}
+  else al.style.display='none';
+  $('p-table').innerHTML=flt.length?flt.map(p=>{
+    const d=days(p.last_contact);const ov=d>21;
+    const outcomes=p.outcomes||[];const barriers=p.barriers||[];
+    return`<tr>
+      <td><div style="display:flex;align-items:center;gap:8px">
+        <div style="width:28px;height:28px;border-radius:50%;background:rgba(16,185,129,.15);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--em);flex-shrink:0">${ini(p.first_name,p.last_name)}</div>
+        <div><div class="cn">${p.first_name||''} ${p.last_name||''}</div>${p.safeguarding?`<span class="safe-flag">🔐 ${p.safeguarding}</span>`:''}</div></div></td>
+      <td style="font-size:11px;color:var(--txt3)">GC-${String(p.id).padStart(4,'0')}</td>
+      <td><span class="badge" style="background:rgba(16,185,129,.12);color:var(--em3)">${p.stage||'Referred'}</span></td>
+      <td style="font-size:12px">${p.advisor||'—'}</td>
+      <td>${outcomes.map(o=>`<span class="badge b-active" style="margin:1px">${o}</span>`).join('')||'<span style="font-size:11px;color:var(--txt3)">None yet</span>'}</td>
+      <td><span class="badge ${rCls(p.risk)}">${p.risk||'Low'}</span></td>
+      <td style="font-size:11px;color:${ov?'var(--amber)':'var(--txt3)'}">${fmtD(p.last_contact)}${ov?` ⚠ ${d}d`:''}</td>
+      <td><div style="display:flex;gap:4px">
+        <button class="btn btn-ghost btn-sm" onclick="openEditP(${p.id})">Edit</button>
+        <button class="btn btn-ghost btn-sm" onclick="openNotes(${p.id})">Notes</button>
+      </div></td></tr>`;
+  }).join(''):`<tr><td colspan="8" style="text-align:center;color:var(--txt3);padding:24px">No participants yet. Add your first one.</td></tr>`;
+}
+
+function openAddP(){
+  editPId=null;$('mp-title').textContent='Add participant';
+  ['mp-fn','mp-ln','mp-note'].forEach(f=>$(f).value='');
+  $('mp-safe').value='';mkChks('barrier-checks',BARRIERS);mkChks('outcome-checks',OUT_TYPES);
+  $('modal-p').classList.add('open');
+}
+async function openEditP(id){
+  const p=cachedP.find(x=>x.id===id);if(!p)return;editPId=id;
+  $('mp-title').textContent='Edit participant';
+  $('mp-fn').value=p.first_name||'';$('mp-ln').value=p.last_name||'';
+  $('mp-rs').value=p.ref_source||'Self-referral';$('mp-adv').value=p.advisor||'Unassigned';
+  $('mp-st').value=p.stage||'Referred';$('mp-risk').value=p.risk||'Low';
+  $('mp-safe').value=p.safeguarding||'';$('mp-note').value='';
+  mkChks('barrier-checks',BARRIERS,p.barriers||[]);mkChks('outcome-checks',OUT_TYPES,p.outcomes||[]);
+  $('modal-p').classList.add('open');
+}
+async function saveP(){
+  setBtn('save-p-btn',true);
+  const note=$('mp-note').value;
+  const today=new Date().toISOString().split('T')[0];
+  const d={org_id:ORG.id,first_name:$('mp-fn').value||'Unknown',last_name:$('mp-ln').value||'',ref_source:$('mp-rs').value,stage:$('mp-st').value,advisor:$('mp-adv').value,barriers:chks('barrier-checks'),outcomes:chks('outcome-checks'),safeguarding:$('mp-safe').value||null,risk:$('mp-risk').value,last_contact:today};
+  if(editPId){
+    const existing=cachedP.find(x=>x.id===editPId);
+    const notes=existing?.notes||[];
+    if(note)notes.push({t:note,d:today,s:PROFILE?.full_name||'Staff'});
+    await sb.from('participants').update({...d,notes}).eq('id',editPId);
+  }else{
+    const notes=note?[{t:note,d:today,s:PROFILE?.full_name||'Staff'}]:[];
+    await sb.from('participants').insert({...d,notes});
+  }
+  cachedP=[];closeModal('modal-p');setBtn('save-p-btn',false,'Save');renderParticipants();
+}
+
+function openNotes(id){
+  caseNoteId=id;const p=cachedP.find(x=>x.id===id);if(!p)return;
+  const notes=(p.notes||[]).slice().reverse();
+  const m=document.createElement('div');m.className='modal-overlay open';m.id='modal-notes';
+  m.innerHTML=`<div class="modal"><h2>Case notes — ${p.first_name} ${p.last_name}</h2>
+    <div style="max-height:240px;overflow-y:auto;margin-bottom:12px">${notes.length?notes.map(n=>`<div class="tl-entry"><div class="tl-dot"></div><div><div class="tl-lbl">${n.t}</div><div class="tl-meta">${n.d} · ${n.s}</div></div></div>`).join(''):'<div style="color:var(--txt3);font-size:13px">No notes yet.</div>'}</div>
+    <div class="form-row"><label>New note</label><textarea id="new-note-txt" placeholder="Add case note…"></textarea></div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="document.getElementById('modal-notes').remove()">Close</button><button class="btn btn-p" onclick="addNote()">Add note</button></div>
+  </div>`;
+  document.body.appendChild(m);
+}
+async function addNote(){
+  const p=cachedP.find(x=>x.id===caseNoteId);const txt=$('new-note-txt').value;if(!txt||!p)return;
+  const today=new Date().toISOString().split('T')[0];
+  const notes=[...(p.notes||[]),{t:txt,d:today,s:PROFILE?.full_name||'Staff'}];
+  await sb.from('participants').update({notes,last_contact:today}).eq('id',p.id);
+  cachedP=[];$('modal-notes').remove();renderParticipants();
+}
+
+// ── CONTACTS ──
+let cachedC=[];
+async function renderContacts(){
+  const{data}=await sb.from('contacts').select('*').eq('org_id',ORG.id);
+  cachedC=data||[];
+  const rc={'Donor':'b-vol','Partner':'b-part'};const sc={'Active Supporter':'b-active','Prospect':'b-prospect','Lapsed':'b-lapsed','Engaged':'b-engaged'};
+  $('c-table').innerHTML=cachedC.length?cachedC.map(c=>`<tr>
+    <td class="cn">${c.first_name||''} ${c.last_name||''}</td>
+    <td><span class="badge ${rc[c.role]||''}">${c.role||''}</span></td>
+    <td>${c.email||''}</td>
+    <td><span class="badge ${sc[c.status]||''}">${c.status||''}</span></td>
+    <td><div class="sbar"><div class="strack"><div class="sfill" style="width:${Math.min(((c.engagements||[]).length)*30,100)}%"></div></div><span style="font-size:11px;color:var(--txt3)">${(c.engagements||[]).length}</span></div></td>
+  </tr>`).join(''):`<tr><td colspan="5" style="text-align:center;color:var(--txt3);padding:24px">No contacts yet.</td></tr>`;
+}
+function openAddC(){['cf-fn','cf-ln','cf-em'].forEach(f=>$(f).value='');$('modal-c').classList.add('open');}
+async function saveC(){
+  await sb.from('contacts').insert({org_id:ORG.id,first_name:$('cf-fn').value,last_name:$('cf-ln').value,email:$('cf-em').value,role:$('cf-role').value,status:$('cf-st').value,engagements:[]});
+  closeModal('modal-c');renderContacts();
+}
+
+// ── VOLUNTEERS ──
+async function renderVolunteers(){
+  const{data}=await sb.from('volunteers').select('*').eq('org_id',ORG.id);
+  const vols=data||[];
+  $('vol-table').innerHTML=vols.length?vols.map(v=>`<tr>
+    <td class="cn">${v.first_name||''} ${v.last_name||''}</td>
+    <td><span class="badge b-vol">${v.role||''}</span></td>
+    <td style="font-size:12px;color:var(--txt2)">${v.skills||''}</td>
+    <td style="color:var(--em);font-weight:600">${v.hours||0}</td>
+    <td><span class="badge b-active">${v.status||'Active'}</span></td>
+  </tr>`).join(''):`<tr><td colspan="5" style="text-align:center;color:var(--txt3);padding:24px">No volunteers yet.</td></tr>`;
+}
+function openAddV(){['vf-fn','vf-ln','vf-sk'].forEach(f=>$(f).value='');$('modal-v').classList.add('open');}
+async function saveV(){
+  await sb.from('volunteers').insert({org_id:ORG.id,first_name:$('vf-fn').value,last_name:$('vf-ln').value,role:$('vf-role').value,skills:$('vf-sk').value,hours:0,status:'Active'});
+  closeModal('modal-v');renderVolunteers();
+}
+
+// ── PIPELINE ──
+async function renderPipeline(){
+  if(!cachedP.length)await loadParticipants();
+  const sel=($('pipe-adv')||{}).value||'';
+  const flt=sel?cachedP.filter(p=>p.advisor===sel):cachedP;
+  $('kanban').innerHTML=P_STAGES.map(stage=>{
+    const cards=flt.filter(p=>p.stage===stage);
+    return`<div class="k-col"><div class="k-col-hd">${stage}<span class="k-cnt">${cards.length}</span></div>
+    ${cards.map(p=>{const d=days(p.last_contact);const fl=d>21;return`<div class="k-card" onclick="openEditP(${p.id})">
+      <div class="k-name">${p.first_name||''} ${p.last_name||''}</div>
+      <div class="k-meta">${p.advisor||'Unassigned'}</div>
+      ${fl?`<div class="k-flag">⚠ No contact ${d}d</div>`:''}
+      ${p.safeguarding?`<div class="k-flag">🔐 Safeguarding</div>`:''}</div>`;}).join('')||'<div style="font-size:11px;color:var(--txt3);text-align:center;padding:8px 0">Empty</div>'}
+    </div>`;
+  }).join('');
+}
+
+// ── REFERRALS ──
+async function renderReferrals(){
+  const{data}=await sb.from('referrals').select('*').eq('org_id',ORG.id);
+  const refs=data||[];
+  const stale=refs.filter(r=>r.status==='Referred'&&days(r.referred_date)>14);
+  $('ref-alerts').innerHTML=stale.length?`<div class="alert alert-warn">⚠ ${stale.length} stalled referral(s) — no update in 14+ days</div>`:'';
+  const sc={'Referred':'b-ref','In delivery':'b-inprog','Closed':'b-closed'};
+  $('ref-table').innerHTML=refs.length?refs.map(r=>{
+    const d=days(r.referred_date);const st=r.status==='Referred'&&d>14;
+    return`<tr><td class="cn">${r.first_name||''} ${r.last_name||''}</td>
+    <td><span class="badge b-part">${r.source||''}</span></td>
+    <td><span class="badge ${sc[r.status]||''}">${r.status||''}</span></td>
+    <td style="font-size:12px">${fmtD(r.referred_date)}</td>
+    <td style="font-size:12px">${r.advisor||''}</td>
+    <td>${st?`<span class="badge b-flag">⚠ ${d}d stalled</span>`:'—'}</td></tr>`;
+  }).join(''):`<tr><td colspan="6" style="text-align:center;color:var(--txt3);padding:24px">No referrals yet.</td></tr>`;
+}
+function openAddR(){$('rf-date').value=new Date().toISOString().split('T')[0];['rf-fn','rf-ln'].forEach(f=>$(f).value='');$('modal-r').classList.add('open');}
+async function saveR(){
+  await sb.from('referrals').insert({org_id:ORG.id,first_name:$('rf-fn').value,last_name:$('rf-ln').value,source:$('rf-src').value,status:'Referred',referred_date:$('rf-date').value,advisor:$('rf-adv').value});
+  closeModal('modal-r');renderReferrals();
+}
+
+// ── EVENTS ──
+async function renderEvents(){
+  const{data}=await sb.from('events').select('*').eq('org_id',ORG.id);
+  const evs=data||[];
+  $('ev-list').innerHTML=evs.length?evs.map(e=>{
+    const p=Math.round((e.attendees||0)/(e.capacity||1)*100);
+    return`<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+      <div><div style="font-size:14px;font-weight:600;color:var(--txt)">${e.name}</div><div style="font-size:12px;color:var(--txt3)">${fmtD(e.event_date)} · ${e.type||''} · ${e.location||''}</div></div>
+      <span class="badge b-vol">${e.attendees||0}/${e.capacity||0}</span></div>
+      <div class="fund-track"><div class="fund-fill" style="width:${p}%"></div></div></div>`;
+  }).join(''):'<div style="color:var(--txt3);font-size:13px;padding:12px">No events yet.</div>';
+}
+function openAddEv(){$('ef-date').value=new Date().toISOString().split('T')[0];['ef-name','ef-loc'].forEach(f=>$(f).value='');$('modal-ev').classList.add('open');}
+async function saveEv(){
+  await sb.from('events').insert({org_id:ORG.id,name:$('ef-name').value,event_date:$('ef-date').value,type:$('ef-type').value,capacity:parseInt($('ef-cap').value)||20,location:$('ef-loc').value,attendees:0});
+  closeModal('modal-ev');renderEvents();
+}
+
+// ── CIRCULAR ──
+async function renderCircular(){
+  const{data}=await sb.from('circular_items').select('*').eq('org_id',ORG.id);
+  const items=data||[];
+  const totalKg=items.reduce((a,i)=>a+parseFloat(i.weight_kg||0),0);
+  const repaired=items.filter(i=>i.status==='Repaired'||i.status==='Resold').length;
+  const diverted=items.filter(i=>i.status!=='Beyond repair').reduce((a,i)=>a+parseFloat(i.weight_kg||0),0);
+  $('eco-stats').innerHTML=[{l:'Items logged',v:items.length},{l:'Repaired/resold',v:repaired},{l:'Total kg',v:totalKg.toFixed(1)+'kg'},{l:'Kg diverted',v:diverted.toFixed(1)+'kg'}].map(s=>`<div class="stat-card"><div class="stat-lbl">${s.l}</div><div class="stat-val">${s.v}</div></div>`).join('');
+  $('eco-impact').innerHTML=[`♻️ ${items.filter(i=>i.status==='Resold').length} resold`,`🎁 ${items.filter(i=>i.status==='Donated').length} donated`,`🗑️ ${diverted.toFixed(1)}kg diverted`].map(t=>`<span class="eco-stat">${t}</span>`).join('');
+  const sc={Collected:'b-prospect','In repair':'b-engaged',Repaired:'b-active',Resold:'b-active',Donated:'b-vol','Beyond repair':'b-lapsed'};
+  $('eco-table').innerHTML=items.length?items.map(i=>`<tr>
+    <td class="cn">${i.name||''}</td><td><span class="badge b-part">${i.category||''}</span></td>
+    <td style="color:var(--em)">${i.weight_kg||0}kg</td>
+    <td><span class="badge ${sc[i.status]||''}">${i.status||''}</span></td>
+    <td style="font-size:12px">${i.fixer||'—'}</td>
+    <td style="font-size:12px">${i.cohort||'—'}</td>
+    <td><span class="badge ${i.outcome?'b-active':'b-prospect'}">${i.outcome||'Pending'}</span></td>
+  </tr>`).join(''):`<tr><td colspan="7" style="text-align:center;color:var(--txt3);padding:24px">No items logged yet.</td></tr>`;
+}
+function openAddItem(){['it-name','it-kg','it-fixer','it-cohort'].forEach(f=>$(f).value='');$('modal-item').classList.add('open');}
+async function saveItem(){
+  await sb.from('circular_items').insert({org_id:ORG.id,name:$('it-name').value,category:$('it-cat').value,weight_kg:parseFloat($('it-kg').value)||0,status:$('it-st').value,fixer:$('it-fixer').value,cohort:$('it-cohort').value,outcome:''});
+  closeModal('modal-item');renderCircular();
+}
+
+// ── OUTCOMES ──
+async function renderOutcomes(){
+  if(!cachedP.length)await loadParticipants();
+  const tot=cachedP.length;const wo=cachedP.filter(p=>(p.outcomes||[]).length>0).length;
+  const jobs=cachedP.filter(p=>(p.outcomes||[]).includes('Employment')).length;
+  const sus=cachedP.filter(p=>p.stage==='Sustained').length;
+  $('out-stats').innerHTML=[{l:'Total starts',v:tot},{l:'Positive outcomes',v:wo},{l:'Employment',v:jobs},{l:'Sustained 12wks+',v:sus}].map(s=>`<div class="stat-card"><div class="stat-lbl">${s.l}</div><div class="stat-val">${s.v}</div></div>`).join('');
+  $('out-by-type').innerHTML=OUT_TYPES.map(t=>{const c=cachedP.filter(p=>(p.outcomes||[]).includes(t)).length;const pct=tot?Math.round(c/tot*100):0;return`<div class="fund-bar-wrap"><div class="fund-top"><span>${t}</span><span>${c}</span></div><div class="fund-track"><div class="fund-fill" style="width:${pct}%"></div></div></div>`;}).join('');
+  $('out-barriers').innerHTML=BARRIERS.slice(0,6).map(b=>{const c=cachedP.filter(p=>(p.barriers||[]).includes(b)).length;const pct=tot?Math.round(c/tot*100):0;return`<div class="fund-bar-wrap"><div class="fund-top"><span>${b}</span><span>${c}</span></div><div class="fund-track"><div class="fund-fill ${pct>40?'warn':''}" style="width:${pct}%"></div></div></div>`;}).join('');
+  $('job-table').innerHTML=cachedP.filter(p=>(p.outcomes||[]).includes('Employment')).map(p=>`<tr><td class="cn">${p.first_name||''} ${p.last_name||''}</td><td>${fmtD(p.last_contact)}</td><td style="color:var(--em)">25+</td><td><span class="badge b-active">Yes</span></td><td>${p.stage==='Sustained'?'12+':'1-11'}</td><td><span class="badge ${p.stage==='Sustained'?'b-active':'b-engaged'}">${p.stage==='Sustained'?'Sustained':'In progress'}</span></td></tr>`).join('')||`<tr><td colspan="6" style="text-align:center;color:var(--txt3);padding:16px">No employment outcomes yet.</td></tr>`;
+}
+
+// ── FUNDING ──
+async function renderFunding(){
+  const{data}=await sb.from('contracts').select('*').eq('org_id',ORG.id);
+  const cons=data||[];
+  $('fund-list').innerHTML=cons.length?cons.map(c=>{
+    const sp=Math.round((c.actual_starts||0)/(c.target_starts||1)*100);
+    const op=Math.round((c.actual_outcomes||0)/(c.target_outcomes||1)*100);
+    return`<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+      <div><div style="font-size:14px;font-weight:600;color:var(--txt)">${c.name}</div><div style="font-size:12px;color:var(--txt3)">${c.funder} · £${(c.value||0).toLocaleString()}</div></div>
+      ${sp<70||op<70?'<span class="badge b-flag">⚠ Underperforming</span>':'<span class="badge b-active">On track</span>'}</div>
+      <div class="fund-bar-wrap"><div class="fund-top"><span>Starts: ${c.actual_starts||0}/${c.target_starts||0}</span><span>${sp}%</span></div><div class="fund-track"><div class="fund-fill ${sp<60?'danger':sp<80?'warn':''}" style="width:${Math.min(sp,100)}%"></div></div></div>
+      <div class="fund-bar-wrap"><div class="fund-top"><span>Outcomes: ${c.actual_outcomes||0}/${c.target_outcomes||0}</span><span>${op}%</span></div><div class="fund-track"><div class="fund-fill ${op<60?'danger':op<80?'warn':''}" style="width:${Math.min(op,100)}%"></div></div></div>
+    </div>`;
+  }).join(''):'<div style="color:var(--txt3);font-size:13px;padding:12px">No contracts yet.</div>';
+}
+function openAddCon(){['con-name','con-funder','con-val','con-ts','con-to'].forEach(f=>$(f).value='');$('modal-con').classList.add('open');}
+async function saveCon(){
+  await sb.from('contracts').insert({org_id:ORG.id,name:$('con-name').value,funder:$('con-funder').value,value:parseInt($('con-val').value)||0,target_starts:parseInt($('con-ts').value)||0,actual_starts:0,target_outcomes:parseInt($('con-to').value)||0,actual_outcomes:0});
+  closeModal('modal-con');renderFunding();
+}
+
+// ── EVIDENCE ──
+async function renderEvidence(){
+  const{data}=await sb.from('evidence').select('*').eq('org_id',ORG.id);
+  const evid=data||[];
+  const miss=evid.filter(e=>e.status==='Missing');
+  $('evid-alerts').innerHTML=miss.length?`<div class="alert alert-danger">⚠ ${miss.length} missing evidence item(s) — action required before audit.</div>`:'';
+  const sc={'Verified':'b-active','Pending':'b-prospect','Missing':'b-lapsed'};
+  $('evid-table').innerHTML=evid.length?evid.map(e=>`<tr>
+    <td class="cn">${e.participant_name||''}</td>
+    <td><span class="badge b-vol">${e.type||''}</span></td>
+    <td><span class="badge b-active">${e.linked_outcome||''}</span></td>
+    <td style="font-size:12px">${e.staff||''}</td>
+    <td style="font-size:12px">${fmtD(e.evidence_date)}</td>
+    <td><span class="badge ${sc[e.status]||''}">${e.status||''}</span></td>
+  </tr>`).join(''):`<tr><td colspan="6" style="text-align:center;color:var(--txt3);padding:24px">No evidence uploaded yet.</td></tr>`;
+}
+function openAddEvid(){$('evid-p').value='';$('modal-evid').classList.add('open');}
+async function saveEvid(){
+  await sb.from('evidence').insert({org_id:ORG.id,participant_name:$('evid-p').value,type:$('evid-type').value,linked_outcome:$('evid-out').value,staff:PROFILE?.full_name||'Staff',evidence_date:new Date().toISOString().split('T')[0],status:'Pending'});
+  closeModal('modal-evid');renderEvidence();
+}
+
+// ── SAFEGUARDING ──
+async function renderSafeguarding(){
+  if(!cachedP.length)await loadParticipants();
+  const fl=cachedP.filter(p=>p.safeguarding);
+  $('safe-flags').innerHTML=fl.length?fl.map(p=>`<div class="tl-entry"><div class="tl-dot red"></div><div><div class="tl-lbl">${p.first_name||''} ${p.last_name||''}</div><div class="tl-meta">${p.safeguarding} · ${p.advisor||'Unassigned'}</div></div></div>`).join(''):'<div style="color:var(--txt3);font-size:13px">No flagged cases.</div>';
+  $('consent-list').innerHTML=cachedP.map(p=>`<div class="tl-entry"><div class="tl-dot ${(p.notes||[]).length?'':'amber'}"></div><div><div class="tl-lbl">${p.first_name||''} ${p.last_name||''}</div><div class="tl-meta">Consent: ${(p.notes||[]).length?'Recorded':'Pending'} · GDPR active</div></div></div>`).join('');
+}
+
+// ── DASHBOARD ──
+async function renderDashboard(){
+  if(!cachedP.length)await loadParticipants();
+  const tot=cachedP.length;const act=cachedP.filter(p=>p.stage!=='Closed').length;
+  const hi=cachedP.filter(p=>p.risk==='High').length;const outs=cachedP.filter(p=>(p.outcomes||[]).length>0).length;
+  $('dash-stats').innerHTML=[{l:'Active participants',v:act,s:'Across all stages'},{l:'Outcomes achieved',v:outs,s:Math.round(outs/Math.max(tot,1)*100)+'% rate'},{l:'High risk',v:hi,s:'Need attention',c:'color:var(--red)'},{l:'Open contracts',v:0,s:'Active funding'}].map(s=>`<div class="stat-card"><div class="stat-lbl">${s.l}</div><div class="stat-val" style="${s.c||''}">${s.v}</div><div class="stat-sub">${s.s}</div></div>`).join('');
+  const risk=cachedP.filter(p=>p.risk==='High'||days(p.last_contact)>21);
+  $('dash-risk').innerHTML=risk.length?risk.map(p=>{const d=days(p.last_contact);return`<div class="tl-entry"><div class="tl-dot ${p.risk==='High'?'red':'amber'}"></div><div><div class="tl-lbl">${p.first_name||''} ${p.last_name||''} <span class="badge ${rCls(p.risk)}">${p.risk}</span></div><div class="tl-meta">${d>21?`No contact ${d}d · `:''}${p.advisor||''}${p.safeguarding?' · 🔐 '+p.safeguarding:''}</div></div></div>`;}).join(''):'<div style="color:var(--txt3);font-size:13px">No at-risk participants. Great work!</div>';
+  const recent=cachedP.flatMap(p=>(p.notes||[]).map(n=>({...n,who:(p.first_name||'')+' '+(p.last_name||'')}))).sort((a,b)=>new Date(b.d)-new Date(a.d)).slice(0,4);
+  $('dash-activity').innerHTML=recent.length?recent.map(n=>`<div class="tl-entry"><div class="tl-dot"></div><div><div class="tl-lbl">${n.who}</div><div class="tl-meta">${(n.t||'').slice(0,60)}… · ${fmtD(n.d)}</div></div></div>`).join(''):'<div style="color:var(--txt3);font-size:13px">No activity yet. Add participants and log notes.</div>';
+  if(dChart)dChart.destroy();
+  dChart=new Chart($('dash-chart'),{type:'bar',data:{labels:['Oct','Nov','Dec','Jan','Feb','Mar'],datasets:[{label:'Starts',data:[0,0,0,0,0,tot],backgroundColor:'#10b981',borderRadius:3},{label:'Outcomes',data:[0,0,0,0,0,outs],backgroundColor:'#059669',borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#6a8f76'},grid:{color:'#1a2a1a'}},y:{ticks:{color:'#6a8f76'},grid:{color:'#1a2a1a'}}}}});
+}
+
+// ── IMPACT ──
+function anim(id,v){let c=0;const el=$(id);const s=Math.ceil(v/50)||1;const iv=setInterval(()=>{c=Math.min(c+s,v);el.textContent=c.toLocaleString();if(c>=v)clearInterval(iv);},25);}
+async function renderImpact(){
+  if(!cachedP.length)await loadParticipants();
+  const{data:items}=await sb.from('circular_items').select('weight_kg').eq('org_id',ORG.id);
+  const kg=Math.round((items||[]).reduce((a,i)=>a+parseFloat(i.weight_kg||0),0));
+  anim('iw-p',cachedP.length);
+  anim('iw-o',cachedP.filter(p=>(p.outcomes||[]).length).length);
+  anim('iw-j',cachedP.filter(p=>(p.outcomes||[]).includes('Employment')).length);
+  anim('iw-kg',kg);
+  if(iChart)iChart.destroy();
+  iChart=new Chart($('impact-chart'),{type:'line',data:{labels:['Oct','Nov','Dec','Jan','Feb','Mar'],datasets:[{label:'Engagements',data:[0,0,0,0,0,cachedP.reduce((a,p)=>a+(p.notes||[]).length,0)],borderColor:'#10b981',backgroundColor:'rgba(16,185,129,.1)',fill:true,tension:.4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#6a8f76'},grid:{color:'#1a2a1a'}},y:{ticks:{color:'#6a8f76'},grid:{color:'#1a2a1a'}}}}});
+}
+
+// ── SETTINGS ──
+function renderSettings(){
+  if(ORG)$('settings-org').innerHTML=`<strong style="color:var(--txt)">${ORG.name}</strong><br/>${ORG.type||''}`;
+  if(USER)$('settings-user').innerHTML=`<strong style="color:var(--txt)">${PROFILE?.full_name||''}</strong><br/>${USER.email}`;
+  if(ORG)$('settings-plan').innerHTML=`Current plan: <strong style="color:var(--em)">${(ORG.plan||'free').toUpperCase()}</strong>`;
+}
+
+// ── EXPORT ──
+async function exportCSV(){
+  if(!cachedP.length)await loadParticipants();
+  const rows=[['ID','Name','Stage','Advisor','Outcomes','Barriers','Risk','Last Contact'],...cachedP.map(p=>[`GC-${String(p.id).padStart(4,'0')}`,`${p.first_name||''} ${p.last_name||''}`,p.stage||'',p.advisor||'',(p.outcomes||[]).join(';'),(p.barriers||[]).join(';'),p.risk||'',p.last_contact||''])];
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(rows.map(r=>r.join(',')).join('\n'));a.download='greencrm-export.csv';a.click();
+}
+
+init();
+</script>
+</body>
+</html>
