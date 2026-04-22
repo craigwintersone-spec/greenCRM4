@@ -135,6 +135,8 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <button class="nav-btn" onclick="go('funding')"><span class="icon">💰</span><span>Funding & Contracts</span></button>
   <button class="nav-btn" onclick="go('evidence')"><span class="icon">🗂️</span><span>Evidence Hub</span></button>
   <div class="nav-section">Settings</div>
+  <button class="nav-btn" onclick="go('rag')"><span class="icon">🚦</span><span>RAG Dashboard</span></button>
+  <button class="nav-btn" onclick="go('employers')"><span class="icon">🏢</span><span>Employers</span></button>
   <button class="nav-btn" onclick="go('safeguarding')"><span class="icon">🔐</span><span>Safeguarding</span></button>
   <button class="nav-btn" onclick="go('settings')"><span class="icon">⚙️</span><span>Settings</span></button>
   <div class="sidebar-bottom">
@@ -241,6 +243,18 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <div class="page-header"><div><div class="page-title">Evidence & Compliance Hub</div><div class="page-sub">PIP-proof · Always audit-ready</div></div><button class="btn btn-p btn-sm" onclick="openAddEvid()">+ Upload evidence</button></div>
   <div id="evid-alerts"></div>
   <div class="tbl-wrap"><table><thead><tr><th>Participant</th><th>Type</th><th>Outcome</th><th>Staff</th><th>Date</th><th>Status</th></tr></thead><tbody id="evid-table"></tbody></table></div>
+</div>
+
+<!-- RAG DASHBOARD -->
+<div id="page-rag" class="page">
+  <div class="page-header"><div><div class="page-title">RAG Status Dashboard</div><div class="page-sub">Red · Amber · Green — contract performance at a glance</div></div><button class="btn btn-ghost btn-sm" onclick="renderRAG()">↻ Refresh</button></div>
+  <div id="rag-list"></div>
+</div>
+
+<!-- EMPLOYERS -->
+<div id="page-employers" class="page">
+  <div class="page-header"><div><div class="page-title">Employer CRM</div><div class="page-sub">Track vacancies, placements, and employer relationships</div></div><button class="btn btn-p btn-sm" onclick="openAddEmployer()">+ Add employer</button></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Employer</th><th>Sector</th><th>Contact</th><th>Vacancies</th><th>Placements</th><th>Relationship</th><th></th></tr></thead><tbody id="emp-table"></tbody></table></div>
 </div>
 
 <!-- SAFEGUARDING -->
