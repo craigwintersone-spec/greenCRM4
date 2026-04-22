@@ -148,6 +148,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <button class="nav-btn" onclick="go('evidence')"><span class="icon">🗂️</span><span>Evidence Hub</span></button>
   <div class="nav-section">Settings</div>
   <button class="nav-btn" onclick="go('safeguarding')"><span class="icon">🔐</span><span>Safeguarding</span></button>
+  <button class="nav-btn" id="nav-team" onclick="window.location.href='invite.html'" style="display:none"><span class="icon">👥</span><span>Team Management</span></button>
   <button class="nav-btn" onclick="go('settings')"><span class="icon">⚙️</span><span>Settings</span></button>
   <div class="sidebar-bottom">
     <div id="sb-free"><p style="font-size:11px;color:var(--txt3);margin-bottom:4px" id="sb-plan-label">Free plan</p><button class="upgrade-sidebar" onclick="openUpgrade()">Upgrade to Pro</button></div>
@@ -452,7 +453,7 @@ const sb=supabase.createClient(SURL,SKEY);
 const BARRIERS=['Housing','Confidence','Skills gap','Transport','Childcare','Mental health','Substance misuse','Criminal record','Language','Benefits'];
 const OUT_TYPES=['Employment','Training','Qualification','Volunteering','Wellbeing','Housing secured'];
 const P_STAGES=['Referred','Engaged','In Support','Job Ready','Outcome Achieved','Sustained','Closed'];
-let USER=null,ORG=null,PROFILE=null,dChart=null,iChart=null,editPId=null,editEmpId=null,caseNoteId=null;
+let USER=null,ORG=null,PROFILE=null,ROLE=null,dChart=null,iChart=null,editPId=null,editEmpId=null,caseNoteId=null;
 const $=id=>document.getElementById(id);
 const days=d=>d?Math.floor((Date.now()-new Date(d))/86400000):9999;
 const fmtD=d=>d?new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}):'—';
@@ -470,15 +471,34 @@ async function init(){
   if(!session){window.location.href='login.html';return;}
   USER=session.user;
   const{data:p}=await sb.from('profiles').select('*,organisations(*)').eq('id',USER.id).single();
-  if(p){PROFILE=p;ORG=p.organisations;}
+  if(p){PROFILE=p;ORG=p.organisations;ROLE=p.role||'advisor';}
+
+  // Role-based UI
+  if(ROLE==='read-only'){
+    // Read-only: only reports and impact
+    document.querySelectorAll('.nav-btn').forEach(b=>b.style.display='none');
+    document.querySelectorAll('.nav-section').forEach(s=>s.style.display='none');
+    document.getElementById('sidebar').innerHTML+=`
+      <div style="padding:10px 18px 4px;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px">Reports</div>
+      <button class="nav-btn active" onclick="go('reports')" style="display:flex"><span class="icon">📄</span><span>Funder Reports</span></button>
+      <button class="nav-btn" onclick="go('impact')" style="display:flex"><span class="icon">🌿</span><span>Impact Wall</span></button>`;
+  }
+
+  if(ROLE==='admin'){
+    document.getElementById('nav-team').style.display='flex';
+  }
+
   if(ORG){
     $('sb-org-name').textContent=ORG.name;
     $('dash-org-name').textContent=ORG.name;
     if(ORG.plan==='pro'){$('sb-free').style.display='none';$('sb-pro').style.display='block';}
-    else $('sb-plan-label').textContent=`Free · ${ORG.name}`;
+    else $('sb-plan-label').textContent=`${ROLE} · ${ORG.name}`;
   }
   document.body.classList.add('ready');
-  go('participants');
+
+  // Role-based default page
+  if(ROLE==='read-only')go('reports');
+  else go('participants');
 }
 async function signOut(){await sb.auth.signOut();window.location.href='login.html';}
 
