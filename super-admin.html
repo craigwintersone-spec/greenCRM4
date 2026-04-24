@@ -2,53 +2,152 @@
 <html>
 <head>
   <title>GreenCRM Super Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { margin:0; font-family:Arial, sans-serif; background:#0a0f0a; color:#e2f5eb; }
+    .layout { display:flex; min-height:100vh; }
+    .sidebar { width:240px; background:#111811; border-right:1px solid #2a3a2a; padding:24px; }
+    .logo { color:#10b981; font-size:22px; font-weight:bold; margin-bottom:30px; }
+    .nav { display:block; color:#9ab8a4; text-decoration:none; padding:10px; border-radius:8px; margin-bottom:6px; }
+    .nav.active, .nav:hover { background:rgba(16,185,129,.12); color:#10b981; }
+    .main { flex:1; padding:32px; }
+    h1 { margin:0; font-size:30px; }
+    .sub { color:#9ab8a4; margin-top:6px; margin-bottom:28px; }
+    .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:28px; }
+    .card { background:#182018; border:1px solid #2a3a2a; border-radius:14px; padding:20px; }
+    .label { font-size:12px; color:#6a8f76; text-transform:uppercase; letter-spacing:.6px; }
+    .value { font-size:34px; font-weight:bold; color:#10b981; margin-top:8px; }
+    table { width:100%; border-collapse:collapse; background:#182018; border:1px solid #2a3a2a; border-radius:14px; overflow:hidden; }
+    th, td { padding:14px; border-bottom:1px solid #2a3a2a; text-align:left; font-size:14px; }
+    th { color:#6a8f76; text-transform:uppercase; font-size:11px; letter-spacing:.6px; }
+    .badge { padding:4px 9px; border-radius:20px; font-size:12px; font-weight:bold; }
+    .free { background:#2a2a1a; color:#f59e0b; }
+    .pro { background:#1a3a2a; color:#34d399; }
+    .network { background:#1a2a3a; color:#60a5fa; }
+    .active { color:#34d399; font-weight:bold; }
+    button { background:#10b981; color:white; border:0; padding:8px 12px; border-radius:8px; font-weight:bold; cursor:pointer; }
+  </style>
 </head>
-<body style="font-family: Arial; padding: 40px;">
-  <h1>GreenCRM Super Admin</h1>
-  <p id="status">Starting...</p>
-  <div id="orgs"></div>
 
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo">GreenCRM Admin</div>
+    <a class="nav active" href="#">Dashboard</a>
+    <a class="nav" href="#">Organisations</a>
+    <a class="nav" href="#">Subscriptions</a>
+    <a class="nav" href="#">Modules</a>
+    <a class="nav" href="/app.html">← Back to CRM</a>
+  </aside>
 
-  <script>
-    document.getElementById("status").textContent = "Script running...";
+  <main class="main">
+    <h1>Super Admin Dashboard</h1>
+    <p class="sub" id="status">Loading organisations...</p>
 
-    const SUPABASE_URL = "https://nznfrxzgvcjhfsdaphyp.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw";
+    <section class="stats">
+      <div class="card">
+        <div class="label">Total Organisations</div>
+        <div class="value" id="total-orgs">0</div>
+      </div>
+      <div class="card">
+        <div class="label">Paid Organisations</div>
+        <div class="value" id="paid-orgs">0</div>
+      </div>
+      <div class="card">
+        <div class="label">Free Organisations</div>
+        <div class="value" id="free-orgs">0</div>
+      </div>
+      <div class="card">
+        <div class="label">Monthly Revenue</div>
+        <div class="value" id="monthly-revenue">£0</div>
+      </div>
+    </section>
 
-    if (!window.supabase) {
-      document.getElementById("status").textContent = "Supabase library did not load";
-    } else {
-      const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    <h2>Organisations</h2>
 
-      async function loadOrganisations() {
-        document.getElementById("status").textContent = "Loading organisations...";
+    <table>
+      <thead>
+        <tr>
+          <th>Organisation</th>
+          <th>Sector</th>
+          <th>Plan</th>
+          <th>Status</th>
+          <th>Monthly Value</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="org-table">
+        <tr><td colspan="6">Loading...</td></tr>
+      </tbody>
+    </table>
+  </main>
+</div>
 
-        const { data, error } = await client
-          .from("organisations")
-          .select("*");
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 
-        if (error) {
-          document.getElementById("status").textContent = "Error loading organisations";
-          document.getElementById("orgs").innerHTML =
-            "<pre>" + JSON.stringify(error, null, 2) + "</pre>";
-          return;
-        }
+<script>
+const SUPABASE_URL = "https://nznfrxzgvcjhfsdaphyp.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw";
 
-        document.getElementById("status").textContent = "Loaded successfully";
+const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        document.getElementById("orgs").innerHTML = data.map(org => `
-          <div style="border:1px solid #ddd; padding:15px; margin:10px 0; border-radius:8px;">
-            <h3>${org.name || "Unnamed organisation"}</h3>
-            <p>Sector: ${org.sector || "N/A"}</p>
-            <p>Plan: ${org.plan || "free"}</p>
-            <p>Status: ${org.status || "active"}</p>
-          </div>
-        `).join("");
-      }
+const prices = {
+  free: 0,
+  starter: 9,
+  pro: 29,
+  network: 79
+};
 
-      loadOrganisations();
-    }
-  </script>
+function planClass(plan) {
+  if (plan === "pro") return "pro";
+  if (plan === "network") return "network";
+  return "free";
+}
+
+async function loadOrganisations() {
+  const { data, error } = await client
+    .from("organisations")
+    .select("*")
+    .order("name");
+
+  if (error) {
+    document.getElementById("status").textContent = "Error loading organisations";
+    document.getElementById("org-table").innerHTML =
+      `<tr><td colspan="6">${error.message}</td></tr>`;
+    return;
+  }
+
+  const orgs = data || [];
+  const paid = orgs.filter(o => o.plan && o.plan !== "free");
+  const free = orgs.filter(o => !o.plan || o.plan === "free");
+  const revenue = orgs.reduce((sum, org) => {
+    return sum + (prices[org.plan] || 0);
+  }, 0);
+
+  document.getElementById("status").textContent = "Loaded successfully";
+  document.getElementById("total-orgs").textContent = orgs.length;
+  document.getElementById("paid-orgs").textContent = paid.length;
+  document.getElementById("free-orgs").textContent = free.length;
+  document.getElementById("monthly-revenue").textContent = "£" + revenue;
+
+  document.getElementById("org-table").innerHTML = orgs.map(org => {
+    const plan = org.plan || "free";
+    const value = prices[plan] || 0;
+
+    return `
+      <tr>
+        <td><strong>${org.name || "Unnamed"}</strong></td>
+        <td>${org.sector || "N/A"}</td>
+        <td><span class="badge ${planClass(plan)}">${plan}</span></td>
+        <td class="active">${org.status || "active"}</td>
+        <td>£${value}/mo</td>
+        <td><button onclick="alert('Open ${org.name}')">View</button></td>
+      </tr>
+    `;
+  }).join("");
+}
+
+loadOrganisations();
+</script>
 </body>
 </html>
