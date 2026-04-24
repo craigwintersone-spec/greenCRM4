@@ -1,213 +1,24 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>GreenCRM Super Admin</title>
-<style>
-  body {
-    margin: 0;
-    font-family: Arial, sans-serif;
-    background: #0a0f0a;
-    color: #e2f5eb;
-  }
-  .layout {
-    display: flex;
-    min-height: 100vh;
-  }
-  .sidebar {
-    width: 240px;
-    background: #111811;
-    border-right: 1px solid #2a3a2a;
-    padding: 24px 18px;
-  }
-  .logo {
-    font-size: 22px;
-    font-weight: bold;
-    color: #10b981;
-    margin-bottom: 30px;
-  }
-  .nav {
-    display: block;
-    color: #9ab8a4;
-    text-decoration: none;
-    padding: 10px;
-    border-radius: 8px;
-    margin-bottom: 6px;
-  }
-  .nav:hover, .nav.active {
-    background: rgba(16,185,129,0.12);
-    color: #10b981;
-  }
-  .main {
-    flex: 1;
-    padding: 32px;
-  }
-  .header {
-    margin-bottom: 28px;
-  }
-  .header h1 {
-    margin: 0;
-    font-size: 30px;
-  }
-  .header p {
-    color: #9ab8a4;
-    margin-top: 6px;
-  }
-  .stats {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    margin-bottom: 28px;
-  }
-  .card {
-    background: #182018;
-    border: 1px solid #2a3a2a;
-    border-radius: 14px;
-    padding: 20px;
-  }
-  .label {
-    font-size: 12px;
-    color: #6a8f76;
-    text-transform: uppercase;
-    letter-spacing: .6px;
-  }
-  .value {
-    font-size: 34px;
-    font-weight: bold;
-    color: #10b981;
-    margin-top: 8px;
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    background: #182018;
-    border: 1px solid #2a3a2a;
-    border-radius: 14px;
-    overflow: hidden;
-  }
-  th, td {
-    padding: 14px;
-    border-bottom: 1px solid #2a3a2a;
-    text-align: left;
-    font-size: 14px;
-  }
-  th {
-    color: #6a8f76;
-    text-transform: uppercase;
-    font-size: 11px;
-    letter-spacing: .6px;
-  }
-  .badge {
-    padding: 4px 9px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: bold;
-  }
-  .free { background: #2a2a1a; color: #f59e0b; }
-  .pro { background: #1a3a2a; color: #34d399; }
-  .network { background: #1a2a3a; color: #60a5fa; }
-  .active { color: #34d399; }
-  .suspended { color: #f87171; }
-  button {
-    background: #10b981;
-    color: white;
-    border: none;
-    padding: 8px 12px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: bold;
-  }
-  button:hover {
-    background: #059669;
-  }
-</style>
-</head>
-<body>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-<div class="layout">
-  <aside class="sidebar">
-    <div class="logo">GreenCRM Admin</div>
-    <a class="nav active" href="#">Dashboard</a>
-    <a class="nav" href="#">Organisations</a>
-    <a class="nav" href="#">Users</a>
-    <a class="nav" href="#">Subscriptions</a>
-    <a class="nav" href="#">Modules</a>
-    <a class="nav" href="#">Reports</a>
-    <a class="nav" href="/app.html">← Back to GreenCRM</a>
-  </aside>
+<script>
+const SUPABASE_URL = "https://nznfrxzgvcjhfssdaphyp.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw;
 
-  <main class="main">
-    <div class="header">
-      <h1>Super Admin Dashboard</h1>
-      <p>Manage all GreenCRM organisations, users, plans and modules.</p>
-    </div>
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    <section class="stats">
-      <div class="card">
-        <div class="label">Total Organisations</div>
-        <div class="value">3</div>
-      </div>
-      <div class="card">
-        <div class="label">Total Users</div>
-        <div class="value">12</div>
-      </div>
-      <div class="card">
-        <div class="label">Paid Organisations</div>
-        <div class="value">2</div>
-      </div>
-      <div class="card">
-        <div class="label">Monthly Revenue</div>
-        <div class="value">£108</div>
-      </div>
-    </section>
+async function loadSuperAdmin() {
+  const { data, error } = await supabase
+    .from("organisations")
+    .select("*");
 
-    <h2>Organisations</h2>
+  if (error) {
+    console.error(error);
+    alert("Error loading data");
+    return;
+  }
 
-    <table>
-      <thead>
-        <tr>
-          <th>Organisation</th>
-          <th>Sector</th>
-          <th>Plan</th>
-          <th>Users</th>
-          <th>Modules</th>
-          <th>Status</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Project Abundance</td>
-          <td>Green Skills</td>
-          <td><span class="badge pro">Pro</span></td>
-          <td>5</td>
-          <td>Participants, Volunteers, Events, Circular</td>
-          <td class="active">Active</td>
-          <td><button>View</button></td>
-        </tr>
-        <tr>
-          <td>Org B</td>
-          <td>Employment Charity</td>
-          <td><span class="badge network">Network</span></td>
-          <td>6</td>
-          <td>MoJ, GLA, Employers, Reports</td>
-          <td class="active">Active</td>
-          <td><button>View</button></td>
-        </tr>
-        <tr>
-          <td>Org C</td>
-          <td>Repair Café Network</td>
-          <td><span class="badge free">Free</span></td>
-          <td>1</td>
-          <td>Circular Economy Only</td>
-          <td class="active">Active</td>
-          <td><button>View</button></td>
-        </tr>
-      </tbody>
-    </table>
-  </main>
-</div>
+  document.body.innerHTML += "<pre>" + JSON.stringify(data, null, 2) + "</pre>";
+}
 
-</body>
-</html>
+loadSuperAdmin();
+</script>
