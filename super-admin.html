@@ -3,86 +3,153 @@
 <head>
   <title>GreenCRM Super Admin</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <style>
     body { margin:0; font-family:Arial, sans-serif; background:#0a0f0a; color:#e2f5eb; }
     .layout { display:flex; min-height:100vh; }
-    .sidebar { width:240px; background:#111811; border-right:1px solid #2a3a2a; padding:24px; }
+    .sidebar { width:240px; background:#111811; border-right:1px solid #2a3a2a; padding:24px; position:fixed; top:0; bottom:0; left:0; }
     .logo { color:#10b981; font-size:22px; font-weight:bold; margin-bottom:30px; }
     .nav { display:block; color:#9ab8a4; text-decoration:none; padding:10px; border-radius:8px; margin-bottom:6px; }
     .nav.active, .nav:hover { background:rgba(16,185,129,.12); color:#10b981; }
-    .main { flex:1; padding:32px; }
+    .main { flex:1; padding:32px; margin-left:288px; }
     h1 { margin:0; font-size:30px; }
+    h2 { margin-top:34px; }
     .sub { color:#9ab8a4; margin-top:6px; margin-bottom:28px; }
     .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:28px; }
-    .card { background:#182018; border:1px solid #2a3a2a; border-radius:14px; padding:20px; }
+    .card { background:#182018; border:1px solid #2a3a2a; border-radius:14px; padding:20px; margin-bottom:16px; }
     .label { font-size:12px; color:#6a8f76; text-transform:uppercase; letter-spacing:.6px; }
     .value { font-size:34px; font-weight:bold; color:#10b981; margin-top:8px; }
-    table { width:100%; border-collapse:collapse; background:#182018; border:1px solid #2a3a2a; border-radius:14px; overflow:hidden; }
+    table { width:100%; border-collapse:collapse; background:#182018; border:1px solid #2a3a2a; border-radius:14px; overflow:hidden; margin-bottom:20px; }
     th, td { padding:14px; border-bottom:1px solid #2a3a2a; text-align:left; font-size:14px; }
     th { color:#6a8f76; text-transform:uppercase; font-size:11px; letter-spacing:.6px; }
-    .badge { padding:4px 9px; border-radius:20px; font-size:12px; font-weight:bold; }
+    .badge { padding:4px 9px; border-radius:20px; font-size:12px; font-weight:bold; display:inline-block; }
     .free { background:#2a2a1a; color:#f59e0b; }
     .starter { background:#2a2a1a; color:#fbbf24; }
     .pro { background:#1a3a2a; color:#34d399; }
     .network { background:#1a2a3a; color:#60a5fa; }
     .active { color:#34d399; font-weight:bold; }
     .suspended { color:#f87171; font-weight:bold; }
-    button { background:#10b981; color:white; border:0; padding:8px 12px; border-radius:8px; font-weight:bold; cursor:pointer; }
+    button { background:#10b981; color:white; border:0; padding:8px 12px; border-radius:8px; font-weight:bold; cursor:pointer; margin-right:6px; }
     button:hover { background:#059669; }
+    .secondary { background:#1f2937; }
+    .secondary:hover { background:#374151; }
+    .plan-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+    .module-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+    .muted { color:#9ab8a4; font-size:14px; }
   </style>
 </head>
 
 <body>
 <div class="layout">
+
   <aside class="sidebar">
     <div class="logo">GreenCRM Admin</div>
-    <a class="nav active" href="#">Dashboard</a>
-    <a class="nav" href="#">Organisations</a>
-    <a class="nav" href="#">Subscriptions</a>
-    <a class="nav" href="#">Modules</a>
+    <a class="nav active" href="#dashboard">Dashboard</a>
+    <a class="nav" href="#organisations">Organisations</a>
+    <a class="nav" href="#subscriptions">Subscriptions</a>
+    <a class="nav" href="#modules">Modules</a>
     <a class="nav" href="/app.html">← Back to CRM</a>
   </aside>
 
   <main class="main">
-    <h1>Super Admin Dashboard</h1>
-    <p class="sub" id="status">Loading organisations...</p>
 
-    <section class="stats">
-      <div class="card">
-        <div class="label">Total Organisations</div>
-        <div class="value" id="total-orgs">0</div>
-      </div>
-      <div class="card">
-        <div class="label">Paid Organisations</div>
-        <div class="value" id="paid-orgs">0</div>
-      </div>
-      <div class="card">
-        <div class="label">Free Organisations</div>
-        <div class="value" id="free-orgs">0</div>
-      </div>
-      <div class="card">
-        <div class="label">Monthly Revenue</div>
-        <div class="value" id="monthly-revenue">£0</div>
+    <section id="dashboard">
+      <h1>Super Admin Dashboard</h1>
+      <p class="sub" id="status">Loading organisations...</p>
+
+      <section class="stats">
+        <div class="card">
+          <div class="label">Total Organisations</div>
+          <div class="value" id="total-orgs">0</div>
+        </div>
+        <div class="card">
+          <div class="label">Paid Organisations</div>
+          <div class="value" id="paid-orgs">0</div>
+        </div>
+        <div class="card">
+          <div class="label">Free Organisations</div>
+          <div class="value" id="free-orgs">0</div>
+        </div>
+        <div class="card">
+          <div class="label">Monthly Revenue</div>
+          <div class="value" id="monthly-revenue">£0</div>
+        </div>
+      </section>
+    </section>
+
+    <section id="organisations">
+      <h2>Organisations</h2>
+      <p class="muted">View, edit and open each organisation’s CRM.</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Organisation</th>
+            <th>Sector</th>
+            <th>Plan</th>
+            <th>Status</th>
+            <th>Monthly Value</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="org-table">
+          <tr><td colspan="6">Loading...</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="subscriptions">
+      <h2>Subscriptions</h2>
+
+      <div class="plan-grid">
+        <div class="card">
+          <div class="label">Free</div>
+          <div class="value">£0</div>
+          <p class="muted">1 user. Basic CRM access.</p>
+        </div>
+
+        <div class="card">
+          <div class="label">Starter</div>
+          <div class="value">£9</div>
+          <p class="muted">Small organisations and local projects.</p>
+        </div>
+
+        <div class="card">
+          <div class="label">Pro</div>
+          <div class="value">£29</div>
+          <p class="muted">Reporting, employers, funders and outcomes.</p>
+        </div>
+
+        <div class="card">
+          <div class="label">Network</div>
+          <div class="value">£79</div>
+          <p class="muted">Multi-site networks and repair café groups.</p>
+        </div>
       </div>
     </section>
 
-    <h2>Organisations</h2>
+    <section id="modules">
+      <h2>Modules</h2>
+      <p class="muted">Modules are controlled from each organisation’s View page.</p>
 
-    <table>
-      <thead>
-        <tr>
-          <th>Organisation</th>
-          <th>Sector</th>
-          <th>Plan</th>
-          <th>Status</th>
-          <th>Monthly Value</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody id="org-table">
-        <tr><td colspan="6">Loading...</td></tr>
-      </tbody>
-    </table>
+      <div class="module-grid">
+        <div class="card">
+          <div class="label">People</div>
+          <p>Participants, Volunteers, Staff</p>
+        </div>
+
+        <div class="card">
+          <div class="label">Delivery</div>
+          <p>Events, Feedback, Referrals, Circular Economy</p>
+        </div>
+
+        <div class="card">
+          <div class="label">Reporting</div>
+          <p>Funders, Employers, Evidence, MoJ / GLA reports</p>
+        </div>
+      </div>
+    </section>
+
   </main>
 </div>
 
@@ -123,6 +190,7 @@ async function loadOrganisations() {
   }
 
   const orgs = data || [];
+
   const paid = orgs.filter(o => o.plan && o.plan !== "free");
   const free = orgs.filter(o => !o.plan || o.plan === "free");
 
@@ -149,9 +217,8 @@ async function loadOrganisations() {
         <td class="${status === "suspended" ? "suspended" : "active"}">${status}</td>
         <td>£${value}/mo</td>
         <td>
-          <button onclick="window.location.href='/org.html?id=${org.id}'">
-            View
-          </button>
+          <button onclick="window.location.href='/org.html?id=${org.id}'">View</button>
+          <button class="secondary" onclick="window.location.href='/app.html?org_id=${org.id}'">Open CRM</button>
         </td>
       </tr>
     `;
@@ -160,5 +227,6 @@ async function loadOrganisations() {
 
 loadOrganisations();
 </script>
+
 </body>
 </html>
