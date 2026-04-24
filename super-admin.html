@@ -1,24 +1,77 @@
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!DOCTYPE html>
+<html>
+<head>
+  <title>GreenCRM Super Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
 
-<script>
-const SUPABASE_URL = "https://nznfrxzgvcjhfssdaphyp.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw;
+<body style="font-family: Arial; padding: 40px; background:#f5f5f5;">
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  <h1>🌍 GreenCRM Super Admin</h1>
+  <p id="status">Connecting to database...</p>
 
-async function loadSuperAdmin() {
-  const { data, error } = await supabase
-    .from("organisations")
-    .select("*");
+  <div id="orgs" style="margin-top:20px;"></div>
 
-  if (error) {
-    console.error(error);
-    alert("Error loading data");
-    return;
-  }
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  document.body.innerHTML += "<pre>" + JSON.stringify(data, null, 2) + "</pre>";
-}
+  <script>
+    const SUPABASE_URL = "https://nznfrxzgvcjhfsdaphyp.supabase.co";
 
-loadSuperAdmin();
-</script>
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw";
+
+    const supabase = window.supabase.createClient(
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY
+    );
+
+    async function loadOrganisations() {
+      const status = document.getElementById("status");
+      const orgsDiv = document.getElementById("orgs");
+
+      status.textContent = "Loading organisations...";
+
+      const { data, error } = await supabase
+        .from("organisations")
+        .select("*");
+
+      if (error) {
+        status.textContent = "❌ Error loading data";
+        orgsDiv.innerHTML = "<pre>" + JSON.stringify(error, null, 2) + "</pre>";
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        status.textContent = "⚠️ No organisations found";
+        return;
+      }
+
+      status.textContent = "✅ Organisations loaded";
+
+      let html = "";
+
+      data.forEach(org => {
+        html += `
+          <div style="
+            background:white;
+            padding:20px;
+            margin-bottom:10px;
+            border-radius:10px;
+            box-shadow:0 2px 5px rgba(0,0,0,0.1);
+          ">
+            <h3>${org.name}</h3>
+            <p><strong>Sector:</strong> ${org.sector || "N/A"}</p>
+            <p><strong>Plan:</strong> ${org.plan || "free"}</p>
+            <p><strong>Status:</strong> ${org.status || "active"}</p>
+          </div>
+        `;
+      });
+
+      orgsDiv.innerHTML = html;
+    }
+
+    loadOrganisations();
+  </script>
+
+</body>
+</html>
