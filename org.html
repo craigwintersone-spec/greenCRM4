@@ -3,27 +3,102 @@
 <head>
   <title>GreenCRM Organisation</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <style>
-    body { margin:0; font-family:Arial,sans-serif; background:#0a0f0a; color:#e2f5eb; }
-    .main { padding:32px; max-width:900px; margin:auto; }
-    a { color:#10b981; text-decoration:none; }
-    .card { background:#182018; border:1px solid #2a3a2a; border-radius:14px; padding:20px; margin-top:18px; }
-    label { display:block; color:#9ab8a4; margin-top:14px; font-size:13px; }
-    input, select { width:100%; padding:10px; margin-top:6px; border-radius:8px; border:1px solid #2a3a2a; background:#111811; color:#e2f5eb; }
-    button { background:#10b981; color:white; border:0; padding:10px 14px; border-radius:8px; font-weight:bold; cursor:pointer; margin-top:18px; }
-    .danger { background:#ef4444; margin-left:8px; }
-    .status { color:#9ab8a4; margin-top:12px; }
+    body {
+      margin:0;
+      font-family:Arial,sans-serif;
+      background:#0a0f0a;
+      color:#e2f5eb;
+    }
+
+    .main {
+      padding:32px;
+      max-width:900px;
+      margin:auto;
+    }
+
+    a {
+      color:#10b981;
+      text-decoration:none;
+    }
+
+    .card {
+      background:#182018;
+      border:1px solid #2a3a2a;
+      border-radius:14px;
+      padding:20px;
+      margin-top:18px;
+    }
+
+    label {
+      display:block;
+      color:#9ab8a4;
+      margin-top:14px;
+      font-size:13px;
+    }
+
+    input, select {
+      width:100%;
+      padding:10px;
+      margin-top:6px;
+      border-radius:8px;
+      border:1px solid #2a3a2a;
+      background:#111811;
+      color:#e2f5eb;
+    }
+
+    button {
+      background:#10b981;
+      color:white;
+      border:0;
+      padding:10px 14px;
+      border-radius:8px;
+      font-weight:bold;
+      cursor:pointer;
+      margin-top:18px;
+    }
+
+    .danger {
+      background:#ef4444;
+      margin-left:8px;
+    }
+
+    .status {
+      color:#9ab8a4;
+      margin-top:12px;
+    }
+
+    .modules {
+      margin-top:10px;
+    }
+
+    .modules label {
+      display:flex;
+      align-items:center;
+      gap:8px;
+      margin-top:6px;
+      font-size:14px;
+    }
+
+    .modules input {
+      width:auto;
+    }
+
   </style>
 </head>
+
 <body>
 
 <main class="main">
+
   <a href="/super-admin.html">← Back to Super Admin</a>
 
   <h1 id="title">Organisation</h1>
   <p id="status" class="status">Loading...</p>
 
   <div class="card">
+
     <label>Organisation name</label>
     <input id="name">
 
@@ -33,9 +108,9 @@
     <label>Plan</label>
     <select id="plan">
       <option value="free">Free</option>
-      <option value="starter">Starter - £9/mo</option>
-      <option value="pro">Pro - £29/mo</option>
-      <option value="network">Network - £79/mo</option>
+      <option value="starter">Starter (£9/mo)</option>
+      <option value="pro">Pro (£29/mo)</option>
+      <option value="network">Network (£79/mo)</option>
     </select>
 
     <label>Status</label>
@@ -44,14 +119,27 @@
       <option value="suspended">Suspended</option>
     </select>
 
+    <label>Modules</label>
+    <div class="modules">
+      <label><input type="checkbox" id="mod_volunteers"> Volunteers</label>
+      <label><input type="checkbox" id="mod_events"> Events</label>
+      <label><input type="checkbox" id="mod_participants"> Participants</label>
+      <label><input type="checkbox" id="mod_circular"> Circular</label>
+      <label><input type="checkbox" id="mod_employers"> Employers</label>
+      <label><input type="checkbox" id="mod_funders"> Funders</label>
+    </div>
+
     <button onclick="saveOrg()">Save changes</button>
     <button class="danger" onclick="suspendOrg()">Suspend</button>
+
   </div>
+
 </main>
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 
 <script>
+
 const SUPABASE_URL = "https://nznfrxzgvcjhfsdaphyp.supabase.co";
 
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw";
@@ -62,8 +150,9 @@ const params = new URLSearchParams(window.location.search);
 const orgId = params.get("id");
 
 async function loadOrg() {
+
   if (!orgId) {
-    document.getElementById("status").textContent = "No organisation ID provided.";
+    document.getElementById("status").textContent = "No organisation ID.";
     return;
   }
 
@@ -74,19 +163,31 @@ async function loadOrg() {
     .single();
 
   if (error) {
-    document.getElementById("status").textContent = "Error: " + error.message;
+    document.getElementById("status").textContent = error.message;
     return;
   }
 
-  document.getElementById("title").textContent = data.name || "Organisation";
+  document.getElementById("title").textContent = data.name;
   document.getElementById("name").value = data.name || "";
   document.getElementById("sector").value = data.sector || "";
   document.getElementById("plan").value = data.plan || "free";
   document.getElementById("org_status").value = data.status || "active";
+
+  const modules = data.modules || {};
+
+  document.getElementById("mod_volunteers").checked = modules.volunteers ?? true;
+  document.getElementById("mod_events").checked = modules.events ?? true;
+  document.getElementById("mod_participants").checked = modules.participants ?? true;
+  document.getElementById("mod_circular").checked = modules.circular ?? false;
+  document.getElementById("mod_employers").checked = modules.employers ?? false;
+  document.getElementById("mod_funders").checked = modules.funders ?? false;
+
   document.getElementById("status").textContent = "Loaded successfully";
+
 }
 
 async function saveOrg() {
+
   document.getElementById("status").textContent = "Saving...";
 
   const { error } = await client
@@ -95,15 +196,24 @@ async function saveOrg() {
       name: document.getElementById("name").value,
       sector: document.getElementById("sector").value,
       plan: document.getElementById("plan").value,
-      status: document.getElementById("org_status").value
+      status: document.getElementById("org_status").value,
+      modules: {
+        volunteers: document.getElementById("mod_volunteers").checked,
+        events: document.getElementById("mod_events").checked,
+        participants: document.getElementById("mod_participants").checked,
+        circular: document.getElementById("mod_circular").checked,
+        employers: document.getElementById("mod_employers").checked,
+        funders: document.getElementById("mod_funders").checked
+      }
     })
     .eq("id", orgId);
 
   if (error) {
-    document.getElementById("status").textContent = "Save error: " + error.message;
+    document.getElementById("status").textContent = "Error: " + error.message;
   } else {
     document.getElementById("status").textContent = "Saved successfully ✅";
   }
+
 }
 
 async function suspendOrg() {
@@ -112,6 +222,7 @@ async function suspendOrg() {
 }
 
 loadOrg();
+
 </script>
 
 </body>
