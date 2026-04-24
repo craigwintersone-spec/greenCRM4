@@ -2,76 +2,53 @@
 <html>
 <head>
   <title>GreenCRM Super Admin</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
+<body style="font-family: Arial; padding: 40px;">
+  <h1>GreenCRM Super Admin</h1>
+  <p id="status">Starting...</p>
+  <div id="orgs"></div>
 
-<body style="font-family: Arial; padding: 40px; background:#f5f5f5;">
-
-  <h1>🌍 GreenCRM Super Admin</h1>
-  <p id="status">Connecting to database...</p>
-
-  <div id="orgs" style="margin-top:20px;"></div>
-
-  <!-- Supabase -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 
   <script>
-    const SUPABASE_URL = "https://nznfrxzgvcjhfsdaphyp.supabase.co";
+    document.getElementById("status").textContent = "Script running...";
 
+    const SUPABASE_URL = "https://nznfrxzgvcjhfsdaphyp.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw";
 
-    const supabase = window.supabase.createClient(
-      SUPABASE_URL,
-      SUPABASE_ANON_KEY
-    );
+    if (!window.supabase) {
+      document.getElementById("status").textContent = "Supabase library did not load";
+    } else {
+      const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    async function loadOrganisations() {
-      const status = document.getElementById("status");
-      const orgsDiv = document.getElementById("orgs");
+      async function loadOrganisations() {
+        document.getElementById("status").textContent = "Loading organisations...";
 
-      status.textContent = "Loading organisations...";
+        const { data, error } = await client
+          .from("organisations")
+          .select("*");
 
-      const { data, error } = await supabase
-        .from("organisations")
-        .select("*");
+        if (error) {
+          document.getElementById("status").textContent = "Error loading organisations";
+          document.getElementById("orgs").innerHTML =
+            "<pre>" + JSON.stringify(error, null, 2) + "</pre>";
+          return;
+        }
 
-      if (error) {
-        status.textContent = "❌ Error loading data";
-        orgsDiv.innerHTML = "<pre>" + JSON.stringify(error, null, 2) + "</pre>";
-        return;
-      }
+        document.getElementById("status").textContent = "Loaded successfully";
 
-      if (!data || data.length === 0) {
-        status.textContent = "⚠️ No organisations found";
-        return;
-      }
-
-      status.textContent = "✅ Organisations loaded";
-
-      let html = "";
-
-      data.forEach(org => {
-        html += `
-          <div style="
-            background:white;
-            padding:20px;
-            margin-bottom:10px;
-            border-radius:10px;
-            box-shadow:0 2px 5px rgba(0,0,0,0.1);
-          ">
-            <h3>${org.name}</h3>
-            <p><strong>Sector:</strong> ${org.sector || "N/A"}</p>
-            <p><strong>Plan:</strong> ${org.plan || "free"}</p>
-            <p><strong>Status:</strong> ${org.status || "active"}</p>
+        document.getElementById("orgs").innerHTML = data.map(org => `
+          <div style="border:1px solid #ddd; padding:15px; margin:10px 0; border-radius:8px;">
+            <h3>${org.name || "Unnamed organisation"}</h3>
+            <p>Sector: ${org.sector || "N/A"}</p>
+            <p>Plan: ${org.plan || "free"}</p>
+            <p>Status: ${org.status || "active"}</p>
           </div>
-        `;
-      });
+        `).join("");
+      }
 
-      orgsDiv.innerHTML = html;
+      loadOrganisations();
     }
-
-    loadOrganisations();
   </script>
-
 </body>
 </html>
