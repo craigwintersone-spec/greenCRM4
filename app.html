@@ -1269,3 +1269,36 @@ setupOrganisationMode();
 </script>
 </body>
 </html>
+<script>
+async function loadDashboardStats() {
+  const params = new URLSearchParams(window.location.search);
+  const orgId = params.get("org_id");
+  if (!orgId) return;
+
+  const { data } = await greencrm
+    .from("outcomes")
+    .select("*")
+    .eq("org_id", orgId);
+
+  const total = data.length;
+  const jobs = data.filter(o => o.type === "job").length;
+  const training = data.filter(o => o.type === "training").length;
+
+  const box = document.createElement("div");
+  box.style.background = "#182018";
+  box.style.padding = "16px";
+  box.style.margin = "20px";
+  box.style.borderRadius = "12px";
+
+  box.innerHTML = `
+    <h3>Impact Dashboard</h3>
+    <p>Total Outcomes: ${total}</p>
+    <p>Jobs: ${jobs}</p>
+    <p>Training: ${training}</p>
+  `;
+
+  document.body.prepend(box);
+}
+
+loadDashboardStats();
+</script>
