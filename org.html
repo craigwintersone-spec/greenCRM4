@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>GreenCRM Organisation</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { margin:0; font-family:Arial,sans-serif; background:#0a0f0a; color:#e2f5eb; }
+    .main { padding:32px; max-width:900px; margin:auto; }
+    a { color:#10b981; text-decoration:none; }
+    .card { background:#182018; border:1px solid #2a3a2a; border-radius:14px; padding:20px; margin-top:18px; }
+    label { display:block; color:#9ab8a4; margin-top:14px; font-size:13px; }
+    input, select { width:100%; padding:10px; margin-top:6px; border-radius:8px; border:1px solid #2a3a2a; background:#111811; color:#e2f5eb; }
+    button { background:#10b981; color:white; border:0; padding:10px 14px; border-radius:8px; font-weight:bold; cursor:pointer; margin-top:18px; }
+    .danger { background:#ef4444; margin-left:8px; }
+    .status { color:#9ab8a4; margin-top:12px; }
+  </style>
+</head>
+<body>
+
+<main class="main">
+  <a href="/super-admin.html">← Back to Super Admin</a>
+
+  <h1 id="title">Organisation</h1>
+  <p id="status" class="status">Loading...</p>
+
+  <div class="card">
+    <label>Organisation name</label>
+    <input id="name">
+
+    <label>Sector</label>
+    <input id="sector">
+
+    <label>Plan</label>
+    <select id="plan">
+      <option value="free">Free</option>
+      <option value="starter">Starter - £9/mo</option>
+      <option value="pro">Pro - £29/mo</option>
+      <option value="network">Network - £79/mo</option>
+    </select>
+
+    <label>Status</label>
+    <select id="org_status">
+      <option value="active">Active</option>
+      <option value="suspended">Suspended</option>
+    </select>
+
+    <button onclick="saveOrg()">Save changes</button>
+    <button class="danger" onclick="suspendOrg()">Suspend</button>
+  </div>
+</main>
+
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+
+<script>
+const SUPABASE_URL = "https://nznfrxzgvcjhfsdaphyp.supabase.co";
+const SUPABASE_ANON_KEY = "PASTE_YOUR_ANON_KEY_HERE";
+
+const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const params = new URLSearchParams(window.location.search);
+const orgId = params.get("id");
+
+async function loadOrg() {
+  if (!orgId) {
+    document.getElementById("status").textContent = "No organisation ID provided.";
+    return;
+  }
+
+  const { data, error } = await client
+    .from("organisations")
+    .select("*")
+    .eq("id", orgId)
+    .single();
+
+  if (error) {
+    document.getElementById("status").textContent = error.message;
+    return;
+  }
+
+  document.getElementById("title").textContent = data.name;
+  document.getElementById("name").value = data.name || "";
+  document.getElementById("sector").value = data.sector || "";
+  document.getElementById("plan").value = data.plan || "free";
+  document.getElementById("org_status").value = data.status || "active";
+  document.getElementById("status").textContent = "Loaded";
+}
+
+async function saveOrg() {
+  const { error } = await client
+    .from("organisations")
+    .update({
+      name: document.getElementById("name").value,
+      sector: document.getElementById("sector").value,
+      plan: document.getElementById("plan").value,
+      status: document.getElementById("org_status").value
+    })
+    .eq("id", orgId);
+
+  document.getElementById("status").textContent = error ? error.message : "Saved successfully";
+}
+
+async function suspendOrg() {
+  document.getElementById("org_status").value = "suspended";
+  await saveOrg();
+}
+
+loadOrg();
+</script>
+
+</body>
+</html>
