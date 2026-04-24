@@ -53,7 +53,8 @@
 
 <script>
 const SUPABASE_URL = "https://nznfrxzgvcjhfsdaphyp.supabase.co";
-const SUPABASE_ANON_KEY = "PASTE_YOUR_ANON_KEY_HERE";
+
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw";
 
 const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -73,19 +74,21 @@ async function loadOrg() {
     .single();
 
   if (error) {
-    document.getElementById("status").textContent = error.message;
+    document.getElementById("status").textContent = "Error: " + error.message;
     return;
   }
 
-  document.getElementById("title").textContent = data.name;
+  document.getElementById("title").textContent = data.name || "Organisation";
   document.getElementById("name").value = data.name || "";
   document.getElementById("sector").value = data.sector || "";
   document.getElementById("plan").value = data.plan || "free";
   document.getElementById("org_status").value = data.status || "active";
-  document.getElementById("status").textContent = "Loaded";
+  document.getElementById("status").textContent = "Loaded successfully";
 }
 
 async function saveOrg() {
+  document.getElementById("status").textContent = "Saving...";
+
   const { error } = await client
     .from("organisations")
     .update({
@@ -96,7 +99,11 @@ async function saveOrg() {
     })
     .eq("id", orgId);
 
-  document.getElementById("status").textContent = error ? error.message : "Saved successfully";
+  if (error) {
+    document.getElementById("status").textContent = "Save error: " + error.message;
+  } else {
+    document.getElementById("status").textContent = "Saved successfully ✅";
+  }
 }
 
 async function suspendOrg() {
