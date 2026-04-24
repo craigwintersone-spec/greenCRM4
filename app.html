@@ -7,13 +7,13 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#0a0f0a;--surface:#111811;--card:#182018;--border:#2a3a2a;--em:#10b981;--em2:#059669;--em3:#34d399;--txt:#e2f5eb;--txt2:#9ab8a4;--txt3:#6a8f76;--amber:#f59e0b;--red:#f87171;--blue:#60a5fa;--radius:10px;--radiuslg:14px}
-body{background:var(--bg);color:var(--txt);font-family:system-ui,sans-serif;font-size:14px;line-height:1.6;min-height:100vh}
+body{background:var(--bg);color:var(--txt);font-family:system-ui,sans-serif;font-size:14px;line-height:1.6;min-height:100vh;display:flex;flex-direction:column}
 button{cursor:pointer;border:none;font-family:inherit}
 input,select,textarea{font-family:inherit;font-size:13px;background:var(--card);border:1px solid var(--border);color:var(--txt);border-radius:var(--radius);padding:7px 11px;width:100%;outline:none}
 input:focus,select:focus,textarea:focus{border-color:var(--em)}
 textarea{resize:vertical;min-height:70px}
 label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
-#shell{display:flex;min-height:100vh}
+#shell{display:flex;flex:1;min-height:0}
 #sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:14px 0;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto}
 #main{flex:1;overflow-y:auto;padding:24px}
 .logo{font-size:17px;font-weight:700;color:var(--em);padding:4px 18px 16px;border-bottom:1px solid var(--border);margin-bottom:10px;letter-spacing:-.5px}
@@ -24,6 +24,9 @@ label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;le
 .nav-btn.active{color:var(--em);background:rgba(16,185,129,.1);border-left-color:var(--em)}
 .nav-btn .icon{font-size:14px;width:18px;text-align:center}
 .sidebar-bottom{margin-top:auto;padding:12px 18px;border-top:1px solid var(--border)}
+.pro-badge-sm{background:linear-gradient(135deg,var(--em),var(--em2));color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px}
+.upgrade-sidebar{background:var(--em);color:#fff;padding:8px 12px;border-radius:var(--radius);font-size:12px;font-weight:600;width:100%;text-align:center;margin-top:8px;cursor:pointer;border:none}
+.upgrade-sidebar:hover{background:var(--em2)}
 .page{display:none}.page.active{display:block}
 .page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
 .page-title{font-size:20px;font-weight:700;color:var(--txt)}
@@ -45,9 +48,10 @@ tr:hover td{background:rgba(16,185,129,.03)}
 .b-active{background:#1a3a2a;color:#34d399}.b-prospect{background:#2a2a1a;color:#f59e0b}
 .b-lapsed{background:#2a1a1a;color:#f87171}.b-engaged{background:#1a2a3a;color:#60a5fa}
 .b-vol{background:#1a2a3a;color:#60a5fa}.b-part{background:#2a1a3a;color:#a78bfa}
-.b-green{background:#1a3a2a;color:#34d399}.b-amber{background:#2a2a1a;color:#f59e0b}
-.b-blue{background:#1a2a3a;color:#60a5fa}.b-coral{background:#2a1a1a;color:#fca5a5}
-.b-teal{background:#0a2a20;color:#5eead4}
+.b-ref{background:#2a1a3a;color:#c4b5fd}.b-inprog{background:#1a2a1a;color:#6ee7b7}
+.b-closed{background:#2a2a2a;color:#9ca3af}.b-flag{background:#2a1a1a;color:#f87171}
+.b-teal{background:#0a2a20;color:#5eead4}.b-amber{background:#2a2a1a;color:#f59e0b}
+.risk-hi{background:#3a1a1a;color:#f87171}.risk-med{background:#2a2a1a;color:#fbbf24}.risk-lo{background:#1a3a2a;color:#34d399}
 .toolbar{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
 .toolbar input{max-width:220px}.toolbar select{max-width:160px}
 .ml-auto{margin-left:auto}
@@ -56,17 +60,35 @@ tr:hover td{background:rgba(16,185,129,.03)}
 .btn-ghost{background:var(--card);color:var(--txt2);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--em);color:var(--em)}
 .btn-sm{padding:5px 10px;font-size:12px}
 .btn-danger{background:none;color:var(--red);border:1px solid var(--border)}.btn-danger:hover{border-color:var(--red)}
+.sbar{display:flex;align-items:center;gap:6px}
+.strack{flex:1;height:4px;background:var(--border);border-radius:3px;max-width:55px}
+.sfill{height:100%;border-radius:3px;background:var(--em)}
 .tl-entry{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
 .tl-dot{width:9px;height:9px;border-radius:50%;background:var(--em);flex-shrink:0;margin-top:4px}
 .tl-dot.amber{background:var(--amber)}.tl-dot.blue{background:var(--blue)}.tl-dot.red{background:var(--red)}
+.tl-lbl{font-size:13px;color:var(--txt);font-weight:500}
+.tl-meta{font-size:11px;color:var(--txt3)}
+.kanban{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;overflow-x:auto;padding-bottom:6px}
+.k-col{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;min-width:150px}
+.k-col-hd{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+.k-cnt{background:var(--border);color:var(--txt2);font-size:10px;padding:1px 5px;border-radius:10px}
+.k-card{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:9px 10px;margin-bottom:7px;cursor:pointer;transition:border-color .2s}
+.k-card:hover{border-color:var(--em)}
+.k-name{font-size:12px;font-weight:600;color:var(--txt)}
+.k-meta{font-size:11px;color:var(--txt3);margin-top:2px}
+.k-flag{font-size:10px;color:var(--red);margin-top:3px}
+.impact-wall{background:var(--card);border:1px solid var(--em);border-radius:var(--radiuslg);padding:32px;text-align:center;margin-bottom:20px}
+.iw-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.iw-val{font-size:32px;font-weight:800;color:var(--em)}
+.iw-lbl{font-size:11px;color:var(--txt2);margin-top:2px}
 .fund-bar-wrap{margin-bottom:12px}
 .fund-top{display:flex;justify-content:space-between;font-size:12px;color:var(--txt2);margin-bottom:4px}
 .fund-track{height:7px;background:var(--border);border-radius:4px}
 .fund-fill{height:100%;border-radius:4px;background:var(--em);transition:width .6s}
 .fund-fill.warn{background:var(--amber)}.fund-fill.danger{background:var(--red)}
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:500;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:500;align-items:flex-start;justify-content:center;padding:20px 16px;overflow-y:auto}
 .modal-overlay.open{display:flex}
-.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radiuslg);padding:24px;width:100%;max-width:640px}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radiuslg);padding:24px;width:100%;max-width:520px;position:relative}
 .modal h2{font-size:17px;font-weight:700;color:var(--txt);margin-bottom:18px}
 .form-row{margin-bottom:12px}
 .form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -78,34 +100,49 @@ tr:hover td{background:rgba(16,185,129,.03)}
 .alert-danger{background:#2a1a1a;border:1px solid #3a2a2a;color:#f87171}
 .eco-stat{display:inline-flex;align-items:center;gap:6px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);border-radius:8px;padding:6px 12px;font-size:13px;color:var(--em);margin:3px}
 .safe-flag{display:inline-flex;align-items:center;gap:5px;background:#3a1a2a;border:1px solid #5a2a3a;border-radius:6px;padding:3px 9px;font-size:11px;color:#f9a8d4}
+.uplist{list-style:none;margin-bottom:20px}
+.uplist li{padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;color:var(--txt2);display:flex;align-items:center;gap:8px}
+.up-cta{width:100%;background:var(--em);color:#fff;padding:13px;border-radius:var(--radius);font-size:15px;font-weight:700;cursor:pointer;border:none}
+.score-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:12px}
+.score-label{font-size:10px;font-weight:700;color:var(--em);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.ai-panel{background:var(--surface);border:1px solid var(--em);border-radius:var(--radius);padding:14px;margin-top:8px}
+.report-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:22px;cursor:pointer;transition:all .2s;margin-bottom:0}
+.report-card:hover{border-color:var(--em);transform:translateY(-2px)}
+/* Vol-specific */
 .chk-group{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
 .chk-pill label{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--txt2);text-transform:none;letter-spacing:0;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 10px;cursor:pointer;transition:all .15s}
-.chk-pill input{width:auto;background:none;border:none;padding:0;cursor:pointer}
+.chk-pill input{width:auto;background:none;border:none;padding:0}
 .chk-pill label:has(input:checked){background:rgba(16,185,129,.12);border-color:var(--em);color:var(--em)}
 .dist-btns{display:flex;gap:6px;margin-top:4px}
 .dist-btn{width:38px;height:38px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--txt2);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
 .dist-btn.sel{background:rgba(16,185,129,.15);border-color:var(--em);color:var(--em)}
-.onboard-dots{display:flex;gap:4px;align-items:center}
-.onboard-dot{width:10px;height:10px;border-radius:50%;background:var(--border)}
+.vol-avatar{width:38px;height:38px;border-radius:50%;background:rgba(16,185,129,.15);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--em);flex-shrink:0}
+.onboard-dots{display:flex;gap:3px}
+.onboard-dot{width:9px;height:9px;border-radius:50%;background:var(--border)}
 .onboard-dot.done{background:var(--em)}
-.onboard-dot.partial{background:var(--amber)}
-.vol-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:16px;margin-bottom:10px;cursor:pointer;transition:border-color .2s}
-.vol-card:hover{border-color:var(--em)}
-.vol-avatar{width:40px;height:40px;border-radius:50%;background:rgba(16,185,129,.15);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--em);flex-shrink:0}
-.ev-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:18px;margin-bottom:12px;cursor:pointer;transition:border-color .2s}
+.vtab-bar{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px}
+.vtab-btn{padding:8px 14px;cursor:pointer;border-bottom:2px solid transparent;font-size:12px;font-weight:500;color:var(--txt3);background:none;border-top:none;border-left:none;border-right:none}
+.vtab-btn.active{color:var(--em);border-bottom-color:var(--em)}
+/* Ev/feedback cards */
+.ev-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:16px;margin-bottom:10px;cursor:pointer;transition:border-color .2s}
 .ev-card:hover{border-color:var(--em)}
-.score-stars{display:flex;gap:4px}
-.star{width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--txt3);font-size:13px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s}
-.star.sel{background:rgba(245,158,11,.15);border-color:var(--amber);color:var(--amber)}
-.impact-wall{background:var(--card);border:1px solid var(--em);border-radius:var(--radiuslg);padding:32px;text-align:center;margin-bottom:20px}
-.quote-card{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--em);border-radius:var(--radius);padding:12px 16px;margin-bottom:8px}
-.tab-bar{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:20px}
-.tab-btn{padding:9px 18px;cursor:pointer;border-bottom:2px solid transparent;font-size:13px;font-weight:500;color:var(--txt3);background:none;border-top:none;border-left:none;border-right:none;transition:all .15s}
-.tab-btn.active{color:var(--em);border-bottom-color:var(--em)}
+.fb-star{width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--txt3);font-size:12px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s}
+.fb-star.sel{background:rgba(245,158,11,.15);border-color:var(--amber);color:var(--amber)}
+.quote-card{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--em);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px}
 @media(max-width:900px){
   #sidebar{width:52px}
-  .nav-btn span:not(.icon),.nav-section,.logo span,.sidebar-bottom p{display:none}
+  .nav-btn span:not(.icon),.nav-section,.logo span,.sidebar-bottom p,.upgrade-sidebar{display:none}
+  .logo{padding:4px 12px 16px;font-size:14px}
+  .nav-btn{padding:10px 14px;justify-content:center}
   .stats-grid{grid-template-columns:repeat(2,1fr)}
+  .kanban{grid-template-columns:repeat(3,1fr)}
+  .iw-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media print{
+  #sidebar,#main .page-header,#main .toolbar,.btn,.nav-btn{display:none!important}
+  body{display:block!important;background:#fff!important;color:#000!important}
+  #printable-report{background:#fff!important;color:#000!important;border:none!important;padding:0!important}
+  #printable-report *{color:#000!important;border-color:#ddd!important;background:#f9f9f9!important}
 }
 </style>
 </head>
@@ -115,49 +152,67 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <div class="logo">Green<span>CRM</span></div>
   <div class="nav-section">Overview</div>
   <button class="nav-btn" onclick="go('dashboard')"><span class="icon">📊</span><span>Dashboard</span></button>
+  <button class="nav-btn" onclick="go('rag')"><span class="icon">🚦</span><span>RAG Dashboard</span></button>
   <button class="nav-btn" onclick="go('impact')"><span class="icon">🌿</span><span>Impact Wall</span></button>
   <div class="nav-section">People</div>
-  <button class="nav-btn" onclick="go('volunteers')"><span class="icon">🤝</span><span>Volunteers</span></button>
-  <button class="nav-btn" onclick="go('contacts')"><span class="icon">📋</span><span>Contacts</span></button>
+  <button class="nav-btn" onclick="go('participants')"><span class="icon">👤</span><span>Participants</span></button>
+  <button class="nav-btn" onclick="go('contacts')"><span class="icon">📋</span><span>Contacts & Donors</span></button>
+  <button class="nav-btn" onclick="go('volunteers')"><span class="icon">🤝</span><span>Volunteers & Staff</span></button>
+  <button class="nav-btn" onclick="go('employers')"><span class="icon">🏢</span><span>Employers</span></button>
   <div class="nav-section">Delivery</div>
+  <button class="nav-btn" onclick="go('pipeline')"><span class="icon">🔁</span><span>Caseload Pipeline</span></button>
+  <button class="nav-btn" onclick="go('referrals')"><span class="icon">📨</span><span>Referrals</span></button>
+  <button class="nav-btn" onclick="go('partnerrefs')"><span class="icon">🤝</span><span>Partner Referrals</span></button>
   <button class="nav-btn" onclick="go('events')"><span class="icon">📅</span><span>Events & Workshops</span></button>
   <button class="nav-btn" onclick="go('feedback')"><span class="icon">💬</span><span>Participant Feedback</span></button>
+  <button class="nav-btn" onclick="go('circular')"><span class="icon">♻️</span><span>Circular Economy</span></button>
   <div class="nav-section">Reporting</div>
-  <button class="nav-btn" onclick="go('reports')"><span class="icon">📄</span><span>Impact Reports</span></button>
+  <button class="nav-btn" onclick="go('outcomes')"><span class="icon">🎯</span><span>Outcomes</span></button>
+  <button class="nav-btn" onclick="go('funding')"><span class="icon">💰</span><span>Funding & Contracts</span></button>
+  <button class="nav-btn" onclick="go('reports')"><span class="icon">📄</span><span>Funder Reports</span></button>
+  <button class="nav-btn" onclick="go('evidence')"><span class="icon">🗂️</span><span>Evidence Hub</span></button>
+  <div class="nav-section">Settings</div>
+  <button class="nav-btn" onclick="go('safeguarding')"><span class="icon">🔐</span><span>Safeguarding</span></button>
+  <button class="nav-btn" onclick="go('settings')"><span class="icon">⚙️</span><span>Settings</span></button>
   <div class="sidebar-bottom">
-    <div style="font-size:11px;color:var(--txt3);margin-bottom:4px">Project Abundance</div>
-    <div style="font-size:12px;color:var(--em);font-weight:600">GreenCRM</div>
+    <div id="sb-free"><p style="font-size:11px;color:var(--txt3);margin-bottom:4px">Free plan</p><button class="upgrade-sidebar" onclick="openUpgrade()">Upgrade to Pro</button></div>
+    <div id="sb-pro" style="display:none"><span class="pro-badge-sm">PRO</span></div>
+    <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:10px">Sign out</button>
   </div>
 </div>
-
 <div id="main">
 
 <!-- DASHBOARD -->
 <div id="page-dashboard" class="page">
-  <div class="page-header">
-    <div><div class="page-title">Dashboard</div><div class="page-sub">Project Abundance · Impact overview</div></div>
-    <button class="btn btn-ghost btn-sm" onclick="renderDashboard()">↻ Refresh</button>
-  </div>
+  <div class="page-header"><div><div class="page-title">Dashboard</div><div class="page-sub">Project Abundance · Overview</div></div><button class="btn btn-ghost btn-sm" onclick="renderDashboard()">↻ Refresh</button></div>
   <div class="stats-grid" id="dash-stats"></div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
-    <div class="card"><div class="card-title">Feedback highlights</div><div id="dash-feedback"></div></div>
-    <div class="card"><div class="card-title">Confidence journey (avg)</div><div id="dash-confidence"></div></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div class="card"><div class="card-title">At-risk — chase today</div><div id="dash-risk"></div></div>
+    <div class="card"><div class="card-title">Recent activity</div><div id="dash-activity"></div></div>
   </div>
-  <div class="card"><div class="card-title">SDG alignment</div><div id="dash-sdg" style="display:flex;flex-wrap:wrap;gap:8px"></div></div>
-  <div class="card" style="margin-top:14px"><div class="card-title">Recent participant quotes</div><div id="dash-quotes"></div></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+    <div class="card"><div class="card-title">Feedback highlights</div><div id="dash-feedback-hi"></div></div>
+    <div class="card"><div class="card-title">Confidence journey</div><div id="dash-confidence"></div></div>
+  </div>
 </div>
 
-<!-- IMPACT WALL -->
+<!-- RAG -->
+<div id="page-rag" class="page">
+  <div class="page-header"><div><div class="page-title">RAG Status Dashboard</div><div class="page-sub">Red · Amber · Green per contract</div></div><button class="btn btn-ghost btn-sm" onclick="renderRAG()">↻ Refresh</button></div>
+  <div id="rag-list"></div>
+</div>
+
+<!-- IMPACT -->
 <div id="page-impact" class="page">
   <div class="page-header"><div><div class="page-title">Impact Wall</div><div class="page-sub">Board-ready · Funder presentations</div></div></div>
   <div class="impact-wall">
     <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--em);margin-bottom:6px">Project Abundance · 2024–25</div>
-    <div style="font-size:22px;font-weight:700;color:var(--txt);margin-bottom:24px">Numbers that matter</div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
-      <div><div style="font-size:36px;font-weight:800;color:var(--em)" id="iw-ev">—</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">Workshops & events</div></div>
-      <div><div style="font-size:36px;font-weight:800;color:var(--em)" id="iw-p">—</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">Participants reached</div></div>
-      <div><div style="font-size:36px;font-weight:800;color:var(--em)" id="iw-v">—</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">Active volunteers</div></div>
-      <div><div style="font-size:36px;font-weight:800;color:var(--em)" id="iw-fb">—</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">Feedback responses</div></div>
+    <div style="font-size:22px;font-weight:700;color:var(--txt);margin-bottom:24px">Numbers that move funders</div>
+    <div class="iw-grid">
+      <div><div class="iw-val" id="iw-p">—</div><div class="iw-lbl">Participants supported</div></div>
+      <div><div class="iw-val" id="iw-ev">—</div><div class="iw-lbl">Events & workshops</div></div>
+      <div><div class="iw-val" id="iw-v">—</div><div class="iw-lbl">Active volunteers</div></div>
+      <div><div class="iw-val" id="iw-fb">—</div><div class="iw-lbl">Feedback responses</div></div>
     </div>
   </div>
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
@@ -165,434 +220,545 @@ tr:hover td{background:rgba(16,185,129,.03)}
     <div class="stat-card"><div class="stat-lbl">Learned something new</div><div class="stat-val" id="imp-learned">—</div></div>
     <div class="stat-card"><div class="stat-lbl">Felt more connected</div><div class="stat-val" id="imp-connected">—</div></div>
   </div>
-  <div class="card"><div class="card-title">Confidence scores · before vs after</div>
-    <div style="display:flex;gap:32px;align-items:center;padding:8px 0">
-      <div style="text-align:center"><div style="font-size:40px;font-weight:800;color:var(--amber)" id="imp-conf-before">—</div><div style="font-size:12px;color:var(--txt3)">avg before</div></div>
+  <div class="card"><div class="card-title">Confidence scores · before → after</div>
+    <div style="display:flex;gap:24px;align-items:center;padding:8px 0">
+      <div style="text-align:center"><div style="font-size:40px;font-weight:800;color:var(--amber)" id="imp-cb">—</div><div style="font-size:11px;color:var(--txt3)">avg before</div></div>
       <div style="font-size:28px;color:var(--txt3)">→</div>
-      <div style="text-align:center"><div style="font-size:40px;font-weight:800;color:var(--em)" id="imp-conf-after">—</div><div style="font-size:12px;color:var(--txt3)">avg after</div></div>
-      <div style="flex:1" id="imp-conf-bar"></div>
+      <div style="text-align:center"><div style="font-size:40px;font-weight:800;color:var(--em)" id="imp-ca">—</div><div style="font-size:11px;color:var(--txt3)">avg after</div></div>
     </div>
   </div>
   <div class="card"><div class="card-title">Participant voices</div><div id="imp-quotes"></div></div>
 </div>
 
+<!-- PARTICIPANTS -->
+<div id="page-participants" class="page">
+  <div class="page-header"><div><div class="page-title">Participants & Beneficiaries</div><div class="page-sub">Profiles · journeys · outcomes</div></div><button class="btn btn-p btn-sm" onclick="openAddP()">+ Add participant</button></div>
+  <div class="toolbar">
+    <input id="p-search" placeholder="Search name…" oninput="renderParticipants()"/>
+    <select id="p-stage" onchange="renderParticipants()"><option value="">All stages</option><option>Referred</option><option>Engaged</option><option>In Support</option><option>Job Ready</option><option>Outcome Achieved</option><option>Sustained</option><option>Closed</option></select>
+    <select id="p-risk" onchange="renderParticipants()"><option value="">All risk</option><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option></select>
+    <button class="btn btn-ghost btn-sm ml-auto" onclick="exportCSV()">Export CSV</button>
+  </div>
+  <div id="p-alert" class="alert alert-warn" style="display:none"></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Participant</th><th>Ref</th><th>Stage</th><th>Advisor</th><th>Outcomes</th><th>Risk</th><th>Last contact</th><th>Actions</th></tr></thead><tbody id="p-table"></tbody></table></div>
+</div>
+
+<!-- CONTACTS -->
+<div id="page-contacts" class="page">
+  <div class="page-header"><div><div class="page-title">Contacts & Donors</div></div><button class="btn btn-p btn-sm" onclick="openAddC()">+ Add</button></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Organisation</th><th>Role</th><th>Email</th><th>Status</th><th>Engagements</th></tr></thead><tbody id="c-table"></tbody></table></div>
+</div>
+
 <!-- VOLUNTEERS -->
 <div id="page-volunteers" class="page">
-  <div class="page-header">
-    <div><div class="page-title">Volunteers</div><div class="page-sub">Registration · onboarding · event links</div></div>
-    <button class="btn btn-p btn-sm" onclick="openAddVol()">+ Add volunteer</button>
-  </div>
+  <div class="page-header"><div><div class="page-title">Volunteers & Staff</div><div class="page-sub">Registration · onboarding · skills · event links</div></div><button class="btn btn-p btn-sm" onclick="openAddVol()">+ Add volunteer</button></div>
   <div class="toolbar">
     <input id="vol-search" placeholder="Search name or email…" oninput="renderVolunteers()"/>
-    <select id="vol-filter-status" onchange="renderVolunteers()">
-      <option value="">All statuses</option>
-      <option>Active</option><option>Inactive</option><option>On leave</option>
-    </select>
-    <select id="vol-filter-role" onchange="renderVolunteers()">
-      <option value="">All roles</option>
-      <option>Volunteer</option><option>Corporate volunteer</option><option>Staff</option><option>Fixer</option>
-    </select>
+    <select id="vol-filter-status" onchange="renderVolunteers()"><option value="">All statuses</option><option>Active</option><option>Inactive</option><option>On leave</option></select>
+    <select id="vol-filter-role" onchange="renderVolunteers()"><option value="">All roles</option><option>Volunteer</option><option>Corporate volunteer</option><option>Staff</option><option>Fixer</option><option>Advisor</option><option>Manager</option><option>Admin</option></select>
     <button class="btn btn-ghost btn-sm ml-auto" onclick="exportVolCSV()">Export CSV</button>
   </div>
   <div id="vol-list"></div>
 </div>
 
-<!-- CONTACTS -->
-<div id="page-contacts" class="page">
-  <div class="page-header"><div><div class="page-title">Contacts & Donors</div></div><button class="btn btn-p btn-sm" onclick="openAddContact()">+ Add</button></div>
-  <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Organisation</th><th>Role</th><th>Email</th><th>Status</th></tr></thead><tbody id="contact-table"></tbody></table></div>
+<!-- EMPLOYERS -->
+<div id="page-employers" class="page">
+  <div class="page-header"><div><div class="page-title">Employer CRM</div><div class="page-sub">Vacancies · placements · relationships</div></div><button class="btn btn-p btn-sm" onclick="openAddEmployer()">+ Add employer</button></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Employer</th><th>Sector</th><th>Contact</th><th>Vacancies</th><th>Placements</th><th>Status</th><th></th></tr></thead><tbody id="emp-table"></tbody></table></div>
+</div>
+
+<!-- PIPELINE -->
+<div id="page-pipeline" class="page">
+  <div class="page-header"><div><div class="page-title">Caseload Pipeline</div><div class="page-sub">Who do I need to chase today?</div></div></div>
+  <div class="kanban" id="kanban"></div>
+</div>
+
+<!-- REFERRALS -->
+<div id="page-referrals" class="page">
+  <div class="page-header"><div><div class="page-title">Referrals</div></div><button class="btn btn-p btn-sm" onclick="openAddR()">+ New referral</button></div>
+  <div id="ref-alerts"></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Source</th><th>Status</th><th>Date</th><th>Advisor</th><th>Flag</th></tr></thead><tbody id="ref-table"></tbody></table></div>
+</div>
+
+<!-- PARTNER REFERRALS -->
+<div id="page-partnerrefs" class="page">
+  <div class="page-header"><div><div class="page-title">Partner Referrals</div><div class="page-sub">Submitted via the Partner Portal</div></div></div>
+  <div id="pref-alerts"></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>From</th><th>Need</th><th>Urgency</th><th>Safeguarding</th><th>Submitted</th><th>Status</th></tr></thead><tbody id="pref-table"><tr><td colspan="7" style="text-align:center;color:var(--txt3);padding:24px">No partner referrals yet.</td></tr></tbody></table></div>
 </div>
 
 <!-- EVENTS -->
 <div id="page-events" class="page">
-  <div class="page-header">
-    <div><div class="page-title">Events & Workshops</div><div class="page-sub">68 events · 1,300+ participants · Jun 2024–Jun 2025</div></div>
-    <button class="btn btn-p btn-sm" onclick="openAddEvent()">+ Create event</button>
-  </div>
+  <div class="page-header"><div><div class="page-title">Events & Workshops</div><div class="page-sub">68 events · 1,300+ participants · Jun 2024–Jun 2025</div></div><button class="btn btn-p btn-sm" onclick="openAddEv()">+ Create event</button></div>
   <div class="toolbar">
-    <select id="ev-filter-type" onchange="renderEvents()">
-      <option value="">All types</option>
-      <option>Green Skills</option><option>Wellbeing</option><option>Community Event</option><option>Frailty</option><option>Other</option>
-    </select>
-    <button class="btn btn-ghost btn-sm ml-auto" id="ev-view-toggle" onclick="toggleEvView()">List view</button>
+    <select id="ev-filter-type" onchange="renderEvents()"><option value="">All types</option><option>Green Skills</option><option>Wellbeing</option><option>Community Event</option><option>Frailty</option><option>Other</option></select>
   </div>
-  <div id="ev-summary" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px"></div>
+  <div class="stats-grid" id="ev-stats"></div>
   <div id="ev-list"></div>
 </div>
 
 <!-- FEEDBACK -->
 <div id="page-feedback" class="page">
-  <div class="page-header">
-    <div><div class="page-title">Participant Feedback</div><div class="page-sub">Per-participant survey responses</div></div>
-    <button class="btn btn-p btn-sm" onclick="openAddFeedback()">+ Add response</button>
-  </div>
+  <div class="page-header"><div><div class="page-title">Participant Feedback</div><div class="page-sub">Per-participant survey responses</div></div><button class="btn btn-p btn-sm" onclick="openAddFb()">+ Add response</button></div>
   <div class="toolbar">
-    <select id="fb-filter-event" onchange="renderFeedback()"><option value="">All events</option></select>
-    <select id="fb-filter-score" onchange="renderFeedback()">
-      <option value="">All scores</option><option value="5">5 stars</option><option value="4">4+ stars</option><option value="3">3 stars or below</option>
-    </select>
+    <select id="fb-filter-ev" onchange="renderFeedback()"><option value="">All events</option></select>
   </div>
   <div class="stats-grid" id="fb-stats"></div>
   <div id="fb-list"></div>
 </div>
 
+<!-- CIRCULAR -->
+<div id="page-circular" class="page">
+  <div class="page-header"><div><div class="page-title">Circular Economy & Repair</div></div><button class="btn btn-p btn-sm" onclick="openAddItem()">+ Log item</button></div>
+  <div class="stats-grid" id="eco-stats"></div>
+  <div class="card"><div class="card-title">Environmental impact</div><div id="eco-impact" style="display:flex;flex-wrap:wrap;gap:6px"></div></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Item</th><th>Category</th><th>Weight</th><th>Status</th><th>Fixer</th><th>Outcome</th><th></th></tr></thead><tbody id="eco-table"></tbody></table></div>
+</div>
+
+<!-- OUTCOMES -->
+<div id="page-outcomes" class="page">
+  <div class="page-header"><div><div class="page-title">Outcomes & Impact Reporting</div></div><button class="btn btn-ghost btn-sm" onclick="exportCSV()">Export CSV</button></div>
+  <div class="stats-grid" id="out-stats"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div class="card"><div class="card-title">Outcomes by type</div><div id="out-by-type"></div></div>
+    <div class="card"><div class="card-title">Barriers</div><div id="out-barriers"></div></div>
+  </div>
+</div>
+
+<!-- FUNDING -->
+<div id="page-funding" class="page">
+  <div class="page-header"><div><div class="page-title">Funding & Contracts</div></div><button class="btn btn-p btn-sm" onclick="openAddCon()">+ Add contract</button></div>
+  <div id="fund-list"></div>
+</div>
+
 <!-- REPORTS -->
 <div id="page-reports" class="page">
-  <div class="page-header"><div><div class="page-title">Impact Reports</div><div class="page-sub">SDG · Funder · Board</div></div></div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px">
-    <div class="card" style="cursor:pointer" onclick="generateReport('annual')">
-      <div style="font-size:28px;margin-bottom:8px">🌿</div>
-      <div style="font-size:15px;font-weight:700;color:var(--txt);margin-bottom:4px">Annual Impact Report</div>
-      <div style="font-size:12px;color:var(--txt3);margin-bottom:12px">Full 2024–25 overview · SDG alignment · Confidence scores</div>
-      <button class="btn btn-p btn-sm">Generate →</button>
-    </div>
-    <div class="card" style="cursor:pointer" onclick="generateReport('sdg')">
-      <div style="font-size:28px;margin-bottom:8px">🌍</div>
-      <div style="font-size:15px;font-weight:700;color:var(--txt);margin-bottom:4px">SDG Alignment Report</div>
-      <div style="font-size:12px;color:var(--txt3);margin-bottom:12px">SDG 3 · SDG 4 · SDG 11 · Evidence mapping</div>
-      <button class="btn btn-p btn-sm">Generate →</button>
-    </div>
-    <div class="card" style="cursor:pointer" onclick="generateReport('volunteer')">
-      <div style="font-size:28px;margin-bottom:8px">🤝</div>
-      <div style="font-size:15px;font-weight:700;color:var(--txt);margin-bottom:4px">Volunteer Report</div>
-      <div style="font-size:12px;color:var(--txt3);margin-bottom:12px">Hours · Skills · Demographics · Barriers</div>
-      <button class="btn btn-p btn-sm">Generate →</button>
-    </div>
-    <div class="card" style="cursor:pointer" onclick="generateReport('workshop')">
-      <div style="font-size:28px;margin-bottom:8px">📅</div>
-      <div style="font-size:15px;font-weight:700;color:var(--txt);margin-bottom:4px">Workshop Delivery Report</div>
-      <div style="font-size:12px;color:var(--txt3);margin-bottom:12px">Reach · Feedback · Highlights</div>
-      <button class="btn btn-p btn-sm">Generate →</button>
-    </div>
+  <div class="page-header"><div><div class="page-title">Funder Report Generator</div><div class="page-sub">One-click reports · MoJ · GLA · CBF · UKSPF · Impact</div></div></div>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:20px">
+    <div class="report-card card" onclick="generateReport('moj')"><div style="font-size:28px;margin-bottom:8px">⚖️</div><div style="font-size:15px;font-weight:700;color:var(--txt);margin-bottom:4px">MoJ Report</div><div style="font-size:12px;color:var(--txt3);margin-bottom:12px">Ministry of Justice · Employment & desistance</div><button class="btn btn-p btn-sm" onclick="event.stopPropagation();generateReport('moj')">Generate →</button></div>
+    <div class="report-card card" onclick="generateReport('gla')"><div style="font-size:28px;margin-bottom:8px">🏙️</div><div style="font-size:15px;font-weight:700;color:var(--txt);margin-bottom:4px">GLA Report</div><div style="font-size:12px;color:var(--txt3);margin-bottom:12px">Greater London Authority · Good jobs · Skills</div><button class="btn btn-p btn-sm" onclick="event.stopPropagation();generateReport('gla')">Generate →</button></div>
+    <div class="report-card card" onclick="generateReport('cbf')"><div style="font-size:28px;margin-bottom:8px">🌉</div><div style="font-size:15px;font-weight:700;color:var(--txt);margin-bottom:4px">CBF Report</div><div style="font-size:12px;color:var(--txt3);margin-bottom:12px">City Bridge Foundation · Wellbeing · Community</div><button class="btn btn-p btn-sm" onclick="event.stopPropagation();generateReport('cbf')">Generate →</button></div>
+    <div class="report-card card" onclick="generateReport('impact')"><div style="font-size:28px;margin-bottom:8px">🌿</div><div style="font-size:15px;font-weight:700;color:var(--txt);margin-bottom:4px">Annual Impact Report</div><div style="font-size:12px;color:var(--txt3);margin-bottom:12px">Workshops · Volunteers · Feedback · SDGs</div><button class="btn btn-p btn-sm" onclick="event.stopPropagation();generateReport('impact')">Generate →</button></div>
   </div>
   <div id="report-output" style="display:none"></div>
 </div>
 
+<!-- EVIDENCE -->
+<div id="page-evidence" class="page">
+  <div class="page-header"><div><div class="page-title">Evidence & Compliance Hub</div></div><button class="btn btn-p btn-sm" onclick="openAddEvid()">+ Upload evidence</button></div>
+  <div id="evid-alerts"></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Participant</th><th>Type</th><th>Outcome</th><th>Staff</th><th>Date</th><th>Status</th></tr></thead><tbody id="evid-table"></tbody></table></div>
+</div>
+
+<!-- SAFEGUARDING -->
+<div id="page-safeguarding" class="page">
+  <div class="page-header"><div><div class="page-title">Safeguarding & Permissions</div></div></div>
+  <div class="alert alert-info" style="margin-bottom:14px">Role-based access active · GDPR compliant · Consent tracked</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div class="card"><div class="card-title">Flagged cases</div><div id="safe-flags"></div></div>
+    <div class="card"><div class="card-title">Consent tracker</div><div id="consent-list"></div></div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div id="page-settings" class="page">
+  <div class="page-header"><div><div class="page-title">Settings</div></div></div>
+  <div class="card"><div class="card-title">Organisation</div><div style="font-size:13px;color:var(--txt2)">Project Abundance · Peterborough</div></div>
+  <div class="card"><div class="card-title">Plan</div><div style="font-size:13px;color:var(--txt2)">Free plan</div><button class="btn btn-p btn-sm" style="margin-top:12px" onclick="openUpgrade()">Upgrade to Pro — £9/mo</button></div>
+</div>
+
 </div></div>
 
-<!-- VOLUNTEER MODAL -->
+<!-- ══ MODALS ══ -->
+
+<!-- Participant modal (unchanged from original) -->
+<div class="modal-overlay" id="modal-p">
+<div class="modal"><h2 id="mp-title">Add participant</h2>
+  <div class="form-grid-2"><div class="form-row"><label>First name</label><input id="mp-fn"/></div><div class="form-row"><label>Last name</label><input id="mp-ln"/></div></div>
+  <div class="form-grid-2"><div class="form-row"><label>Referral source</label><select id="mp-rs"><option>Self-referral</option><option>Probation</option><option>Jobcentre Plus</option><option>Community org</option><option>School / college</option></select></div><div class="form-row"><label>Advisor</label><select id="mp-adv"><option>Sarah T.</option><option>Marcus O.</option><option>Priya S.</option><option>Unassigned</option></select></div></div>
+  <div class="form-grid-2"><div class="form-row"><label>Stage</label><select id="mp-st"><option>Referred</option><option>Engaged</option><option>In Support</option><option>Job Ready</option><option>Outcome Achieved</option><option>Sustained</option><option>Closed</option></select></div><div class="form-row"><label>Risk level</label><select id="mp-risk"><option>Low</option><option>Medium</option><option>High</option></select></div></div>
+  <div class="form-row"><label>Barriers</label><div id="barrier-checks" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px"></div></div>
+  <div class="form-row"><label>Outcomes achieved</label><div id="outcome-checks" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px"></div></div>
+  <div class="form-row"><label>Safeguarding flag</label><select id="mp-safe"><option value="">None</option><option>Domestic abuse</option><option>Mental health</option><option>Substance misuse</option><option>Homelessness risk</option></select></div>
+  <div class="score-box"><div class="score-label">Distance Travelled (1–10)</div>
+    <div class="form-grid-2"><div class="form-row"><label>Confidence</label><input type="number" id="mp-conf" min="1" max="10"/></div><div class="form-row"><label>Work readiness</label><input type="number" id="mp-work" min="1" max="10"/></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Wellbeing</label><input type="number" id="mp-well" min="1" max="10"/></div><div class="form-row"><label>Skills</label><input type="number" id="mp-skills" min="1" max="10"/></div></div>
+  </div>
+  <div class="form-row"><label>Case note</label><textarea id="mp-note"></textarea></div>
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-p')">Cancel</button><button class="btn btn-p" id="save-p-btn" onclick="saveP()">Save</button></div>
+</div></div>
+
+<!-- Contact modal -->
+<div class="modal-overlay" id="modal-c">
+<div class="modal"><h2>Add contact</h2>
+  <div class="form-grid-2"><div class="form-row"><label>First name</label><input id="cf-fn"/></div><div class="form-row"><label>Last name</label><input id="cf-ln"/></div></div>
+  <div class="form-row"><label>Organisation (optional)</label><input id="cf-org" placeholder="Company / charity name"/></div>
+  <div class="form-row"><label>Email</label><input id="cf-em" type="email"/></div>
+  <div class="form-grid-2"><div class="form-row"><label>Role</label><select id="cf-role"><option>Donor</option><option>Partner</option><option>Funder</option><option>Trustee</option></select></div><div class="form-row"><label>Status</label><select id="cf-st"><option>Prospect</option><option>Engaged</option><option>Active Supporter</option><option>Lapsed</option></select></div></div>
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-c')">Cancel</button><button class="btn btn-p" onclick="saveC()">Save</button></div>
+</div></div>
+
+<!-- VOLUNTEER MODAL — full schema, tabbed -->
 <div class="modal-overlay" id="modal-vol">
-<div class="modal" style="max-width:680px">
-  <h2 id="vol-modal-title">Add volunteer</h2>
-  <div class="tab-bar">
-    <button class="tab-btn active" onclick="switchVolTab('basic',this)">Basic info</button>
-    <button class="tab-btn" onclick="switchVolTab('details',this)">Details</button>
-    <button class="tab-btn" onclick="switchVolTab('onboarding',this)">Onboarding</button>
+<div class="modal" style="max-width:640px"><h2 id="vol-modal-title">Add volunteer</h2>
+  <div class="vtab-bar">
+    <button class="vtab-btn active" onclick="switchVTab('basic',this)">Basic info</button>
+    <button class="vtab-btn" onclick="switchVTab('details',this)">Availability & skills</button>
+    <button class="vtab-btn" onclick="switchVTab('onboard',this)">Onboarding</button>
   </div>
-  <div id="vol-tab-basic">
-    <div class="form-grid-2">
-      <div class="form-row"><label>Full name *</label><input id="vf-name"/></div>
-      <div class="form-row"><label>Email *</label><input id="vf-email" type="email"/></div>
-    </div>
-    <div class="form-grid-3">
-      <div class="form-row"><label>Phone (optional)</label><input id="vf-phone"/></div>
-      <div class="form-row"><label>Postcode (first part)</label><input id="vf-postcode" placeholder="e.g. PE1"/></div>
-      <div class="form-row"><label>Organisation (optional)</label><input id="vf-org" placeholder="Company name"/></div>
-    </div>
-    <div class="form-grid-3">
-      <div class="form-row"><label>Age</label><select id="vf-age">
-        <option value="">Select</option>
-        <option>Under 18</option><option>18–24</option><option>25–34</option><option>35–44</option><option>45–54</option><option>55–64</option><option>65+</option>
-      </select></div>
-      <div class="form-row"><label>Gender</label><select id="vf-gender">
-        <option value="">Select</option>
-        <option>Female</option><option>Male</option><option>Non-binary</option><option>Prefer not to say</option><option>Other</option>
-      </select></div>
-      <div class="form-row"><label>How did they hear?</label><select id="vf-heard">
-        <option value="">Select</option>
-        <option>Social media</option><option>Friend/family</option><option>Leaflet/poster</option><option>Local organisation</option><option>Event</option><option>Website</option><option>Other</option>
-      </select></div>
-    </div>
-    <div class="form-grid-2">
-      <div class="form-row"><label>Ethnicity</label><select id="vf-ethnicity">
-        <option value="">Select</option>
-        <option>White British</option><option>White Other</option><option>Asian/Asian British</option><option>Black/Black British</option><option>Mixed/Multiple</option><option>Prefer not to say</option><option>Other</option>
-      </select></div>
-      <div class="form-row"><label>Disability</label><select id="vf-disability">
-        <option>No</option><option>Yes</option><option>Prefer not to say</option>
-      </select></div>
-    </div>
-    <div class="form-row"><label>Role</label>
-      <div class="chk-group" id="vf-role-group">
-        <div class="chk-pill"><label><input type="radio" name="vf-role" value="Volunteer" checked/> Volunteer</label></div>
-        <div class="chk-pill"><label><input type="radio" name="vf-role" value="Corporate volunteer"/> Corporate volunteer</label></div>
-        <div class="chk-pill"><label><input type="radio" name="vf-role" value="Staff"/> Staff</label></div>
-        <div class="chk-pill"><label><input type="radio" name="vf-role" value="Fixer"/> Fixer</label></div>
-      </div>
-    </div>
+  <!-- TAB: basic -->
+  <div id="vtab-basic">
+    <div class="form-grid-2"><div class="form-row"><label>Full name *</label><input id="vf-name"/></div><div class="form-row"><label>Email *</label><input id="vf-email" type="email"/></div></div>
+    <div class="form-grid-3"><div class="form-row"><label>Phone (optional)</label><input id="vf-phone"/></div><div class="form-row"><label>Postcode</label><input id="vf-postcode" placeholder="e.g. PE1"/></div><div class="form-row"><label>Organisation (optional)</label><input id="vf-org"/></div></div>
+    <div class="form-grid-3"><div class="form-row"><label>Age</label><select id="vf-age"><option value="">Select</option><option>Under 18</option><option>18–24</option><option>25–34</option><option>35–44</option><option>45–54</option><option>55–64</option><option>65+</option></select></div><div class="form-row"><label>Gender</label><select id="vf-gender"><option value="">Select</option><option>Female</option><option>Male</option><option>Non-binary</option><option>Prefer not to say</option><option>Other</option></select></div><div class="form-row"><label>How did they hear?</label><select id="vf-heard"><option value="">Select</option><option>Social media</option><option>Friend/family</option><option>Leaflet/poster</option><option>Local organisation</option><option>Event</option><option>Website</option><option>Other</option></select></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Ethnicity</label><select id="vf-ethnicity"><option value="">Select</option><option>White British</option><option>White Other</option><option>Asian/Asian British</option><option>Black/Black British</option><option>Mixed/Multiple</option><option>Prefer not to say</option><option>Other</option></select></div><div class="form-row"><label>Disability</label><select id="vf-disability"><option>No</option><option>Yes</option><option>Prefer not to say</option></select></div></div>
+    <div class="form-row"><label>Role</label><div class="chk-group" id="vf-role-grp">
+      <div class="chk-pill"><label><input type="radio" name="vf-role" value="Volunteer" checked/> Volunteer</label></div>
+      <div class="chk-pill"><label><input type="radio" name="vf-role" value="Corporate volunteer"/> Corporate volunteer</label></div>
+      <div class="chk-pill"><label><input type="radio" name="vf-role" value="Fixer"/> Fixer</label></div>
+      <div class="chk-pill"><label><input type="radio" name="vf-role" value="Advisor"/> Advisor</label></div>
+      <div class="chk-pill"><label><input type="radio" name="vf-role" value="Manager"/> Manager</label></div>
+      <div class="chk-pill"><label><input type="radio" name="vf-role" value="Admin"/> Admin</label></div>
+    </div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Status</label><select id="vf-status"><option>Active</option><option>Inactive</option><option>On leave</option></select></div><div class="form-row"><label>Hours logged</label><input type="number" id="vf-hours" placeholder="0" min="0"/></div></div>
   </div>
-  <div id="vol-tab-details" style="display:none">
-    <div class="form-row"><label>Skills & preferred tasks (tick all that apply)</label>
-      <div class="chk-group" id="vf-skills"></div>
-    </div>
-    <div class="form-row"><label>Availability</label>
-      <div class="chk-group" id="vf-availability"></div>
-    </div>
-    <div class="form-row"><label>Frequency</label>
-      <div class="chk-group" id="vf-freq-group">
-        <div class="chk-pill"><label><input type="radio" name="vf-freq" value="Weekly"/> Weekly</label></div>
-        <div class="chk-pill"><label><input type="radio" name="vf-freq" value="Fortnightly"/> Fortnightly</label></div>
-        <div class="chk-pill"><label><input type="radio" name="vf-freq" value="Monthly"/> Monthly</label></div>
-        <div class="chk-pill"><label><input type="radio" name="vf-freq" value="Ad hoc"/> Ad hoc</label></div>
+  <!-- TAB: details -->
+  <div id="vtab-details" style="display:none">
+    <div class="form-row"><label>Skills & preferred tasks</label><div class="chk-group" id="vf-skills"></div></div>
+    <div class="form-row"><label>Availability</label><div class="chk-group" id="vf-avail"></div></div>
+    <div class="form-row"><label>Frequency</label><div class="chk-group" id="vf-freq-grp">
+      <div class="chk-pill"><label><input type="radio" name="vf-freq" value="Weekly"/> Weekly</label></div>
+      <div class="chk-pill"><label><input type="radio" name="vf-freq" value="Fortnightly"/> Fortnightly</label></div>
+      <div class="chk-pill"><label><input type="radio" name="vf-freq" value="Monthly"/> Monthly</label></div>
+      <div class="chk-pill"><label><input type="radio" name="vf-freq" value="Ad hoc"/> Ad hoc</label></div>
+    </div></div>
+    <div class="form-row"><label>Availability restrictions / notes</label><textarea id="vf-avail-notes" style="min-height:50px"></textarea></div>
+    <div class="form-row"><label>Barriers to participation</label><div class="chk-group" id="vf-barriers"></div></div>
+    <div class="form-row"><label>Distance travelled (1=very local, 5=far)</label>
+      <div class="dist-btns" id="vf-dist-btns">
+        <button type="button" class="dist-btn" onclick="setDist(1)">1</button>
+        <button type="button" class="dist-btn" onclick="setDist(2)">2</button>
+        <button type="button" class="dist-btn" onclick="setDist(3)">3</button>
+        <button type="button" class="dist-btn" onclick="setDist(4)">4</button>
+        <button type="button" class="dist-btn" onclick="setDist(5)">5</button>
       </div>
     </div>
-    <div class="form-row"><label>Availability restrictions / notes</label><textarea id="vf-avail-notes" style="min-height:55px" placeholder="e.g. Not available school holidays…"></textarea></div>
-    <div class="form-row"><label>Barriers to participation</label>
-      <div class="chk-group" id="vf-barriers"></div>
-    </div>
-    <div class="form-row"><label>Distance travelled (1 = very local, 5 = far)</label>
-      <div class="dist-btns" id="vf-distance-btns">
-        <button class="dist-btn" onclick="setDist(1)">1</button>
-        <button class="dist-btn" onclick="setDist(2)">2</button>
-        <button class="dist-btn" onclick="setDist(3)">3</button>
-        <button class="dist-btn" onclick="setDist(4)">4</button>
-        <button class="dist-btn" onclick="setDist(5)">5</button>
-      </div>
-    </div>
-    <div class="form-grid-2">
-      <div class="form-row"><label>Valid driving licence?</label>
-        <div class="chk-group">
-          <div class="chk-pill"><label><input type="radio" name="vf-drives" value="Yes"/> Yes</label></div>
-          <div class="chk-pill"><label><input type="radio" name="vf-drives" value="No" checked/> No</label></div>
-        </div>
-      </div>
-      <div class="form-row"><label>Hours logged</label><input type="number" id="vf-hours" placeholder="0" min="0"/></div>
-    </div>
-    <div class="form-row"><label>Health / accessibility needs</label><textarea id="vf-health" style="min-height:55px" placeholder="Any needs we should know about…"></textarea></div>
-    <div class="form-row"><label>Emergency contact (name & number)</label><input id="vf-emergency" placeholder="e.g. Jane Smith 07700900000"/></div>
-    <div class="form-row"><label>Consents</label>
-      <div class="chk-group">
-        <div class="chk-pill"><label><input type="checkbox" id="vf-consent-mail"/> Added to mailing list</label></div>
-        <div class="chk-pill"><label><input type="checkbox" id="vf-consent-photo"/> Photos / videos during volunteering</label></div>
-      </div>
-    </div>
-    <div class="form-row"><label>Linked events</label><div class="chk-group" id="vf-events-link"></div></div>
+    <div class="form-row"><label>Valid driving licence?</label><div class="chk-group">
+      <div class="chk-pill"><label><input type="radio" name="vf-drives" value="Yes"/> Yes</label></div>
+      <div class="chk-pill"><label><input type="radio" name="vf-drives" value="No" checked/> No</label></div>
+    </div></div>
+    <div class="form-row"><label>Health / accessibility needs</label><textarea id="vf-health" style="min-height:50px"></textarea></div>
+    <div class="form-row"><label>Emergency contact (name & number)</label><input id="vf-emergency"/></div>
+    <div class="form-row"><label>Consents</label><div class="chk-group">
+      <div class="chk-pill"><label><input type="checkbox" id="vf-cm"/> Mailing list</label></div>
+      <div class="chk-pill"><label><input type="checkbox" id="vf-cp"/> Photos/videos</label></div>
+    </div></div>
+    <div class="form-row"><label>Link to events</label><div class="chk-group" id="vf-ev-link"></div></div>
   </div>
-  <div id="vol-tab-onboarding" style="display:none">
-    <div style="margin-bottom:16px;padding:14px;background:var(--card);border-radius:var(--radius)">
-      <div style="font-size:12px;color:var(--txt3);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Onboarding progress</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div class="chk-pill"><label><input type="checkbox" id="vf-ob-call"/> Call to book intro meeting</label></div>
-        <div class="chk-pill"><label><input type="checkbox" id="vf-ob-welcome"/> Welcome email sent</label></div>
-        <div class="chk-pill"><label><input type="checkbox" id="vf-ob-forms"/> Onboarding forms complete</label></div>
-        <div class="chk-pill"><label><input type="checkbox" id="vf-ob-agreement"/> Agreement signed</label></div>
+  <!-- TAB: onboarding -->
+  <div id="vtab-onboard" style="display:none">
+    <div style="background:var(--card);border-radius:var(--radius);padding:14px;margin-bottom:14px">
+      <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Onboarding checklist</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="chk-pill"><label><input type="checkbox" id="vf-ob1"/> Call to book intro meeting</label></div>
+        <div class="chk-pill"><label><input type="checkbox" id="vf-ob2"/> Welcome email sent</label></div>
+        <div class="chk-pill"><label><input type="checkbox" id="vf-ob3"/> Onboarding forms complete</label></div>
+        <div class="chk-pill"><label><input type="checkbox" id="vf-ob4"/> Agreement signed</label></div>
       </div>
     </div>
-    <div class="form-row"><label>Notes / case notes</label><textarea id="vf-notes" style="min-height:80px" placeholder="Any notes about this volunteer…"></textarea></div>
-    <div class="form-row"><label>Status</label><select id="vf-status">
-      <option>Active</option><option>Inactive</option><option>On leave</option>
-    </select></div>
+    <div class="form-row"><label>Volunteering as part of corporate/business team?</label><div class="chk-group">
+      <div class="chk-pill"><label><input type="radio" name="vf-corp" value="No" checked/> No</label></div>
+      <div class="chk-pill"><label><input type="radio" name="vf-corp" value="Yes"/> Yes</label></div>
+    </div></div>
+    <div class="form-row"><label>Notes</label><textarea id="vf-notes" style="min-height:70px"></textarea></div>
   </div>
   <div class="modal-footer">
     <button class="btn btn-ghost" onclick="closeModal('modal-vol')">Cancel</button>
-    <button class="btn btn-ghost btn-sm" onclick="volTabNav(-1)">← Back</button>
-    <button class="btn btn-ghost btn-sm" onclick="volTabNav(1)">Next →</button>
-    <button class="btn btn-p" id="vol-save-btn" onclick="saveVol()">Save volunteer</button>
+    <button class="btn btn-ghost btn-sm" onclick="vTabNav(-1)">← Back</button>
+    <button class="btn btn-ghost btn-sm" onclick="vTabNav(1)">Next →</button>
+    <button class="btn btn-p" onclick="saveVol()">Save volunteer</button>
   </div>
 </div></div>
 
-<!-- EVENT MODAL -->
+<!-- Employer modal -->
+<div class="modal-overlay" id="modal-emp">
+<div class="modal"><h2 id="emp-title">Add employer</h2>
+  <div class="form-grid-2"><div class="form-row"><label>Employer name</label><input id="ef-nm"/></div><div class="form-row"><label>Sector</label><select id="ef-sec"><option>Retail</option><option>Healthcare</option><option>Logistics</option><option>Construction</option><option>Hospitality</option><option>Admin / office</option><option>Tech</option><option>Social care</option><option>Other</option></select></div></div>
+  <div class="form-grid-2"><div class="form-row"><label>Contact name</label><input id="ef-con"/></div><div class="form-row"><label>Contact email</label><input id="ef-cem" type="email"/></div></div>
+  <div class="form-grid-2"><div class="form-row"><label>Open vacancies</label><input type="number" id="ef-vac" placeholder="0"/></div><div class="form-row"><label>Relationship</label><select id="ef-rel"><option>Prospecting</option><option>Engaged</option><option>Active partner</option><option>Dormant</option></select></div></div>
+  <div class="form-row"><label>Notes</label><textarea id="ef-notes"></textarea></div>
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-emp')">Cancel</button><button class="btn btn-p" onclick="saveEmployer()">Save</button></div>
+</div></div>
+
+<!-- Referral modal -->
+<div class="modal-overlay" id="modal-r">
+<div class="modal"><h2>New referral</h2>
+  <div class="form-grid-2"><div class="form-row"><label>First name</label><input id="rf-fn"/></div><div class="form-row"><label>Last name</label><input id="rf-ln"/></div></div>
+  <div class="form-grid-2"><div class="form-row"><label>Source</label><select id="rf-src"><option>Probation</option><option>Jobcentre Plus</option><option>Community org</option><option>Self-referral</option></select></div><div class="form-row"><label>Advisor</label><select id="rf-adv"><option>Sarah T.</option><option>Marcus O.</option><option>Priya S.</option></select></div></div>
+  <div class="form-row"><label>Date referred</label><input type="date" id="rf-date"/></div>
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-r')">Cancel</button><button class="btn btn-p" onclick="saveR()">Save</button></div>
+</div></div>
+
+<!-- EVENT MODAL — enhanced -->
 <div class="modal-overlay" id="modal-ev">
-<div class="modal" style="max-width:600px">
-  <h2 id="ev-modal-title">Create event</h2>
-  <div class="form-row"><label>Event name *</label><input id="ef-name"/></div>
-  <div class="form-grid-3">
-    <div class="form-row"><label>Type</label><select id="ef-type">
-      <option>Green Skills</option><option>Wellbeing</option><option>Community Event</option><option>Frailty</option><option>Other</option>
-    </select></div>
-    <div class="form-row"><label>Date</label><input type="date" id="ef-date"/></div>
-    <div class="form-row"><label>Attendees</label><input type="number" id="ef-attendees" min="0" placeholder="0"/></div>
-  </div>
-  <div class="form-grid-2">
-    <div class="form-row"><label>Location</label><input id="ef-location" placeholder="e.g. PE1 Community Garden"/></div>
-    <div class="form-row"><label>Capacity</label><input type="number" id="ef-capacity" min="0" placeholder="20"/></div>
-  </div>
-  <div class="form-row"><label>SDG alignment</label>
-    <div class="chk-group" id="ef-sdgs"></div>
-  </div>
-  <div class="form-row"><label>Linked volunteers</label><div class="chk-group" id="ef-vol-link"></div></div>
-  <div class="form-row"><label>Notes / highlights</label><textarea id="ef-notes" style="min-height:60px"></textarea></div>
-  <div class="modal-footer">
-    <button class="btn btn-ghost" onclick="closeModal('modal-ev')">Cancel</button>
-    <button class="btn btn-p" id="ev-save-btn" onclick="saveEvent()">Save event</button>
-  </div>
+<div class="modal" style="max-width:580px"><h2 id="ev-modal-title">Create event</h2>
+  <div class="form-row"><label>Event name *</label><input id="evf-name"/></div>
+  <div class="form-grid-3"><div class="form-row"><label>Type</label><select id="evf-type"><option>Green Skills</option><option>Wellbeing</option><option>Community Event</option><option>Frailty</option><option>Other</option></select></div><div class="form-row"><label>Date</label><input type="date" id="evf-date"/></div><div class="form-row"><label>Attendees</label><input type="number" id="evf-att" min="0" placeholder="0"/></div></div>
+  <div class="form-grid-2"><div class="form-row"><label>Location</label><input id="evf-loc"/></div><div class="form-row"><label>Capacity</label><input type="number" id="evf-cap" placeholder="20"/></div></div>
+  <div class="form-row"><label>SDG alignment</label><div class="chk-group" id="evf-sdgs"></div></div>
+  <div class="form-row"><label>Link volunteers</label><div class="chk-group" id="evf-vols"></div></div>
+  <div class="form-row"><label>Notes / highlights</label><textarea id="evf-notes" style="min-height:55px"></textarea></div>
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-ev')">Cancel</button><button class="btn btn-p" id="ev-save-btn" onclick="saveEv()">Save event</button></div>
 </div></div>
 
 <!-- FEEDBACK MODAL -->
 <div class="modal-overlay" id="modal-fb">
-<div class="modal" style="max-width:560px">
-  <h2>Add feedback response</h2>
+<div class="modal" style="max-width:520px"><h2>Add feedback response</h2>
+  <div class="form-grid-2"><div class="form-row"><label>Event *</label><select id="fbf-ev"><option value="">Select event…</option></select></div><div class="form-row"><label>Participant name (optional)</label><input id="fbf-name"/></div></div>
+  <div class="form-row"><label>Enjoyment (1–5)</label><div style="display:flex;gap:5px;margin-top:4px" id="fbf-enjoyed-stars"></div></div>
   <div class="form-grid-2">
-    <div class="form-row"><label>Event *</label><select id="fbf-event"><option value="">Select event…</option></select></div>
-    <div class="form-row"><label>Participant name (optional)</label><input id="fbf-name"/></div>
+    <div class="form-row"><label>Confidence before (1–5)</label><div style="display:flex;gap:5px;margin-top:4px" id="fbf-cb-stars"></div></div>
+    <div class="form-row"><label>Confidence after (1–5)</label><div style="display:flex;gap:5px;margin-top:4px" id="fbf-ca-stars"></div></div>
   </div>
-  <div class="form-row"><label>Enjoyment (1–5)</label>
-    <div class="score-stars" id="fbf-enjoyed-stars"></div>
-  </div>
-  <div class="form-grid-2">
-    <div class="form-row"><label>Confidence before (1–5)</label>
-      <div class="score-stars" id="fbf-conf-before-stars"></div>
-    </div>
-    <div class="form-row"><label>Confidence after (1–5)</label>
-      <div class="score-stars" id="fbf-conf-after-stars"></div>
-    </div>
-  </div>
-  <div class="form-row"><label>Outcomes</label>
-    <div class="chk-group">
-      <div class="chk-pill"><label><input type="checkbox" id="fbf-learned"/> Learned something new</label></div>
-      <div class="chk-pill"><label><input type="checkbox" id="fbf-connected"/> Felt more connected</label></div>
-      <div class="chk-pill"><label><input type="checkbox" id="fbf-friend"/> Made a new friend</label></div>
-    </div>
-  </div>
-  <div class="form-row"><label>Quote (optional)</label><textarea id="fbf-quote" style="min-height:60px" placeholder="Participant's words in their own voice…"></textarea></div>
-  <div class="modal-footer">
-    <button class="btn btn-ghost" onclick="closeModal('modal-fb')">Cancel</button>
-    <button class="btn btn-p" id="fb-save-btn" onclick="saveFeedback()">Save response</button>
-  </div>
+  <div class="form-row"><label>Outcomes</label><div class="chk-group">
+    <div class="chk-pill"><label><input type="checkbox" id="fbf-learned"/> Learned something new</label></div>
+    <div class="chk-pill"><label><input type="checkbox" id="fbf-connected"/> Felt more connected</label></div>
+    <div class="chk-pill"><label><input type="checkbox" id="fbf-friend"/> Made a new friend</label></div>
+  </div></div>
+  <div class="form-row"><label>Quote (optional)</label><textarea id="fbf-quote" style="min-height:55px"></textarea></div>
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-fb')">Cancel</button><button class="btn btn-p" onclick="saveFb()">Save response</button></div>
 </div></div>
 
-<!-- CONTACT MODAL -->
-<div class="modal-overlay" id="modal-contact">
-<div class="modal" style="max-width:480px">
-  <h2>Add contact</h2>
-  <div class="form-grid-2">
-    <div class="form-row"><label>First name</label><input id="cf-fn"/></div>
-    <div class="form-row"><label>Last name</label><input id="cf-ln"/></div>
-  </div>
-  <div class="form-row"><label>Organisation (optional)</label><input id="cf-org"/></div>
-  <div class="form-row"><label>Email</label><input id="cf-email" type="email"/></div>
-  <div class="form-grid-2">
-    <div class="form-row"><label>Role</label><select id="cf-role"><option>Donor</option><option>Partner</option><option>Funder</option><option>Trustee</option></select></div>
-    <div class="form-row"><label>Status</label><select id="cf-status"><option>Prospect</option><option>Engaged</option><option>Active Supporter</option><option>Lapsed</option></select></div>
-  </div>
-  <div class="modal-footer">
-    <button class="btn btn-ghost" onclick="closeModal('modal-contact')">Cancel</button>
-    <button class="btn btn-p" onclick="saveContact()">Save</button>
-  </div>
+<!-- Circular item modal -->
+<div class="modal-overlay" id="modal-item">
+<div class="modal"><h2 id="item-title">Log item</h2>
+  <div class="form-grid-2"><div class="form-row"><label>Item</label><input id="it-name"/></div><div class="form-row"><label>Category</label><select id="it-cat"><option>Small electrical</option><option>Clothing</option><option>Furniture</option><option>Bike</option><option>Electronics</option></select></div></div>
+  <div class="form-grid-2"><div class="form-row"><label>Weight (kg)</label><input type="number" id="it-kg"/></div><div class="form-row"><label>Status</label><select id="it-st"><option>Collected</option><option>In repair</option><option>Repaired</option><option>Resold</option><option>Donated</option><option>Beyond repair</option></select></div></div>
+  <div class="form-grid-2"><div class="form-row"><label>Fixer</label><input id="it-fixer"/></div><div class="form-row"><label>Outcome</label><select id="it-outcome"><option value="">Pending</option><option>Resold</option><option>Donated</option><option>Returned to owner</option><option>Scrapped</option></select></div></div>
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-item')">Cancel</button><button class="btn btn-p" onclick="saveItem()">Save</button></div>
+</div></div>
+
+<!-- Contract modal -->
+<div class="modal-overlay" id="modal-con">
+<div class="modal"><h2>Add funding contract</h2>
+  <div class="form-row"><label>Contract name</label><input id="con-name"/></div>
+  <div class="form-grid-2"><div class="form-row"><label>Funder</label><input id="con-funder"/></div><div class="form-row"><label>Value (£)</label><input type="number" id="con-val"/></div></div>
+  <div class="form-grid-2"><div class="form-row"><label>Target starts</label><input type="number" id="con-ts"/></div><div class="form-row"><label>Target outcomes</label><input type="number" id="con-to"/></div></div>
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-con')">Cancel</button><button class="btn btn-p" onclick="saveCon()">Save</button></div>
+</div></div>
+
+<!-- Evidence modal -->
+<div class="modal-overlay" id="modal-evid">
+<div class="modal"><h2>Upload evidence</h2>
+  <div class="form-row"><label>Participant name</label><input id="evid-p"/></div>
+  <div class="form-grid-2"><div class="form-row"><label>Type</label><select id="evid-type"><option>Payslip</option><option>Contract</option><option>Certificate</option><option>ID document</option><option>Consent form</option></select></div><div class="form-row"><label>Linked outcome</label><select id="evid-out"><option>Employment</option><option>Training</option><option>Qualification</option><option>Volunteering</option></select></div></div>
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-evid')">Cancel</button><button class="btn btn-p" onclick="saveEvid()">Save</button></div>
+</div></div>
+
+<!-- Upgrade modal -->
+<div class="modal-overlay" id="modal-upgrade">
+<div class="modal" style="max-width:400px">
+  <h2 style="text-align:center">GreenCRM Pro</h2>
+  <div style="text-align:center;margin-bottom:18px"><div style="font-size:36px;font-weight:800;color:var(--em)">£9 <span style="font-size:14px;color:var(--txt2);font-weight:400">/ month</span></div></div>
+  <ul class="uplist">
+    <li><span style="color:var(--em)">✓</span> Unlimited participants & contacts</li>
+    <li><span style="color:var(--em)">✓</span> Funder reports (MoJ/GLA/CBF/UKSPF)</li>
+    <li><span style="color:var(--em)">✓</span> AI Next Action Engine</li>
+    <li><span style="color:var(--em)">✓</span> Full volunteer registration & onboarding</li>
+    <li><span style="color:var(--em)">✓</span> Feedback & impact tracking</li>
+    <li><span style="color:var(--em)">✓</span> Partner portal & team management</li>
+  </ul>
+  <button class="up-cta" onclick="closeModal('modal-upgrade')">Contact us — hello@greencrm.co.uk</button>
+  <div style="text-align:center;margin-top:10px"><button class="btn btn-ghost btn-sm" onclick="closeModal('modal-upgrade')">Maybe later</button></div>
 </div></div>
 
 <script>
-// ── DATA STORE ──
+// ══ CONSTANTS ══
+const BARRIERS=['Housing','Confidence','Skills gap','Transport','Childcare','Mental health','Substance misuse','Criminal record','Language','Benefits','Disability','Financial'];
+const OUT_TYPES=['Employment','Training','Qualification','Volunteering','Wellbeing','Housing secured'];
+const P_STAGES=['Referred','Engaged','In Support','Job Ready','Outcome Achieved','Sustained','Closed'];
 const SKILLS_LIST=['Gardening','Composting','Cooking','Teaching/Facilitation','Photography','Social Media','Admin/Office','Driving','Event Setup','Fundraising','Bike repair','Electrical','Sewing/Textiles','Other'];
-const AVAILABILITY_LIST=['Weekday mornings','Weekday afternoons','Weekday evenings','Saturday','Sunday'];
-const BARRIERS_LIST=['None','Disability','Financial','Transport','Language','Childcare','Other'];
+const AVAIL_LIST=['Weekday mornings','Weekday afternoons','Weekday evenings','Saturday','Sunday'];
+const VOL_BARRIERS=['None','Disability','Financial','Transport','Language','Childcare','Other'];
 const SDGS=['SDG 3: Good Health & Wellbeing','SDG 4: Quality Education','SDG 11: Sustainable Cities & Communities'];
 
+// ══ LOCAL DATA STORE (replaces Supabase for demo) ══
 let DB={
+  participants:[
+    {id:1,first_name:'Maria',last_name:'Santos',ref_source:'Community org',advisor:'Sarah T.',stage:'In Support',risk:'Medium',barriers:['Confidence','Transport'],outcomes:['Training'],safeguarding:null,scores:{confidence:4,work_readiness:5,wellbeing:6,skills:4},notes:[{t:'Initial assessment complete. Keen to find work in admin.',d:'2025-03-10',s:'Sarah T.',type:'note'}],last_contact:'2025-04-01',contract_ids:[]},
+    {id:2,first_name:'Jamal',last_name:'Hussein',ref_source:'Probation',advisor:'Marcus O.',stage:'Job Ready',risk:'High',barriers:['Criminal record','Confidence'],outcomes:[],safeguarding:'Mental health',scores:{confidence:3,work_readiness:4,wellbeing:3,skills:5},notes:[],last_contact:'2025-02-20',contract_ids:[]},
+  ],
   volunteers:[
-    {id:1,name:'Amara Osei',email:'amara@example.com',phone:'07700900001',postcode:'PE1',org:'',age:'25–34',gender:'Female',disability:'No',ethnicity:'Black/Black British',heard:'Friend/family',role:'Volunteer',skills:['Gardening','Composting'],availability:['Saturday','Sunday'],freq:'Weekly',availNotes:'',barriers:['None'],distance:2,drives:'Yes',hours:24,health:'',emergency:'Kwame 07700900002',consentMail:true,consentPhoto:true,obCall:true,obWelcome:true,obForms:true,obAgreement:true,notes:'',status:'Active',linkedEvents:[1,2]},
-    {id:2,name:'Tom Whitfield',email:'tom@example.com',phone:'',postcode:'PE2',org:'',age:'45–54',gender:'Male',disability:'Yes',ethnicity:'White British',heard:'Website',role:'Volunteer',skills:['Teaching/Facilitation','Event Setup'],availability:['Weekday mornings','Weekday afternoons'],freq:'Fortnightly',availNotes:'',barriers:['Disability'],distance:1,drives:'No',hours:16,health:'Uses a wheelchair',emergency:'',consentMail:true,consentPhoto:false,obCall:true,obWelcome:true,obForms:false,obAgreement:false,notes:'Excellent facilitator',status:'Active',linkedEvents:[1]},
-    {id:3,name:'Priya Sharma',email:'priya@example.com',phone:'07700900003',postcode:'PE3',org:'GreenTech Ltd',age:'18–24',gender:'Female',disability:'No',ethnicity:'Asian/Asian British',heard:'Social media',role:'Corporate volunteer',skills:['Social Media','Photography','Admin/Office'],availability:['Weekday evenings','Saturday'],freq:'Monthly',availNotes:'',barriers:['Financial'],distance:3,drives:'Yes',hours:8,health:'',emergency:'Raj 07700900004',consentMail:true,consentPhoto:true,obCall:true,obWelcome:true,obForms:true,obAgreement:true,notes:'',status:'Active',linkedEvents:[2,3]},
+    {id:1,name:'Amara Osei',email:'amara@example.com',phone:'07700900001',postcode:'PE1',org:'',age:'25–34',gender:'Female',disability:'No',ethnicity:'Black/Black British',heard:'Friend/family',role:'Volunteer',skills:['Gardening','Composting'],avail:['Saturday','Sunday'],freq:'Weekly',availNotes:'',barriers:['None'],dist:2,drives:'Yes',hours:24,health:'',emergency:'Kwame 07700900002',cm:true,cp:true,ob1:true,ob2:true,ob3:true,ob4:true,corp:'No',notes:'',status:'Active',linkedEvents:[1,2]},
+    {id:2,name:'Tom Whitfield',email:'tom@example.com',phone:'',postcode:'PE2',org:'',age:'45–54',gender:'Male',disability:'Yes',ethnicity:'White British',heard:'Website',role:'Volunteer',skills:['Teaching/Facilitation','Event Setup'],avail:['Weekday mornings'],freq:'Fortnightly',availNotes:'',barriers:['Disability'],dist:1,drives:'No',hours:16,health:'Uses a wheelchair',emergency:'',cm:true,cp:false,ob1:true,ob2:true,ob3:false,ob4:false,corp:'No',notes:'Excellent facilitator',status:'Active',linkedEvents:[1]},
+    {id:3,name:'Priya Sharma',email:'priya@example.com',phone:'07700900003',postcode:'PE3',org:'GreenTech Ltd',age:'18–24',gender:'Female',disability:'No',ethnicity:'Asian/Asian British',heard:'Social media',role:'Corporate volunteer',skills:['Social Media','Photography'],avail:['Saturday'],freq:'Monthly',availNotes:'',barriers:['Financial'],dist:3,drives:'Yes',hours:8,health:'',emergency:'Raj 07700900004',cm:true,cp:true,ob1:true,ob2:true,ob3:true,ob4:true,corp:'Yes',notes:'',status:'Active',linkedEvents:[2,3]},
   ],
   events:[
     {id:1,name:'Composting Workshop',type:'Green Skills',date:'2025-03-15',attendees:18,capacity:20,location:'PE1 Community Garden',sdgs:['SDG 3: Good Health & Wellbeing','SDG 4: Quality Education'],notes:'Hands-on composting demo',linkedVols:[1,2]},
-    {id:2,name:'Spring Fayre',type:'Community Event',date:'2025-04-20',attendees:612,capacity:700,location:'Central Park PE1',sdgs:['SDG 11: Sustainable Cities & Communities','SDG 3: Good Health & Wellbeing'],notes:'Annual community event — 612 attendees',linkedVols:[1,3]},
+    {id:2,name:'Spring Fayre',type:'Community Event',date:'2025-04-20',attendees:612,capacity:700,location:'Central Park PE1',sdgs:['SDG 11: Sustainable Cities & Communities','SDG 3: Good Health & Wellbeing'],notes:'Annual spring event — 612 attendees',linkedVols:[1,3]},
     {id:3,name:'Herbal Tea Blending',type:'Wellbeing',date:'2025-05-10',attendees:14,capacity:16,location:'PE2 Wellbeing Centre',sdgs:['SDG 3: Good Health & Wellbeing'],notes:'',linkedVols:[3]},
     {id:4,name:'Grow Your Own Mushrooms',type:'Green Skills',date:'2025-06-01',attendees:23,capacity:25,location:'PE3 Urban Farm',sdgs:['SDG 4: Quality Education','SDG 11: Sustainable Cities & Communities'],notes:'Each attendee left with a grow-at-home kit',linkedVols:[]},
-    {id:5,name:'Flower Pressing',type:'Wellbeing',date:'2025-06-14',attendees:19,capacity:20,location:'PE1 Community Centre',sdgs:['SDG 3: Good Health & Wellbeing'],notes:'',linkedVols:[]},
-    {id:6,name:'Frailty Workshop',type:'Frailty',date:'2025-04-08',attendees:9,capacity:12,location:'PE4 Health Centre',sdgs:['SDG 3: Good Health & Wellbeing'],notes:'Session 3 of 7 — engaging 60+ adults',linkedVols:[]},
+    {id:5,name:'Frailty Workshop — Session 3',type:'Frailty',date:'2025-04-08',attendees:9,capacity:12,location:'PE4 Health Centre',sdgs:['SDG 3: Good Health & Wellbeing'],notes:'Session 3 of 7 — engaging 60+ adults',linkedVols:[]},
   ],
   feedback:[
-    {id:1,eventId:1,name:'Sarah M.',enjoyed:5,confBefore:3,confAfter:5,learned:true,connected:true,friend:true,quote:'A low-pressure environment that allowed natural conversation.'},
-    {id:2,eventId:1,name:'David K.',enjoyed:4,confBefore:2,confAfter:4,learned:true,connected:true,friend:false,quote:''},
-    {id:3,eventId:2,name:'Fatima A.',enjoyed:5,confBefore:4,confAfter:5,learned:true,connected:true,friend:true,quote:"Loved learning about pickling, soap making and herbal teas!"},
-    {id:4,eventId:3,name:'Lena P.',enjoyed:5,confBefore:3,confAfter:5,learned:true,connected:false,friend:true,quote:"I didn't realise gardening could feel so healing."},
-    {id:5,eventId:4,name:'James R.',enjoyed:4,confBefore:3,confAfter:4,learned:true,connected:true,friend:false,quote:''},
+    {id:1,eventId:1,name:'Sarah M.',enjoyed:5,cb:3,ca:5,learned:true,connected:true,friend:true,quote:'A low-pressure environment that allowed natural conversation.'},
+    {id:2,eventId:1,name:'David K.',enjoyed:4,cb:2,ca:4,learned:true,connected:true,friend:false,quote:''},
+    {id:3,eventId:2,name:'Fatima A.',enjoyed:5,cb:4,ca:5,learned:true,connected:true,friend:true,quote:"Loved learning about pickling, soap making and herbal teas!"},
+    {id:4,eventId:3,name:'Lena P.',enjoyed:5,cb:3,ca:5,learned:true,connected:false,friend:true,quote:"I didn't realise gardening could feel so healing."},
+    {id:5,eventId:4,name:'James R.',enjoyed:4,cb:3,ca:4,learned:true,connected:true,friend:false,quote:''},
   ],
-  contacts:[
-    {id:1,fn:'Clare',ln:'Dodds',org:'Peterborough City Council',email:'c.dodds@peterborough.gov.uk',role:'Partner',status:'Active Supporter'},
-  ],
-  nextId:{v:4,e:7,fb:6,c:2}
+  contacts:[{id:1,fn:'Clare',ln:'Dodds',org:'Peterborough City Council',email:'c.dodds@pcc.gov.uk',role:'Partner',status:'Active Supporter',engagements:[1]}],
+  employers:[],referrals:[],circular:[],contracts:[],evidence:[],
+  nid:{p:3,v:4,e:6,fb:6,c:2,emp:1,r:1,ci:1,con:1,ev:1}
 };
 
-let editVolId=null,editEvId=null,editFbId=null,volTab='basic',volDist=3,evView='cards';
-const fbScores={enjoyed:5,confBefore:3,confAfter:5};
-
-// ── UTILS ──
+// ══ UTILS ══
 const $=id=>document.getElementById(id);
 const closeModal=id=>{$(id).classList.remove('open')};
 const fmtD=d=>d?new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}):'—';
-const ini=n=>n.split(' ').map(x=>x[0]||'').join('').slice(0,2).toUpperCase();
+const ini=n=>(n||'').split(' ').map(x=>x[0]||'').join('').slice(0,2).toUpperCase();
+const days=d=>d?Math.floor((Date.now()-new Date(d))/86400000):9999;
+const rCls=r=>r==='High'?'risk-hi':r==='Medium'?'risk-med':'risk-lo';
 const pct=(n,d)=>d?Math.round(n/d*100):0;
+const calcCarbon=kg=>(kg*2.5).toFixed(1);
+function openUpgrade(){$('modal-upgrade').classList.add('open');}
+function mkChks(cid,items,sel=[]){$(cid).innerHTML=items.map(b=>`<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--txt2);text-transform:none;letter-spacing:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 7px;cursor:pointer"><input type="checkbox" value="${b}" ${sel.includes(b)?'checked':''} style="width:auto;background:none;border:none;padding:0"/> ${b}</label>`).join('');}
+function getChks(cid){return[...document.querySelectorAll(`#${cid} input[type=checkbox]:checked`)].map(x=>x.value);}
+function mkChkGroup(cid,items,sel=[]){$(cid).innerHTML=items.map(it=>`<div class="chk-pill"><label><input type="checkbox" value="${it}" ${sel.includes(it)?'checked':''}/> ${it}</label></div>`).join('');}
 
-function mkChkGroup(containerId,items,selected=[]){
-  $(containerId).innerHTML=items.map(it=>`<div class="chk-pill"><label><input type="checkbox" value="${it}" ${selected.includes(it)?'checked':''}/> ${it}</label></div>`).join('');
-}
-function getChks(containerId){return[...document.querySelectorAll(`#${containerId} input[type=checkbox]:checked`)].map(x=>x.value);}
-
-// ── NAV ──
+// ══ NAV ══
 function go(page){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
-  $('page-'+page).classList.add('active');
-  const map={dashboard:renderDashboard,impact:renderImpact,volunteers:renderVolunteers,contacts:renderContacts,events:renderEvents,feedback:renderFeedback,reports:()=>{}};
+  $('page-'+page)?.classList.add('active');
+  const map={dashboard:renderDashboard,rag:renderRAG,impact:renderImpact,participants:renderParticipants,contacts:renderContacts,volunteers:renderVolunteers,employers:renderEmployers,pipeline:renderPipeline,referrals:renderReferrals,events:renderEvents,feedback:renderFeedback,circular:renderCircular,outcomes:renderOutcomes,funding:renderFunding,evidence:renderEvidence,safeguarding:renderSafeguarding,settings:()=>{}};
   map[page]?.();
   document.querySelectorAll('.nav-btn').forEach(b=>{if(b.getAttribute('onclick')?.includes(`'${page}'`))b.classList.add('active');});
 }
 
-// ── DASHBOARD ──
+// ══ DASHBOARD ══
 function renderDashboard(){
-  const fb=DB.feedback,evs=DB.events,vols=DB.volunteers;
-  const totalP=evs.reduce((a,e)=>a+e.attendees,0);
-  const enjoyed=fb.length?pct(fb.filter(f=>f.enjoyed>=4).length,fb.length):0;
-  const learned=fb.length?pct(fb.filter(f=>f.learned).length,fb.length):0;
-  const connected=fb.length?pct(fb.filter(f=>f.connected).length,fb.length):0;
-  const avgB=fb.length?(fb.reduce((a,f)=>a+f.confBefore,0)/fb.length).toFixed(1):'-';
-  const avgA=fb.length?(fb.reduce((a,f)=>a+f.confAfter,0)/fb.length).toFixed(1):'-';
+  const P=DB.participants,V=DB.volunteers,E=DB.events,FB=DB.feedback;
+  const totalEvP=E.reduce((a,e)=>a+e.attendees,0);
+  const enjoyed=FB.length?pct(FB.filter(f=>f.enjoyed>=4).length,FB.length):0;
+  const avgCB=FB.length?(FB.reduce((a,f)=>a+f.cb,0)/FB.length).toFixed(1):'-';
+  const avgCA=FB.length?(FB.reduce((a,f)=>a+f.ca,0)/FB.length).toFixed(1):'-';
   $('dash-stats').innerHTML=[
-    {l:'Volunteers',v:vols.length,s:'Active'},
-    {l:'Events delivered',v:evs.length,s:`${totalP.toLocaleString()} participants`},
-    {l:'Feedback responses',v:fb.length,s:'Per-participant'},
-    {l:'Enjoyed sessions',v:enjoyed+'%',s:'Rated 4–5 stars'},
+    {l:'Active participants',v:P.filter(p=>p.stage!=='Closed').length,s:'Across all stages'},
+    {l:'Events delivered',v:E.length,s:totalEvP.toLocaleString()+' participants'},
+    {l:'Active volunteers',v:V.filter(v=>v.status==='Active').length,s:'Registered'},
+    {l:'Outcomes achieved',v:P.filter(p=>(p.outcomes||[]).length>0).length,s:pct(P.filter(p=>(p.outcomes||[]).length>0).length,P.length)+'% rate'},
   ].map(s=>`<div class="stat-card"><div class="stat-lbl">${s.l}</div><div class="stat-val">${s.v}</div><div class="stat-sub">${s.s}</div></div>`).join('');
-  $('dash-feedback').innerHTML=[
-    {l:'Enjoyed the session',v:enjoyed+'%'},
-    {l:'Learned something new',v:learned+'%'},
-    {l:'Felt more connected',v:connected+'%'},
-    {l:'Made a new friend',v:pct(fb.filter(f=>f.friend).length,fb.length)+'%'},
-  ].map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)"><span style="font-size:13px;color:var(--txt2)">${r.l}</span><span style="font-weight:700;color:var(--em)">${r.v}</span></div>`).join('');
-  $('dash-confidence').innerHTML=`<div style="display:flex;align-items:center;gap:20px;padding:10px 0">
-    <div style="text-align:center"><div style="font-size:36px;font-weight:800;color:var(--amber)">${avgB}</div><div style="font-size:11px;color:var(--txt3)">avg before</div></div>
-    <div style="font-size:24px;color:var(--txt3)">→</div>
-    <div style="text-align:center"><div style="font-size:36px;font-weight:800;color:var(--em)">${avgA}</div><div style="font-size:11px;color:var(--txt3)">avg after</div></div>
-    <div style="flex:1;font-size:12px;color:var(--txt3);line-height:1.8">Average confidence score improved from <strong style="color:var(--amber)">${avgB}</strong> to <strong style="color:var(--em)">${avgA}</strong>/5 across all sessions.</div>
-  </div>`;
-  const sdgCounts={};SDGS.forEach(s=>{sdgCounts[s]=evs.filter(e=>e.sdgs.includes(s)).length;});
-  $('dash-sdg').innerHTML=SDGS.map(s=>`<span class="eco-stat">${s} <strong style="margin-left:4px">${sdgCounts[s]}</strong> events</span>`).join('');
-  $('dash-quotes').innerHTML=DB.feedback.filter(f=>f.quote).map(f=>{const ev=DB.events.find(e=>e.id===f.eventId);return`<div class="quote-card"><div style="font-size:13px;font-style:italic;color:var(--txt)">"${f.quote}"</div><div style="font-size:11px;color:var(--txt3);margin-top:4px">${f.name||'Anonymous'} · ${ev?.name||''}</div></div>`;}).join('');
+  const risk=P.filter(p=>p.risk==='High'||days(p.last_contact)>21);
+  $('dash-risk').innerHTML=risk.length?risk.map(p=>`<div class="tl-entry"><div class="tl-dot ${p.risk==='High'?'red':'amber'}"></div><div><div class="tl-lbl">${p.first_name} ${p.last_name} <span class="badge ${rCls(p.risk)}">${p.risk}</span></div><div class="tl-meta">${days(p.last_contact)>21?`No contact ${days(p.last_contact)}d · `:''}${p.advisor||''}</div></div></div>`).join(''):'<div style="color:var(--txt3);font-size:13px">No at-risk participants.</div>';
+  const recent=P.flatMap(p=>(p.notes||[]).map(n=>({...n,who:p.first_name+' '+p.last_name}))).sort((a,b)=>new Date(b.d)-new Date(a.d)).slice(0,4);
+  $('dash-activity').innerHTML=recent.length?recent.map(n=>`<div class="tl-entry"><div class="tl-dot blue"></div><div><div class="tl-lbl">${n.who}</div><div class="tl-meta">${(n.t||'').slice(0,55)} · ${fmtD(n.d)}</div></div></div>`).join(''):'<div style="color:var(--txt3);font-size:13px">No activity yet.</div>';
+  $('dash-feedback-hi').innerHTML=[{l:'Enjoyed sessions',v:enjoyed+'%'},{l:'Learned something new',v:pct(FB.filter(f=>f.learned).length,FB.length||1)+'%'},{l:'Felt more connected',v:pct(FB.filter(f=>f.connected).length,FB.length||1)+'%'},{l:'Made a new friend',v:pct(FB.filter(f=>f.friend).length,FB.length||1)+'%'}].map(r=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)"><span style="font-size:13px;color:var(--txt2)">${r.l}</span><span style="font-weight:700;color:var(--em)">${r.v}</span></div>`).join('');
+  $('dash-confidence').innerHTML=`<div style="display:flex;gap:20px;align-items:center;padding:8px 0"><div style="text-align:center"><div style="font-size:36px;font-weight:800;color:var(--amber)">${avgCB}</div><div style="font-size:11px;color:var(--txt3)">avg before</div></div><div style="font-size:22px;color:var(--txt3)">→</div><div style="text-align:center"><div style="font-size:36px;font-weight:800;color:var(--em)">${avgCA}</div><div style="font-size:11px;color:var(--txt3)">avg after</div></div><div style="font-size:12px;color:var(--txt3);flex:1;padding-left:12px">Confidence score improves from <strong style="color:var(--amber)">${avgCB}</strong> to <strong style="color:var(--em)">${avgCA}</strong>/5 across all workshops.</div></div>`;
 }
 
-// ── IMPACT ──
+// ══ IMPACT ══
 function anim(id,v,fmt=n=>n){let c=0;const el=$(id),s=Math.ceil(v/40)||1,iv=setInterval(()=>{c=Math.min(c+s,v);el.textContent=fmt(c);if(c>=v)clearInterval(iv);},20);}
 function renderImpact(){
-  const fb=DB.feedback,evs=DB.events,vols=DB.volunteers.filter(v=>v.status==='Active');
-  const totalP=evs.reduce((a,e)=>a+e.attendees,0);
-  anim('iw-ev',evs.length);anim('iw-p',totalP,n=>n.toLocaleString());anim('iw-v',vols.length);anim('iw-fb',fb.length);
-  const enjoyed=fb.length?pct(fb.filter(f=>f.enjoyed>=4).length,fb.length):0;
-  const learned=fb.length?pct(fb.filter(f=>f.learned).length,fb.length):0;
-  const connected=fb.length?pct(fb.filter(f=>f.connected).length,fb.length):0;
-  $('imp-enjoyed').textContent=enjoyed+'%';$('imp-learned').textContent=learned+'%';$('imp-connected').textContent=connected+'%';
-  const avgB=fb.length?(fb.reduce((a,f)=>a+f.confBefore,0)/fb.length).toFixed(1):'-';
-  const avgA=fb.length?(fb.reduce((a,f)=>a+f.confAfter,0)/fb.length).toFixed(1):'-';
-  $('imp-conf-before').textContent=avgB;$('imp-conf-after').textContent=avgA;
-  $('imp-conf-bar').innerHTML=`<div class="fund-bar-wrap"><div class="fund-top"><span>Before</span><span>${avgB}/5</span></div><div class="fund-track"><div class="fund-fill warn" style="width:${parseFloat(avgB)/5*100}%"></div></div></div><div class="fund-bar-wrap"><div class="fund-top"><span>After</span><span>${avgA}/5</span></div><div class="fund-track"><div class="fund-fill" style="width:${parseFloat(avgA)/5*100}%"></div></div></div>`;
-  $('imp-quotes').innerHTML=DB.feedback.filter(f=>f.quote).map(f=>{const ev=DB.events.find(e=>e.id===f.eventId);return`<div class="quote-card"><div style="font-size:14px;font-style:italic;color:var(--txt)">"${f.quote}"</div><div style="font-size:11px;color:var(--txt3);margin-top:6px">${f.name||'Anonymous'} · ${ev?.name||''}</div></div>`;}).join('');
+  const E=DB.events,FB=DB.feedback,V=DB.volunteers;
+  const totalP=E.reduce((a,e)=>a+e.attendees,0);
+  anim('iw-p',totalP,n=>n.toLocaleString());anim('iw-ev',E.length);anim('iw-v',V.filter(v=>v.status==='Active').length);anim('iw-fb',FB.length);
+  $('imp-enjoyed').textContent=pct(FB.filter(f=>f.enjoyed>=4).length,FB.length||1)+'%';
+  $('imp-learned').textContent=pct(FB.filter(f=>f.learned).length,FB.length||1)+'%';
+  $('imp-connected').textContent=pct(FB.filter(f=>f.connected).length,FB.length||1)+'%';
+  const avgCB=FB.length?(FB.reduce((a,f)=>a+f.cb,0)/FB.length).toFixed(1):'-';
+  const avgCA=FB.length?(FB.reduce((a,f)=>a+f.ca,0)/FB.length).toFixed(1):'-';
+  $('imp-cb').textContent=avgCB;$('imp-ca').textContent=avgCA;
+  $('imp-quotes').innerHTML=FB.filter(f=>f.quote).map(f=>{const ev=E.find(e=>e.id===f.eventId);return`<div class="quote-card"><div style="font-size:13px;font-style:italic;color:var(--txt)">"${f.quote}"</div><div style="font-size:11px;color:var(--txt3);margin-top:4px">${f.name||'Anonymous'} · ${ev?.name||''}</div></div>`;}).join('');
 }
 
-// ── VOLUNTEERS ──
+// ══ PARTICIPANTS ══
+function renderParticipants(){
+  const q=($('p-search')||{}).value?.toLowerCase()||'';
+  const sf=($('p-stage')||{}).value||'',rf=($('p-risk')||{}).value||'';
+  const flt=DB.participants.filter(p=>{const nm=(p.first_name+' '+p.last_name).toLowerCase();return(!q||nm.includes(q))&&(!sf||p.stage===sf)&&(!rf||p.risk===rf);});
+  const stale=DB.participants.filter(p=>days(p.last_contact)>21&&p.stage!=='Closed');
+  const al=$('p-alert');
+  if(stale.length){al.style.display='flex';al.textContent=`⚠ ${stale.length} participant(s) no contact 21+ days`;}
+  else al.style.display='none';
+  $('p-table').innerHTML=flt.length?flt.map(p=>{
+    const d=days(p.last_contact),ov=d>21;
+    return`<tr><td><div style="display:flex;align-items:center;gap:8px"><div style="width:28px;height:28px;border-radius:50%;background:rgba(16,185,129,.15);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--em);flex-shrink:0">${ini(p.first_name+' '+p.last_name)}</div><div><div class="cn">${p.first_name} ${p.last_name}</div>${p.safeguarding?`<span class="safe-flag">🔐 ${p.safeguarding}</span>`:''}</div></div></td>
+    <td style="font-size:11px;color:var(--txt3)">GC-${String(p.id).padStart(4,'0')}</td>
+    <td><span class="badge" style="background:rgba(16,185,129,.12);color:var(--em3)">${p.stage||'Referred'}</span></td>
+    <td style="font-size:12px">${p.advisor||'—'}</td>
+    <td>${(p.outcomes||[]).map(o=>`<span class="badge b-active" style="margin:1px">${o}</span>`).join('')||'<span style="font-size:11px;color:var(--txt3)">None yet</span>'}</td>
+    <td><span class="badge ${rCls(p.risk)}">${p.risk||'Low'}</span></td>
+    <td style="font-size:11px;color:${ov?'var(--amber)':'var(--txt3)'}">${fmtD(p.last_contact)}${ov?` ⚠ ${d}d`:''}</td>
+    <td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm" onclick="openEditP(${p.id})">Edit</button><button class="btn btn-ghost btn-sm" onclick="openNotes(${p.id})">Notes</button></div></td></tr>`;
+  }).join(''):`<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--txt3)">No participants yet.</td></tr>`;
+}
+function openAddP(){
+  window._editPId=null;$('mp-title').textContent='Add participant';
+  ['mp-fn','mp-ln','mp-note','mp-conf','mp-work','mp-well','mp-skills'].forEach(f=>$(f).value='');
+  $('mp-safe').value='';mkChks('barrier-checks',BARRIERS);mkChks('outcome-checks',OUT_TYPES);
+  $('modal-p').classList.add('open');
+}
+function openEditP(id){
+  const p=DB.participants.find(x=>x.id===id);if(!p)return;window._editPId=id;
+  $('mp-title').textContent='Edit participant';$('mp-fn').value=p.first_name;$('mp-ln').value=p.last_name;
+  $('mp-rs').value=p.ref_source||'Self-referral';$('mp-adv').value=p.advisor||'Unassigned';
+  $('mp-st').value=p.stage||'Referred';$('mp-risk').value=p.risk||'Low';$('mp-safe').value=p.safeguarding||'';
+  const sc=p.scores||{};$('mp-conf').value=sc.confidence||'';$('mp-work').value=sc.work_readiness||'';$('mp-well').value=sc.wellbeing||'';$('mp-skills').value=sc.skills||'';
+  mkChks('barrier-checks',BARRIERS,p.barriers||[]);mkChks('outcome-checks',OUT_TYPES,p.outcomes||[]);$('mp-note').value='';
+  $('modal-p').classList.add('open');
+}
+function saveP(){
+  const today=new Date().toISOString().split('T')[0];
+  const note=$('mp-note').value;
+  const d={first_name:$('mp-fn').value||'Unknown',last_name:$('mp-ln').value||'',ref_source:$('mp-rs').value,stage:$('mp-st').value,advisor:$('mp-adv').value,barriers:getChks('barrier-checks'),outcomes:getChks('outcome-checks'),safeguarding:$('mp-safe').value||null,risk:$('mp-risk').value,last_contact:today,scores:{confidence:parseInt($('mp-conf').value)||null,work_readiness:parseInt($('mp-work').value)||null,wellbeing:parseInt($('mp-well').value)||null,skills:parseInt($('mp-skills').value)||null}};
+  if(window._editPId){
+    const ex=DB.participants.find(x=>x.id===window._editPId);
+    const notes=[...(ex.notes||[])];if(note)notes.push({t:note,d:today,s:'Staff',type:'note'});
+    DB.participants=DB.participants.map(x=>x.id===window._editPId?{...x,...d,notes}:x);
+  }else{
+    DB.participants.push({id:DB.nid.p++,...d,notes:note?[{t:note,d:today,s:'Staff',type:'note'}]:[]});
+  }
+  closeModal('modal-p');renderParticipants();
+}
+function openNotes(id){
+  const p=DB.participants.find(x=>x.id===id);if(!p)return;
+  window._noteId=id;
+  const notes=(p.notes||[]).slice().reverse();
+  const m=document.createElement('div');m.className='modal-overlay open';m.id='modal-notes';
+  m.innerHTML=`<div class="modal" style="max-width:560px"><h2>Case notes — ${p.first_name} ${p.last_name}</h2>
+    <div style="max-height:220px;overflow-y:auto;margin-bottom:12px">${notes.length?notes.map(n=>`<div class="tl-entry"><div class="tl-dot blue"></div><div><div class="tl-lbl">${n.t}</div><div class="tl-meta">${n.d} · ${n.s}</div></div></div>`).join(''):'<div style="color:var(--txt3);font-size:13px">No notes yet.</div>'}</div>
+    <div class="form-row"><label>New case note</label><textarea id="new-note-txt"></textarea></div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="document.getElementById('modal-notes').remove()">Close</button><button class="btn btn-p" onclick="addNote()">Save note</button></div>
+  </div>`;
+  document.body.appendChild(m);
+}
+function addNote(){
+  const p=DB.participants.find(x=>x.id===window._noteId);const txt=$('new-note-txt').value;
+  if(!txt||!p)return;
+  const today=new Date().toISOString().split('T')[0];
+  p.notes=[...(p.notes||[]),{t:txt,d:today,s:'Staff',type:'note'}];p.last_contact=today;
+  $('modal-notes').remove();renderParticipants();
+}
+
+// ══ CONTACTS ══
+function renderContacts(){
+  $('c-table').innerHTML=DB.contacts.length?DB.contacts.map(c=>`<tr><td class="cn">${c.fn} ${c.ln}</td><td style="font-size:12px;color:var(--txt2)">${c.org||'—'}</td><td><span class="badge b-vol">${c.role}</span></td><td>${c.email}</td><td><span class="badge ${c.status==='Active Supporter'?'b-active':'b-prospect'}">${c.status}</span></td><td><div class="sbar"><div class="strack"><div class="sfill" style="width:${Math.min(((c.engagements||[]).length)*30,100)}%"></div></div><span style="font-size:11px;color:var(--txt3)">${(c.engagements||[]).length}</span></div></td></tr>`).join(''):`<tr><td colspan="6" style="text-align:center;color:var(--txt3);padding:24px">No contacts yet.</td></tr>`;
+}
+function openAddC(){['cf-fn','cf-ln','cf-org','cf-em'].forEach(f=>$(f).value='');$('modal-c').classList.add('open');}
+function saveC(){DB.contacts.push({id:DB.nid.c++,fn:$('cf-fn').value,ln:$('cf-ln').value,org:$('cf-org').value,email:$('cf-em').value,role:$('cf-role').value,status:$('cf-st').value,engagements:[]});closeModal('modal-c');renderContacts();}
+
+// ══ VOLUNTEERS ══
+let _vDist=3,_vTab='basic',_editVolId=null;
+
 function renderVolunteers(){
   const q=($('vol-search')||{}).value?.toLowerCase()||'';
   const sf=($('vol-filter-status')||{}).value||'';
   const rf=($('vol-filter-role')||{}).value||'';
-  const vols=DB.volunteers.filter(v=>
-    (!q||v.name.toLowerCase().includes(q)||v.email.toLowerCase().includes(q))&&
-    (!sf||v.status===sf)&&(!rf||v.role===rf)
-  );
+  const vols=DB.volunteers.filter(v=>(!q||v.name.toLowerCase().includes(q)||v.email.toLowerCase().includes(q))&&(!sf||v.status===sf)&&(!rf||v.role===rf));
   $('vol-list').innerHTML=vols.length?vols.map(v=>{
-    const ob=[v.obCall,v.obWelcome,v.obForms,v.obAgreement];
-    const obDone=ob.filter(Boolean).length;
-    const steps=['Call','Welcome','Forms','Agreement'];
-    return`<div class="vol-card" onclick="openVolDetail(${v.id})">
+    const ob=[v.ob1,v.ob2,v.ob3,v.ob4];
+    return`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:14px;margin-bottom:10px;cursor:pointer;transition:border-color .2s" onmouseenter="this.style.borderColor='var(--em)'" onmouseleave="this.style.borderColor='var(--border)'" onclick="openVolDetail(${v.id})">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div style="display:flex;gap:12px;align-items:center">
           <div class="vol-avatar">${ini(v.name)}</div>
@@ -602,446 +768,409 @@ function renderVolunteers(){
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:8px">
-          <div class="onboard-dots">
-            ${ob.map((d,i)=>`<div class="onboard-dot ${d?'done':''}" title="${steps[i]}"></div>`).join('')}
-          </div>
-          <span style="font-size:11px;color:var(--txt3)">${obDone}/4</span>
+          <div class="onboard-dots">${ob.map(d=>`<div class="onboard-dot ${d?'done':''}"></div>`).join('')}</div>
+          <span style="font-size:11px;color:var(--txt3)">${ob.filter(Boolean).length}/4</span>
           <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openEditVol(${v.id})">Edit</button>
         </div>
       </div>
       <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
-        ${volBadge(v.role)}
+        <span class="badge b-vol">${v.role}</span>
         ${v.skills.slice(0,4).map(s=>`<span class="badge b-teal">${s}</span>`).join('')}
         ${v.barriers.filter(b=>b!=='None').map(b=>`<span class="badge b-amber">${b}</span>`).join('')}
-        ${v.drives==='Yes'?'<span class="badge b-blue">Driver</span>':''}
-        <span style="font-size:11px;color:var(--txt3);margin-left:4px">Dist: ${v.distance}/5 · ${v.hours}hrs</span>
+        ${v.drives==='Yes'?'<span class="badge b-engaged">Driver</span>':''}
+        <span style="font-size:11px;color:var(--txt3);margin-left:4px">Dist: ${v.dist}/5 · ${v.hours}hrs</span>
       </div>
     </div>`;
   }).join(''):`<div style="color:var(--txt3);font-size:13px;text-align:center;padding:32px">No volunteers found.</div>`;
 }
-function volBadge(role){
-  const m={'Volunteer':'b-vol','Corporate volunteer':'b-part','Staff':'b-active','Fixer':'b-blue'};
-  return`<span class="badge ${m[role]||'b-vol'}">${role}</span>`;
-}
 
 function openVolDetail(id){
   const v=DB.volunteers.find(x=>x.id===id);if(!v)return;
-  const m=document.createElement('div');m.className='modal-overlay open';m.id='modal-vol-detail';
-  const evNames=v.linkedEvents.map(eid=>DB.events.find(e=>e.id===eid)?.name||'').filter(Boolean);
-  m.innerHTML=`<div class="modal" style="max-width:600px">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px">
-      <div style="display:flex;gap:14px;align-items:center">
-        <div class="vol-avatar" style="width:52px;height:52px;font-size:16px">${ini(v.name)}</div>
-        <div>
-          <div style="font-size:18px;font-weight:700;color:var(--txt)">${v.name}</div>
-          <div style="font-size:13px;color:var(--txt3)">${v.email} ${v.phone?'· '+v.phone:''}</div>
-          ${v.org?`<div style="font-size:12px;color:var(--blue)">${v.org}</div>`:''}
-        </div>
+  const evNames=v.linkedEvents.map(eid=>DB.events.find(e=>e.id===eid)?.name).filter(Boolean);
+  const m=document.createElement('div');m.className='modal-overlay open';
+  m.innerHTML=`<div class="modal" style="max-width:580px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+      <div style="display:flex;gap:12px;align-items:center">
+        <div class="vol-avatar" style="width:48px;height:48px;font-size:15px">${ini(v.name)}</div>
+        <div><div style="font-size:17px;font-weight:700;color:var(--txt)">${v.name}</div><div style="font-size:12px;color:var(--txt3)">${v.email}${v.phone?' · '+v.phone:''}</div>${v.org?`<div style="font-size:12px;color:var(--blue)">${v.org}</div>`:''}</div>
       </div>
       <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-overlay').remove();openEditVol(${v.id})">Edit</button>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;margin-bottom:14px">
-      ${[['Postcode',v.postcode||'—'],['Age',v.age||'—'],['Gender',v.gender||'—'],['Ethnicity',v.ethnicity||'—'],['Disability',v.disability],['Drives',v.drives],['Distance',v.distance+'/5'],['Hours logged',v.hours],['Frequency',v.freq||'—'],['How heard',v.heard||'—']].map(([k,val])=>`<div style="background:var(--card);padding:8px 12px;border-radius:var(--radius)"><div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">${k}</div><div style="color:var(--txt)">${val}</div></div>`).join('')}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;font-size:12px;margin-bottom:14px">
+      ${[['Postcode',v.postcode||'—'],['Age',v.age||'—'],['Gender',v.gender||'—'],['Ethnicity',v.ethnicity||'—'],['Disability',v.disability],['Drives',v.drives],['Distance',v.dist+'/5'],['Hours',v.hours],['Frequency',v.freq||'—'],['How heard',v.heard||'—']].map(([k,val])=>`<div style="background:var(--card);padding:7px 10px;border-radius:var(--radius)"><div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px">${k}</div><div style="color:var(--txt)">${val}</div></div>`).join('')}
     </div>
-    <div style="margin-bottom:12px"><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Skills</div><div style="display:flex;flex-wrap:wrap;gap:6px">${v.skills.map(s=>`<span class="badge b-teal">${s}</span>`).join('')||'—'}</div></div>
-    <div style="margin-bottom:12px"><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Barriers</div><div style="display:flex;flex-wrap:wrap;gap:6px">${v.barriers.map(b=>`<span class="badge b-amber">${b}</span>`).join('')}</div></div>
-    <div style="margin-bottom:12px"><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Onboarding</div><div style="display:flex;gap:16px">
-      ${[['Call',v.obCall],['Welcome email',v.obWelcome],['Forms',v.obForms],['Agreement',v.obAgreement]].map(([l,d])=>`<div style="display:flex;align-items:center;gap:5px;font-size:12px;color:${d?'var(--em)':'var(--txt3)'}"><span style="width:10px;height:10px;border-radius:50%;background:${d?'var(--em)':'var(--border)'};display:inline-block"></span>${l}</div>`).join('')}
-    </div></div>
-    ${evNames.length?`<div style="margin-bottom:12px"><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Linked events</div><div style="display:flex;flex-wrap:wrap;gap:6px">${evNames.map(n=>`<span class="badge b-blue">${n}</span>`).join('')}</div></div>`:''}
-    ${v.health?`<div style="font-size:13px;color:var(--txt2);margin-bottom:8px"><span style="color:var(--txt3)">Health/accessibility: </span>${v.health}</div>`:''}
-    ${v.emergency?`<div style="font-size:13px;color:var(--txt2);margin-bottom:8px"><span style="color:var(--txt3)">Emergency contact: </span>${v.emergency}</div>`:''}
-    ${v.notes?`<div style="font-size:13px;color:var(--txt2);margin-bottom:8px"><span style="color:var(--txt3)">Notes: </span>${v.notes}</div>`:''}
-    <div style="display:flex;gap:8px;margin-top:14px;justify-content:space-between">
-      <button class="btn btn-danger btn-sm" onclick="if(confirm('Delete this volunteer?')){DB.volunteers=DB.volunteers.filter(x=>x.id!==${v.id});this.closest('.modal-overlay').remove();renderVolunteers();}">Delete</button>
+    <div style="margin-bottom:10px"><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;margin-bottom:6px">Skills</div><div style="display:flex;flex-wrap:wrap;gap:5px">${v.skills.map(s=>`<span class="badge b-teal">${s}</span>`).join('')||'—'}</div></div>
+    <div style="margin-bottom:10px"><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;margin-bottom:6px">Barriers</div><div style="display:flex;gap:5px;flex-wrap:wrap">${v.barriers.map(b=>`<span class="badge b-amber">${b}</span>`).join('')}</div></div>
+    <div style="margin-bottom:10px"><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;margin-bottom:6px">Onboarding</div><div style="display:flex;gap:14px">${[['Call',v.ob1],['Welcome email',v.ob2],['Forms',v.ob3],['Agreement',v.ob4]].map(([l,d])=>`<div style="display:flex;align-items:center;gap:4px;font-size:12px;color:${d?'var(--em)':'var(--txt3)'}"><span style="width:9px;height:9px;border-radius:50%;background:${d?'var(--em)':'var(--border)'};display:inline-block"></span>${l}</div>`).join('')}</div></div>
+    ${evNames.length?`<div style="margin-bottom:10px"><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;margin-bottom:6px">Linked events</div><div style="display:flex;gap:5px;flex-wrap:wrap">${evNames.map(n=>`<span class="badge b-vol">${n}</span>`).join('')}</div></div>`:''}
+    ${v.health?`<div style="font-size:12px;color:var(--txt2);margin-bottom:6px"><span style="color:var(--txt3)">Health: </span>${v.health}</div>`:''}
+    ${v.emergency?`<div style="font-size:12px;color:var(--txt2);margin-bottom:6px"><span style="color:var(--txt3)">Emergency: </span>${v.emergency}</div>`:''}
+    ${v.notes?`<div style="font-size:12px;color:var(--txt2);margin-bottom:6px"><span style="color:var(--txt3)">Notes: </span>${v.notes}</div>`:''}
+    <div style="display:flex;justify-content:space-between;margin-top:14px">
+      <button class="btn btn-danger btn-sm" onclick="if(confirm('Delete?')){DB.volunteers=DB.volunteers.filter(x=>x.id!==${v.id});this.closest('.modal-overlay').remove();renderVolunteers();}">Delete</button>
       <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Close</button>
     </div>
   </div>`;
   document.body.appendChild(m);
 }
 
-function setDist(n){
-  volDist=n;
-  document.querySelectorAll('.dist-btn').forEach((b,i)=>b.classList.toggle('sel',i+1===n));
-}
-function switchVolTab(tab,btn){
-  volTab=tab;
-  ['basic','details','onboarding'].forEach(t=>{$('vol-tab-'+t).style.display=t===tab?'block':'none';});
-  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+function setDist(n){_vDist=n;document.querySelectorAll('.dist-btn').forEach((b,i)=>b.classList.toggle('sel',i+1===n));}
+function switchVTab(tab,btn){
+  _vTab=tab;
+  ['basic','details','onboard'].forEach(t=>{$('vtab-'+t).style.display=t===tab?'block':'none';});
+  document.querySelectorAll('.vtab-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
 }
-function volTabNav(dir){
-  const tabs=['basic','details','onboarding'];
-  const cur=tabs.indexOf(volTab);
-  const next=tabs[Math.max(0,Math.min(tabs.length-1,cur+dir))];
-  const btn=document.querySelectorAll('.tab-btn')[tabs.indexOf(next)];
-  switchVolTab(next,btn);
+function vTabNav(dir){
+  const tabs=['basic','details','onboard'],cur=tabs.indexOf(_vTab),next=tabs[Math.max(0,Math.min(2,cur+dir))];
+  switchVTab(next,document.querySelectorAll('.vtab-btn')[tabs.indexOf(next)]);
 }
 
 function openAddVol(){
-  editVolId=null;volDist=3;
+  _editVolId=null;_vDist=3;
   $('vol-modal-title').textContent='Add volunteer';
   ['vf-name','vf-email','vf-phone','vf-postcode','vf-org','vf-avail-notes','vf-health','vf-emergency','vf-notes'].forEach(id=>$(id).value='');
   ['vf-age','vf-gender','vf-heard','vf-ethnicity'].forEach(id=>$(id).value='');
   $('vf-disability').value='No';$('vf-status').value='Active';$('vf-hours').value='0';
-  ['vf-ob-call','vf-ob-welcome','vf-ob-forms','vf-ob-agreement','vf-consent-mail','vf-consent-photo'].forEach(id=>$(id).checked=false);
+  ['vf-ob1','vf-ob2','vf-ob3','vf-ob4','vf-cm','vf-cp'].forEach(id=>$(id).checked=false);
   document.querySelectorAll('input[name="vf-role"]')[0].checked=true;
-  document.querySelectorAll('input[name="vf-freq"]')[0].checked=false;
+  document.querySelectorAll('input[name="vf-freq"]').forEach(r=>r.checked=false);
+  document.querySelectorAll('input[name="vf-drives"]')[1].checked=true;
+  document.querySelectorAll('input[name="vf-corp"]')[0].checked=true;
   mkChkGroup('vf-skills',SKILLS_LIST);
-  mkChkGroup('vf-availability',AVAILABILITY_LIST);
-  mkChkGroup('vf-barriers',BARRIERS_LIST);
-  mkChkGroup('vf-events-link',DB.events.map(e=>e.name));
+  mkChkGroup('vf-avail',AVAIL_LIST);
+  mkChkGroup('vf-barriers',VOL_BARRIERS);
+  mkChkGroup('vf-ev-link',DB.events.map(e=>e.name));
   setDist(3);
-  switchVolTab('basic',document.querySelectorAll('.tab-btn')[0]);
+  switchVTab('basic',document.querySelectorAll('.vtab-btn')[0]);
   $('modal-vol').classList.add('open');
 }
 function openEditVol(id){
   const v=DB.volunteers.find(x=>x.id===id);if(!v)return;
-  editVolId=id;volDist=v.distance||3;
+  _editVolId=id;_vDist=v.dist||3;
   $('vol-modal-title').textContent='Edit volunteer';
   $('vf-name').value=v.name;$('vf-email').value=v.email;$('vf-phone').value=v.phone||'';
   $('vf-postcode').value=v.postcode||'';$('vf-org').value=v.org||'';
   $('vf-age').value=v.age||'';$('vf-gender').value=v.gender||'';
   $('vf-heard').value=v.heard||'';$('vf-ethnicity').value=v.ethnicity||'';
-  $('vf-disability').value=v.disability||'No';
+  $('vf-disability').value=v.disability||'No';$('vf-status').value=v.status||'Active';$('vf-hours').value=v.hours||0;
   document.querySelectorAll('input[name="vf-role"]').forEach(r=>r.checked=r.value===v.role);
-  mkChkGroup('vf-skills',SKILLS_LIST,v.skills||[]);
-  mkChkGroup('vf-availability',AVAILABILITY_LIST,v.availability||[]);
   document.querySelectorAll('input[name="vf-freq"]').forEach(r=>r.checked=r.value===v.freq);
-  $('vf-avail-notes').value=v.availNotes||'';
-  mkChkGroup('vf-barriers',BARRIERS_LIST,v.barriers||[]);
-  setDist(v.distance||3);
   document.querySelectorAll('input[name="vf-drives"]').forEach(r=>r.checked=r.value===v.drives);
-  $('vf-hours').value=v.hours||0;$('vf-health').value=v.health||'';
-  $('vf-emergency').value=v.emergency||'';
-  $('vf-consent-mail').checked=!!v.consentMail;$('vf-consent-photo').checked=!!v.consentPhoto;
-  const evNames=DB.events.map(e=>e.name);
-  const selEv=v.linkedEvents.map(eid=>DB.events.find(e=>e.id===eid)?.name||'');
-  mkChkGroup('vf-events-link',evNames,selEv);
-  $('vf-ob-call').checked=!!v.obCall;$('vf-ob-welcome').checked=!!v.obWelcome;
-  $('vf-ob-forms').checked=!!v.obForms;$('vf-ob-agreement').checked=!!v.obAgreement;
-  $('vf-notes').value=v.notes||'';$('vf-status').value=v.status||'Active';
-  switchVolTab('basic',document.querySelectorAll('.tab-btn')[0]);
+  document.querySelectorAll('input[name="vf-corp"]').forEach(r=>r.checked=r.value===v.corp);
+  $('vf-avail-notes').value=v.availNotes||'';$('vf-health').value=v.health||'';
+  $('vf-emergency').value=v.emergency||'';$('vf-cm').checked=!!v.cm;$('vf-cp').checked=!!v.cp;
+  $('vf-ob1').checked=!!v.ob1;$('vf-ob2').checked=!!v.ob2;$('vf-ob3').checked=!!v.ob3;$('vf-ob4').checked=!!v.ob4;
+  $('vf-notes').value=v.notes||'';
+  mkChkGroup('vf-skills',SKILLS_LIST,v.skills||[]);
+  mkChkGroup('vf-avail',AVAIL_LIST,v.avail||[]);
+  mkChkGroup('vf-barriers',VOL_BARRIERS,v.barriers||[]);
+  const selEvNames=v.linkedEvents.map(eid=>DB.events.find(e=>e.id===eid)?.name).filter(Boolean);
+  mkChkGroup('vf-ev-link',DB.events.map(e=>e.name),selEvNames);
+  setDist(v.dist||3);
+  switchVTab('basic',document.querySelectorAll('.vtab-btn')[0]);
   $('modal-vol').classList.add('open');
 }
 function saveVol(){
-  const name=$('vf-name').value.trim();
-  if(!name){alert('Name is required');switchVolTab('basic',document.querySelectorAll('.tab-btn')[0]);return;}
+  const name=$('vf-name').value.trim();if(!name){alert('Name is required');return;}
   const role=[...document.querySelectorAll('input[name="vf-role"]:checked')].map(r=>r.value)[0]||'Volunteer';
   const freq=[...document.querySelectorAll('input[name="vf-freq"]:checked')].map(r=>r.value)[0]||'';
   const drives=[...document.querySelectorAll('input[name="vf-drives"]:checked')].map(r=>r.value)[0]||'No';
-  const selEvNames=getChks('vf-events-link');
+  const corp=[...document.querySelectorAll('input[name="vf-corp"]:checked')].map(r=>r.value)[0]||'No';
+  const selEvNames=getChks('vf-ev-link');
   const linkedEvents=DB.events.filter(e=>selEvNames.includes(e.name)).map(e=>e.id);
-  const v={
-    id:editVolId||DB.nextId.v++,name,
-    email:$('vf-email').value,phone:$('vf-phone').value,postcode:$('vf-postcode').value,org:$('vf-org').value,
-    age:$('vf-age').value,gender:$('vf-gender').value,heard:$('vf-heard').value,
-    ethnicity:$('vf-ethnicity').value,disability:$('vf-disability').value,role,
-    skills:getChks('vf-skills'),availability:getChks('vf-availability'),freq,
-    availNotes:$('vf-avail-notes').value,barriers:getChks('vf-barriers'),
-    distance:volDist,drives,hours:parseInt($('vf-hours').value)||0,
-    health:$('vf-health').value,emergency:$('vf-emergency').value,
-    consentMail:$('vf-consent-mail').checked,consentPhoto:$('vf-consent-photo').checked,
-    linkedEvents,
-    obCall:$('vf-ob-call').checked,obWelcome:$('vf-ob-welcome').checked,
-    obForms:$('vf-ob-forms').checked,obAgreement:$('vf-ob-agreement').checked,
-    notes:$('vf-notes').value,status:$('vf-status').value
-  };
-  if(editVolId) DB.volunteers=DB.volunteers.map(x=>x.id===editVolId?v:x);
+  const v={id:_editVolId||DB.nid.v++,name,email:$('vf-email').value,phone:$('vf-phone').value,postcode:$('vf-postcode').value,org:$('vf-org').value,age:$('vf-age').value,gender:$('vf-gender').value,heard:$('vf-heard').value,ethnicity:$('vf-ethnicity').value,disability:$('vf-disability').value,role,skills:getChks('vf-skills'),avail:getChks('vf-avail'),freq,availNotes:$('vf-avail-notes').value,barriers:getChks('vf-barriers'),dist:_vDist,drives,hours:parseInt($('vf-hours').value)||0,health:$('vf-health').value,emergency:$('vf-emergency').value,cm:$('vf-cm').checked,cp:$('vf-cp').checked,linkedEvents,ob1:$('vf-ob1').checked,ob2:$('vf-ob2').checked,ob3:$('vf-ob3').checked,ob4:$('vf-ob4').checked,corp,notes:$('vf-notes').value,status:$('vf-status').value};
+  if(_editVolId) DB.volunteers=DB.volunteers.map(x=>x.id===_editVolId?v:x);
   else DB.volunteers.push(v);
   closeModal('modal-vol');renderVolunteers();
 }
-
 function exportVolCSV(){
   const rows=[['Name','Email','Phone','Postcode','Org','Age','Gender','Ethnicity','Disability','Role','Skills','Availability','Frequency','Barriers','Distance','Drives','Hours','Status','Onboarding','Consent Mail','Consent Photo'],
-    ...DB.volunteers.map(v=>[v.name,v.email,v.phone,v.postcode,v.org,v.age,v.gender,v.ethnicity,v.disability,v.role,v.skills.join(';'),v.availability.join(';'),v.freq,v.barriers.join(';'),v.distance,v.drives,v.hours,v.status,[v.obCall,v.obWelcome,v.obForms,v.obAgreement].filter(Boolean).length+'/4',v.consentMail?'Yes':'No',v.consentPhoto?'Yes':'No'])
-  ];
+    ...DB.volunteers.map(v=>[v.name,v.email,v.phone,v.postcode,v.org,v.age,v.gender,v.ethnicity,v.disability,v.role,v.skills.join(';'),v.avail.join(';'),v.freq,v.barriers.join(';'),v.dist,v.drives,v.hours,v.status,[v.ob1,v.ob2,v.ob3,v.ob4].filter(Boolean).length+'/4',v.cm?'Yes':'No',v.cp?'Yes':'No'])];
   const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(rows.map(r=>r.join(',')).join('\n'));a.download='volunteers.csv';a.click();
 }
 
-// ── EVENTS ──
-function toggleEvView(){
-  evView=evView==='cards'?'table':'cards';
-  $('ev-view-toggle').textContent=evView==='cards'?'List view':'Card view';
-  renderEvents();
+// ══ EMPLOYERS ══
+let _editEmpId=null;
+function renderEmployers(){
+  const rc={'Active partner':'b-active','Engaged':'b-engaged','Prospecting':'b-prospect','Dormant':'b-lapsed'};
+  $('emp-table').innerHTML=DB.employers.length?DB.employers.map(e=>`<tr><td class="cn">${e.name}</td><td><span class="badge b-part">${e.sector}</span></td><td style="font-size:12px">${e.contact_name||'—'}<br/><span style="color:var(--txt3)">${e.contact_email||''}</span></td><td style="color:var(--em);font-weight:600">${e.vacancies||0}</td><td style="color:var(--em3);font-weight:600">${e.placements||0}</td><td><span class="badge ${rc[e.relationship]||'b-prospect'}">${e.relationship}</span></td><td><button class="btn btn-ghost btn-sm" onclick="openEditEmployer(${e.id})">Edit</button></td></tr>`).join(''):`<tr><td colspan="7" style="text-align:center;color:var(--txt3);padding:24px">No employers yet.</td></tr>`;
 }
+function openAddEmployer(){_editEmpId=null;$('emp-title').textContent='Add employer';['ef-nm','ef-con','ef-cem','ef-notes'].forEach(f=>$(f).value='');$('ef-vac').value='0';$('modal-emp').classList.add('open');}
+function openEditEmployer(id){const e=DB.employers.find(x=>x.id===id);if(!e)return;_editEmpId=id;$('emp-title').textContent='Edit employer';$('ef-nm').value=e.name;$('ef-sec').value=e.sector;$('ef-con').value=e.contact_name||'';$('ef-cem').value=e.contact_email||'';$('ef-vac').value=e.vacancies||0;$('ef-rel').value=e.relationship;$('ef-notes').value=e.notes||'';$('modal-emp').classList.add('open');}
+function saveEmployer(){
+  const d={id:_editEmpId||DB.nid.emp++,name:$('ef-nm').value,sector:$('ef-sec').value,contact_name:$('ef-con').value,contact_email:$('ef-cem').value,vacancies:parseInt($('ef-vac').value)||0,relationship:$('ef-rel').value,notes:$('ef-notes').value,placements:0};
+  if(_editEmpId) DB.employers=DB.employers.map(x=>x.id===_editEmpId?d:x); else DB.employers.push(d);
+  closeModal('modal-emp');renderEmployers();
+}
+
+// ══ PIPELINE ══
+function renderPipeline(){
+  $('kanban').innerHTML=P_STAGES.map(stage=>{const cards=DB.participants.filter(p=>p.stage===stage);return`<div class="k-col"><div class="k-col-hd">${stage}<span class="k-cnt">${cards.length}</span></div>${cards.map(p=>{const d=days(p.last_contact),fl=d>21;return`<div class="k-card" onclick="openEditP(${p.id})"><div class="k-name">${p.first_name} ${p.last_name}</div><div class="k-meta">${p.advisor||'Unassigned'}</div>${fl?`<div class="k-flag">⚠ No contact ${d}d</div>`:''}</div>`;}).join('')||'<div style="font-size:11px;color:var(--txt3);text-align:center;padding:8px 0">Empty</div>'}</div>`;}).join('');
+}
+
+// ══ REFERRALS ══
+function renderReferrals(){
+  const stale=DB.referrals.filter(r=>r.status==='Referred'&&days(r.referred_date)>14);
+  $('ref-alerts').innerHTML=stale.length?`<div class="alert alert-warn">⚠ ${stale.length} stalled referral(s) — no update in 14+ days</div>`:'';
+  $('ref-table').innerHTML=DB.referrals.length?DB.referrals.map(r=>{const d=days(r.referred_date),st=r.status==='Referred'&&d>14;return`<tr><td class="cn">${r.first_name} ${r.last_name}</td><td><span class="badge b-part">${r.source}</span></td><td><span class="badge b-ref">${r.status}</span></td><td style="font-size:12px">${fmtD(r.referred_date)}</td><td style="font-size:12px">${r.advisor}</td><td>${st?`<span class="badge b-flag">⚠ ${d}d stalled</span>`:'—'}</td></tr>`;}).join(''):`<tr><td colspan="6" style="text-align:center;color:var(--txt3);padding:24px">No referrals yet.</td></tr>`;
+}
+function openAddR(){$('rf-date').value=new Date().toISOString().split('T')[0];['rf-fn','rf-ln'].forEach(f=>$(f).value='');$('modal-r').classList.add('open');}
+function saveR(){DB.referrals.push({id:DB.nid.r++,first_name:$('rf-fn').value,last_name:$('rf-ln').value,source:$('rf-src').value,status:'Referred',referred_date:$('rf-date').value,advisor:$('rf-adv').value});closeModal('modal-r');renderReferrals();}
+
+// ══ EVENTS ══
+let _editEvId=null;
 function renderEvents(){
   const tf=($('ev-filter-type')||{}).value||'';
   const evs=DB.events.filter(e=>!tf||e.type===tf).sort((a,b)=>new Date(b.date)-new Date(a.date));
   const totalP=DB.events.reduce((a,e)=>a+e.attendees,0);
   const gs=DB.events.filter(e=>e.type==='Green Skills').length;
   const wb=DB.events.filter(e=>e.type==='Wellbeing').length;
-  $('ev-summary').innerHTML=[
-    {l:'Total participants',v:totalP.toLocaleString()},
-    {l:'Green Skills workshops',v:gs},
-    {l:'Wellbeing workshops',v:wb},
-  ].map(s=>`<div class="stat-card"><div class="stat-lbl">${s.l}</div><div class="stat-val">${s.v}</div></div>`).join('');
-  if(evView==='cards'){
-    $('ev-list').innerHTML=evs.map(ev=>{
-      const fbItems=DB.feedback.filter(f=>f.eventId===ev.id);
-      const fill=Math.round(ev.attendees/(ev.capacity||1)*100);
-      const typeColor={'Green Skills':'b-green','Wellbeing':'b-teal','Community Event':'b-blue','Frailty':'b-part','Other':'b-engaged'};
-      return`<div class="ev-card" onclick="openEvDetail(${ev.id})">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
-          <div>
-            <div style="font-size:15px;font-weight:600;color:var(--txt)">${ev.name}</div>
-            <div style="font-size:12px;color:var(--txt3);margin-top:2px">${fmtD(ev.date)} · ${ev.location}</div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:24px;font-weight:800;color:var(--em)">${ev.attendees.toLocaleString()}</div>
-            <div style="font-size:11px;color:var(--txt3)">participants</div>
-          </div>
-        </div>
-        <div style="margin-bottom:10px">
-          <div class="fund-top"><span style="font-size:11px;color:var(--txt3)">Capacity</span><span style="font-size:11px;color:var(--txt3)">${ev.attendees}/${ev.capacity}</span></div>
-          <div class="fund-track"><div class="fund-fill ${fill>90?'warn':''}" style="width:${Math.min(fill,100)}%"></div></div>
-        </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <span class="badge ${typeColor[ev.type]||'b-engaged'}">${ev.type}</span>
-          ${ev.sdgs.map(s=>`<span class="badge" style="background:#0a2020;color:var(--em3);font-size:9px">${s.split(':')[0]}</span>`).join('')}
-          ${ev.linkedVols.length?`<span class="badge b-vol">${ev.linkedVols.length} volunteer${ev.linkedVols.length>1?'s':''}</span>`:''}
-          ${fbItems.length?`<span class="badge b-part">${fbItems.length} feedback</span>`:''}
-        </div>
-        ${ev.notes?`<div style="font-size:12px;color:var(--txt3);margin-top:8px;font-style:italic">${ev.notes}</div>`:''}
-      </div>`;
-    }).join('')||`<div style="color:var(--txt3);font-size:13px;text-align:center;padding:32px">No events found.</div>`;
-  } else {
-    $('ev-list').innerHTML=`<div class="tbl-wrap"><table><thead><tr><th>Event</th><th>Type</th><th>Date</th><th>Attendees</th><th>SDGs</th><th>Feedback</th><th></th></tr></thead><tbody>${evs.map(ev=>{
-      const fbItems=DB.feedback.filter(f=>f.eventId===ev.id);
-      return`<tr><td class="cn">${ev.name}<div style="font-size:11px;color:var(--txt3)">${ev.location}</div></td><td><span class="badge b-teal">${ev.type}</span></td><td style="font-size:12px">${fmtD(ev.date)}</td><td style="color:var(--em);font-weight:700">${ev.attendees.toLocaleString()}</td><td>${ev.sdgs.map(s=>`<span class="badge" style="background:#0a2020;color:var(--em3);font-size:9px;margin:1px">${s.split(':')[0]}</span>`).join('')}</td><td style="color:var(--txt3)">${fbItems.length}</td><td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openEditEvent(${ev.id})">Edit</button></td></tr>`;
-    }).join('')}</tbody></table></div>`;
-  }
-  // event filter dropdown
-  if($('fbf-event'))populateFbEventSelect();
+  $('ev-stats').innerHTML=[{l:'Total participants',v:totalP.toLocaleString()},{l:'Green Skills',v:gs},{l:'Wellbeing',v:wb},{l:'Feedback responses',v:DB.feedback.length}].map(s=>`<div class="stat-card"><div class="stat-lbl">${s.l}</div><div class="stat-val">${s.v}</div></div>`).join('');
+  const typeCls={'Green Skills':'b-active','Wellbeing':'b-teal','Community Event':'b-vol','Frailty':'b-part','Other':'b-engaged'};
+  $('ev-list').innerHTML=evs.length?evs.map(ev=>{
+    const fbItems=DB.feedback.filter(f=>f.eventId===ev.id);
+    const fill=Math.round(ev.attendees/(ev.capacity||1)*100);
+    return`<div class="ev-card" onclick="openEvDetail(${ev.id})">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+        <div><div style="font-size:15px;font-weight:600;color:var(--txt)">${ev.name}</div><div style="font-size:12px;color:var(--txt3);margin-top:2px">${fmtD(ev.date)} · ${ev.location}</div></div>
+        <div style="text-align:right"><div style="font-size:26px;font-weight:800;color:var(--em)">${ev.attendees.toLocaleString()}</div><div style="font-size:11px;color:var(--txt3)">participants</div></div>
+      </div>
+      <div class="fund-bar-wrap" style="margin-bottom:10px"><div class="fund-top"><span style="font-size:11px;color:var(--txt3)">Capacity</span><span style="font-size:11px;color:var(--txt3)">${ev.attendees}/${ev.capacity}</span></div><div class="fund-track"><div class="fund-fill ${fill>90?'warn':''}" style="width:${Math.min(fill,100)}%"></div></div></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <span class="badge ${typeCls[ev.type]||'b-engaged'}">${ev.type}</span>
+        ${ev.sdgs.map(s=>`<span class="badge" style="background:#0a2020;color:var(--em3);font-size:9px">${s.split(':')[0]}</span>`).join('')}
+        ${ev.linkedVols.length?`<span class="badge b-vol">${ev.linkedVols.length} vol${ev.linkedVols.length>1?'s':''}</span>`:''}
+        ${fbItems.length?`<span class="badge b-part">${fbItems.length} feedback</span>`:''}
+      </div>
+      ${ev.notes?`<div style="font-size:12px;color:var(--txt3);margin-top:8px;font-style:italic">${ev.notes}</div>`:''}
+    </div>`;
+  }).join(''):`<div style="color:var(--txt3);font-size:13px;text-align:center;padding:32px">No events found.</div>`;
+  populateFbEvSelect();
 }
 function openEvDetail(id){
   const ev=DB.events.find(x=>x.id===id);if(!ev)return;
   const fbItems=DB.feedback.filter(f=>f.eventId===id);
-  const volNames=ev.linkedVols.map(vid=>DB.volunteers.find(v=>v.id===vid)?.name||'').filter(Boolean);
+  const volNames=ev.linkedVols.map(vid=>DB.volunteers.find(v=>v.id===vid)?.name).filter(Boolean);
   const m=document.createElement('div');m.className='modal-overlay open';
-  m.innerHTML=`<div class="modal" style="max-width:580px">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px">
-      <div>
-        <div style="font-size:18px;font-weight:700;color:var(--txt)">${ev.name}</div>
-        <div style="font-size:13px;color:var(--txt3)">${fmtD(ev.date)} · ${ev.location}</div>
-      </div>
-      <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-overlay').remove();openEditEvent(${ev.id})">Edit</button>
+  m.innerHTML=`<div class="modal" style="max-width:560px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+      <div><div style="font-size:17px;font-weight:700;color:var(--txt)">${ev.name}</div><div style="font-size:12px;color:var(--txt3)">${fmtD(ev.date)} · ${ev.location}</div></div>
+      <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-overlay').remove();openEditEv(${ev.id})">Edit</button>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
       <div class="stat-card"><div class="stat-lbl">Attendees</div><div class="stat-val">${ev.attendees.toLocaleString()}</div></div>
       <div class="stat-card"><div class="stat-lbl">Feedback</div><div class="stat-val">${fbItems.length}</div></div>
       <div class="stat-card"><div class="stat-lbl">Volunteers</div><div class="stat-val">${volNames.length}</div></div>
     </div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
-      <span class="badge b-teal">${ev.type}</span>
-      ${ev.sdgs.map(s=>`<span class="badge" style="background:#0a2020;color:var(--em3)">${s}</span>`).join('')}
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"><span class="badge b-teal">${ev.type}</span>${ev.sdgs.map(s=>`<span class="badge" style="background:#0a2020;color:var(--em3)">${s}</span>`).join('')}</div>
+    ${volNames.length?`<div style="margin-bottom:12px"><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;margin-bottom:6px">Volunteers</div><div style="display:flex;gap:5px;flex-wrap:wrap">${volNames.map(n=>`<span class="badge b-vol">${n}</span>`).join('')}</div></div>`:''}
+    ${ev.notes?`<div style="font-size:13px;color:var(--txt2);margin-bottom:12px;font-style:italic">${ev.notes}</div>`:''}
+    <div><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;margin-bottom:8px">Feedback</div>
+      ${fbItems.length?fbItems.map(f=>`<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;margin-bottom:6px"><div style="display:flex;justify-content:space-between"><span style="font-size:13px;font-weight:600;color:var(--txt)">${f.name||'Anonymous'}</span><span style="font-size:12px;color:var(--txt3)">Conf: ${f.cb}→${f.ca} · ★${f.enjoyed}</span></div>${f.quote?`<div style="font-size:12px;font-style:italic;color:var(--txt2);margin-top:4px">"${f.quote}"</div>`:''}</div>`).join(''):'<div style="font-size:13px;color:var(--txt3)">No feedback yet.</div>'}
     </div>
-    ${volNames.length?`<div style="margin-bottom:14px"><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Volunteers</div><div style="display:flex;gap:6px;flex-wrap:wrap">${volNames.map(n=>`<span class="badge b-vol">${n}</span>`).join('')}</div></div>`:''}
-    ${ev.notes?`<div style="font-size:13px;color:var(--txt2);margin-bottom:14px;font-style:italic">${ev.notes}</div>`:''}
-    <div>
-      <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Feedback</div>
-      ${fbItems.length?fbItems.map(f=>`<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:6px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          <span style="font-size:13px;font-weight:600;color:var(--txt)">${f.name||'Anonymous'}</span>
-          <span style="font-size:12px;color:var(--txt3)">Conf: ${f.confBefore}→${f.confAfter} · Enjoyed: ${f.enjoyed}/5</span>
-        </div>
-        ${f.quote?`<div style="font-size:12px;font-style:italic;color:var(--txt2)">"${f.quote}"</div>`:''}
-      </div>`).join(''):'<div style="font-size:13px;color:var(--txt3)">No feedback yet — <button class="btn btn-ghost btn-sm" onclick="this.closest(\'.modal-overlay\').remove();openAddFeedback('+id+')">Add response</button></div>'}
-    </div>
-    <div style="display:flex;gap:8px;margin-top:18px;justify-content:space-between">
+    <div style="display:flex;justify-content:space-between;margin-top:16px">
       <button class="btn btn-danger btn-sm" onclick="if(confirm('Delete event?')){DB.events=DB.events.filter(x=>x.id!==${id});this.closest('.modal-overlay').remove();renderEvents();}">Delete</button>
       <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Close</button>
     </div>
   </div>`;
   document.body.appendChild(m);
 }
-
-function buildEventModal(ev){
+function buildEvModal(ev){
   $('ev-modal-title').textContent=ev?'Edit event':'Create event';
-  if(ev){
-    $('ef-name').value=ev.name;$('ef-type').value=ev.type;$('ef-date').value=ev.date;
-    $('ef-attendees').value=ev.attendees;$('ef-capacity').value=ev.capacity||20;
-    $('ef-location').value=ev.location||'';$('ef-notes').value=ev.notes||'';
-    mkChkGroup('ef-sdgs',SDGS,ev.sdgs||[]);
-    const volNames=DB.volunteers.map(v=>v.name);
-    const selVols=ev.linkedVols.map(vid=>DB.volunteers.find(v=>v.id===vid)?.name||'');
-    mkChkGroup('ef-vol-link',volNames,selVols);
-  } else {
-    ['ef-name','ef-location','ef-notes'].forEach(id=>$(id).value='');
-    $('ef-type').value='Green Skills';$('ef-date').value=new Date().toISOString().split('T')[0];
-    $('ef-attendees').value='';$('ef-capacity').value='20';
-    mkChkGroup('ef-sdgs',SDGS);
-    mkChkGroup('ef-vol-link',DB.volunteers.map(v=>v.name));
-  }
+  if(ev){$('evf-name').value=ev.name;$('evf-type').value=ev.type;$('evf-date').value=ev.date;$('evf-att').value=ev.attendees;$('evf-cap').value=ev.capacity||20;$('evf-loc').value=ev.location||'';$('evf-notes').value=ev.notes||'';mkChkGroup('evf-sdgs',SDGS,ev.sdgs||[]);const selVols=ev.linkedVols.map(vid=>DB.volunteers.find(v=>v.id===vid)?.name).filter(Boolean);mkChkGroup('evf-vols',DB.volunteers.map(v=>v.name),selVols);}
+  else{['evf-name','evf-loc','evf-notes'].forEach(id=>$(id).value='');$('evf-type').value='Green Skills';$('evf-date').value=new Date().toISOString().split('T')[0];$('evf-att').value='';$('evf-cap').value='20';mkChkGroup('evf-sdgs',SDGS);mkChkGroup('evf-vols',DB.volunteers.map(v=>v.name));}
   $('modal-ev').classList.add('open');
 }
-function openAddEvent(){editEvId=null;buildEventModal(null);}
-function openEditEvent(id){editEvId=id;buildEventModal(DB.events.find(x=>x.id===id));}
-function saveEvent(){
-  const name=$('ef-name').value.trim();if(!name){alert('Event name required');return;}
-  const selVolNames=getChks('ef-vol-link');
+function openAddEv(){_editEvId=null;buildEvModal(null);}
+function openEditEv(id){_editEvId=id;buildEvModal(DB.events.find(x=>x.id===id));}
+function saveEv(){
+  const name=$('evf-name').value.trim();if(!name){alert('Event name required');return;}
+  const selVolNames=getChks('evf-vols');
   const linkedVols=DB.volunteers.filter(v=>selVolNames.includes(v.name)).map(v=>v.id);
-  const ev={
-    id:editEvId||DB.nextId.e++,name,type:$('ef-type').value,date:$('ef-date').value,
-    attendees:parseInt($('ef-attendees').value)||0,capacity:parseInt($('ef-capacity').value)||20,
-    location:$('ef-location').value,sdgs:getChks('ef-sdgs'),notes:$('ef-notes').value,linkedVols
-  };
-  if(editEvId) DB.events=DB.events.map(x=>x.id===editEvId?ev:x);
-  else DB.events.push(ev);
-  closeModal('modal-ev');renderEvents();populateFbEventSelect();
+  const ev={id:_editEvId||DB.nid.e++,name,type:$('evf-type').value,date:$('evf-date').value,attendees:parseInt($('evf-att').value)||0,capacity:parseInt($('evf-cap').value)||20,location:$('evf-loc').value,sdgs:getChks('evf-sdgs'),notes:$('evf-notes').value,linkedVols};
+  if(_editEvId) DB.events=DB.events.map(x=>x.id===_editEvId?ev:x); else DB.events.push(ev);
+  closeModal('modal-ev');renderEvents();
 }
 
-// ── FEEDBACK ──
-function populateFbEventSelect(){
-  const selEls=[$('fb-filter-event'),$('fbf-event')];
-  selEls.forEach(sel=>{if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="">All events</option>';DB.events.forEach(e=>{const o=document.createElement('option');o.value=e.id;o.textContent=e.name;if(cur==e.id)o.selected=true;sel.appendChild(o);});});
+// ══ FEEDBACK ══
+let _fbScores={enjoyed:5,cb:3,ca:5},_editFbId=null;
+function populateFbEvSelect(){
+  [$('fb-filter-ev'),$('fbf-ev')].forEach(sel=>{if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="">All events</option>';DB.events.forEach(e=>{const o=document.createElement('option');o.value=e.id;o.textContent=e.name;if(cur==e.id)o.selected=true;sel.appendChild(o);});});
 }
-function makeStars(containerId,key,initial=5){
-  const c=$(containerId);if(!c)return;
-  c.innerHTML=[1,2,3,4,5].map(n=>`<div class="star ${fbScores[key]>=n?'sel':''}" onclick="setFbScore('${key}',${n},'${containerId}')">${n}</div>`).join('');
+function makeStars(cid,key,val){
+  const c=$(cid);if(!c)return;
+  c.innerHTML=[1,2,3,4,5].map(n=>`<div class="fb-star ${val>=n?'sel':''}" onclick="setFbScore('${key}',${n},'${cid}')">${n}</div>`).join('');
 }
-function setFbScore(key,val,containerId){
-  fbScores[key]=val;
-  [...$(containerId).children].forEach((s,i)=>s.classList.toggle('sel',i+1<=val));
-}
+function setFbScore(key,val,cid){_fbScores[key]=val;[...$(cid).children].forEach((s,i)=>s.classList.toggle('sel',i+1<=val));}
 function renderFeedback(){
-  const ef=parseInt(($('fb-filter-event')||{}).value)||0;
-  const sf=($('fb-filter-score')||{}).value||'';
-  const items=DB.feedback.filter(f=>(!ef||f.eventId===ef)&&(!sf||(sf==='5'?f.enjoyed===5:sf==='4'?f.enjoyed>=4:f.enjoyed<=3)));
+  const ef=parseInt(($('fb-filter-ev')||{}).value)||0;
+  const items=DB.feedback.filter(f=>!ef||f.eventId===ef);
   const enjoyed=items.length?pct(items.filter(f=>f.enjoyed>=4).length,items.length):0;
-  const avgB=items.length?(items.reduce((a,f)=>a+f.confBefore,0)/items.length).toFixed(1):'-';
-  const avgA=items.length?(items.reduce((a,f)=>a+f.confAfter,0)/items.length).toFixed(1):'-';
-  $('fb-stats').innerHTML=[
-    {l:'Responses',v:items.length},
-    {l:'Enjoyed (4–5★)',v:enjoyed+'%'},
-    {l:'Avg confidence before',v:avgB+'/5',c:'color:var(--amber)'},
-    {l:'Avg confidence after',v:avgA+'/5'},
-  ].map(s=>`<div class="stat-card"><div class="stat-lbl">${s.l}</div><div class="stat-val" style="${s.c||''}">${s.v}</div></div>`).join('');
-  $('fb-list').innerHTML=items.length?items.map(f=>{
-    const ev=DB.events.find(e=>e.id===f.eventId);
-    return`<div class="ev-card">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-        <div>
-          <div style="font-size:14px;font-weight:600;color:var(--txt)">${f.name||'Anonymous'}</div>
-          <div style="font-size:12px;color:var(--txt3)">${ev?.name||'Unknown event'} · ${fmtD(ev?.date)}</div>
-        </div>
-        <div style="display:flex;gap:14px;text-align:center">
-          <div><div style="font-size:18px;font-weight:700;color:var(--amber)">${f.confBefore}</div><div style="font-size:10px;color:var(--txt3)">before</div></div>
-          <div style="color:var(--txt3);align-self:center">→</div>
-          <div><div style="font-size:18px;font-weight:700;color:var(--em)">${f.confAfter}</div><div style="font-size:10px;color:var(--txt3)">after</div></div>
-          <button class="btn btn-ghost btn-sm" onclick="openEditFb(${f.id})" style="margin-left:8px">Edit</button>
-        </div>
+  const avgCB=items.length?(items.reduce((a,f)=>a+f.cb,0)/items.length).toFixed(1):'-';
+  const avgCA=items.length?(items.reduce((a,f)=>a+f.ca,0)/items.length).toFixed(1):'-';
+  $('fb-stats').innerHTML=[{l:'Responses',v:items.length},{l:'Enjoyed (4–5★)',v:enjoyed+'%'},{l:'Avg confidence before',v:avgCB+'/5'},{l:'Avg confidence after',v:avgCA+'/5',c:'color:var(--em)'}].map(s=>`<div class="stat-card"><div class="stat-lbl">${s.l}</div><div class="stat-val" style="${s.c||''}">${s.v}</div></div>`).join('');
+  $('fb-list').innerHTML=items.length?items.map(f=>{const ev=DB.events.find(e=>e.id===f.eventId);return`<div class="ev-card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+      <div><div style="font-size:14px;font-weight:600;color:var(--txt)">${f.name||'Anonymous'}</div><div style="font-size:12px;color:var(--txt3)">${ev?.name||'Unknown event'} · ${fmtD(ev?.date)}</div></div>
+      <div style="display:flex;gap:12px;align-items:center;text-align:center">
+        <div><div style="font-size:18px;font-weight:700;color:var(--amber)">${f.cb}</div><div style="font-size:10px;color:var(--txt3)">before</div></div>
+        <div style="color:var(--txt3)">→</div>
+        <div><div style="font-size:18px;font-weight:700;color:var(--em)">${f.ca}</div><div style="font-size:10px;color:var(--txt3)">after</div></div>
+        <button class="btn btn-ghost btn-sm" onclick="openEditFb(${f.id})">Edit</button>
       </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-        <span class="badge ${f.enjoyed>=4?'b-active':'b-amber'}">Enjoyed: ${f.enjoyed}/5</span>
-        ${f.learned?'<span class="badge b-teal">Learned something</span>':''}
-        ${f.connected?'<span class="badge b-blue">Felt connected</span>':''}
-        ${f.friend?'<span class="badge b-coral">Made a friend</span>':''}
-      </div>
-      ${f.quote?`<div style="font-size:13px;font-style:italic;color:var(--txt2)">"${f.quote}"</div>`:''}
-    </div>`;
-  }).join(''):`<div style="color:var(--txt3);font-size:13px;text-align:center;padding:32px">No feedback responses yet.</div>`;
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+      <span class="badge ${f.enjoyed>=4?'b-active':'b-amber'}">★ ${f.enjoyed}/5</span>
+      ${f.learned?'<span class="badge b-teal">Learned something</span>':''}
+      ${f.connected?'<span class="badge b-vol">Felt connected</span>':''}
+      ${f.friend?'<span class="badge b-engaged">Made a friend</span>':''}
+    </div>
+    ${f.quote?`<div style="font-size:13px;font-style:italic;color:var(--txt2)">"${f.quote}"</div>`:''}
+  </div>`;}).join(''):`<div style="color:var(--txt3);font-size:13px;text-align:center;padding:32px">No feedback yet.</div>`;
 }
-function openAddFeedback(preEventId){
-  editFbId=null;fbScores.enjoyed=5;fbScores.confBefore=3;fbScores.confAfter=5;
+function openAddFb(preEvId){
+  _editFbId=null;_fbScores={enjoyed:5,cb:3,ca:5};
   $('fbf-name').value='';$('fbf-quote').value='';
   ['fbf-learned','fbf-connected','fbf-friend'].forEach(id=>$(id).checked=false);
-  populateFbEventSelect();
-  if(preEventId) $('fbf-event').value=preEventId;
-  makeStars('fbf-enjoyed-stars','enjoyed',5);
-  makeStars('fbf-conf-before-stars','confBefore',3);
-  makeStars('fbf-conf-after-stars','confAfter',5);
+  populateFbEvSelect();if(preEvId)$('fbf-ev').value=preEvId;
+  makeStars('fbf-enjoyed-stars','enjoyed',5);makeStars('fbf-cb-stars','cb',3);makeStars('fbf-ca-stars','ca',5);
   $('modal-fb').classList.add('open');
 }
 function openEditFb(id){
-  const f=DB.feedback.find(x=>x.id===id);if(!f)return;
-  editFbId=id;fbScores.enjoyed=f.enjoyed;fbScores.confBefore=f.confBefore;fbScores.confAfter=f.confAfter;
+  const f=DB.feedback.find(x=>x.id===id);if(!f)return;_editFbId=id;_fbScores={enjoyed:f.enjoyed,cb:f.cb,ca:f.ca};
   $('fbf-name').value=f.name||'';$('fbf-quote').value=f.quote||'';
   $('fbf-learned').checked=!!f.learned;$('fbf-connected').checked=!!f.connected;$('fbf-friend').checked=!!f.friend;
-  populateFbEventSelect();$('fbf-event').value=f.eventId;
-  makeStars('fbf-enjoyed-stars','enjoyed',f.enjoyed);
-  makeStars('fbf-conf-before-stars','confBefore',f.confBefore);
-  makeStars('fbf-conf-after-stars','confAfter',f.confAfter);
+  populateFbEvSelect();$('fbf-ev').value=f.eventId;
+  makeStars('fbf-enjoyed-stars','enjoyed',f.enjoyed);makeStars('fbf-cb-stars','cb',f.cb);makeStars('fbf-ca-stars','ca',f.ca);
   $('modal-fb').classList.add('open');
 }
-function saveFeedback(){
-  const evId=parseInt($('fbf-event').value);if(!evId){alert('Please select an event');return;}
-  const f={
-    id:editFbId||DB.nextId.fb++,eventId:evId,
-    name:$('fbf-name').value,enjoyed:fbScores.enjoyed,
-    confBefore:fbScores.confBefore,confAfter:fbScores.confAfter,
-    learned:$('fbf-learned').checked,connected:$('fbf-connected').checked,friend:$('fbf-friend').checked,
-    quote:$('fbf-quote').value
-  };
-  if(editFbId) DB.feedback=DB.feedback.map(x=>x.id===editFbId?f:x);
-  else DB.feedback.push(f);
+function saveFb(){
+  const evId=parseInt($('fbf-ev').value);if(!evId){alert('Please select an event');return;}
+  const f={id:_editFbId||DB.nid.fb++,eventId:evId,name:$('fbf-name').value,enjoyed:_fbScores.enjoyed,cb:_fbScores.cb,ca:_fbScores.ca,learned:$('fbf-learned').checked,connected:$('fbf-connected').checked,friend:$('fbf-friend').checked,quote:$('fbf-quote').value};
+  if(_editFbId) DB.feedback=DB.feedback.map(x=>x.id===_editFbId?f:x); else DB.feedback.push(f);
   closeModal('modal-fb');renderFeedback();
 }
 
-// ── CONTACTS ──
-function renderContacts(){
-  $('contact-table').innerHTML=DB.contacts.length?DB.contacts.map(c=>`<tr>
-    <td class="cn">${c.fn} ${c.ln}</td>
-    <td style="font-size:12px;color:var(--txt2)">${c.org||'—'}</td>
-    <td><span class="badge b-vol">${c.role}</span></td>
-    <td style="font-size:12px">${c.email}</td>
-    <td><span class="badge ${c.status==='Active Supporter'?'b-active':'b-prospect'}">${c.status}</span></td>
-  </tr>`).join(''):`<tr><td colspan="5" style="text-align:center;color:var(--txt3);padding:24px">No contacts yet.</td></tr>`;
+// ══ CIRCULAR ══
+let _editItemId=null;
+function renderCircular(){
+  const items=DB.circular;
+  const totalKg=items.reduce((a,i)=>a+parseFloat(i.weight_kg||0),0);
+  const repaired=items.filter(i=>['Repaired','Resold'].includes(i.status)).length;
+  const diverted=items.filter(i=>i.status!=='Beyond repair').reduce((a,i)=>a+parseFloat(i.weight_kg||0),0);
+  const co2=calcCarbon(diverted);
+  $('eco-stats').innerHTML=[{l:'Items logged',v:items.length},{l:'Repaired/resold',v:repaired},{l:'Kg diverted',v:diverted.toFixed(1)+'kg'},{l:'CO₂ saved',v:co2+'kg'}].map(s=>`<div class="stat-card"><div class="stat-lbl">${s.l}</div><div class="stat-val">${s.v}</div></div>`).join('');
+  $('eco-impact').innerHTML=[`♻️ ${items.filter(i=>i.status==='Resold').length} resold`,`🎁 ${items.filter(i=>i.status==='Donated').length} donated`,`🌍 ${co2}kg CO₂ saved`,`🌳 ~${(parseFloat(co2)/21).toFixed(1)} trees equivalent`].map(t=>`<span class="eco-stat">${t}</span>`).join('');
+  const sc={Collected:'b-prospect','In repair':'b-engaged',Repaired:'b-active',Resold:'b-active',Donated:'b-vol','Beyond repair':'b-lapsed'};
+  $('eco-table').innerHTML=items.length?items.map(i=>`<tr><td class="cn">${i.name}</td><td><span class="badge b-part">${i.category}</span></td><td style="color:var(--em)">${i.weight_kg}kg</td><td><span class="badge ${sc[i.status]||''}">${i.status}</span></td><td style="font-size:12px">${i.fixer||'—'}</td><td><span class="badge ${i.outcome?'b-active':'b-prospect'}">${i.outcome||'Pending'}</span></td><td><button class="btn btn-ghost btn-sm" onclick="openEditItem(${i.id})">Edit</button></td></tr>`).join(''):`<tr><td colspan="7" style="text-align:center;color:var(--txt3);padding:24px">No items yet.</td></tr>`;
 }
-function openAddContact(){['cf-fn','cf-ln','cf-org','cf-email'].forEach(id=>$(id).value='');$('modal-contact').classList.add('open');}
-function saveContact(){
-  DB.contacts.push({id:DB.nextId.c++,fn:$('cf-fn').value,ln:$('cf-ln').value,org:$('cf-org').value,email:$('cf-email').value,role:$('cf-role').value,status:$('cf-status').value});
-  closeModal('modal-contact');renderContacts();
+function openAddItem(){_editItemId=null;$('item-title').textContent='Log item';['it-name','it-kg','it-fixer'].forEach(f=>$(f).value='');$('it-st').value='Collected';$('it-cat').value='Small electrical';$('it-outcome').value='';$('modal-item').classList.add('open');}
+function openEditItem(id){const i=DB.circular.find(x=>x.id===id);if(!i)return;_editItemId=id;$('item-title').textContent='Edit item';$('it-name').value=i.name;$('it-cat').value=i.category;$('it-kg').value=i.weight_kg;$('it-st').value=i.status;$('it-fixer').value=i.fixer||'';$('it-outcome').value=i.outcome||'';$('modal-item').classList.add('open');}
+function saveItem(){
+  const d={id:_editItemId||DB.nid.ci++,name:$('it-name').value,category:$('it-cat').value,weight_kg:parseFloat($('it-kg').value)||0,status:$('it-st').value,fixer:$('it-fixer').value,outcome:$('it-outcome').value};
+  if(_editItemId) DB.circular=DB.circular.map(x=>x.id===_editItemId?d:x); else DB.circular.push(d);
+  closeModal('modal-item');renderCircular();
 }
 
-// ── REPORTS ──
+// ══ RAG ══
+function renderRAG(){
+  if(!DB.contracts.length){$('rag-list').innerHTML='<div class="alert alert-info">No contracts yet. Add contracts in Funding & Contracts first.</div>';return;}
+  $('rag-list').innerHTML=DB.contracts.map(c=>{
+    const linked=DB.participants.filter(p=>(p.contract_ids||[]).includes(String(c.id)));
+    const starts=linked.length,outcomes=linked.filter(p=>(p.outcomes||[]).length>0).length;
+    const sp=c.target_starts?Math.round(starts/c.target_starts*100):0,op=c.target_outcomes?Math.round(outcomes/c.target_outcomes*100):0;
+    const avg=(sp+op)/2,rag=avg>=80?'green':avg>=50?'amber':'red';
+    const col={green:'#10b981',amber:'#f59e0b',red:'#f87171'}[rag];
+    const lbl={green:'🟢 GREEN — On track',amber:'🟡 AMBER — At risk',red:'🔴 RED — Underperforming'}[rag];
+    return`<div class="card" style="border-left:4px solid ${col}">
+      <div style="display:flex;justify-content:space-between;margin-bottom:14px"><div><div style="font-size:15px;font-weight:700;color:var(--txt)">${c.name}</div><div style="font-size:12px;color:var(--txt3)">${c.funder} · £${(c.value||0).toLocaleString()}</div></div><span style="font-size:11px;font-weight:700;color:${col};background:rgba(0,0,0,.2);padding:4px 12px;border-radius:20px">${lbl}</span></div>
+      <div class="stats-grid"><div class="stat-card"><div class="stat-lbl">Participants</div><div class="stat-val">${starts}/${c.target_starts||0}</div></div><div class="stat-card"><div class="stat-lbl">Outcomes</div><div class="stat-val">${outcomes}/${c.target_outcomes||0}</div></div></div>
+      <div class="fund-bar-wrap"><div class="fund-top"><span>Starts</span><span>${sp}%</span></div><div class="fund-track"><div class="fund-fill ${sp<50?'danger':sp<80?'warn':''}" style="width:${Math.min(sp,100)}%"></div></div></div>
+      <div class="fund-bar-wrap"><div class="fund-top"><span>Outcomes</span><span>${op}%</span></div><div class="fund-track"><div class="fund-fill ${op<50?'danger':op<80?'warn':''}" style="width:${Math.min(op,100)}%"></div></div></div>
+    </div>`;
+  }).join('');
+}
+
+// ══ OUTCOMES ══
+function renderOutcomes(){
+  const P=DB.participants,tot=P.length;
+  $('out-stats').innerHTML=[{l:'Total starts',v:tot},{l:'Positive outcomes',v:P.filter(p=>(p.outcomes||[]).length>0).length},{l:'Employment',v:P.filter(p=>(p.outcomes||[]).includes('Employment')).length},{l:'Sustained 12wks+',v:P.filter(p=>p.stage==='Sustained').length}].map(s=>`<div class="stat-card"><div class="stat-lbl">${s.l}</div><div class="stat-val">${s.v}</div></div>`).join('');
+  $('out-by-type').innerHTML=OUT_TYPES.map(t=>{const c=P.filter(p=>(p.outcomes||[]).includes(t)).length,pct2=tot?Math.round(c/tot*100):0;return`<div class="fund-bar-wrap"><div class="fund-top"><span>${t}</span><span>${c}</span></div><div class="fund-track"><div class="fund-fill" style="width:${pct2}%"></div></div></div>`;}).join('');
+  $('out-barriers').innerHTML=BARRIERS.slice(0,6).map(b=>{const c=P.filter(p=>(p.barriers||[]).includes(b)).length,pct2=tot?Math.round(c/tot*100):0;return`<div class="fund-bar-wrap"><div class="fund-top"><span>${b}</span><span>${c}</span></div><div class="fund-track"><div class="fund-fill ${pct2>40?'warn':''}" style="width:${pct2}%"></div></div></div>`;}).join('');
+}
+
+// ══ FUNDING ══
+function renderFunding(){
+  $('fund-list').innerHTML=DB.contracts.length?DB.contracts.map(c=>{
+    const linked=DB.participants.filter(p=>(p.contract_ids||[]).includes(String(c.id)));
+    const starts=linked.length,outcomes=linked.filter(p=>(p.outcomes||[]).length>0).length;
+    const sp=Math.round(starts/(c.target_starts||1)*100),op=Math.round(outcomes/(c.target_outcomes||1)*100);
+    return`<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-size:14px;font-weight:600;color:var(--txt)">${c.name}</div><div style="font-size:12px;color:var(--txt3)">${c.funder} · £${(c.value||0).toLocaleString()}</div></div>${sp<70||op<70?'<span class="badge b-flag">⚠ Underperforming</span>':'<span class="badge b-active">On track</span>'}</div>
+    <div class="fund-bar-wrap"><div class="fund-top"><span>Starts: ${starts}/${c.target_starts||0}</span><span>${sp}%</span></div><div class="fund-track"><div class="fund-fill ${sp<60?'danger':sp<80?'warn':''}" style="width:${Math.min(sp,100)}%"></div></div></div>
+    <div class="fund-bar-wrap"><div class="fund-top"><span>Outcomes: ${outcomes}/${c.target_outcomes||0}</span><span>${op}%</span></div><div class="fund-track"><div class="fund-fill ${op<60?'danger':op<80?'warn':''}" style="width:${Math.min(op,100)}%"></div></div></div>
+    <button class="btn btn-danger btn-sm" style="margin-top:8px" onclick="if(confirm('Delete?')){DB.contracts=DB.contracts.filter(x=>x.id!==${c.id});renderFunding();}">Delete</button></div>`;
+  }).join(''):'<div style="color:var(--txt3);font-size:13px;padding:12px">No contracts yet.</div>';
+}
+function openAddCon(){['con-name','con-funder','con-val','con-ts','con-to'].forEach(f=>$(f).value='');$('modal-con').classList.add('open');}
+function saveCon(){DB.contracts.push({id:DB.nid.con++,name:$('con-name').value,funder:$('con-funder').value,value:parseInt($('con-val').value)||0,target_starts:parseInt($('con-ts').value)||0,target_outcomes:parseInt($('con-to').value)||0});closeModal('modal-con');renderFunding();}
+
+// ══ EVIDENCE ══
+function renderEvidence(){
+  $('evid-table').innerHTML=DB.evidence.length?DB.evidence.map(e=>`<tr><td class="cn">${e.participant_name}</td><td><span class="badge b-vol">${e.type}</span></td><td><span class="badge b-active">${e.linked_outcome}</span></td><td style="font-size:12px">${e.staff}</td><td style="font-size:12px">${fmtD(e.evidence_date)}</td><td><span class="badge b-prospect">${e.status}</span></td></tr>`).join(''):`<tr><td colspan="6" style="text-align:center;color:var(--txt3);padding:24px">No evidence uploaded yet.</td></tr>`;
+}
+function openAddEvid(){$('evid-p').value='';$('modal-evid').classList.add('open');}
+function saveEvid(){DB.evidence.push({id:DB.nid.ev++,participant_name:$('evid-p').value,type:$('evid-type').value,linked_outcome:$('evid-out').value,staff:'Staff',evidence_date:new Date().toISOString().split('T')[0],status:'Pending'});closeModal('modal-evid');renderEvidence();}
+
+// ══ SAFEGUARDING ══
+function renderSafeguarding(){
+  const fl=DB.participants.filter(p=>p.safeguarding);
+  $('safe-flags').innerHTML=fl.length?fl.map(p=>`<div class="tl-entry"><div class="tl-dot red"></div><div><div class="tl-lbl">${p.first_name} ${p.last_name}</div><div class="tl-meta">${p.safeguarding} · ${p.advisor||'Unassigned'}</div></div></div>`).join(''):'<div style="color:var(--txt3);font-size:13px">No flagged cases.</div>';
+  $('consent-list').innerHTML=DB.participants.map(p=>`<div class="tl-entry"><div class="tl-dot ${(p.notes||[]).length?'':'amber'}"></div><div><div class="tl-lbl">${p.first_name} ${p.last_name}</div><div class="tl-meta">Consent: ${(p.notes||[]).length?'Recorded':'Pending'} · GDPR active</div></div></div>`).join('');
+}
+
+// ══ FUNDER REPORTS ══
 function generateReport(type){
   const out=$('report-output');out.style.display='block';
-  const evs=DB.events,fb=DB.feedback,vols=DB.volunteers;
-  const totalP=evs.reduce((a,e)=>a+e.attendees,0);
-  const avgB=fb.length?(fb.reduce((a,f)=>a+f.confBefore,0)/fb.length).toFixed(1):'-';
-  const avgA=fb.length?(fb.reduce((a,f)=>a+f.confAfter,0)/fb.length).toFixed(1):'-';
-  const enjoyed=fb.length?pct(fb.filter(f=>f.enjoyed>=4).length,fb.length):0;
+  const P=DB.participants,E=DB.events,FB=DB.feedback,V=DB.volunteers;
+  const totalEvP=E.reduce((a,e)=>a+e.attendees,0);
+  const tot=P.length,active=P.filter(p=>p.stage!=='Closed').length;
+  const jobs=P.filter(p=>(p.outcomes||[]).includes('Employment')).length;
+  const training=P.filter(p=>(p.outcomes||[]).includes('Training')).length;
+  const sustained=P.filter(p=>p.stage==='Sustained').length;
+  const avgCB=FB.length?(FB.reduce((a,f)=>a+f.cb,0)/FB.length).toFixed(1):'-';
+  const avgCA=FB.length?(FB.reduce((a,f)=>a+f.ca,0)/FB.length).toFixed(1):'-';
+  const enjoyed=pct(FB.filter(f=>f.enjoyed>=4).length,FB.length||1);
   const today=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
+  const sdgRows=SDGS.map(s=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)"><span style="font-size:13px;color:var(--txt2)">${s}</span><span style="font-weight:700;color:var(--em)">${E.filter(e=>e.sdgs.includes(s)).length} events</span></div>`).join('');
+  const quotes=FB.filter(f=>f.quote).map(f=>{const ev=E.find(e=>e.id===f.eventId);return`<div class="quote-card"><div style="font-size:13px;font-style:italic">"${f.quote}"</div><div style="font-size:11px;color:var(--txt3);margin-top:4px">${f.name||'Anonymous'} · ${ev?.name||''}</div></div>`;}).join('');
   const cfgs={
-    annual:{title:'Annual Impact Report 2024–25',icon:'🌿',sub:'Project Abundance · Peterborough'},
-    sdg:{title:'SDG Alignment Report',icon:'🌍',sub:'SDG 3 · SDG 4 · SDG 11'},
-    volunteer:{title:'Volunteer Report',icon:'🤝',sub:'Project Abundance volunteers'},
-    workshop:{title:'Workshop Delivery Report',icon:'📅',sub:'Green Skills · Wellbeing · Community'},
+    moj:{title:'MoJ Programme Performance Report',icon:'⚖️',sub:'Ministry of Justice',metrics:[{l:'Total starts',v:tot},{l:'Active',v:active},{l:'Employment outcomes',v:jobs},{l:'Sustained 12wks+',v:sustained},{l:'Events delivered',v:E.length}],narrative:`During this reporting period, Project Abundance supported <strong style="color:var(--em)">${tot} participants</strong> with <strong style="color:var(--em)">${jobs} employment outcomes</strong> and <strong style="color:var(--em)">${sustained} sustained 12+ weeks</strong>.`},
+    gla:{title:'GLA Skills & Employment Report',icon:'🏙️',sub:'Greater London Authority',metrics:[{l:'Total participants',v:tot},{l:'Employment outcomes',v:jobs},{l:'Training outcomes',v:training},{l:'Events delivered',v:E.length},{l:'Participants reached',v:totalEvP.toLocaleString()}],narrative:`Project Abundance delivered <strong style="color:var(--em)">${E.length} events</strong> reaching <strong style="color:var(--em)">${totalEvP.toLocaleString()} participants</strong>, achieving <strong style="color:var(--em)">${jobs} good job outcomes</strong>.`},
+    cbf:{title:'CBF Impact & Wellbeing Report',icon:'🌉',sub:'City Bridge Foundation',metrics:[{l:'Beneficiaries',v:totalEvP.toLocaleString()},{l:'Wellbeing outcomes',v:P.filter(p=>(p.outcomes||[]).includes('Wellbeing')).length},{l:'Enjoyed sessions',v:enjoyed+'%'},{l:'Confidence before',v:avgCB+'/5'},{l:'Confidence after',v:avgCA+'/5'}],narrative:`Confidence scores improved from an average of <strong style="color:var(--amber)">${avgCB}</strong> to <strong style="color:var(--em)">${avgCA}/5</strong>. <strong style="color:var(--em)">${enjoyed}%</strong> of participants enjoyed their sessions.`},
+    impact:{title:'Annual Impact Report 2024–25',icon:'🌿',sub:'Project Abundance · Peterborough',metrics:[{l:'Events delivered',v:E.length},{l:'Participants reached',v:totalEvP.toLocaleString()},{l:'Active volunteers',v:V.filter(v=>v.status==='Active').length},{l:'Feedback responses',v:FB.length}],narrative:`From June 2024 to June 2025, Project Abundance delivered <strong style="color:var(--em)">${E.length} workshops and events</strong> reaching over <strong style="color:var(--em)">${totalEvP.toLocaleString()} participants</strong> across Peterborough.`},
   };
-  const cfg=cfgs[type];
-  const sdgRows=SDGS.map(s=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)"><span style="font-size:13px;color:var(--txt2)">${s}</span><span style="font-weight:700;color:var(--em)">${evs.filter(e=>e.sdgs.includes(s)).length} events</span></div>`).join('');
-  const typeBreakdown=['Green Skills','Wellbeing','Community Event','Frailty','Other'].map(t=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)"><span style="font-size:13px;color:var(--txt2)">${t}</span><span style="font-weight:700;color:var(--em)">${evs.filter(e=>e.type===t).length} events · ${evs.filter(e=>e.type===t).reduce((a,e)=>a+e.attendees,0)} participants</span></div>`).join('');
-  const quotes=fb.filter(f=>f.quote).map(f=>{const ev=evs.find(e=>e.id===f.eventId);return`<div class="quote-card"><div style="font-size:13px;font-style:italic">"${f.quote}"</div><div style="font-size:11px;color:var(--txt3);margin-top:4px">${f.name||'Anonymous'} · ${ev?.name||''}</div></div>`;}).join('');
-  const barrierCounts={};vols.forEach(v=>v.barriers.filter(b=>b!=='None').forEach(b=>barrierCounts[b]=(barrierCounts[b]||0)+1));
+  const cfg=cfgs[type]||cfgs.impact;
   out.innerHTML=`<div id="printable-report" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radiuslg);padding:28px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:18px;border-bottom:2px solid var(--em)">
-      <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--txt3);margin-bottom:4px">${cfg.sub}</div>
-        <div style="font-size:22px;font-weight:800;color:var(--txt)">${cfg.icon} ${cfg.title}</div>
-        <div style="font-size:13px;color:var(--txt3);margin-top:4px">Generated ${today}</div>
-      </div>
+      <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--txt3);margin-bottom:4px">${cfg.sub}</div><div style="font-size:22px;font-weight:800;color:var(--txt)">${cfg.icon} ${cfg.title}</div><div style="font-size:13px;color:var(--txt3);margin-top:4px">Generated ${today}</div></div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:22px">
-      ${[{l:'Events delivered',v:evs.length},{l:'Participants reached',v:totalP.toLocaleString()},{l:'Active volunteers',v:vols.filter(v=>v.status==='Active').length},{l:'Feedback responses',v:fb.length}].map(m=>`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;text-align:center"><div style="font-size:26px;font-weight:800;color:var(--em)">${m.v}</div><div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-top:2px">${m.l}</div></div>`).join('')}
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px">
-      <div><div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:10px">Session breakdown</div>${typeBreakdown}</div>
-      <div><div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:10px">SDG alignment</div>${sdgRows}</div>
-    </div>
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:18px">
-      <div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:12px">Feedback outcomes</div>
-      ${[{l:'Enjoyed the sessions (4–5★)',v:enjoyed+'%'},{l:'Learned something new',v:pct(fb.filter(f=>f.learned).length,fb.length||1)+'%'},{l:'Felt more connected to community',v:pct(fb.filter(f=>f.connected).length,fb.length||1)+'%'},{l:'Made a new friend',v:pct(fb.filter(f=>f.friend).length,fb.length||1)+'%'},{l:'Avg confidence before',v:avgB+'/5'},{l:'Avg confidence after',v:avgA+'/5'}].map(r=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)"><span style="font-size:13px;color:var(--txt2)">${r.l}</span><span style="font-weight:700;color:var(--em)">${r.v}</span></div>`).join('')}
-    </div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:22px">${cfg.metrics.map(m=>`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;text-align:center"><div style="font-size:24px;font-weight:800;color:var(--em)">${m.v}</div><div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-top:2px">${m.l}</div></div>`).join('')}</div>
+    ${type==='impact'||type==='cbf'?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px"><div><div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:10px">SDG alignment</div>${sdgRows}</div><div><div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:10px">Feedback outcomes</div>${[{l:'Enjoyed sessions',v:enjoyed+'%'},{l:'Learned something new',v:pct(FB.filter(f=>f.learned).length,FB.length||1)+'%'},{l:'Felt more connected',v:pct(FB.filter(f=>f.connected).length,FB.length||1)+'%'},{l:'Made a new friend',v:pct(FB.filter(f=>f.friend).length,FB.length||1)+'%'}].map(r=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)"><span style="font-size:13px;color:var(--txt2)">${r.l}</span><span style="font-weight:700;color:var(--em)">${r.v}</span></div>`).join('')}</div></div>`:''}
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:18px"><div style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:8px">Narrative summary</div><p style="font-size:13px;color:var(--txt2);line-height:1.8">${cfg.narrative}</p></div>
     ${quotes?`<div><div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:10px">Participant voices</div>${quotes}</div>`:''}
-    <div style="font-size:11px;color:var(--txt3);text-align:center;border-top:1px solid var(--border);padding-top:14px;margin-top:18px">Project Abundance · Peterborough · Confidential</div>
+    <div style="font-size:11px;color:var(--txt3);text-align:center;border-top:1px solid var(--border);padding-top:14px;margin-top:18px">Project Abundance · Peterborough · ${cfg.sub} · Confidential</div>
   </div>
-  <div style="display:flex;gap:10px;margin-bottom:24px">
-    <button class="btn btn-p" onclick="window.print()">🖨️ Print / Save as PDF</button>
-    <button class="btn btn-ghost" onclick="$('report-output').style.display='none'">Close</button>
-  </div>`;
+  <div style="display:flex;gap:10px;margin-bottom:24px"><button class="btn btn-p" onclick="window.print()">🖨️ Print / Save as PDF</button><button class="btn btn-ghost" onclick="document.getElementById('report-output').style.display='none'">Close</button></div>`;
 }
 
-// ── BOOT ──
+// ══ CSV EXPORT ══
+function exportCSV(){
+  const rows=[['ID','Name','Stage','Advisor','Outcomes','Barriers','Risk','Last Contact'],...DB.participants.map(p=>[`GC-${String(p.id).padStart(4,'0')}`,`${p.first_name} ${p.last_name}`,p.stage,p.advisor,(p.outcomes||[]).join(';'),(p.barriers||[]).join(';'),p.risk,p.last_contact])];
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(rows.map(r=>r.join(',')).join('\n'));a.download='greencrm-export.csv';a.click();
+}
+
+// ══ BOOT ══
 go('dashboard');
 </script>
 </body>
