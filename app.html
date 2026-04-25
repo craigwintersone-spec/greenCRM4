@@ -611,32 +611,53 @@ async function loadOrg(){
 }
 
 // ══ SUPABASE DATA FETCH — wire into DB ══
-async function syncFromSupabase(){
-  if(!sb||!orgId) return;
+async function sbFetch(table){
+  if(!sb||!orgId) return null;
   try{
-    const [pRes,vRes,eRes,fbRes,cRes,empRes,ciRes,conRes,evRes] = await Promise.all([
-      sb.from('participants').select('*').eq('org_id',orgId),
-      sb.from('volunteers').select('*').eq('org_id',orgId),
-      sb.from('events').select('*').eq('org_id',orgId),
-      sb.from('feedback').select('*').eq('org_id',orgId),
-      sb.from('contacts').select('*').eq('org_id',orgId),
-      sb.from('employers').select('*').eq('org_id',orgId),
-      sb.from('circular_items').select('*').eq('org_id',orgId),
-      sb.from('contracts').select('*').eq('org_id',orgId),
-      sb.from('evidence').select('*').eq('org_id',orgId),
-    ]);
-    // Merge — prefer Supabase data if tables exist, fall back to local seed
-    if(pRes.data?.length) DB.participants=pRes.data.map(normalizeParticipant);
-    if(vRes.data?.length) DB.volunteers=vRes.data.map(normalizeVol);
-    if(eRes.data?.length) DB.events=eRes.data.map(normalizeEvent);
-    if(fbRes.data?.length) DB.feedback=fbRes.data.map(normalizeFb);
-    if(cRes.data?.length) DB.contacts=cRes.data;
-    if(empRes.data?.length) DB.employers=empRes.data.map(e=>({...e,name:e.name||e.employer_name,contact_name:e.contact_name||e.contact,placements:e.placements||0}));
-    if(ciRes.data?.length) DB.circular=ciRes.data.map(i=>({...i,weight_kg:i.weight_kg||i.weight||0}));
-    if(conRes.data?.length) DB.contracts=conRes.data;
-    if(evRes.data?.length) DB.evidence=evRes.data;
-    console.log('Synced from Supabase ✓');
-  }catch(err){console.warn('Supabase sync error:',err);}
+    // Try with org_id filter first
+    let {data,error}=await sb.from(table).select('*').eq('org_id',orgId);
+    if(error){
+      // If org_id column doesn't exist, fetch all
+      const r2=await sb.from(table).select('*');
+      if(r2.error){console.warn(`Table "${table}" error:`,r2.error.message);return null;}
+      data=r2.data;
+    }
+    console.log(`${table}: ${data?.length??0} rows`);
+    return data||[];
+  }catch(e){console.warn(`sbFetch(${table}) exception:`,e);return null;}
+}
+
+async function syncFromSupabase(){
+  if(!sb) return;
+  console.log('Syncing from Supabase, orgId=',orgId);
+
+  // Try both 'volunteers' and 'volunteer' table names
+  let vData=await sbFetch('volunteers');
+  if(!vData?.length) vData=await sbFetch('volunteer');
+
+  const [pData,eData,fbData,cData,empData,ciData,conData,evData]=await Promise.all([
+    sbFetch('participants'),
+    sbFetch('events'),
+    sbFetch('feedback'),
+    sbFetch('contacts'),
+    sbFetch('employers'),
+    sbFetch('circular_items').then(d=>d||sbFetch('circular')),
+    sbFetch('contracts'),
+    sbFetch('evidence'),
+  ]);
+
+  if(pData?.length){DB.participants=pData.map(normalizeParticipant);console.log('✓ participants:',DB.participants.length);}
+  if(vData?.length){DB.volunteers=vData.map(normalizeVol);console.log('✓ volunteers:',DB.volunteers.length);}
+  else console.warn('⚠ No volunteer data found in Supabase — using seed data');
+  if(eData?.length){DB.events=eData.map(normalizeEvent);}
+  if(fbData?.length){DB.feedback=fbData.map(normalizeFb);}
+  if(cData?.length){DB.contacts=cData;}
+  if(empData?.length){DB.employers=empData.map(e=>({...e,name:e.name||e.employer_name||'',contact_name:e.contact_name||e.contact||'',placements:e.placements||0}));}
+  if(ciData?.length){DB.circular=ciData.map(i=>({...i,weight_kg:i.weight_kg||i.weight||0}));}
+  if(conData?.length){DB.contracts=conData;}
+  if(evData?.length){DB.evidence=evData;}
+
+  console.log('Sync complete. DB state:',{p:DB.participants.length,v:DB.volunteers.length,e:DB.events.length,fb:DB.feedback.length});
 }
 
 // Normalise Supabase rows to match local schema
@@ -656,22 +677,48 @@ function normalizeParticipant(p){
     contract_ids:p.contract_ids||[]
   };
 }
+function tryParseJson(v,fallback=[]){
+  if(Array.isArray(v)) return v;
+  if(typeof v==='string'){try{return JSON.parse(v);}catch(e){return fallback;}}
+  return fallback;
+}
 function normalizeVol(v){
+  // Log raw row so we can see exact column names in console
+  console.log('raw volunteer row:',JSON.stringify(v));
+  const name=v.name||v.full_name||v.volunteer_name||[v.first_name,v.last_name].filter(Boolean).join(' ')||'Unknown';
   return {
-    id:v.id, name:v.name||'', email:v.email||'', phone:v.phone||'',
-    postcode:v.postcode||'', org:v.org||v.organisation||'',
-    age:v.age||'', gender:v.gender||'', disability:v.disability||'No',
-    ethnicity:v.ethnicity||'', heard:v.heard||'', role:v.role||'Volunteer',
-    skills:v.skills||(v.skills_json?JSON.parse(v.skills_json):[]),
-    avail:v.avail||(v.avail_json?JSON.parse(v.avail_json):[]),
-    freq:v.freq||'', availNotes:v.avail_notes||'',
-    barriers:v.barriers||(v.barriers_json?JSON.parse(v.barriers_json):['None']),
-    dist:v.dist||v.distance||3, drives:v.drives||'No',
-    hours:v.hours||0, health:v.health||'', emergency:v.emergency||'',
-    cm:!!v.consent_mail, cp:!!v.consent_photo,
-    ob1:!!v.ob1, ob2:!!v.ob2, ob3:!!v.ob3, ob4:!!v.ob4,
-    corp:v.corp||'No', notes:v.notes||'', status:v.status||'Active',
-    linkedEvents:v.linked_events||(v.linked_events_json?JSON.parse(v.linked_events_json):[])
+    id:v.id,
+    name,
+    email:v.email||v.email_address||'',
+    phone:v.phone||v.phone_number||v.mobile||'',
+    postcode:v.postcode||v.post_code||v.zip||'',
+    org:v.org||v.organisation||v.organization||v.company||'',
+    age:v.age||v.age_range||'',
+    gender:v.gender||'',
+    disability:v.disability||v.disability_status||'No',
+    ethnicity:v.ethnicity||'',
+    heard:v.heard||v.how_heard||v.source||'',
+    role:v.role||v.volunteer_role||v.type||'Volunteer',
+    skills:tryParseJson(v.skills||v.skills_json||v.skill_list),
+    avail:tryParseJson(v.avail||v.availability||v.avail_json),
+    freq:v.freq||v.frequency||v.availability_frequency||'',
+    availNotes:v.avail_notes||v.availability_notes||v.notes_availability||'',
+    barriers:tryParseJson(v.barriers||v.barriers_json||v.barrier_list,['None']),
+    dist:v.dist||v.distance||v.travel_distance||3,
+    drives:v.drives||v.driving_licence||v.has_licence||'No',
+    hours:v.hours||v.hours_logged||v.total_hours||0,
+    health:v.health||v.health_needs||v.accessibility||'',
+    emergency:v.emergency||v.emergency_contact||'',
+    cm:!!(v.cm||v.consent_mail||v.mailing_list_consent||v.consent_mailing),
+    cp:!!(v.cp||v.consent_photo||v.photo_consent||v.consent_photos),
+    ob1:!!(v.ob1||v.onboard_call||v.onboarding_call),
+    ob2:!!(v.ob2||v.onboard_email||v.welcome_email),
+    ob3:!!(v.ob3||v.onboard_forms||v.forms_complete),
+    ob4:!!(v.ob4||v.onboard_agreement||v.agreement_signed),
+    corp:v.corp||v.corporate||v.is_corporate||'No',
+    notes:v.notes||v.volunteer_notes||v.additional_notes||'',
+    status:v.status||v.volunteer_status||'Active',
+    linkedEvents:tryParseJson(v.linked_events||v.linked_events_json||v.event_links)
   };
 }
 function normalizeEvent(e){
@@ -1449,11 +1496,38 @@ function exportCSV(){
   dl(rows,'greencrm-participants.csv');
 }
 
+// ══ DEBUG PANEL ══
+function showDebug(msg,type='info'){
+  let panel=$('debug-panel');
+  if(!panel){
+    panel=document.createElement('div');panel.id='debug-panel';
+    panel.style.cssText='position:fixed;bottom:0;right:0;width:380px;max-height:200px;overflow-y:auto;background:#0a0f0a;border:1px solid #2a3a2a;border-radius:8px 0 0 0;padding:8px 12px;font-size:11px;font-family:monospace;z-index:9999;color:#9ab8a4';
+    panel.innerHTML='<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:#10b981;font-weight:700">GreenCRM Debug</span><button onclick="this.closest(\'#debug-panel\').remove()" style="background:none;border:none;color:#6a8f76;cursor:pointer;font-size:11px">✕ close</button></div><div id="debug-log"></div>';
+    document.body.appendChild(panel);
+  }
+  const log=$('debug-log');
+  const colors={info:'#9ab8a4',warn:'#f59e0b',error:'#f87171',ok:'#10b981'};
+  const line=document.createElement('div');
+  line.style.color=colors[type]||colors.info;
+  line.style.borderBottom='1px solid #2a3a2a';
+  line.style.padding='2px 0';
+  line.textContent=`[${new Date().toLocaleTimeString()}] ${msg}`;
+  log.appendChild(line);
+  panel.scrollTop=panel.scrollHeight;
+}
+
 // ══ BOOT ══
 async function boot(){
   initSupabase();
+  if(sb) showDebug('Supabase client ready','ok');
+  else showDebug('No Supabase — running on seed data','warn');
+
   await loadOrg();
+  if(orgId) showDebug(`org_id: ${orgId}`,'info');
+  else showDebug('No org_id in URL — using local seed data','warn');
+
   await syncFromSupabase();
+  showDebug(`DB: ${DB.participants.length}p · ${DB.volunteers.length}v · ${DB.events.length}e · ${DB.feedback.length}fb`,'ok');
   go('dashboard');
 }
 boot();
