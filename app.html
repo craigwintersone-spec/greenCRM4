@@ -623,27 +623,7 @@ async function sbFetch(table){
   }catch(e){console.warn(`sbFetch(${table}) exception:`,e);return null;}
 }
 
-// Discover which columns exist in a table by inserting nothing and reading the error
-// Instead we just try a select and inspect the first row's keys
-async function getTableCols(table){
-  if(!sb) return null;
-  try{
-    const {data}=await sb.from(table).select('*').limit(1);
-    if(data?.[0]) return Object.keys(data[0]);
-    // Table exists but empty — do a dummy insert to get schema error keys back
-    return null;
-  }catch(e){return null;}
-}
-
-// Only keep keys that actually exist in the table schema
-function filterToSchema(obj, knownCols){
-  if(!knownCols) return obj;
-  const out={};
-  for(const k of knownCols){ if(k in obj) out[k]=obj[k]; }
-  return out;
-}
-
-let _volCols=null; // cached column list for volunteers table
+let _volCols=null;
 
 async function syncFromSupabase(){
   if(!sb){showDebug('Supabase not ready, using seed data','warn');return;}
@@ -1057,13 +1037,27 @@ function openVolDetail(id){
     ${v.emergency?`<div style="font-size:12px;color:var(--txt2);margin-bottom:6px"><span style="color:var(--txt3)">Emergency: </span>${v.emergency}</div>`:''}
     ${v.notes?`<div style="font-size:12px;color:var(--txt2);margin-bottom:6px"><span style="color:var(--txt3)">Notes: </span>${v.notes}</div>`:''}
     <div style="display:flex;justify-content:space-between;margin-top:14px">
-      <button class="btn btn-danger btn-sm" onclick="if(confirm('Delete this volunteer?')){DB.volunteers=DB.volunteers.filter(x=>x.id!==${v.id});${sb&&orgId?`sb.from('volunteers').delete().eq('id',${v.id});`:''}this.closest('.modal-overlay').remove();renderVolunteers();}">Delete</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteVol(${v.id},this)">Delete</button>
       <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Close</button>
     </div>
   </div>`;
   document.body.appendChild(m);
 }
-function setDist(n){_vDist=n;document.querySelectorAll('.dist-btn').forEach((b,i)=>b.classList.toggle('sel',i+1===n));}
+async function deleteVol(id, btn){
+  if(!confirm('Delete this volunteer?')) return;
+  if(sb){
+    btn.textContent='Deleting…';btn.disabled=true;
+    const {error}=await sb.from('volunteers').delete().eq('id',id);
+    if(error){alert('Delete failed: '+error.message);btn.textContent='Delete';btn.disabled=false;return;}
+    showDebug('Deleted volunteer id='+id,'ok');
+    const fresh=await sbFetch('volunteers');
+    if(fresh!==null) DB.volunteers=fresh.map(normalizeVol);
+  }else{
+    DB.volunteers=DB.volunteers.filter(x=>x.id!==id);
+  }
+  document.querySelector('.modal-overlay.open')?.remove();
+  renderVolunteers();
+}_vDist=n;document.querySelectorAll('.dist-btn').forEach((b,i)=>b.classList.toggle('sel',i+1===n));}
 function switchVTab(tab,btn){
   _vTab=tab;
   ['basic','details','onboard'].forEach(t=>{$('vtab-'+t).style.display=t===tab?'block':'none';});
