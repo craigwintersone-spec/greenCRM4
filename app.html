@@ -1463,3 +1463,36 @@ async function saveVol(){
 
 setTimeout(loadGreenCRM, 1000);
 </script>
+</body>
+ <script>
+setTimeout(async function () {
+  const orgId = new URLSearchParams(window.location.search).get("org_id");
+  if (!orgId || !window.supabase) return;
+
+  const client = window.supabase.createClient(
+    "https://nznfrxzgvcjhfsdaphyp.supabase.co",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw"
+  );
+
+  const dashStats = document.getElementById("dash-stats");
+  if (!dashStats) return;
+
+  const { data: volunteers } = await client
+    .from("volunteers")
+    .select("*")
+    .eq("org_id", orgId);
+
+  const totalHours = (volunteers || []).reduce(
+    (sum, v) => sum + Number(v.hours || 0),
+    0
+  );
+
+  dashStats.innerHTML += `
+    <div class="stat-card">
+      <div class="stat-lbl">Volunteer Hours</div>
+      <div class="stat-val">${totalHours}</div>
+      <div class="stat-sub">Hours logged</div>
+    </div>
+  `;
+}, 1500);
+</script>
