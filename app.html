@@ -1251,7 +1251,7 @@ go('dashboard');
   const support = allOutcomes.filter(o => o.type === "support").length;
   const hours = allVolunteers.reduce((sum, v) => sum + Number(v.hours || 0), 0);
 
-  dashStats.innerHTML = `
+  dashStats.innerHTML = `dashStats.style.opacity = "1";
     <div class="stat-card">
       <div class="stat-lbl">Job Outcomes</div>
       <div class="stat-val">${jobs}</div>
