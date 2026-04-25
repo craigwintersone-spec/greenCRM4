@@ -1114,48 +1114,26 @@ function openEditVol(id){
   $('modal-vol').classList.add('open');
 }
 async function saveVol(){
-  const name=$('vf-name').value.trim();
-  if(!name){alert('Name is required');return;}
+  const firstName=$('vf-name').value.trim().split(' ')[0]||'';
+  const lastName=$('vf-name').value.trim().split(' ').slice(1).join(' ')||'';
+  const fullName=$('vf-name').value.trim();
+  if(!fullName){alert('Name is required');return;}
 
   const role=[...document.querySelectorAll('input[name="vf-role"]:checked')].map(r=>r.value)[0]||'Volunteer';
-  const freq=[...document.querySelectorAll('input[name="vf-freq"]:checked')].map(r=>r.value)[0]||'Ad hoc';
-  const drives=[...document.querySelectorAll('input[name="vf-drives"]:checked')].map(r=>r.value)[0]||'No';
-  const corp=[...document.querySelectorAll('input[name="vf-corp"]:checked')].map(r=>r.value)[0]||'No';
-  const selEvNames=getChks('vf-ev-link');
-  const linkedEvents=DB.events.filter(e=>selEvNames.includes(e.name)).map(e=>e.id);
 
-  // Full local object — used for normalizing back into DB.volunteers
-  const localObj={
-    name, email:$('vf-email').value, phone:$('vf-phone').value,
-    postcode:$('vf-postcode').value, org:$('vf-org').value,
-    age:$('vf-age').value, gender:$('vf-gender').value,
-    disability:$('vf-disability').value, ethnicity:$('vf-ethnicity').value,
-    heard:$('vf-heard').value, role, status:$('vf-status').value,
-    hours:parseInt($('vf-hours').value)||0,
-    skills:getChks('vf-skills'), avail:getChks('vf-avail'),
-    freq, avail_notes:$('vf-avail-notes').value,
-    barriers:getChks('vf-barriers'), dist:_vDist, drives,
-    health:$('vf-health').value, emergency:$('vf-emergency').value,
-    consent_mail:$('vf-cm').checked, consent_photo:$('vf-cp').checked,
-    ob1:$('vf-ob1').checked, ob2:$('vf-ob2').checked,
-    ob3:$('vf-ob3').checked, ob4:$('vf-ob4').checked,
-    corp, notes:$('vf-notes').value,
-    linked_events:linkedEvents,
-    org_id:orgId||null
+  // Only the columns that exist in Supabase
+  const sbPayload={
+    org_id:   orgId||null,
+    first_name: firstName,
+    last_name:  lastName,
+    name:       fullName,
+    email:      $('vf-email').value||null,
+    phone:      $('vf-phone').value||null,
+    role,
+    skills:     JSON.stringify(getChks('vf-skills')),
+    hours:      parseInt($('vf-hours').value)||0,
+    status:     $('vf-status').value||'Active',
   };
-
-  // Supabase payload — strip to only columns the table actually has
-  // If _volCols is known, filter; otherwise send only the safe minimal set
-  let sbPayload;
-  if(_volCols){
-    sbPayload=filterToSchema(localObj,_volCols);
-    showDebug('Saving cols: '+Object.keys(sbPayload).join(', '),'info');
-  }else{
-    // Safe minimal set every volunteers table should have
-    sbPayload={name,email:localObj.email,phone:localObj.phone,role,status:localObj.status,hours:localObj.hours,notes:localObj.notes};
-    if(orgId) sbPayload.org_id=orgId;
-    showDebug('No schema cache — sending minimal cols','warn');
-  }
 
   if(sb){
     const btn=document.querySelector('#modal-vol .btn-p');
@@ -1164,18 +1142,15 @@ async function saveVol(){
       if(_editVolId){
         const {error}=await sb.from('volunteers').update(sbPayload).eq('id',_editVolId);
         if(error) throw error;
-        showDebug('Updated: '+name,'ok');
+        showDebug('Updated: '+fullName,'ok');
       }else{
         const {error}=await sb.from('volunteers').insert([sbPayload]);
         if(error) throw error;
-        showDebug('Inserted: '+name,'ok');
+        showDebug('Inserted: '+fullName,'ok');
       }
-      // Re-fetch so local DB matches Supabase exactly — no duplicates
+      // Re-fetch so local DB matches Supabase exactly
       const fresh=await sbFetch('volunteers');
-      if(fresh!==null){
-        if(fresh.length) _volCols=Object.keys(fresh[0]);
-        DB.volunteers=fresh.map(normalizeVol);
-      }
+      if(fresh!==null) DB.volunteers=fresh.map(normalizeVol);
     }catch(err){
       showDebug('Save error: '+err.message,'error');
       alert('Save failed: '+err.message);
@@ -1184,10 +1159,11 @@ async function saveVol(){
     }
   }else{
     // No Supabase — local only
+    const local=normalizeVol({...sbPayload,id:_editVolId||DB.nid.v++});
     if(_editVolId){
-      DB.volunteers=DB.volunteers.map(x=>x.id===_editVolId?{...x,...normalizeVol({...localObj,id:_editVolId})}:x);
+      DB.volunteers=DB.volunteers.map(x=>x.id===_editVolId?local:x);
     }else{
-      DB.volunteers.push(normalizeVol({...localObj,id:DB.nid.v++}));
+      DB.volunteers.push(local);
     }
   }
 
