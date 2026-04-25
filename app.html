@@ -879,18 +879,56 @@ function openEditVol(id){
   switchVTab('basic',document.querySelectorAll('.vtab-btn')[0]);
   $('modal-vol').classList.add('open');
 }
-function saveVol(){
-  const name=$('vf-name').value.trim();if(!name){alert('Name is required');return;}
-  const role=[...document.querySelectorAll('input[name="vf-role"]:checked')].map(r=>r.value)[0]||'Volunteer';
-  const freq=[...document.querySelectorAll('input[name="vf-freq"]:checked')].map(r=>r.value)[0]||'';
-  const drives=[...document.querySelectorAll('input[name="vf-drives"]:checked')].map(r=>r.value)[0]||'No';
-  const corp=[...document.querySelectorAll('input[name="vf-corp"]:checked')].map(r=>r.value)[0]||'No';
-  const selEvNames=getChks('vf-ev-link');
-  const linkedEvents=DB.events.filter(e=>selEvNames.includes(e.name)).map(e=>e.id);
-  const v={id:_editVolId||DB.nid.v++,name,email:$('vf-email').value,phone:$('vf-phone').value,postcode:$('vf-postcode').value,org:$('vf-org').value,age:$('vf-age').value,gender:$('vf-gender').value,heard:$('vf-heard').value,ethnicity:$('vf-ethnicity').value,disability:$('vf-disability').value,role,skills:getChks('vf-skills'),avail:getChks('vf-avail'),freq,availNotes:$('vf-avail-notes').value,barriers:getChks('vf-barriers'),dist:_vDist,drives,hours:parseInt($('vf-hours').value)||0,health:$('vf-health').value,emergency:$('vf-emergency').value,cm:$('vf-cm').checked,cp:$('vf-cp').checked,linkedEvents,ob1:$('vf-ob1').checked,ob2:$('vf-ob2').checked,ob3:$('vf-ob3').checked,ob4:$('vf-ob4').checked,corp,notes:$('vf-notes').value,status:$('vf-status').value};
-  if(_editVolId) DB.volunteers=DB.volunteers.map(x=>x.id===_editVolId?v:x);
-  else DB.volunteers.push(v);
-  closeModal('modal-vol');renderVolunteers();
+async function saveVol(){
+  const name = $('vf-name').value.trim();
+  if(!name){ alert('Name is required'); return; }
+
+  const params = new URLSearchParams(window.location.search);
+  const orgId = params.get("org_id");
+
+  if (!orgId) {
+    alert("No organisation selected. Open CRM from Super Admin.");
+    return;
+  }
+
+  const role = [...document.querySelectorAll('input[name="vf-role"]:checked')]
+    .map(r => r.value)[0] || 'Volunteer';
+
+  const volunteerData = {
+    org_id: orgId,
+    name: name,
+    email: $('vf-email').value,
+    phone: $('vf-phone').value,
+    role: role,
+    status: $('vf-status').value,
+    hours: parseInt($('vf-hours').value) || 0
+  };
+
+  let result;
+
+  if (_editVolId) {
+    result = await greencrm
+      .from("volunteers")
+      .update(volunteerData)
+      .eq("id", _editVolId);
+  } else {
+    result = await greencrm
+      .from("volunteers")
+      .insert([volunteerData]);
+  }
+
+  if (result.error) {
+    alert("Supabase save error: " + result.error.message);
+    return;
+  }
+
+  closeModal('modal-vol');
+
+  if (typeof renderSupabaseDashboard === "function") {
+    await renderSupabaseDashboard();
+  }
+
+  alert("Volunteer saved to Supabase ✅");
 }
 function exportVolCSV(){
   const rows=[['Name','Email','Phone','Postcode','Org','Age','Gender','Ethnicity','Disability','Role','Skills','Availability','Frequency','Barriers','Distance','Drives','Hours','Status','Onboarding','Consent Mail','Consent Photo'],
