@@ -1317,3 +1317,52 @@ go('dashboard');
   `;
 })();
 </script>
+</body>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+
+<script>
+setTimeout(async function () {
+  const GREENCRM_URL = "https://nznfrxzgvcjhfsdaphyp.supabase.co";
+  const GREENCRM_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw";
+
+  const client = window.supabase.createClient(GREENCRM_URL, GREENCRM_KEY);
+  const orgId = new URLSearchParams(window.location.search).get("org_id");
+
+  if (!orgId) return;
+
+  const { data: org } = await client
+    .from("organisations")
+    .select("*")
+    .eq("id", orgId)
+    .single();
+
+  const banner = document.createElement("div");
+  banner.style.background = "#10b981";
+  banner.style.color = "white";
+  banner.style.padding = "10px 18px";
+  banner.style.fontWeight = "bold";
+  banner.textContent = "Current Org: " + (org?.name || orgId);
+  document.body.prepend(banner);
+
+  const dashStats = document.getElementById("dash-stats");
+  if (!dashStats) {
+    alert("Dashboard not found");
+    return;
+  }
+
+  const { data: outcomes } = await client.from("outcomes").select("*").eq("org_id", orgId);
+  const { data: volunteers } = await client.from("volunteers").select("*").eq("org_id", orgId);
+
+  const jobs = (outcomes || []).filter(o => o.type === "job").length;
+  const training = (outcomes || []).filter(o => o.type === "training").length;
+  const support = (outcomes || []).filter(o => o.type === "support").length;
+  const hours = (volunteers || []).reduce((sum, v) => sum + Number(v.hours || 0), 0);
+
+  dashStats.innerHTML = `
+    <div class="stat-card"><div class="stat-lbl">Job Outcomes</div><div class="stat-val">${jobs}</div><div class="stat-sub">Employment outcomes</div></div>
+    <div class="stat-card"><div class="stat-lbl">Training</div><div class="stat-val">${training}</div><div class="stat-sub">Training outcomes</div></div>
+    <div class="stat-card"><div class="stat-lbl">Support</div><div class="stat-val">${support}</div><div class="stat-sub">Support interventions</div></div>
+    <div class="stat-card"><div class="stat-lbl">Volunteer Hours</div><div class="stat-val">${hours}</div><div class="stat-sub">Hours logged</div></div>
+  `;
+}, 1000);
+</script>
