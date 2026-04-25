@@ -612,52 +612,43 @@ async function loadOrg(){
 
 // ══ SUPABASE DATA FETCH — wire into DB ══
 async function sbFetch(table){
-  if(!sb||!orgId) return null;
+  if(!sb) return null;
   try{
-    // Try with org_id filter first
-    let {data,error}=await sb.from(table).select('*').eq('org_id',orgId);
-    if(error){
-      // If org_id column doesn't exist, fetch all
-      const r2=await sb.from(table).select('*');
-      if(r2.error){console.warn(`Table "${table}" error:`,r2.error.message);return null;}
-      data=r2.data;
-    }
-    console.log(`${table}: ${data?.length??0} rows`);
+    let q=sb.from(table).select('*');
+    if(orgId) q=q.eq('org_id',orgId);
+    const {data,error}=await q;
+    if(error){console.warn(`sbFetch(${table}):`,error.message);return null;}
+    showDebug(`${table}: ${data?.length??0} rows`,'ok');
     return data||[];
   }catch(e){console.warn(`sbFetch(${table}) exception:`,e);return null;}
 }
 
 async function syncFromSupabase(){
-  if(!sb) return;
-  console.log('Syncing from Supabase, orgId=',orgId);
+  if(!sb){showDebug('Supabase not ready, using seed data','warn');return;}
+  showDebug('Syncing…','info');
 
-  // Try both 'volunteers' and 'volunteer' table names
-  let vData=await sbFetch('volunteers');
-  if(!vData?.length) vData=await sbFetch('volunteer');
-
-  const [pData,eData,fbData,cData,empData,ciData,conData,evData]=await Promise.all([
+  const [pData,vData,eData,fbData,cData,empData,ciData,conData,evData]=await Promise.all([
     sbFetch('participants'),
+    sbFetch('volunteers'),
     sbFetch('events'),
     sbFetch('feedback'),
     sbFetch('contacts'),
     sbFetch('employers'),
-    sbFetch('circular_items').then(d=>d||sbFetch('circular')),
+    sbFetch('circular_items'),
     sbFetch('contracts'),
     sbFetch('evidence'),
   ]);
 
-  if(pData?.length){DB.participants=pData.map(normalizeParticipant);console.log('✓ participants:',DB.participants.length);}
-  if(vData?.length){DB.volunteers=vData.map(normalizeVol);console.log('✓ volunteers:',DB.volunteers.length);}
-  else console.warn('⚠ No volunteer data found in Supabase — using seed data');
-  if(eData?.length){DB.events=eData.map(normalizeEvent);}
-  if(fbData?.length){DB.feedback=fbData.map(normalizeFb);}
-  if(cData?.length){DB.contacts=cData;}
-  if(empData?.length){DB.employers=empData.map(e=>({...e,name:e.name||e.employer_name||'',contact_name:e.contact_name||e.contact||'',placements:e.placements||0}));}
-  if(ciData?.length){DB.circular=ciData.map(i=>({...i,weight_kg:i.weight_kg||i.weight||0}));}
-  if(conData?.length){DB.contracts=conData;}
-  if(evData?.length){DB.evidence=evData;}
-
-  console.log('Sync complete. DB state:',{p:DB.participants.length,v:DB.volunteers.length,e:DB.events.length,fb:DB.feedback.length});
+  // Only replace seed data if Supabase returned real rows
+  if(pData?.length)  DB.participants = pData.map(normalizeParticipant);
+  if(vData?.length)  DB.volunteers   = vData.map(normalizeVol);
+  if(eData?.length)  DB.events       = eData.map(normalizeEvent);
+  if(fbData?.length) DB.feedback     = fbData.map(normalizeFb);
+  if(cData?.length)  DB.contacts     = cData;
+  if(empData?.length) DB.employers   = empData.map(e=>({...e,name:e.name||e.employer_name||'',contact_name:e.contact_name||e.contact||'',placements:e.placements||0}));
+  if(ciData?.length) DB.circular     = ciData.map(i=>({...i,weight_kg:i.weight_kg||i.weight||0}));
+  if(conData?.length) DB.contracts   = conData;
+  if(evData?.length) DB.evidence     = evData;
 }
 
 // Normalise Supabase rows to match local schema
@@ -1098,34 +1089,69 @@ function openEditVol(id){
 async function saveVol(){
   const name=$('vf-name').value.trim();
   if(!name){alert('Name is required');return;}
+
   const role=[...document.querySelectorAll('input[name="vf-role"]:checked')].map(r=>r.value)[0]||'Volunteer';
   const freq=[...document.querySelectorAll('input[name="vf-freq"]:checked')].map(r=>r.value)[0]||'Ad hoc';
   const drives=[...document.querySelectorAll('input[name="vf-drives"]:checked')].map(r=>r.value)[0]||'No';
   const corp=[...document.querySelectorAll('input[name="vf-corp"]:checked')].map(r=>r.value)[0]||'No';
   const selEvNames=getChks('vf-ev-link');
   const linkedEvents=DB.events.filter(e=>selEvNames.includes(e.name)).map(e=>e.id);
+
   const d={
-    name,email:$('vf-email').value,phone:$('vf-phone').value,postcode:$('vf-postcode').value,org:$('vf-org').value,
-    age:$('vf-age').value,gender:$('vf-gender').value,disability:$('vf-disability').value,
-    ethnicity:$('vf-ethnicity').value,heard:$('vf-heard').value,role,status:$('vf-status').value,
-    hours:parseInt($('vf-hours').value)||0,skills:getChks('vf-skills'),avail:getChks('vf-avail'),
-    freq,availNotes:$('vf-avail-notes').value,barriers:getChks('vf-barriers'),
-    dist:_vDist,drives,health:$('vf-health').value,emergency:$('vf-emergency').value,
-    cm:$('vf-cm').checked,cp:$('vf-cp').checked,
-    ob1:$('vf-ob1').checked,ob2:$('vf-ob2').checked,ob3:$('vf-ob3').checked,ob4:$('vf-ob4').checked,
-    corp,notes:$('vf-notes').value,linkedEvents
+    name, email:$('vf-email').value, phone:$('vf-phone').value,
+    postcode:$('vf-postcode').value, org:$('vf-org').value,
+    age:$('vf-age').value, gender:$('vf-gender').value,
+    disability:$('vf-disability').value, ethnicity:$('vf-ethnicity').value,
+    heard:$('vf-heard').value, role, status:$('vf-status').value,
+    hours:parseInt($('vf-hours').value)||0,
+    skills:getChks('vf-skills'), avail:getChks('vf-avail'),
+    freq, avail_notes:$('vf-avail-notes').value,
+    barriers:getChks('vf-barriers'),
+    dist:_vDist, drives, health:$('vf-health').value,
+    emergency:$('vf-emergency').value,
+    consent_mail:$('vf-cm').checked, consent_photo:$('vf-cp').checked,
+    ob1:$('vf-ob1').checked, ob2:$('vf-ob2').checked,
+    ob3:$('vf-ob3').checked, ob4:$('vf-ob4').checked,
+    corp, notes:$('vf-notes').value,
+    linked_events:linkedEvents,
+    ...(orgId?{org_id:orgId}:{})
   };
-  if(_editVolId){
-    DB.volunteers=DB.volunteers.map(x=>x.id===_editVolId?{...x,...d,id:_editVolId}:x);
-    if(sb&&orgId) await sb.from('volunteers').update({...d,org_id:orgId,skills_json:JSON.stringify(d.skills),avail_json:JSON.stringify(d.avail),barriers_json:JSON.stringify(d.barriers),linked_events_json:JSON.stringify(d.linkedEvents),consent_mail:d.cm,consent_photo:d.cp,avail_notes:d.availNotes,distance:d.dist}).eq('id',_editVolId);
+
+  if(sb){
+    // Save btn feedback
+    const btn=document.querySelector('#modal-vol .btn-p');
+    const orig=btn.textContent;btn.textContent='Saving…';btn.disabled=true;
+
+    try{
+      if(_editVolId){
+        const {error}=await sb.from('volunteers').update(d).eq('id',_editVolId);
+        if(error) throw error;
+        showDebug(`Updated volunteer id=${_editVolId}`,'ok');
+      }else{
+        const {error}=await sb.from('volunteers').insert([d]);
+        if(error) throw error;
+        showDebug(`Inserted new volunteer: ${name}`,'ok');
+      }
+      // Re-fetch from Supabase so local DB exactly matches — no duplicates
+      const fresh=await sbFetch('volunteers');
+      if(fresh) DB.volunteers=fresh.map(normalizeVol);
+    }catch(err){
+      showDebug('Save error: '+err.message,'error');
+      alert('Save failed: '+err.message);
+    }finally{
+      btn.textContent=orig;btn.disabled=false;
+    }
   }else{
-    const nv={id:DB.nid.v++,...d};DB.volunteers.push(nv);
-    if(sb&&orgId){
-      const {data}=await sb.from('volunteers').insert([{...d,org_id:orgId,skills_json:JSON.stringify(d.skills),avail_json:JSON.stringify(d.avail),barriers_json:JSON.stringify(d.barriers),linked_events_json:JSON.stringify(d.linkedEvents),consent_mail:d.cm,consent_photo:d.cp,avail_notes:d.availNotes,distance:d.dist}]).select();
-      if(data?.[0]) nv.id=data[0].id;
+    // No Supabase — local only
+    if(_editVolId){
+      DB.volunteers=DB.volunteers.map(x=>x.id===_editVolId?{...x,...normalizeVol({...d,id:_editVolId})}:x);
+    }else{
+      DB.volunteers.push(normalizeVol({...d,id:DB.nid.v++}));
     }
   }
-  closeModal('modal-vol');renderVolunteers();
+
+  closeModal('modal-vol');
+  renderVolunteers();
 }
 function exportVolCSV(){
   const rows=[['Name','Email','Phone','Postcode','Org','Age','Gender','Ethnicity','Disability','Role','Skills','Availability','Frequency','Barriers','Distance','Drives','Hours','Status','Onboarding','Consent Mail','Consent Photo'],
