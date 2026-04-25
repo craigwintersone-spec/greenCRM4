@@ -1173,3 +1173,104 @@ function exportCSV(){
 // ══ BOOT ══
 go('dashboard');
 </script>
+</body>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+
+<script>
+(async function () {
+  const debug = document.createElement("div");
+  debug.style.background = "#f59e0b";
+  debug.style.color = "#111";
+  debug.style.padding = "10px 18px";
+  debug.style.fontWeight = "bold";
+  debug.style.position = "sticky";
+  debug.style.top = "0";
+  debug.style.zIndex = "999999";
+  debug.textContent = "GreenCRM org script starting...";
+  document.body.prepend(debug);
+
+  const GREENCRM_URL = "https://nznfrxzgvcjhfsdaphyp.supabase.co";
+  const GREENCRM_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw";
+
+  if (!window.supabase) {
+    debug.textContent = "ERROR: Supabase library not loaded";
+    return;
+  }
+
+  const client = window.supabase.createClient(GREENCRM_URL, GREENCRM_KEY);
+
+  const params = new URLSearchParams(window.location.search);
+  const orgId = params.get("org_id");
+
+  if (!orgId) {
+    debug.textContent = "No org_id found. Open CRM from Super Admin → Open CRM";
+    return;
+  }
+
+  debug.textContent = "Loading org: " + orgId;
+
+  const { data: org, error: orgError } = await client
+    .from("organisations")
+    .select("*")
+    .eq("id", orgId)
+    .single();
+
+  if (orgError || !org) {
+    debug.textContent = "ERROR loading org: " + (orgError ? orgError.message : "not found");
+    return;
+  }
+
+  debug.textContent = "Current Org: " + org.name + " | Plan: " + (org.plan || "free");
+
+  const dashStats = document.getElementById("dash-stats");
+
+  if (!dashStats) {
+    debug.textContent = "ERROR: dash-stats not found";
+    return;
+  }
+
+  const { data: outcomes } = await client
+    .from("outcomes")
+    .select("*")
+    .eq("org_id", orgId);
+
+  const { data: volunteers } = await client
+    .from("volunteers")
+    .select("*")
+    .eq("org_id", orgId);
+
+  const allOutcomes = outcomes || [];
+  const allVolunteers = volunteers || [];
+
+  const jobs = allOutcomes.filter(o => o.type === "job").length;
+  const training = allOutcomes.filter(o => o.type === "training").length;
+  const support = allOutcomes.filter(o => o.type === "support").length;
+  const hours = allVolunteers.reduce((sum, v) => sum + Number(v.hours || 0), 0);
+
+  dashStats.innerHTML = `
+    <div class="stat-card">
+      <div class="stat-lbl">Job Outcomes</div>
+      <div class="stat-val">${jobs}</div>
+      <div class="stat-sub">Employment outcomes</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-lbl">Training</div>
+      <div class="stat-val">${training}</div>
+      <div class="stat-sub">Training outcomes</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-lbl">Support</div>
+      <div class="stat-val">${support}</div>
+      <div class="stat-sub">Support interventions</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-lbl">Volunteer Hours</div>
+      <div class="stat-val">${hours}</div>
+      <div class="stat-sub">Hours logged</div>
+    </div>
+  `;
+})();
+</script>
