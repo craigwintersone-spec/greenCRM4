@@ -1321,48 +1321,145 @@ go('dashboard');
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 
 <script>
-setTimeout(async function () {
-  const GREENCRM_URL = "https://nznfrxzgvcjhfsdaphyp.supabase.co";
-  const GREENCRM_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw";
+const GREENCRM_URL = "https://nznfrxzgvcjhfsdaphyp.supabase.co";
+const GREENCRM_KEY = "PASTE_YOUR_ANON_KEY_HERE";
 
-  const client = window.supabase.createClient(GREENCRM_URL, GREENCRM_KEY);
-  const orgId = new URLSearchParams(window.location.search).get("org_id");
+const greencrm = window.supabase.createClient(GREENCRM_URL, GREENCRM_KEY);
 
+function getCurrentOrgId() {
+  return new URLSearchParams(window.location.search).get("org_id");
+}
+
+function hidePage(page) {
+  const btn = document.querySelector(`button[onclick="go('${page}')"]`);
+  const el = document.getElementById("page-" + page);
+  if (btn) btn.style.display = "none";
+  if (el) el.style.display = "none";
+}
+
+async function loadGreenCRM() {
+  const orgId = getCurrentOrgId();
   if (!orgId) return;
 
-  const { data: org } = await client
+  const { data: org } = await greencrm
     .from("organisations")
     .select("*")
     .eq("id", orgId)
     .single();
 
+  if (!org) return;
+
   const banner = document.createElement("div");
   banner.style.background = "#10b981";
-  banner.style.color = "white";
+  banner.style.color = "#fff";
   banner.style.padding = "10px 18px";
   banner.style.fontWeight = "bold";
-  banner.textContent = "Current Org: " + (org?.name || orgId);
+  banner.style.position = "sticky";
+  banner.style.top = "0";
+  banner.style.zIndex = "99999";
+  banner.innerText = `Current Org: ${org.name} | Plan: ${org.plan || "free"} | Sector: ${org.sector || "N/A"}`;
   document.body.prepend(banner);
 
-  const dashStats = document.getElementById("dash-stats");
-  if (!dashStats) {
-    alert("Dashboard not found");
-    return;
+  const modules = org.modules || {};
+
+  if (modules.participants === false) {
+    ["participants","pipeline","referrals","outcomes","evidence","safeguarding"].forEach(hidePage);
   }
 
-  const { data: outcomes } = await client.from("outcomes").select("*").eq("org_id", orgId);
-  const { data: volunteers } = await client.from("volunteers").select("*").eq("org_id", orgId);
+  if (modules.volunteers === false) hidePage("volunteers");
+  if (modules.events === false) ["events","feedback","impact"].forEach(hidePage);
+  if (modules.circular === false) hidePage("circular");
+  if (modules.employers === false) hidePage("employers");
+  if (modules.funders === false) ["funding","reports","rag"].forEach(hidePage);
 
-  const jobs = (outcomes || []).filter(o => o.type === "job").length;
-  const training = (outcomes || []).filter(o => o.type === "training").length;
-  const support = (outcomes || []).filter(o => o.type === "support").length;
-  const hours = (volunteers || []).reduce((sum, v) => sum + Number(v.hours || 0), 0);
+  await updateDashboard();
+}
 
-  dashStats.innerHTML = `
+async function updateDashboard() {
+  const orgId = getCurrentOrgId();
+  const dash = document.getElementById("dash-stats");
+  if (!orgId || !dash) return;
+
+  const { data: outcomes } = await greencrm.from("outcomes").select("*").eq("org_id", orgId);
+  const { data: volunteers } = await greencrm.from("volunteers").select("*").eq("org_id", orgId);
+  const { data: participants } = await greencrm.from("participants").select("*").eq("org_id", orgId);
+  const { data: events } = await greencrm.from("events").select("*").eq("org_id", orgId);
+  const { data: circular } = await greencrm.from("circular_items").select("*").eq("org_id", orgId);
+  const { data: employers } = await greencrm.from("employers").select("*").eq("org_id", orgId);
+
+  const outcomeRows = outcomes || [];
+  const volunteerRows = volunteers || [];
+  const eventRows = events || [];
+  const circularRows = circular || [];
+  const employerRows = employers || [];
+
+  const jobs = outcomeRows.filter(o => o.type === "job").length;
+  const training = outcomeRows.filter(o => o.type === "training").length;
+  const support = outcomeRows.filter(o => o.type === "support").length;
+  const volunteerHours = volunteerRows.reduce((s, v) => s + Number(v.hours || 0), 0);
+  const attendees = eventRows.reduce((s, e) => s + Number(e.attendees || 0), 0);
+  const kg = circularRows.reduce((s, i) => s + Number(i.weight_kg || 0), 0);
+  const placements = employerRows.reduce((s, e) => s + Number(e.placements || 0), 0);
+
+  dash.innerHTML = `
+    <div class="stat-card"><div class="stat-lbl">Participants</div><div class="stat-val">${(participants || []).length}</div><div class="stat-sub">People supported</div></div>
     <div class="stat-card"><div class="stat-lbl">Job Outcomes</div><div class="stat-val">${jobs}</div><div class="stat-sub">Employment outcomes</div></div>
     <div class="stat-card"><div class="stat-lbl">Training</div><div class="stat-val">${training}</div><div class="stat-sub">Training outcomes</div></div>
     <div class="stat-card"><div class="stat-lbl">Support</div><div class="stat-val">${support}</div><div class="stat-sub">Support interventions</div></div>
-    <div class="stat-card"><div class="stat-lbl">Volunteer Hours</div><div class="stat-val">${hours}</div><div class="stat-sub">Hours logged</div></div>
+    <div class="stat-card"><div class="stat-lbl">Volunteers</div><div class="stat-val">${volunteerRows.length}</div><div class="stat-sub">Registered volunteers</div></div>
+    <div class="stat-card"><div class="stat-lbl">Volunteer Hours</div><div class="stat-val">${volunteerHours}</div><div class="stat-sub">Hours logged</div></div>
+    <div class="stat-card"><div class="stat-lbl">Events</div><div class="stat-val">${eventRows.length}</div><div class="stat-sub">Workshops delivered</div></div>
+    <div class="stat-card"><div class="stat-lbl">People Reached</div><div class="stat-val">${attendees}</div><div class="stat-sub">Event attendees</div></div>
+    <div class="stat-card"><div class="stat-lbl">Items Logged</div><div class="stat-val">${circularRows.length}</div><div class="stat-sub">Circular economy items</div></div>
+    <div class="stat-card"><div class="stat-lbl">Kg Diverted</div><div class="stat-val">${kg.toFixed(1)}kg</div><div class="stat-sub">Waste diverted</div></div>
+    <div class="stat-card"><div class="stat-lbl">Employers</div><div class="stat-val">${employerRows.length}</div><div class="stat-sub">Employer partners</div></div>
+    <div class="stat-card"><div class="stat-lbl">Placements</div><div class="stat-val">${placements}</div><div class="stat-sub">People placed</div></div>
   `;
-}, 1000);
+}
+
+async function saveVol(){
+  const name = $('vf-name').value.trim();
+  if (!name) {
+    alert("Name is required");
+    return;
+  }
+
+  const orgId = getCurrentOrgId();
+  if (!orgId) {
+    alert("No organisation selected.");
+    return;
+  }
+
+  const role = [...document.querySelectorAll('input[name="vf-role"]:checked')]
+    .map(r => r.value)[0] || "Volunteer";
+
+  const data = {
+    org_id: orgId,
+    name: name,
+    email: $('vf-email').value,
+    phone: $('vf-phone').value,
+    role: role,
+    status: $('vf-status').value,
+    hours: parseInt($('vf-hours').value) || 0
+  };
+
+  let result;
+
+  if (_editVolId) {
+    result = await greencrm.from("volunteers").update(data).eq("id", _editVolId);
+  } else {
+    result = await greencrm.from("volunteers").insert([data]);
+  }
+
+  if (result.error) {
+    alert("Save error: " + result.error.message);
+    return;
+  }
+
+  closeModal("modal-vol");
+  await updateDashboard();
+  alert("Volunteer saved ✅");
+}
+
+setTimeout(loadGreenCRM, 1000);
 </script>
