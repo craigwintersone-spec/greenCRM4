@@ -623,6 +623,28 @@ async function sbFetch(table){
   }catch(e){console.warn(`sbFetch(${table}) exception:`,e);return null;}
 }
 
+// Discover which columns exist in a table by inserting nothing and reading the error
+// Instead we just try a select and inspect the first row's keys
+async function getTableCols(table){
+  if(!sb) return null;
+  try{
+    const {data}=await sb.from(table).select('*').limit(1);
+    if(data?.[0]) return Object.keys(data[0]);
+    // Table exists but empty — do a dummy insert to get schema error keys back
+    return null;
+  }catch(e){return null;}
+}
+
+// Only keep keys that actually exist in the table schema
+function filterToSchema(obj, knownCols){
+  if(!knownCols) return obj;
+  const out={};
+  for(const k of knownCols){ if(k in obj) out[k]=obj[k]; }
+  return out;
+}
+
+let _volCols=null; // cached column list for volunteers table
+
 async function syncFromSupabase(){
   if(!sb){showDebug('Supabase not ready, using seed data','warn');return;}
   showDebug('Syncing…','info');
@@ -639,16 +661,21 @@ async function syncFromSupabase(){
     sbFetch('evidence'),
   ]);
 
-  // Only replace seed data if Supabase returned real rows
-  if(pData?.length)  DB.participants = pData.map(normalizeParticipant);
-  if(vData?.length)  DB.volunteers   = vData.map(normalizeVol);
-  if(eData?.length)  DB.events       = eData.map(normalizeEvent);
-  if(fbData?.length) DB.feedback     = fbData.map(normalizeFb);
-  if(cData?.length)  DB.contacts     = cData;
-  if(empData?.length) DB.employers   = empData.map(e=>({...e,name:e.name||e.employer_name||'',contact_name:e.contact_name||e.contact||'',placements:e.placements||0}));
-  if(ciData?.length) DB.circular     = ciData.map(i=>({...i,weight_kg:i.weight_kg||i.weight||0}));
-  if(conData?.length) DB.contracts   = conData;
-  if(evData?.length) DB.evidence     = evData;
+  // Cache volunteer column names so saveVol can use them
+  if(vData?.length) _volCols=Object.keys(vData[0]);
+  showDebug('Vol cols: '+(_volCols||[]).join(', '),'info');
+
+  // Always fully replace from Supabase — this is the source of truth
+  // But only if table returned data (null = table missing/error, keep seed)
+  if(pData!==null)  DB.participants = (pData||[]).map(normalizeParticipant);
+  if(vData!==null)  DB.volunteers   = (vData||[]).map(normalizeVol);
+  if(eData!==null)  DB.events       = (eData||[]).map(normalizeEvent);
+  if(fbData!==null) DB.feedback     = (fbData||[]).map(normalizeFb);
+  if(cData!==null)  DB.contacts     = cData||[];
+  if(empData!==null) DB.employers   = (empData||[]).map(e=>({...e,name:e.name||e.employer_name||'',contact_name:e.contact_name||e.contact||'',placements:e.placements||0}));
+  if(ciData!==null) DB.circular     = (ciData||[]).map(i=>({...i,weight_kg:i.weight_kg||i.weight||0}));
+  if(conData!==null) DB.contracts   = conData||[];
+  if(evData!==null) DB.evidence     = evData||[];
 }
 
 // Normalise Supabase rows to match local schema
@@ -1097,7 +1124,8 @@ async function saveVol(){
   const selEvNames=getChks('vf-ev-link');
   const linkedEvents=DB.events.filter(e=>selEvNames.includes(e.name)).map(e=>e.id);
 
-  const d={
+  // Full local object — used for normalizing back into DB.volunteers
+  const localObj={
     name, email:$('vf-email').value, phone:$('vf-phone').value,
     postcode:$('vf-postcode').value, org:$('vf-org').value,
     age:$('vf-age').value, gender:$('vf-gender').value,
@@ -1106,35 +1134,48 @@ async function saveVol(){
     hours:parseInt($('vf-hours').value)||0,
     skills:getChks('vf-skills'), avail:getChks('vf-avail'),
     freq, avail_notes:$('vf-avail-notes').value,
-    barriers:getChks('vf-barriers'),
-    dist:_vDist, drives, health:$('vf-health').value,
-    emergency:$('vf-emergency').value,
+    barriers:getChks('vf-barriers'), dist:_vDist, drives,
+    health:$('vf-health').value, emergency:$('vf-emergency').value,
     consent_mail:$('vf-cm').checked, consent_photo:$('vf-cp').checked,
     ob1:$('vf-ob1').checked, ob2:$('vf-ob2').checked,
     ob3:$('vf-ob3').checked, ob4:$('vf-ob4').checked,
     corp, notes:$('vf-notes').value,
     linked_events:linkedEvents,
-    ...(orgId?{org_id:orgId}:{})
+    org_id:orgId||null
   };
 
+  // Supabase payload — strip to only columns the table actually has
+  // If _volCols is known, filter; otherwise send only the safe minimal set
+  let sbPayload;
+  if(_volCols){
+    sbPayload=filterToSchema(localObj,_volCols);
+    showDebug('Saving cols: '+Object.keys(sbPayload).join(', '),'info');
+  }else{
+    // Safe minimal set every volunteers table should have
+    sbPayload={name,email:localObj.email,phone:localObj.phone,role,status:localObj.status,hours:localObj.hours,notes:localObj.notes};
+    if(orgId) sbPayload.org_id=orgId;
+    showDebug('No schema cache — sending minimal cols','warn');
+  }
+
   if(sb){
-    // Save btn feedback
     const btn=document.querySelector('#modal-vol .btn-p');
     const orig=btn.textContent;btn.textContent='Saving…';btn.disabled=true;
-
     try{
       if(_editVolId){
-        const {error}=await sb.from('volunteers').update(d).eq('id',_editVolId);
+        const {error}=await sb.from('volunteers').update(sbPayload).eq('id',_editVolId);
         if(error) throw error;
-        showDebug(`Updated volunteer id=${_editVolId}`,'ok');
+        showDebug('Updated: '+name,'ok');
       }else{
-        const {error}=await sb.from('volunteers').insert([d]);
+        const {error}=await sb.from('volunteers').insert([sbPayload]);
         if(error) throw error;
-        showDebug(`Inserted new volunteer: ${name}`,'ok');
+        showDebug('Inserted: '+name,'ok');
       }
-      // Re-fetch from Supabase so local DB exactly matches — no duplicates
+      // Re-fetch so local DB matches Supabase exactly — no duplicates
       const fresh=await sbFetch('volunteers');
-      if(fresh) DB.volunteers=fresh.map(normalizeVol);
+      if(fresh!==null){
+        if(fresh.length) _volCols=Object.keys(fresh[0]);
+        DB.volunteers=fresh.map(normalizeVol);
+      }
     }catch(err){
       showDebug('Save error: '+err.message,'error');
       alert('Save failed: '+err.message);
@@ -1144,9 +1185,9 @@ async function saveVol(){
   }else{
     // No Supabase — local only
     if(_editVolId){
-      DB.volunteers=DB.volunteers.map(x=>x.id===_editVolId?{...x,...normalizeVol({...d,id:_editVolId})}:x);
+      DB.volunteers=DB.volunteers.map(x=>x.id===_editVolId?{...x,...normalizeVol({...localObj,id:_editVolId})}:x);
     }else{
-      DB.volunteers.push(normalizeVol({...d,id:DB.nid.v++}));
+      DB.volunteers.push(normalizeVol({...localObj,id:DB.nid.v++}));
     }
   }
 
