@@ -1271,3 +1271,11 @@ setupOrganisationMode();
 </html>
 </script>
 </body>
+if (modules.volunteers !== false) {
+  const { data: volunteers } = await greencrm.from("volunteers").select("*").eq("org_id", orgId);
+  const vols = volunteers || [];
+  const hours = vols.reduce((sum, v) => sum + (v.hours || 0), 0);
+
+  cards.push({ label: "Volunteers", value: vols.length, sub: "Active volunteers" });
+  cards.push({ label: "Volunteer Hours", value: hours, sub: "Hours logged" });
+}
