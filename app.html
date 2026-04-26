@@ -641,10 +641,22 @@ async function syncAll(){
     advisor:r.advisor||'',referred_date:r.referred_date||''
   }));
   if(prefD!==null)DB.partner_referrals=prefD.map(r=>({
-    id:r.id,partner_name:r.partner_name||'',
-    first_name:r.first_name||'',last_name:r.last_name||'',
-    primary_need:r.primary_need||'',urgency:r.urgency||'Standard',
-    safeguarding:r.safeguarding||'',status:r.status||'Referred',
+    id:r.id,
+    partner_id:r.partner_id||'',
+    partner_name:r.partner_name||'',
+    first_name:r.first_name||'',
+    last_name:r.last_name||'',
+    dob:r.dob||'',
+    phone:r.phone||'',
+    email:r.email||'',
+    primary_need:r.primary_need||'',
+    urgency:r.urgency||'Standard',
+    notes:r.notes||'',
+    barriers:r.barriers||[],
+    safeguarding:r.safeguarding||'',
+    partner_ref:r.partner_ref||'',
+    consent:!!r.consent,
+    status:r.status||'Referred',
     created_at:r.created_at||''
   }));
 }
@@ -1133,7 +1145,11 @@ function openPartnerRef(id){
         ['Primary need', r.primary_need||'—'],
         ['Urgency', r.urgency||'Standard'],
         ['Phone', r.phone||'—'],
+        ['Email', r.email||'—'],
         ['DOB', fmtD(r.dob)],
+        ['Partner ref', r.partner_ref||'—'],
+        ['Consent given', r.consent?'✓ Yes':'✗ No'],
+        ['Partner org', r.partner_name||'—'],
       ].map(([k,v])=>`<div style="background:var(--card);padding:10px 12px;border-radius:var(--radius)">
         <div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">${k}</div>
         <div style="font-size:13px;color:var(--txt)">${v}</div>
