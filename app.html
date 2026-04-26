@@ -738,22 +738,33 @@ function applyModules(mods){
 }
 
 async function afterLogin(){
+  // Get profile → find org_id
   const{data:profile}=await sb.from('profiles').select('*').eq('id',currentUser.id).maybeSingle();
   if(profile?.org_id) orgId=profile.org_id;
   else orgId=new URLSearchParams(window.location.search).get('org_id');
 
   if(orgId){
-    const{data:orgData,error:orgErr}=await sb.from('organisations').select('*').eq('id',orgId).maybeSingle();
-    if(orgErr) dbg('Org load error: '+orgErr.message,'error');
+    const{data:orgData}=await sb.from('organisations').select('*').eq('id',orgId).maybeSingle();
     if(orgData){
       currentOrg=orgData;
+      // Show banner
       const b=$('org-banner');b.style.display='flex';
       $('ob-txt').textContent=orgData.name+(orgData.sector?' · '+orgData.sector:'');
-      $('ob-plan').textContent=orgData.plan==='pro'?'✦ PRO':orgData.plan==='starter'?'Starter':orgData.plan==='network'?'Network':'Free plan';
+      $('ob-plan').textContent=orgData.plan==='pro'?'✦ PRO':orgData.plan==='starter'?'Starter':orgData.plan==='network'?'Network':'Free';
+      // Apply modules immediately
       applyModules(orgData.modules||{});
+      // Check suspended
+      if(orgData.status==='suspended'){
+        const warn=document.createElement('div');
+        warn.style.cssText='background:#3a1a1a;color:#f87171;padding:8px 20px;font-size:13px;font-weight:600;text-align:center;position:sticky;top:0;z-index:999';
+        warn.textContent='⚠ This organisation is suspended. Contact support to reactivate.';
+        document.body.insertBefore(warn,$('shell'));
+      }
     } else {
-      dbg('Org not found for id: '+orgId,'warn');
+      dbg('Org not found: '+orgId,'warn');
     }
+  } else {
+    dbg('No org_id — showing all modules','warn');
   }
   await syncAll();
   go('dashboard');
@@ -767,9 +778,18 @@ async function signOut(){
 }
 
 async function refresh(){
+  // Re-fetch org to pick up any module changes from super admin
+  if(sb && orgId){
+    const{data:orgData}=await sb.from('organisations').select('*').eq('id',orgId).maybeSingle();
+    if(orgData){
+      currentOrg=orgData;
+      applyModules(orgData.modules||{});
+      $('ob-plan').textContent=orgData.plan==='pro'?'✦ PRO':orgData.plan==='starter'?'Starter':orgData.plan==='network'?'Network':'Free';
+    }
+  }
   await syncAll();
   const active=document.querySelector('.page.active');
-  if(active)go(active.id.replace('page-',''));
+  if(active) go(active.id.replace('page-',''));
 }
 
 // ══ NAV ══
