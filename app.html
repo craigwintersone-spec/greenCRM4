@@ -263,7 +263,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
 <div id="page-partnerrefs" class="page">
   <div class="page-header"><div><div class="page-title">Partner Referrals</div><div class="page-sub">Submitted via Partner Portal</div></div></div>
   <div id="pref-alerts"></div>
-  <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Partner</th><th>Primary need</th><th>Urgency</th><th>Safeguarding</th><th>Submitted</th><th>Status</th></tr></thead><tbody id="pref-table"></tbody></table></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Partner</th><th>Primary need</th><th>Urgency</th><th>Safeguarding</th><th>Submitted</th><th>Status</th><th></th></tr></thead><tbody id="pref-table"></tbody></table></div>
 </div>
 
 <!-- EVENTS -->
@@ -1099,19 +1099,105 @@ async function deleteRef(id){
 
 // ══ PARTNER REFERRALS ══
 function renderPartnerRefs(){
-  const urg={High:'b-flag',Standard:'b-prospect',Urgent:'b-amber'};
+  const urg={Urgent:'b-flag',Crisis:'b-flag',Standard:'b-prospect',High:'b-flag'};
   $('pref-alerts').innerHTML='';
-  const urgent=DB.partner_referrals.filter(r=>r.urgency==='Urgent'||r.urgency==='High');
-  if(urgent.length)$('pref-alerts').innerHTML=`<div class="alert alert-warn">⚠ ${urgent.length} urgent/high-priority partner referral(s)</div>`;
+  const urgent=DB.partner_referrals.filter(r=>r.urgency==='Urgent'||r.urgency==='Crisis');
+  if(urgent.length)$('pref-alerts').innerHTML=`<div class="alert alert-warn">⚠ ${urgent.length} urgent/crisis partner referral(s) — action needed</div>`;
   $('pref-table').innerHTML=DB.partner_referrals.length?DB.partner_referrals.map(r=>`<tr>
     <td class="cn">${r.first_name} ${r.last_name}</td>
     <td style="font-size:12px">${r.partner_name||'—'}</td>
-    <td>${r.primary_need||'—'}</td>
-    <td><span class="badge ${urg[r.urgency]||'b-prospect'}">${r.urgency}</span></td>
+    <td style="font-size:12px">${r.primary_need||'—'}</td>
+    <td><span class="badge ${urg[r.urgency]||'b-prospect'}">${r.urgency||'Standard'}</span></td>
     <td>${r.safeguarding?`<span class="safe-flag">🔐 ${r.safeguarding}</span>`:'—'}</td>
     <td style="font-size:12px">${fmtD(r.created_at)}</td>
     <td><span class="badge b-ref">${r.status}</span></td>
-  </tr>`).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--txt3);padding:24px">No partner referrals yet.</td></tr>';
+    <td><button class="btn btn-ghost btn-sm" onclick="openPartnerRef(${r.id})">View →</button></td>
+  </tr>`).join(''):'<tr><td colspan="8" style="text-align:center;color:var(--txt3);padding:24px">No partner referrals yet.</td></tr>';
+}
+
+function openPartnerRef(id){
+  const r=DB.partner_referrals.find(x=>x.id===id);if(!r)return;
+  const m=document.createElement('div');
+  m.className='modal-overlay open';
+  m.innerHTML=`<div class="modal" style="max-width:580px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px">
+      <div>
+        <div style="font-size:18px;font-weight:700;color:var(--txt)">${r.first_name} ${r.last_name}</div>
+        <div style="font-size:12px;color:var(--txt3);margin-top:2px">Submitted ${fmtD(r.created_at)} by ${r.partner_name||'Partner'}</div>
+      </div>
+      <span class="badge b-ref" style="font-size:12px;padding:4px 10px">${r.status}</span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      ${[
+        ['Primary need', r.primary_need||'—'],
+        ['Urgency', r.urgency||'Standard'],
+        ['Phone', r.phone||'—'],
+        ['DOB', fmtD(r.dob)],
+      ].map(([k,v])=>`<div style="background:var(--card);padding:10px 12px;border-radius:var(--radius)">
+        <div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">${k}</div>
+        <div style="font-size:13px;color:var(--txt)">${v}</div>
+      </div>`).join('')}
+    </div>
+
+    ${r.safeguarding?`<div style="background:#2a1a2a;border:1px solid #5a2a3a;border-radius:var(--radius);padding:10px 14px;margin-bottom:14px;font-size:13px;color:#f9a8d4">🔐 Safeguarding concern: <strong>${r.safeguarding}</strong></div>`:''}
+
+    ${r.notes?`<div style="margin-bottom:14px">
+      <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Background & reason for referral</div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;font-size:13px;color:var(--txt2);line-height:1.7">${r.notes}</div>
+    </div>`:''}
+
+    ${r.barriers&&r.barriers.length?`<div style="margin-bottom:14px">
+      <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Identified barriers</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px">${(Array.isArray(r.barriers)?r.barriers:JSON.parse(r.barriers||'[]')).map(b=>`<span class="badge b-amber">${b}</span>`).join('')}</div>
+    </div>`:''}
+
+    <div style="margin-bottom:18px">
+      <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Update status</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${['Referred','Engaged','In delivery','Outcome achieved','Closed'].map(s=>`<button class="btn btn-sm ${r.status===s?'btn-p':'btn-ghost'}" onclick="updatePrefStatus(${r.id},'${s}',this)">${s}</button>`).join('')}
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between">
+      <button class="btn btn-ghost btn-sm" onclick="convertToParticipant(${r.id})">→ Convert to participant</button>
+      <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Close</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+
+async function updatePrefStatus(id, status, btn){
+  if(!sb)return;
+  const{error}=await sb.from('partner_referrals').update({status}).eq('id',id);
+  if(error){alert('Update failed: '+error.message);return;}
+  // Update local DB
+  const r=DB.partner_referrals.find(x=>x.id===id);
+  if(r)r.status=status;
+  // Update all status buttons in the modal
+  btn.closest('div').querySelectorAll('button').forEach(b=>{
+    b.classList.toggle('btn-p',b.textContent===status);
+    b.classList.toggle('btn-ghost',b.textContent!==status);
+  });
+  dbg('Partner referral status updated: '+status,'ok');
+}
+
+function convertToParticipant(id){
+  const r=DB.partner_referrals.find(x=>x.id===id);if(!r)return;
+  // Pre-fill the participant modal with referral data
+  document.querySelector('.modal-overlay.open')?.remove();
+  _editPId=null;
+  $('mp-title').textContent='Add participant (from referral)';
+  $('mp-fn').value=r.first_name||'';
+  $('mp-ln').value=r.last_name||'';
+  $('mp-rs').value='Community org';
+  $('mp-st').value='Referred';
+  $('mp-risk').value='Medium';
+  $('mp-safe').value=r.safeguarding||'';
+  mkChkArr('barrier-checks',BARRIERS);
+  mkChkArr('outcome-checks',OUT_TYPES);
+  $('mp-note').value=r.notes?`Referred by ${r.partner_name||'partner'}. ${r.notes}`:'';
+  $('modal-p').classList.add('open');
 }
 
 // ══ EVENTS ══
