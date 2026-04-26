@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>GreenCRM — Accept Invite</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0a0f0a;--card:#182018;--border:#2a3a2a;--em:#10b981;--em2:#059669;--txt:#e2f5eb;--txt2:#9ab8a4;--txt3:#6a8f76;--red:#f87171;--radius:10px}
+body{background:var(--bg);color:var(--txt);font-family:system-ui,sans-serif;font-size:14px;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.box{width:100%;max-width:420px}
+.logo{font-size:26px;font-weight:800;color:var(--em);text-align:center;margin-bottom:4px}
+.logo span{color:var(--txt2);font-weight:400}
+.tagline{text-align:center;color:var(--txt3);font-size:13px;margin-bottom:28px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:28px}
+.card-title{font-size:16px;font-weight:700;color:var(--txt);margin-bottom:4px}
+.card-sub{font-size:13px;color:var(--txt2);margin-bottom:20px;line-height:1.6}
+label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+input{font-family:inherit;font-size:13px;background:var(--bg);border:1px solid var(--border);color:var(--txt);border-radius:var(--radius);padding:9px 12px;width:100%;outline:none;margin-bottom:14px}
+input:focus{border-color:var(--em)}
+input[readonly]{opacity:.6;cursor:not-allowed}
+.btn{width:100%;padding:11px;border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;border:none;background:var(--em);color:#fff;transition:background .2s;font-family:inherit;margin-top:4px}
+.btn:hover{background:var(--em2)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.msg{padding:10px 13px;border-radius:var(--radius);font-size:13px;margin-bottom:14px;display:none}
+.msg-ok{background:#1a3a2a;border:1px solid #2a5a3a;color:#34d399}
+.msg-err{background:#2a1a1a;border:1px solid #5a2a2a;color:var(--red)}
+.invite-box{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:18px}
+.invite-row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px}
+.invite-row .lbl{color:var(--txt3)}
+.invite-row .val{color:var(--txt);font-weight:500}
+.badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px}
+.b-advisor{background:#2a1a3a;color:#a78bfa}
+.b-manager{background:#1a2a3a;color:#60a5fa}
+.b-admin{background:#1a3a2a;color:#34d399}
+.b-readonly{background:#2a2a1a;color:#f59e0b}
+.spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--em);border-radius:50%;animation:spin .6s linear infinite;display:inline-block;vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.state{display:none}.state.active{display:block}
+.big-icon{font-size:48px;text-align:center;margin-bottom:16px}
+.strength-bar{height:4px;border-radius:2px;background:var(--border);margin-bottom:14px;overflow:hidden}
+.strength-fill{height:100%;border-radius:2px;transition:width .3s,background .3s;width:0}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="logo">Green<span>CRM</span></div>
+  <div class="tagline">You've been invited to join a team</div>
+
+  <!-- LOADING -->
+  <div id="s-loading" class="state active card" style="text-align:center;padding:40px">
+    <div class="spinner"></div> Checking your invite…
+  </div>
+
+  <!-- INVALID -->
+  <div id="s-invalid" class="state card">
+    <div class="big-icon">❌</div>
+    <div class="card-title" style="text-align:center">Invalid or expired invite</div>
+    <div class="card-sub" style="text-align:center;margin-top:8px">This invite link is no longer valid or has already been used. Ask your admin to send a new one.</div>
+  </div>
+
+  <!-- SIGN UP FORM -->
+  <div id="s-form" class="state card">
+    <div class="card-title">Create your account</div>
+    <div class="card-sub">You've been invited to join GreenCRM. Set your name and password to get started.</div>
+
+    <div class="invite-box" id="invite-info"></div>
+
+    <div class="msg msg-err" id="form-err"></div>
+
+    <label>Your full name</label>
+    <input id="f-name" placeholder="Jane Smith" autocomplete="name"/>
+
+    <label>Email address</label>
+    <input id="f-email" type="email" readonly/>
+
+    <label>Choose a password</label>
+    <input id="f-pass" type="password" placeholder="At least 8 characters" oninput="checkStrength()"/>
+    <div class="strength-bar"><div class="strength-fill" id="strength-fill"></div></div>
+
+    <label>Confirm password</label>
+    <input id="f-pass2" type="password" placeholder="Repeat password"/>
+
+    <button class="btn" id="submit-btn" onclick="createAccount()">Create account & sign in</button>
+  </div>
+
+  <!-- ALREADY MEMBER — just sign in -->
+  <div id="s-signin" class="state card">
+    <div class="card-title">Welcome back</div>
+    <div class="card-sub">You already have a GreenCRM account. Sign in to access your organisation.</div>
+    <div class="invite-box" id="signin-info"></div>
+    <div class="msg msg-err" id="si-err"></div>
+    <label>Email</label>
+    <input id="si-email" type="email" readonly/>
+    <label>Password</label>
+    <input id="si-pass" type="password" placeholder="••••••••"/>
+    <button class="btn" id="si-btn" onclick="signInExisting()">Sign in →</button>
+  </div>
+
+  <!-- SUCCESS -->
+  <div id="s-success" class="state card" style="text-align:center">
+    <div class="big-icon">🎉</div>
+    <div class="card-title">You're all set!</div>
+    <div class="card-sub" style="margin-top:8px">Your account has been created. Taking you to GreenCRM now…</div>
+    <button class="btn" style="margin-top:16px" onclick="goToCRM()">Open GreenCRM →</button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script>
+'use strict';
+const SB_URL='https://nznfrxzgvcjhfsdaphyp.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw';
+const sb=window.supabase.createClient(SB_URL,SB_KEY);
+const $=id=>document.getElementById(id);
+let invite=null, org=null, orgId=null;
+
+function showState(s){
+  document.querySelectorAll('.state').forEach(el=>el.classList.remove('active'));
+  $('s-'+s).classList.add('active');
+}
+
+function roleBadge(r){
+  const cls={admin:'b-admin',manager:'b-manager',advisor:'b-advisor','read-only':'b-readonly'};
+  return`<span class="badge ${cls[r]||'b-advisor'}">${r||'advisor'}</span>`;
+}
+
+function checkStrength(){
+  const pw=$('f-pass').value;
+  const fill=$('strength-fill');
+  let score=0;
+  if(pw.length>=8)score++;
+  if(pw.length>=12)score++;
+  if(/[A-Z]/.test(pw))score++;
+  if(/[0-9]/.test(pw))score++;
+  if(/[^A-Za-z0-9]/.test(pw))score++;
+  const pct=Math.round(score/5*100);
+  const col=score<=1?'#f87171':score<=3?'#f59e0b':'#10b981';
+  fill.style.width=pct+'%';
+  fill.style.background=col;
+}
+
+async function init(){
+  // Check for existing session first
+  const{data:{session}}=await sb.auth.getSession();
+  if(session){
+    // Already logged in — just redirect
+    window.location.href='/app.html';
+    return;
+  }
+
+  const params=new URLSearchParams(window.location.search);
+  const token=params.get('token')||params.get('invite');
+  if(!token){showState('invalid');return;}
+
+  // Look up invite
+  const{data:inv,error}=await sb.from('invites').select('*').eq('token',token).maybeSingle();
+  if(error||!inv){showState('invalid');return;}
+  if(inv.accepted){showState('invalid');return;}
+
+  invite=inv;
+  orgId=inv.org_id;
+
+  // Load org name
+  const{data:orgData}=await sb.from('organisations').select('id,name,sector').eq('id',inv.org_id).maybeSingle();
+  org=orgData;
+
+  const infoHtml=`
+    <div class="invite-row"><span class="lbl">Organisation</span><span class="val">${org?.name||'GreenCRM'}</span></div>
+    <div class="invite-row"><span class="lbl">Your role</span><span class="val">${roleBadge(inv.role)}</span></div>
+    <div class="invite-row"><span class="lbl">Invited email</span><span class="val">${inv.email}</span></div>`;
+
+  // Check if email already has an account
+  const{data:existing}=await sb.from('profiles').select('id').eq('email',inv.email).maybeSingle();
+
+  if(existing){
+    // Show sign-in form
+    $('signin-info').innerHTML=infoHtml;
+    $('si-email').value=inv.email;
+    showState('signin');
+  } else {
+    // Show sign-up form
+    $('invite-info').innerHTML=infoHtml;
+    $('f-email').value=inv.email;
+    showState('form');
+  }
+}
+
+async function createAccount(){
+  const name=$('f-name').value.trim();
+  const pass=$('f-pass').value;
+  const pass2=$('f-pass2').value;
+  $('form-err').style.display='none';
+
+  if(!name){showErr('form-err','Please enter your full name.');return;}
+  if(pass.length<8){showErr('form-err','Password must be at least 8 characters.');return;}
+  if(pass!==pass2){showErr('form-err','Passwords do not match.');return;}
+
+  const btn=$('submit-btn');btn.disabled=true;btn.textContent='Creating account…';
+
+  // Sign up
+  const{data,error}=await sb.auth.signUp({
+    email:invite.email,
+    password:pass,
+    options:{data:{full_name:name}}
+  });
+
+  if(error){showErr('form-err',error.message);btn.disabled=false;btn.textContent='Create account & sign in';return;}
+
+  const uid=data?.user?.id;
+  if(!uid){showErr('form-err','Account created but could not get user ID. Please sign in manually.');btn.disabled=false;btn.textContent='Create account & sign in';return;}
+
+  // Create profile scoped to org
+  await sb.from('profiles').insert({
+    id:uid,
+    full_name:name,
+    email:invite.email,
+    org_id:invite.org_id,
+    role:invite.role,
+    status:'active',
+    invited_by:invite.invited_by
+  });
+
+  // Mark invite as accepted
+  await sb.from('invites').update({accepted:true}).eq('id',invite.id);
+
+  // Sign in immediately
+  await sb.auth.signInWithPassword({email:invite.email,password:pass});
+
+  showState('success');
+  setTimeout(goToCRM, 2500);
+}
+
+async function signInExisting(){
+  const pass=$('si-pass').value;
+  $('si-err').style.display='none';
+  if(!pass){showErr('si-err','Please enter your password.');return;}
+  const btn=$('si-btn');btn.disabled=true;btn.textContent='Signing in…';
+  const{error}=await sb.auth.signInWithPassword({email:invite.email,password:pass});
+  if(error){showErr('si-err',error.message);btn.disabled=false;btn.textContent='Sign in →';return;}
+  // Make sure profile is linked to this org
+  await sb.from('profiles').update({org_id:invite.org_id,role:invite.role}).eq('id',(await sb.auth.getUser()).data.user.id);
+  await sb.from('invites').update({accepted:true}).eq('id',invite.id);
+  showState('success');
+  setTimeout(goToCRM, 2500);
+}
+
+function showErr(id,msg){const e=$(id);e.textContent=msg;e.style.display='block';}
+
+function goToCRM(){
+  window.location.href='/app.html'+(orgId?'?org_id='+orgId:'');
+}
+
+init();
+</script>
+</body>
+</html>
