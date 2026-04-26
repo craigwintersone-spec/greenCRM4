@@ -197,6 +197,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <div class="card"><div class="card-title">Participant voices</div><div id="imp-quotes"></div></div>
 </div>
 
+<!-- PARTICIPANTS -->
 <div id="page-participants" class="page">
   <div class="page-header"><div><div class="page-title">Participants</div><div class="page-sub" id="p-sub"></div></div><button class="btn btn-p btn-sm" onclick="openAddP()">+ Add participant</button></div>
   <div class="toolbar">
@@ -342,19 +343,41 @@ tr:hover td{background:rgba(16,185,129,.03)}
 <!-- MODALS -->
 <div class="modal-overlay" id="modal-p">
 <div class="modal"><h2 id="mp-title">Add participant</h2>
-  <div class="form-grid-2"><div class="form-row"><label>First name</label><input id="mp-fn"/></div><div class="form-row"><label>Last name</label><input id="mp-ln"/></div></div>
-  <div class="form-grid-2"><div class="form-row"><label>Referral source</label><select id="mp-rs"><option>Self-referral</option><option>Probation</option><option>Jobcentre Plus</option><option>Community org</option><option>School / college</option></select></div><div class="form-row"><label>Advisor</label><select id="mp-adv"><option>Sarah T.</option><option>Marcus O.</option><option>Priya S.</option><option>Unassigned</option></select></div></div>
-  <div class="form-grid-2"><div class="form-row"><label>Stage</label><select id="mp-st"><option>Referred</option><option>Engaged</option><option>In Support</option><option>Job Ready</option><option>Outcome Achieved</option><option>Sustained</option><option>Closed</option></select></div><div class="form-row"><label>Risk level</label><select id="mp-risk"><option>Low</option><option>Medium</option><option>High</option></select></div></div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>First name</label><input id="mp-fn"/></div>
+    <div class="form-row"><label>Last name</label><input id="mp-ln"/></div>
+  </div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Referral source</label><select id="mp-rs"><option>Self-referral</option><option>Probation</option><option>Jobcentre Plus</option><option>Community org</option><option>School / college</option></select></div>
+    <div class="form-row"><label>Advisor</label><select id="mp-adv"><option>Sarah T.</option><option>Marcus O.</option><option>Priya S.</option><option>Unassigned</option></select></div>
+  </div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Stage</label><select id="mp-st"><option>Referred</option><option>Engaged</option><option>In Support</option><option>Job Ready</option><option>Outcome Achieved</option><option>Sustained</option><option>Closed</option></select></div>
+    <div class="form-row"><label>Risk level</label><select id="mp-risk"><option>Low</option><option>Medium</option><option>High</option></select></div>
+  </div>
   <div class="form-row"><label>Barriers</label><div id="barrier-checks" class="chk-group"></div></div>
   <div class="form-row"><label>Outcomes achieved</label><div id="outcome-checks" class="chk-group"></div></div>
-  <div class="form-row"><label>Linked contracts</label><div id="mp-contracts" class="chk-group"></div><div style="font-size:11px;color:var(--txt3);margin-top:4px">Link this participant to contracts for RAG & starts tracking</div></div>
+  <div class="form-row">
+    <label>Linked contracts</label>
+    <div id="mp-contracts" class="chk-group"></div>
+    <div style="font-size:11px;color:var(--txt3);margin-top:4px">Tick contracts this participant counts toward — updates RAG & starts</div>
+  </div>
   <div class="form-row"><label>Safeguarding flag</label><select id="mp-safe"><option value="">None</option><option>Domestic abuse</option><option>Mental health</option><option>Substance misuse</option><option>Homelessness risk</option></select></div>
   <div class="score-box"><div class="score-label">Distance Travelled (1–10)</div>
-    <div class="form-grid-2"><div class="form-row"><label>Confidence</label><input type="number" id="mp-conf" min="1" max="10"/></div><div class="form-row"><label>Work readiness</label><input type="number" id="mp-work" min="1" max="10"/></div></div>
-    <div class="form-grid-2"><div class="form-row"><label>Wellbeing</label><input type="number" id="mp-well" min="1" max="10"/></div><div class="form-row"><label>Skills</label><input type="number" id="mp-skillsc" min="1" max="10"/></div></div>
+    <div class="form-grid-2">
+      <div class="form-row"><label>Confidence</label><input type="number" id="mp-conf" min="1" max="10"/></div>
+      <div class="form-row"><label>Work readiness</label><input type="number" id="mp-work" min="1" max="10"/></div>
+    </div>
+    <div class="form-grid-2">
+      <div class="form-row"><label>Wellbeing</label><input type="number" id="mp-well" min="1" max="10"/></div>
+      <div class="form-row"><label>Skills</label><input type="number" id="mp-skillsc" min="1" max="10"/></div>
+    </div>
   </div>
   <div class="form-row"><label>Case note</label><textarea id="mp-note"></textarea></div>
-  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-p')">Cancel</button><button class="btn btn-p" id="p-save-btn" onclick="saveP()">Save</button></div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeModal('modal-p')">Cancel</button>
+    <button class="btn btn-p" id="p-save-btn" onclick="saveP()">Save</button>
+  </div>
 </div></div>
 
 <div class="modal-overlay" id="modal-c">
@@ -815,7 +838,7 @@ async function deleteEmployer(id){if(!confirm('Delete this employer?'))return;aw
 function renderPipeline(){
   $('kanban').innerHTML=P_STAGES.map(stage=>{
     const cards=DB.participants.filter(p=>p.stage===stage);
-    return'<div class="k-col"><div class="k-col-hd">'+stage+'<span class="k-cnt">'+cards.length+'</span></div>'+cards.map(p=>'<div class="k-card" onclick="editPById(\''+String(p.id)+'\')"><div class="k-name">'+p.first_name+' '+p.last_name+'</div><div class="k-meta">'+p.advisor+'</div>'+(days(p.last_contact)>21?'<div class="k-flag">⚠ No contact '+days(p.last_contact)+'d</div>':'')+'</div>').join('')+'</div>';
+    return'<div class="k-col"><div class="k-col-hd">'+stage+'<span class="k-cnt">'+cards.length+'</span></div>'+cards.map(p=>'<div class="k-card" onclick="openPModal(\''+p.id+'\',\'edit\')"><div class="k-name">'+p.first_name+' '+p.last_name+'</div><div class="k-meta">'+p.advisor+'</div>'+(days(p.last_contact)>21?'<div class="k-flag">⚠ No contact '+days(p.last_contact)+'d</div>':'')+'</div>').join('')+'</div>';
   }).join('');
 }
 
