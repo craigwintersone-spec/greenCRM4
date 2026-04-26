@@ -738,21 +738,21 @@ function applyModules(mods){
 }
 
 async function afterLogin(){
-  // Get profile to find org
-  const{data:profile}=await sb.from('profiles').select('*').eq('id',currentUser.id).single();
-  if(profile?.org_id){
-    orgId=profile.org_id;
-  } else {
-    // fallback to URL param
-    orgId=new URLSearchParams(window.location.search).get('org_id');
-  }
+  const{data:profile}=await sb.from('profiles').select('*').eq('id',currentUser.id).maybeSingle();
+  if(profile?.org_id) orgId=profile.org_id;
+  else orgId=new URLSearchParams(window.location.search).get('org_id');
+
   if(orgId){
-    const{data:org}=await sb.from('organisations').select('*').eq('id',orgId).single();
-    if(org){
-      currentOrg=org;
+    const{data:orgData,error:orgErr}=await sb.from('organisations').select('*').eq('id',orgId).maybeSingle();
+    if(orgErr) dbg('Org load error: '+orgErr.message,'error');
+    if(orgData){
+      currentOrg=orgData;
       const b=$('org-banner');b.style.display='flex';
-      $('ob-txt').textContent=org.name+' · '+org.sector||'';
-      $('ob-plan').textContent=org.plan==='pro'?'✦ PRO':'Free plan';
+      $('ob-txt').textContent=orgData.name+(orgData.sector?' · '+orgData.sector:'');
+      $('ob-plan').textContent=orgData.plan==='pro'?'✦ PRO':orgData.plan==='starter'?'Starter':orgData.plan==='network'?'Network':'Free plan';
+      applyModules(orgData.modules||{});
+    } else {
+      dbg('Org not found for id: '+orgId,'warn');
     }
   }
   await syncAll();
