@@ -819,6 +819,7 @@ async function afterLogin(){
     dbg('No org_id — showing all modules','warn');
   }
   await syncAll();
+  renderSettings();
   go('dashboard');
 }
 
