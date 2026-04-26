@@ -771,10 +771,8 @@ async function afterLogin(){
 }
 
 async function signOut(){
-  if(sb)await sb.auth.signOut();
-  currentUser=null;currentOrg=null;orgId=null;
-  $('org-banner').style.display='none';
-  go('login');
+  if(sb) await sb.auth.signOut();
+  window.location.href='/login.html';
 }
 
 async function refresh(){
