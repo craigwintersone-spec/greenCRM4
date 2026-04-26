@@ -699,8 +699,7 @@ async function saveP(){
   const btn=$('p-save-btn');btn.textContent='Saving…';btn.disabled=true;
   try{
     const note=$('mp-note').value;
-    const contractIds=[...document.querySelectorAll('#mp-contracts input[type=checkbox]:checked')].map(x=>String(x.value));
-    const d={
+    const contractIds=[...document.querySelectorAll('#mp-contracts input[type=checkbox]:checked')].map(x=>String(x.value));    const d={
       first_name:$('mp-fn').value||'Unknown',
       last_name:$('mp-ln').value||'',
       ref_source:$('mp-rs').value,
