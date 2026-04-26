@@ -142,6 +142,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <button class="nav-btn" onclick="go('evidence')"><span class="icon">🗂️</span><span>Evidence Hub</span></button>
   <div class="nav-section">Settings</div>
   <button class="nav-btn" onclick="go('safeguarding')"><span class="icon">🔐</span><span>Safeguarding</span></button>
+  <button class="nav-btn" onclick="go('settings')"><span class="icon">⚙️</span><span>Settings</span></button>
   <div class="sidebar-bottom">
     <button class="btn btn-ghost btn-sm" style="width:100%" onclick="signOut()">Sign out</button>
   </div>
@@ -292,11 +293,15 @@ tr:hover td{background:rgba(16,185,129,.03)}
 
 <!-- OUTCOMES -->
 <div id="page-outcomes" class="page">
-  <div class="page-header"><div><div class="page-title">Outcomes & Impact</div></div><button class="btn btn-ghost btn-sm" onclick="exportCSV('participants')">Export CSV</button></div>
+  <div class="page-header"><div><div class="page-title">Outcomes & Impact</div><div class="page-sub" id="out-sub"></div></div><button class="btn btn-ghost btn-sm" onclick="exportCSV('participants')">Export CSV</button></div>
   <div class="stats-grid" id="out-stats"></div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
     <div class="card"><div class="card-title">Outcomes by type</div><div id="out-by-type"></div></div>
     <div class="card"><div class="card-title">Common barriers</div><div id="out-barriers"></div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div class="card"><div class="card-title">Participant journey stages</div><div id="out-stage-breakdown"></div></div>
+    <div class="card"><div class="card-title">Confidence scores (feedback)</div><div id="out-confidence"></div></div>
   </div>
 </div>
 
@@ -325,7 +330,54 @@ tr:hover td{background:rgba(16,185,129,.03)}
 </div>
 
 <!-- SAFEGUARDING -->
-<div id="page-safeguarding" class="page">
+<div id="page-settings" class="page">
+  <div class="page-header"><div><div class="page-title">Settings</div><div class="page-sub">Organisation preferences & module access</div></div></div>
+
+  <div class="card">
+    <div class="card-title">Organisation details</div>
+    <div class="form-grid-2">
+      <div class="form-row"><label>Organisation name</label><input id="set-name"/></div>
+      <div class="form-row"><label>Sector</label><select id="set-sector">
+        <option>Charity / VCSE</option><option>Social enterprise</option>
+        <option>Local authority</option><option>NHS / healthcare</option>
+        <option>Education</option><option>Housing</option>
+        <option>Justice / probation</option><option>Other</option>
+      </select></div>
+    </div>
+    <div class="form-grid-2">
+      <div class="form-row"><label>Plan</label><div style="font-size:14px;font-weight:700;color:var(--em);padding:8px 0" id="set-plan">—</div></div>
+      <div class="form-row"><label>Status</label><div style="font-size:14px;color:var(--txt2);padding:8px 0" id="set-status">—</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Module access</div>
+    <p style="font-size:13px;color:var(--txt2);margin-bottom:16px">Toggle features on or off for your organisation. Changes apply immediately.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      ${[
+        {k:'participants',n:'Participants & Caseload',d:'Pipeline, referrals, outcomes, safeguarding'},
+        {k:'volunteers',n:'Volunteers & Staff',d:'Registration, onboarding, hours tracking'},
+        {k:'events',n:'Events & Feedback',d:'Workshops, feedback surveys, impact wall'},
+        {k:'employers',n:'Employers',d:'Employer CRM, vacancies, placements'},
+        {k:'circular',n:'Circular Economy',d:'Repair café, item logging, CO₂ tracking'},
+        {k:'funders',n:'Funders & Reporting',d:'Contracts, RAG dashboard, funder reports'},
+      ].map(m=>`<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:13px 15px;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--txt)">${m.n}</div>
+          <div style="font-size:11px;color:var(--txt3);margin-top:2px">${m.d}</div>
+        </div>
+        <label style="position:relative;width:42px;height:22px;flex-shrink:0;cursor:pointer;display:block;text-transform:none;letter-spacing:0;margin:0">
+          <input type="checkbox" id="set-mod-${m.k}" style="opacity:0;width:0;height:0;position:absolute"/>
+          <span style="position:absolute;inset:0;background:var(--border);border-radius:11px;transition:background .2s;cursor:pointer" onclick="this.previousElementSibling.click();this.style.background=this.previousElementSibling.checked?'var(--em)':'var(--border)'"></span>
+          <span id="set-mod-thumb-${m.k}" style="position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s;pointer-events:none"></span>
+        </label>
+      </div>`).join('')}
+    </div>
+  </div>
+
+  <div class="alert alert-ok" id="set-save-msg" style="display:none">✓ Settings saved successfully</div>
+  <button class="btn btn-p" id="set-save-btn" onclick="saveSettings()">Save settings</button>
+</div>
   <div class="page-header"><div><div class="page-title">Safeguarding & Permissions</div></div></div>
   <div class="alert alert-info" style="margin-bottom:14px">Role-based access active · GDPR compliant · Consent tracked</div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
@@ -804,7 +856,7 @@ function go(page){
     events:renderEvents,feedback:renderFeedback,circular:renderCircular,
     outcomes:renderOutcomes,funding:renderFunding,
     evidence:renderEvidence,safeguarding:renderSafeguarding,
-    reports:()=>{},login:()=>{}
+    settings:renderSettings,reports:()=>{},login:()=>{}
   };
   renders[page]?.();
   document.querySelectorAll('.nav-btn').forEach(b=>{
@@ -1387,15 +1439,52 @@ function openAddFb(){
   $('modal-fb').classList.add('open');
 }
 async function saveFb(){
-  const evId=parseInt($('fbf-ev').value);if(!evId){alert('Please select an event');return;}
+  const evId=parseInt($('fbf-ev').value);
+  if(!evId){alert('Please select an event');return;}
   const btn=$('fb-save-btn');btn.textContent='Saving…';btn.disabled=true;
   try{
-    const d={event_id:evId,name:$('fbf-name').value,enjoyed:_fbScores.enjoyed,cb:_fbScores.cb,ca:_fbScores.ca,learned:$('fbf-learned').checked,connected:$('fbf-connected').checked,friend:$('fbf-friend').checked,quote:$('fbf-quote').value};
-    if(_editFbId)await sbUpdate('feedback',d,_editFbId);
-    else await sbInsert('feedback',d);
-    await refreshTable('feedback');closeModal('modal-fb');renderFeedback();
-  }catch(e){alert('Save failed: '+e.message);}
-  finally{btn.textContent='Save';btn.disabled=false;}
+    const d={
+      event_id:evId,
+      name:$('fbf-name').value,
+      enjoyed:_fbScores.enjoyed,
+      cb:_fbScores.cb,
+      ca:_fbScores.ca,
+      learned:$('fbf-learned').checked,
+      connected:$('fbf-connected').checked,
+      friend:$('fbf-friend').checked,
+      quote:$('fbf-quote').value
+    };
+    if(_editFbId){
+      await sbUpdate('feedback',d,_editFbId);
+    }else{
+      // org_id handled by sbInsert but feedback table may not have it
+      if(sb&&orgId){
+        const{error}=await sb.from('feedback').insert([{...d,org_id:orgId}]);
+        if(error){
+          // Try without org_id if column doesn't exist
+          if(error.message.includes('org_id')){
+            const{error:e2}=await sb.from('feedback').insert([d]);
+            if(e2)throw e2;
+          }else throw error;
+        }
+      }
+    }
+    // Re-fetch feedback
+    const fresh=await sbQ('feedback');
+    if(fresh!==null) DB.feedback=fresh.map(f=>({
+      id:f.id,eventId:f.event_id||f.eventId,name:f.name||'',
+      enjoyed:num(f.enjoyed)||3,cb:num(f.cb)||3,ca:num(f.ca)||3,
+      learned:!!f.learned,connected:!!f.connected,friend:!!f.friend,quote:f.quote||''
+    }));
+    closeModal('modal-fb');
+    renderFeedback();
+    dbg('Feedback saved ✓','ok');
+  }catch(e){
+    dbg('Feedback save error: '+e.message,'error');
+    alert('Save failed: '+e.message+'\n\nMake sure the feedback table exists in Supabase. Run the SQL from earlier to create it.');
+  }finally{
+    btn.textContent='Save';btn.disabled=false;
+  }
 }
 async function deleteFb(id){
   if(!confirm('Delete this feedback?'))return;
@@ -1444,38 +1533,114 @@ async function deleteItem(id){
   await sbDelete('circular_items',id);await refreshTable('circular_items');renderCircular();
 }
 
-// ══ RAG ══
+// ══ RAG — auto-calculates from participants ══
 function renderRAG(){
-  if(!DB.contracts.length){$('rag-list').innerHTML='<div class="alert alert-info">No contracts yet. Add contracts in Funding & Contracts first.</div>';return;}
+  if(!DB.contracts.length){
+    $('rag-list').innerHTML='<div class="alert alert-info">No contracts yet. Add contracts in Funding & Contracts first.</div>';
+    return;
+  }
+  // Count participants per contract using contract_ids
   $('rag-list').innerHTML=DB.contracts.map(c=>{
-    const sp=c.target_starts?Math.round(c.actual_starts/c.target_starts*100):0;
-    const op=c.target_outcomes?Math.round(c.actual_outcomes/c.target_outcomes*100):0;
-    const avg=(sp+op)/2,rag=avg>=80?'green':avg>=50?'amber':'red';
+    // Participants linked to this contract
+    const linked=DB.participants.filter(p=>(p.contract_ids||[]).includes(String(c.id)));
+    // Auto-calculate actual starts = all linked participants
+    const actualStarts=linked.length;
+    // Auto-calculate actual outcomes = linked participants with at least one outcome
+    const actualOutcomes=linked.filter(p=>(p.outcomes||[]).length>0).length;
+    // Use manual targets from contract
+    const ts=num(c.target_starts)||1;
+    const to=num(c.target_outcomes)||1;
+    const sp=Math.round(actualStarts/ts*100);
+    const op=Math.round(actualOutcomes/to*100);
+    const avg=(sp+op)/2;
+    const rag=avg>=80?'green':avg>=50?'amber':'red';
     const col={green:'#10b981',amber:'#f59e0b',red:'#f87171'}[rag];
-    const lbl={green:'🟢 GREEN — On track',amber:'🟡 AMBER — At risk',red:'🔴 RED — Underperforming'}[rag];
-    return`<div class="card" style="border-left:4px solid ${col}">
-      <div style="display:flex;justify-content:space-between;margin-bottom:14px"><div><div style="font-size:15px;font-weight:700">${c.name}</div><div style="font-size:12px;color:var(--txt3)">${c.funder} · £${num(c.value).toLocaleString()}</div></div><span style="font-size:11px;font-weight:700;color:${col}">${lbl}</span></div>
-      <div class="stats-grid" style="grid-template-columns:repeat(2,1fr)">
-        <div class="stat-card"><div class="stat-lbl">Starts</div><div class="stat-val">${c.actual_starts}/${c.target_starts}</div></div>
-        <div class="stat-card"><div class="stat-lbl">Outcomes</div><div class="stat-val">${c.actual_outcomes}/${c.target_outcomes}</div></div>
+    const lbl={green:'🟢 On track',amber:'🟡 At risk',red:'🔴 Underperforming'}[rag];
+    // Days remaining
+    const daysLeft=c.end_date?Math.ceil((new Date(c.end_date)-Date.now())/86400000):null;
+    const daysStr=daysLeft!==null?(daysLeft>0?`${daysLeft} days remaining`:'Contract ended'):'No end date';
+    return`<div class="card" style="border-left:4px solid ${col};margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+        <div>
+          <div style="font-size:15px;font-weight:700;color:var(--txt)">${c.name}</div>
+          <div style="font-size:12px;color:var(--txt3);margin-top:2px">${c.funder||'—'} · £${num(c.value).toLocaleString()} · ${daysStr}</div>
+        </div>
+        <span style="font-size:12px;font-weight:700;color:${col};background:rgba(0,0,0,.2);padding:4px 12px;border-radius:20px;white-space:nowrap">${lbl}</span>
       </div>
-      <div class="fund-bar-wrap"><div class="fund-top"><span>Starts progress</span><span>${sp}%</span></div><div class="fund-track"><div class="fund-fill ${sp<50?'danger':sp<80?'warn':''}" style="width:${Math.min(sp,100)}%"></div></div></div>
-      <div class="fund-bar-wrap"><div class="fund-top"><span>Outcomes progress</span><span>${op}%</span></div><div class="fund-track"><div class="fund-fill ${op<50?'danger':op<80?'warn':''}" style="width:${Math.min(op,100)}%"></div></div></div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+        <div class="stat-card"><div class="stat-lbl">Starts</div><div class="stat-val">${actualStarts}</div><div class="stat-sub">of ${c.target_starts||0} target</div></div>
+        <div class="stat-card"><div class="stat-lbl">Outcomes</div><div class="stat-val">${actualOutcomes}</div><div class="stat-sub">of ${c.target_outcomes||0} target</div></div>
+        <div class="stat-card"><div class="stat-lbl">Starts %</div><div class="stat-val" style="color:${sp>=80?'var(--em)':sp>=50?'var(--amber)':'var(--red)'}">${sp}%</div></div>
+        <div class="stat-card"><div class="stat-lbl">Outcomes %</div><div class="stat-val" style="color:${op>=80?'var(--em)':op>=50?'var(--amber)':'var(--red)'}">${op}%</div></div>
+      </div>
+      <div class="fund-bar-wrap"><div class="fund-top"><span>Starts progress</span><span>${actualStarts}/${c.target_starts||0}</span></div><div class="fund-track"><div class="fund-fill ${sp<50?'danger':sp<80?'warn':''}" style="width:${Math.min(sp,100)}%"></div></div></div>
+      <div class="fund-bar-wrap"><div class="fund-top"><span>Outcomes progress</span><span>${actualOutcomes}/${c.target_outcomes||0}</span></div><div class="fund-track"><div class="fund-fill ${op<50?'danger':op<80?'warn':''}" style="width:${Math.min(op,100)}%"></div></div></div>
+      ${linked.length?`<div style="margin-top:10px"><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;margin-bottom:6px">Linked participants</div><div style="display:flex;flex-wrap:wrap;gap:5px">${linked.slice(0,8).map(p=>`<span class="badge b-engaged">${p.first_name} ${p.last_name}</span>`).join('')}${linked.length>8?`<span style="font-size:11px;color:var(--txt3)">+${linked.length-8} more</span>`:''}</div></div>`:'<div style="font-size:12px;color:var(--txt3);margin-top:8px">No participants linked to this contract yet. Edit participants and assign contract IDs.</div>'}
     </div>`;
   }).join('');
 }
 
-// ══ OUTCOMES ══
+// ══ OUTCOMES — wired to Supabase outcomes table + participant data ══
 function renderOutcomes(){
   const P=DB.participants,tot=P.length;
+  const jobs=P.filter(p=>p.outcomes.includes('Employment')).length;
+  const training=P.filter(p=>p.outcomes.includes('Training')).length;
+  const qual=P.filter(p=>p.outcomes.includes('Qualification')).length;
+  const vol=P.filter(p=>p.outcomes.includes('Volunteering')).length;
+  const wellbeing=P.filter(p=>p.outcomes.includes('Wellbeing')).length;
+  const housing=P.filter(p=>p.outcomes.includes('Housing secured')).length;
+  const sustained=P.filter(p=>p.stage==='Sustained').length;
+  const withOutcomes=P.filter(p=>p.outcomes.length>0).length;
+
   $('out-stats').innerHTML=[
-    {l:'Total starts',v:tot},
-    {l:'Positive outcomes',v:P.filter(p=>p.outcomes.length>0).length},
-    {l:'Employment',v:P.filter(p=>p.outcomes.includes('Employment')).length},
-    {l:'Sustained 12wks+',v:P.filter(p=>p.stage==='Sustained').length}
-  ].map(s=>`<div class="stat-card"><div class="stat-lbl">${s.l}</div><div class="stat-val">${s.v}</div></div>`).join('');
-  $('out-by-type').innerHTML=OUT_TYPES.map(t=>{const c=P.filter(p=>p.outcomes.includes(t)).length,p2=tot?Math.round(c/tot*100):0;return`<div class="fund-bar-wrap"><div class="fund-top"><span>${t}</span><span>${c}</span></div><div class="fund-track"><div class="fund-fill" style="width:${p2}%"></div></div></div>`;}).join('');
-  $('out-barriers').innerHTML=BARRIERS.map(b=>{const c=P.filter(p=>p.barriers.includes(b)).length,p2=tot?Math.round(c/tot*100):0;return`<div class="fund-bar-wrap"><div class="fund-top"><span>${b}</span><span>${c}</span></div><div class="fund-track"><div class="fund-fill ${p2>40?'warn':''}" style="width:${p2}%"></div></div></div>`;}).join('');
+    {l:'Total starts',v:tot,s:'All participants'},
+    {l:'Positive outcomes',v:withOutcomes,s:pct(withOutcomes,tot||1)+'% success rate'},
+    {l:'Employment',v:jobs,s:pct(jobs,tot||1)+'% of starts'},
+    {l:'Sustained 12wks+',v:sustained,s:'Long-term sustainment'},
+  ].map(s=>`<div class="stat-card"><div class="stat-lbl">${s.l}</div><div class="stat-val">${s.v}</div><div class="stat-sub">${s.s}</div></div>`).join('');
+
+  $('out-by-type').innerHTML=OUT_TYPES.map(t=>{
+    const c=P.filter(p=>p.outcomes.includes(t)).length;
+    const p2=tot?Math.round(c/tot*100):0;
+    return`<div class="fund-bar-wrap">
+      <div class="fund-top"><span style="font-size:13px;color:var(--txt2)">${t}</span><span style="font-weight:600;color:var(--em)">${c} <span style="color:var(--txt3);font-weight:400">(${p2}%)</span></span></div>
+      <div class="fund-track"><div class="fund-fill" style="width:${p2}%"></div></div>
+    </div>`;
+  }).join('');
+
+  $('out-barriers').innerHTML=BARRIERS.map(b=>{
+    const c=P.filter(p=>p.barriers.includes(b)).length;
+    const p2=tot?Math.round(c/tot*100):0;
+    return`<div class="fund-bar-wrap">
+      <div class="fund-top"><span style="font-size:13px;color:var(--txt2)">${b}</span><span style="font-weight:600;color:${p2>40?'var(--amber)':'var(--txt2)'}"> ${c} <span style="color:var(--txt3);font-weight:400">(${p2}%)</span></span></div>
+      <div class="fund-track"><div class="fund-fill ${p2>40?'warn':''}" style="width:${p2}%"></div></div>
+    </div>`;
+  }).join('');
+
+  // Stage breakdown
+  const stageBreakdown=P_STAGES.map(s=>({s,c:P.filter(p=>p.stage===s).length}));
+  const stageEl=$('out-stage-breakdown');
+  if(stageEl){
+    stageEl.innerHTML=stageBreakdown.map(({s,c})=>{
+      const p2=tot?Math.round(c/tot*100):0;
+      return`<div class="fund-bar-wrap">
+        <div class="fund-top"><span style="font-size:13px;color:var(--txt2)">${s}</span><span style="font-weight:600;color:var(--em)">${c}</span></div>
+        <div class="fund-track"><div class="fund-fill" style="width:${p2}%"></div></div>
+      </div>`;
+    }).join('');
+  }
+
+  // Confidence scores
+  const FB=DB.feedback;
+  const avgCB=FB.length?(FB.reduce((a,f)=>a+num(f.cb),0)/FB.length).toFixed(1):'-';
+  const avgCA=FB.length?(FB.reduce((a,f)=>a+num(f.ca),0)/FB.length).toFixed(1):'-';
+  const confEl=$('out-confidence');
+  if(confEl) confEl.innerHTML=`<div style="display:flex;gap:20px;align-items:center;padding:8px 0">
+    <div style="text-align:center"><div style="font-size:36px;font-weight:800;color:var(--amber)">${avgCB}</div><div style="font-size:11px;color:var(--txt3)">avg confidence before</div></div>
+    <div style="font-size:22px;color:var(--txt3)">→</div>
+    <div style="text-align:center"><div style="font-size:36px;font-weight:800;color:var(--em)">${avgCA}</div><div style="font-size:11px;color:var(--txt3)">avg confidence after</div></div>
+    <div style="font-size:12px;color:var(--txt3);flex:1;padding-left:12px">Based on <strong>${FB.length}</strong> feedback responses across all workshops.</div>
+  </div>`;
 }
 
 // ══ FUNDING ══
@@ -1594,7 +1759,42 @@ function generateReport(type){
   </div>`;
 }
 
-// ══ BOOT ══
+// ══ SETTINGS PAGE ══
+function renderSettings(){
+  if(!currentOrg) return;
+  const m=currentOrg.modules||{};
+  $('set-name').value=currentOrg.name||'';
+  $('set-sector').value=currentOrg.sector||'';
+  $('set-plan').textContent=currentOrg.plan==='pro'?'Pro':currentOrg.plan==='starter'?'Starter':currentOrg.plan==='network'?'Network':'Free';
+  $('set-status').textContent=currentOrg.status||'active';
+  // Module toggles
+  ['participants','volunteers','events','employers','circular','funders'].forEach(k=>{
+    const el=$('set-mod-'+k);
+    if(el) el.checked=m[k]??true;
+  });
+}
+
+async function saveSettings(){
+  const btn=$('set-save-btn');btn.textContent='Saving…';btn.disabled=true;
+  try{
+    const mods={
+      participants:$('set-mod-participants').checked,
+      volunteers:$('set-mod-volunteers').checked,
+      events:$('set-mod-events').checked,
+      employers:$('set-mod-employers').checked,
+      circular:$('set-mod-circular').checked,
+      funders:$('set-mod-funders').checked,
+    };
+    const d={name:$('set-name').value,sector:$('set-sector').value,modules:mods};
+    await sbUpdate('organisations',d,orgId);
+    currentOrg={...currentOrg,...d};
+    applyModules(mods);
+    $('ob-txt').textContent=currentOrg.name+(currentOrg.sector?' · '+currentOrg.sector:'');
+    $('set-save-msg').style.display='block';
+    setTimeout(()=>$('set-save-msg').style.display='none',3000);
+  }catch(e){alert('Save failed: '+e.message);}
+  finally{btn.textContent='Save settings';btn.disabled=false;}
+}
 async function boot(){
   initSB();
   // Check for existing session
