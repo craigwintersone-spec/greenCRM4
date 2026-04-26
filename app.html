@@ -56,6 +56,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
 .btn-ghost{background:var(--card);color:var(--txt2);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--em);color:var(--em)}
 .btn-sm{padding:5px 10px;font-size:12px}
 .btn-danger{background:none;color:var(--red);border:1px solid var(--border)}.btn-danger:hover{border-color:var(--red)}
+.btn-demo{background:rgba(245,158,11,.15);color:var(--amber);border:1px solid rgba(245,158,11,.3)}.btn-demo:hover{background:rgba(245,158,11,.25)}
 .tl-entry{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
 .tl-dot{width:9px;height:9px;border-radius:50%;background:var(--em);flex-shrink:0;margin-top:5px}
 .tl-dot.amber{background:var(--amber)}.tl-dot.blue{background:var(--blue)}.tl-dot.red{background:var(--red)}
@@ -112,6 +113,21 @@ tr:hover td{background:rgba(16,185,129,.03)}
 .report-card:hover{border-color:var(--em)}
 .mod-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:13px 15px;display:flex;align-items:center;justify-content:space-between;transition:border-color .2s}
 .mod-item.on{border-color:var(--em)}
+/* Contract multi-select */
+.con-select{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:8px;max-height:120px;overflow-y:auto}
+.con-option{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;transition:background .15s}
+.con-option:hover{background:rgba(16,185,129,.08)}
+.con-option input{width:auto;background:none;border:none;padding:0;cursor:pointer}
+.con-option.selected{background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2)}
+/* Empty state */
+.empty-state{text-align:center;padding:40px 20px;color:var(--txt3)}
+.empty-state .es-icon{font-size:40px;margin-bottom:12px}
+.empty-state .es-title{font-size:15px;font-weight:600;color:var(--txt2);margin-bottom:6px}
+.empty-state .es-sub{font-size:13px;margin-bottom:16px}
+/* Demo banner */
+.demo-banner{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);border-radius:var(--radiuslg);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;gap:12px}
+.demo-banner-txt{font-size:13px;color:var(--amber);font-weight:500}
+.demo-banner-sub{font-size:12px;color:var(--txt3);margin-top:2px}
 #org-banner{background:linear-gradient(90deg,var(--em2),var(--em));color:#fff;padding:7px 20px;font-size:12px;font-weight:600;display:none;justify-content:space-between}
 #dbg{position:fixed;bottom:0;right:0;width:360px;max-height:150px;overflow-y:auto;background:#060c06;border:1px solid var(--border);border-radius:8px 0 0 0;padding:6px 10px;font-size:10px;font-family:monospace;z-index:9999;display:none}
 @media(max-width:900px){#sidebar{width:52px}.nav-btn span:not(.icon),.nav-section,.logo span{display:none}.stats-grid{grid-template-columns:repeat(2,1fr)}.kanban{grid-template-columns:repeat(3,1fr)}}
@@ -152,8 +168,14 @@ tr:hover td{background:rgba(16,185,129,.03)}
 </div>
 <div id="main">
 
+<!-- PAGES -->
 <div id="page-dashboard" class="page">
-  <div class="page-header"><div><div class="page-title">Dashboard</div><div class="page-sub" id="dash-sub">Overview</div></div><button class="btn btn-ghost btn-sm" onclick="refresh()">↻ Refresh</button></div>
+  <div class="page-header"><div><div class="page-title">Dashboard</div><div class="page-sub" id="dash-sub">Overview</div></div>
+  <div style="display:flex;gap:8px">
+    <button class="btn btn-demo btn-sm" onclick="loadDemoData()" id="demo-btn">🎭 Load demo data</button>
+    <button class="btn btn-ghost btn-sm" onclick="refresh()">↻ Refresh</button>
+  </div></div>
+  <div id="demo-banner-wrap"></div>
   <div class="stats-grid" id="dash-stats"></div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
     <div class="card"><div class="card-title">At-risk — chase today</div><div id="dash-risk"></div></div>
@@ -206,7 +228,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
     <button class="btn btn-ghost btn-sm ml-auto" onclick="exportCSV('participants')">Export CSV</button>
   </div>
   <div id="p-alert" class="alert alert-warn" style="display:none"></div>
-  <div class="tbl-wrap"><table><thead><tr><th>Participant</th><th>Ref</th><th>Stage</th><th>Advisor</th><th>Outcomes</th><th>Risk</th><th>Last contact</th><th></th></tr></thead><tbody id="p-table"></tbody></table></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Participant</th><th>Ref</th><th>Stage</th><th>Advisor</th><th>Contracts</th><th>Outcomes</th><th>Risk</th><th>Last contact</th><th></th></tr></thead><tbody id="p-table"></tbody></table></div>
 </div>
 
 <div id="page-contacts" class="page">
@@ -347,6 +369,14 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <div class="form-grid-2"><div class="form-row"><label>Stage</label><select id="mp-st"><option>Referred</option><option>Engaged</option><option>In Support</option><option>Job Ready</option><option>Outcome Achieved</option><option>Sustained</option><option>Closed</option></select></div><div class="form-row"><label>Risk level</label><select id="mp-risk"><option>Low</option><option>Medium</option><option>High</option></select></div></div>
   <div class="form-row"><label>Barriers</label><div id="barrier-checks" class="chk-group"></div></div>
   <div class="form-row"><label>Outcomes achieved</label><div id="outcome-checks" class="chk-group"></div></div>
+  <!-- ── CONTRACT LINKING ── -->
+  <div class="form-row">
+    <label>Link to contracts</label>
+    <div class="con-select" id="mp-contracts-list">
+      <div style="font-size:12px;color:var(--txt3);padding:4px">No contracts yet — add contracts in Funding first.</div>
+    </div>
+    <div style="font-size:11px;color:var(--txt3);margin-top:4px">Linking updates RAG dashboard automatically</div>
+  </div>
   <div class="form-row"><label>Safeguarding flag</label><select id="mp-safe"><option value="">None</option><option>Domestic abuse</option><option>Mental health</option><option>Substance misuse</option><option>Homelessness risk</option></select></div>
   <div class="score-box"><div class="score-label">Distance Travelled (1–10)</div>
     <div class="form-grid-2"><div class="form-row"><label>Confidence</label><input type="number" id="mp-conf" min="1" max="10"/></div><div class="form-row"><label>Work readiness</label><input type="number" id="mp-work" min="1" max="10"/></div></div>
@@ -491,6 +521,7 @@ let sb=null,orgId=null,currentOrg=null,currentUser=null;
 let _editPId=null,_editVolId=null,_editEmpId=null,_editEvId=null;
 let _editFbId=null,_editItemId=null,_editConId=null,_editCId=null,_editRId=null;
 let _vTab='vbasic',_fbScores={enjoyed:5,cb:3,ca:5};
+let _demoLoaded=false;
 
 const DB={participants:[],volunteers:[],events:[],feedback:[],contacts:[],employers:[],referrals:[],partner_referrals:[],circular:[],contracts:[],evidence:[]};
 
@@ -511,6 +542,7 @@ function dbg(msg,type='info'){
   el.innerHTML+=`<div style="color:${c[type]||c.info};padding:1px 0">${msg}</div>`;
   el.scrollTop=el.scrollHeight;
 }
+
 function mkChkArr(cid,items,sel=[]){
   const el=$(cid);if(!el)return;
   el.innerHTML=items.map(b=>`<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--txt2);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 7px;cursor:pointer;text-transform:none;letter-spacing:0"><input type="checkbox" value="${b}" ${sel.includes(b)?'checked':''} style="width:auto;background:none;border:none;padding:0"/> ${b}</label>`).join('');
@@ -519,6 +551,117 @@ function getChkArr(cid){return[...document.querySelectorAll(`#${cid} input[type=
 function mkChkGroup(cid,items,sel=[]){
   const el=$(cid);if(!el)return;
   el.innerHTML=items.map(it=>`<div class="chk-pill"><label><input type="checkbox" value="${it}" ${sel.includes(it)?'checked':''}/> ${it}</label></div>`).join('');
+}
+
+// ══ CONTRACT SELECTOR IN PARTICIPANT MODAL ══
+function renderContractSelector(selectedIds=[]){
+  const el=$('mp-contracts-list');if(!el)return;
+  if(!DB.contracts.length){
+    el.innerHTML='<div style="font-size:12px;color:var(--txt3);padding:4px">No contracts yet — add contracts in Funding first.</div>';
+    return;
+  }
+  el.innerHTML=DB.contracts.map(c=>{
+    const sel=selectedIds.map(String).includes(String(c.id));
+    return`<div class="con-option${sel?' selected':''}" id="con-opt-${c.id}" onclick="toggleConOption(${c.id})">
+      <input type="checkbox" value="${c.id}" ${sel?'checked':''} style="width:auto;background:none;border:none;padding:0;pointer-events:none"/>
+      <div>
+        <div style="font-size:12px;font-weight:600;color:var(--txt)">${c.name}</div>
+        <div style="font-size:11px;color:var(--txt3)">${c.funder||'—'} · £${num(c.value).toLocaleString()} · target ${c.target_starts||0} starts</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleConOption(id){
+  const el=$(`con-opt-${id}`);if(!el)return;
+  const cb=el.querySelector('input');
+  cb.checked=!cb.checked;
+  el.classList.toggle('selected',cb.checked);
+}
+
+function getSelectedContractIds(){
+  return[...document.querySelectorAll('#mp-contracts-list input[type=checkbox]:checked')].map(x=>x.value);
+}
+
+// ══ DEMO DATA ══
+async function loadDemoData(){
+  if(_demoLoaded){alert('Demo data already loaded this session.');return;}
+  if(!confirm('Load sample data to explore GreenCRM?\n\nThis will add demo participants, events, a contract, and feedback so you can see everything working. You can delete it anytime.'))return;
+  const btn=$('demo-btn');btn.textContent='Loading…';btn.disabled=true;
+
+  const demoContract={name:'MoJ Employment Support 2024-25',funder:'Ministry of Justice',value:45000,target_starts:25,target_outcomes:15,actual_starts:0,actual_outcomes:0,start_date:'2024-04-01',end_date:'2025-03-31'};
+  let conId=null;
+  if(sb&&orgId){
+    try{const r=await sbInsert('contracts',demoContract);conId=r?.id;}catch(e){}
+  } else {
+    conId='demo-'+Date.now();
+    DB.contracts.push({id:conId,...demoContract});
+  }
+
+  const demoParticipants=[
+    {first_name:'Aisha',last_name:'Okonkwo',ref_source:'Probation',stage:'In Support',advisor:'Sarah T.',barriers:['Confidence','Housing'],outcomes:['Employment'],risk:'Medium',last_contact:today(),notes:[{t:'Initial assessment complete. Strong motivation.',d:today(),s:'Sarah T.'}],scores:{confidence:6,work_readiness:5,wellbeing:7,skills:5},safeguarding:null,contract_ids:[String(conId)]},
+    {first_name:'Marcus',last_name:'Webb',ref_source:'Jobcentre Plus',stage:'Job Ready',advisor:'Marcus O.',barriers:['Skills gap','Transport'],outcomes:['Training','Employment'],risk:'Low',last_contact:today(),notes:[{t:'Completed Green Skills workshop. Applied for 3 roles.',d:today(),s:'Marcus O.'}],scores:{confidence:8,work_readiness:8,wellbeing:7,skills:7},safeguarding:null,contract_ids:[String(conId)]},
+    {first_name:'Priya',last_name:'Sharma',ref_source:'Community org',stage:'Engaged',advisor:'Priya S.',barriers:['Childcare','Mental health'],outcomes:[],risk:'High',last_contact:new Date(Date.now()-25*86400000).toISOString().split('T')[0],notes:[],scores:{confidence:3,work_readiness:2,wellbeing:4,skills:4},safeguarding:'Mental health',contract_ids:[String(conId)]},
+    {first_name:'James',last_name:'Okafor',ref_source:'Self-referral',stage:'Outcome Achieved',advisor:'Sarah T.',barriers:['Criminal record'],outcomes:['Employment','Volunteering'],risk:'Low',last_contact:today(),notes:[{t:'Started full-time role at GreenCycle Ltd. Brilliant outcome.',d:today(),s:'Sarah T.'}],scores:{confidence:9,work_readiness:9,wellbeing:8,skills:8},safeguarding:null,contract_ids:[String(conId)]},
+    {first_name:'Fatima',last_name:'Al-Hassan',ref_source:'School / college',stage:'Referred',advisor:'Unassigned',barriers:['Language','Confidence'],outcomes:[],risk:'Medium',last_contact:new Date(Date.now()-3*86400000).toISOString().split('T')[0],notes:[],scores:{},safeguarding:null,contract_ids:[]},
+  ];
+
+  const demoEvents=[
+    {name:'Green Skills Taster Day',type:'Green Skills',event_date:'2024-11-15',attendees:18,capacity:20,location:'Hackney Community Centre'},
+    {name:'CV & Interview Workshop',type:'Green Skills',event_date:'2024-12-03',attendees:12,capacity:15,location:'Online / Zoom'},
+    {name:'Wellbeing & Mindfulness Morning',type:'Wellbeing',event_date:'2025-01-20',attendees:9,capacity:12,location:'GreenHub'},
+  ];
+
+  const demoVolunteers=[
+    {name:'Tom Greenfield',first_name:'Tom',last_name:'Greenfield',email:'tom@greencrm.co.uk',phone:'07700 900001',role:'Fixer',skills:JSON.stringify(['Gardening','Bike repair','Event Setup']),hours:42,status:'Active'},
+    {name:'Adaeze Nwachukwu',first_name:'Adaeze',last_name:'Nwachukwu',email:'ada@greencrm.co.uk',phone:'',role:'Advisor',skills:JSON.stringify(['Teaching/Facilitation','Admin/Office']),hours:28,status:'Active'},
+  ];
+
+  const demoFeedback=[
+    {event_id:null,name:'Marcus Webb',enjoyed:5,cb:3,ca:5,learned:true,connected:true,friend:false,quote:'I never thought I\'d be job-ready this quickly. The team believed in me.'},
+    {event_id:null,name:'Aisha Okonkwo',enjoyed:4,cb:2,ca:4,learned:true,connected:true,friend:true,quote:'The green skills workshop opened my eyes to a whole new career path.'},
+    {event_id:null,name:'Anonymous',enjoyed:5,cb:3,ca:5,learned:true,connected:false,friend:false,quote:''},
+  ];
+
+  if(sb&&orgId){
+    try{
+      for(const p of demoParticipants)await sbInsert('participants',p);
+      const evIds=[];
+      for(const e of demoEvents){const r=await sbInsert('events',e);evIds.push(r?.id);}
+      for(const v of demoVolunteers)await sbInsert('volunteers',v);
+      for(let i=0;i<demoFeedback.length;i++){
+        const fb={...demoFeedback[i],event_id:evIds[i]||evIds[0]||null};
+        try{
+          const p={...fb};if(orgId)p.org_id=orgId;
+          await sb.from('feedback').insert([p]);
+        }catch(e){}
+      }
+      await syncAll();
+    }catch(e){dbg('Demo insert error: '+e.message,'error');}
+  } else {
+    // Local fallback if no Supabase
+    let fakeId=1000;
+    demoParticipants.forEach(p=>DB.participants.push({id:fakeId++,...p}));
+    demoEvents.forEach(e=>DB.events.push({id:fakeId++,...e,date:e.event_date}));
+    demoVolunteers.forEach(v=>DB.volunteers.push({id:fakeId++,...v}));
+    demoFeedback.forEach((f,i)=>DB.feedback.push({id:fakeId++,...f,eventId:DB.events[i]?.id||null}));
+  }
+
+  _demoLoaded=true;
+  btn.textContent='🎭 Load demo data';btn.disabled=false;
+  showDemoBanner();
+  go('dashboard');
+}
+
+function showDemoBanner(){
+  const w=$('demo-banner-wrap');if(!w)return;
+  w.innerHTML=`<div class="demo-banner">
+    <div>
+      <div class="demo-banner-txt">🎭 Demo data loaded</div>
+      <div class="demo-banner-sub">Sample participants, events, a contract, and feedback are now active. Explore freely — nothing is live.</div>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="this.closest('.demo-banner').style.display='none'">Dismiss</button>
+  </div>`;
 }
 
 function initSB(){
@@ -576,12 +719,11 @@ async function syncAll(){
   if(evD!==null)DB.evidence=evD.map(e=>({id:e.id,participant_name:e.participant_name||'',type:e.type||'',linked_outcome:e.linked_outcome||'',staff:e.staff||'',evidence_date:e.evidence_date||'',status:e.status||'Pending'}));
   if(refD!==null)DB.referrals=refD.map(r=>({id:r.id,first_name:r.first_name||'',last_name:r.last_name||'',source:r.source||'',status:r.status||'Referred',advisor:r.advisor||'',referred_date:r.referred_date||''}));
   if(prefD!==null)DB.partner_referrals=prefD.map(r=>({id:r.id,partner_name:r.partner_name||'',first_name:r.first_name||'',last_name:r.last_name||'',dob:r.dob||'',phone:r.phone||'',email:r.email||'',primary_need:r.primary_need||'',urgency:r.urgency||'Standard',notes:r.notes||'',barriers:toArr(r.barriers),safeguarding:r.safeguarding||'',partner_ref:r.partner_ref||'',consent:!!r.consent,status:r.status||'Referred',created_at:r.created_at||''}));
-  dbg('Sync done — '+DB.participants.length+'p '+DB.volunteers.length+'v '+DB.events.length+'e','ok');
+  dbg('Sync done','ok');
 }
 
 async function refreshTable(table){
   const fresh=await sbQ(table);if(fresh===null)return;
-  const key=table==='circular_items'?'circular':table;
   if(table==='participants')DB.participants=fresh.map(p=>({id:p.id,first_name:p.first_name||'',last_name:p.last_name||'',ref_source:p.ref_source||'Self-referral',stage:p.stage||'Referred',advisor:p.advisor||'Unassigned',barriers:toArr(p.barriers),outcomes:toArr(p.outcomes),safeguarding:p.safeguarding||null,risk:p.risk||'Low',last_contact:p.last_contact||null,notes:toArr(p.notes),scores:p.scores||{},contract_ids:toArr(p.contract_ids)}));
   else if(table==='volunteers')DB.volunteers=fresh.map(v=>({id:v.id,name:v.name||[v.first_name,v.last_name].filter(Boolean).join(' ')||'Unknown',first_name:v.first_name||'',last_name:v.last_name||'',email:v.email||'',phone:v.phone||'',role:v.role||'Volunteer',skills:toArr(v.skills),hours:num(v.hours),status:v.status||'Active'}));
   else if(table==='events')DB.events=fresh.map(e=>({id:e.id,name:e.name||'',type:e.type||'Other',date:e.event_date||e.date||'',attendees:num(e.attendees),capacity:num(e.capacity)||20,location:e.location||''}));
@@ -592,6 +734,10 @@ async function refreshTable(table){
   else if(table==='contracts')DB.contracts=fresh.map(c=>({id:c.id,name:c.name||'',funder:c.funder||'',value:num(c.value),target_starts:num(c.target_starts),actual_starts:num(c.actual_starts),target_outcomes:num(c.target_outcomes),actual_outcomes:num(c.actual_outcomes),start_date:c.start_date||'',end_date:c.end_date||''}));
   else if(table==='evidence')DB.evidence=fresh.map(e=>({id:e.id,participant_name:e.participant_name||'',type:e.type||'',linked_outcome:e.linked_outcome||'',staff:e.staff||'',evidence_date:e.evidence_date||'',status:e.status||'Pending'}));
   else if(table==='referrals')DB.referrals=fresh.map(r=>({id:r.id,first_name:r.first_name||'',last_name:r.last_name||'',source:r.source||'',status:r.status||'Referred',advisor:r.advisor||'',referred_date:r.referred_date||''}));
+}
+
+function emptyState(icon,title,sub,btnLabel,btnFn){
+  return`<div class="empty-state"><div class="es-icon">${icon}</div><div class="es-title">${title}</div><div class="es-sub">${sub}</div>${btnLabel?`<button class="btn btn-p btn-sm" onclick="${btnFn}">${btnLabel}</button>`:''}</div>`;
 }
 
 function applyModules(mods){
@@ -641,11 +787,14 @@ function renderDashboard(){
     {l:'Outcomes achieved',v:withOutcomes,s:pct(withOutcomes,P.length||1)+'% rate'},
   ].map(s=>`<div class="stat-card"><div class="stat-lbl">${s.l}</div><div class="stat-val">${s.v}</div><div class="stat-sub">${s.s}</div></div>`).join('');
   const risk=P.filter(p=>p.risk==='High'||days(p.last_contact)>21);
-  $('dash-risk').innerHTML=risk.length?risk.map(p=>`<div class="tl-entry"><div class="tl-dot ${p.risk==='High'?'red':'amber'}"></div><div><div class="tl-lbl">${p.first_name} ${p.last_name} <span class="badge ${rCls(p.risk)}">${p.risk}</span></div><div class="tl-meta">${days(p.last_contact)>21?'No contact '+days(p.last_contact)+'d · ':''}${p.advisor}</div></div></div>`).join(''):'<div style="color:var(--txt3);font-size:13px">No at-risk participants 🎉</div>';
+  $('dash-risk').innerHTML=risk.length?risk.map(p=>`<div class="tl-entry"><div class="tl-dot ${p.risk==='High'?'red':'amber'}"></div><div><div class="tl-lbl">${p.first_name} ${p.last_name} <span class="badge ${rCls(p.risk)}">${p.risk}</span></div><div class="tl-meta">${days(p.last_contact)>21?'No contact '+days(p.last_contact)+'d · ':''}${p.advisor}</div></div></div>`).join(''):emptyState('🎉','No at-risk participants','Everyone is on track. Great work!','');
   const recent=P.flatMap(p=>toArr(p.notes).map(nt=>({...nt,who:p.first_name+' '+p.last_name}))).sort((a,b)=>new Date(b.d)-new Date(a.d)).slice(0,5);
-  $('dash-activity').innerHTML=recent.length?recent.map(nt=>`<div class="tl-entry"><div class="tl-dot blue"></div><div><div class="tl-lbl">${nt.who}</div><div class="tl-meta">${(nt.t||'').slice(0,65)} · ${fmtD(nt.d)}</div></div></div>`).join(''):'<div style="color:var(--txt3);font-size:13px">No activity yet.</div>';
+  $('dash-activity').innerHTML=recent.length?recent.map(nt=>`<div class="tl-entry"><div class="tl-dot blue"></div><div><div class="tl-lbl">${nt.who}</div><div class="tl-meta">${(nt.t||'').slice(0,65)} · ${fmtD(nt.d)}</div></div></div>`).join(''):`<div style="color:var(--txt3);font-size:13px;padding:8px 0">No recent activity. <a onclick="go('participants')" style="color:var(--em);cursor:pointer">Add your first participant →</a></div>`;
   $('dash-fb-hi').innerHTML=[{l:'Enjoyed sessions',v:pct(FB.filter(f=>f.enjoyed>=4).length,FB.length||1)+'%'},{l:'Learned something',v:pct(FB.filter(f=>f.learned).length,FB.length||1)+'%'},{l:'Felt more connected',v:pct(FB.filter(f=>f.connected).length,FB.length||1)+'%'},{l:'Made a new friend',v:pct(FB.filter(f=>f.friend).length,FB.length||1)+'%'}].map(r=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)"><span style="font-size:13px;color:var(--txt2)">${r.l}</span><span style="font-weight:700;color:var(--em)">${r.v}</span></div>`).join('');
   $('dash-conf-j').innerHTML=`<div style="display:flex;gap:20px;align-items:center;padding:8px 0"><div style="text-align:center"><div style="font-size:36px;font-weight:800;color:var(--amber)">${avgCB}</div><div style="font-size:11px;color:var(--txt3)">avg before</div></div><div style="font-size:22px;color:var(--txt3)">→</div><div style="text-align:center"><div style="font-size:36px;font-weight:800;color:var(--em)">${avgCA}</div><div style="font-size:11px;color:var(--txt3)">avg after</div></div></div>`;
+  // Show demo button only if no data
+  const demoBtn=$('demo-btn');
+  if(demoBtn)demoBtn.style.display=(P.length||E.length||_demoLoaded)?'none':'inline-block';
 }
 
 // ══ IMPACT ══
@@ -660,7 +809,7 @@ function renderImpact(){
   $('imp-connected').textContent=pct(FB.filter(f=>f.connected).length,FB.length||1)+'%';
   $('imp-cb').textContent=FB.length?(FB.reduce((a,f)=>a+num(f.cb),0)/FB.length).toFixed(1):'-';
   $('imp-ca').textContent=FB.length?(FB.reduce((a,f)=>a+num(f.ca),0)/FB.length).toFixed(1):'-';
-  $('imp-quotes').innerHTML=FB.filter(f=>f.quote).map(f=>{const ev=DB.events.find(e=>e.id===f.eventId);return`<div class="quote-card"><div style="font-size:13px;font-style:italic">"${f.quote}"</div><div style="font-size:11px;color:var(--txt3);margin-top:4px">${f.name||'Anonymous'} · ${ev?.name||''}</div></div>`;}).join('');
+  $('imp-quotes').innerHTML=FB.filter(f=>f.quote).map(f=>{const ev=DB.events.find(e=>e.id===f.eventId);return`<div class="quote-card"><div style="font-size:13px;font-style:italic">"${f.quote}"</div><div style="font-size:11px;color:var(--txt3);margin-top:4px">${f.name||'Anonymous'} · ${ev?.name||''}</div></div>`;}).join('')||'<div style="color:var(--txt3);font-size:13px">No quotes yet — collect feedback after events.</div>';
 }
 
 // ══ PARTICIPANTS ══
@@ -673,25 +822,70 @@ function renderParticipants(){
   const stale=DB.participants.filter(p=>days(p.last_contact)>21&&p.stage!=='Closed');
   const al=$('p-alert');
   if(stale.length){al.style.display='flex';al.textContent='⚠ '+stale.length+' participant(s) — no contact in 21+ days';}else al.style.display='none';
-  $('p-table').innerHTML=flt.length?flt.map(p=>{
+  if(!flt.length){
+    $('p-table').innerHTML=`<tr><td colspan="9">${DB.participants.length?'<div style="text-align:center;padding:20px;color:var(--txt3)">No participants match your filters.</div>':emptyState('👤','No participants yet','Add your first participant to get started.','+ Add participant',"openAddP()")}</td></tr>`;
+    return;
+  }
+  $('p-table').innerHTML=flt.map(p=>{
     const d=days(p.last_contact),ov=d>21;
-    return`<tr><td><div style="display:flex;align-items:center;gap:8px"><div style="width:28px;height:28px;border-radius:50%;background:rgba(16,185,129,.15);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--em)">${ini(p.first_name+' '+p.last_name)}</div><div><div class="cn">${p.first_name} ${p.last_name}</div>${p.safeguarding?'<span class="safe-flag">🔐 '+p.safeguarding+'</span>':''}</div></div></td><td style="font-size:11px;color:var(--txt3)">GC-${String(p.id).padStart(4,'0')}</td><td><span class="badge" style="background:rgba(16,185,129,.12);color:var(--em3)">${p.stage}</span></td><td style="font-size:12px">${p.advisor}</td><td>${p.outcomes.map(o=>'<span class="badge b-active" style="margin:1px">'+o+'</span>').join('')||'<span style="font-size:11px;color:var(--txt3)">None yet</span>'}</td><td><span class="badge ${rCls(p.risk)}">${p.risk}</span></td><td style="font-size:11px;color:${ov?'var(--amber)':'var(--txt3)'}">${fmtD(p.last_contact)}${ov?' ⚠ '+d+'d':''}</td><td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm" onclick="openEditP(${p.id})">Edit</button><button class="btn btn-ghost btn-sm" onclick="openNotes(${p.id})">Notes</button><button class="btn btn-danger btn-sm" onclick="deleteP(${p.id})">Del</button></div></td></tr>`;
-  }).join(''):'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--txt3)">No participants found.</td></tr>';
+    // linked contract names
+    const linkedCons=toArr(p.contract_ids).map(cid=>DB.contracts.find(c=>String(c.id)===String(cid))).filter(Boolean);
+    const conBadges=linkedCons.map(c=>`<span class="badge b-part" title="${c.funder||''}">${c.name.length>20?c.name.slice(0,18)+'…':c.name}</span>`).join(' ')||'<span style="font-size:11px;color:var(--txt3)">None</span>';
+    return`<tr><td><div style="display:flex;align-items:center;gap:8px"><div style="width:28px;height:28px;border-radius:50%;background:rgba(16,185,129,.15);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--em)">${ini(p.first_name+' '+p.last_name)}</div><div><div class="cn">${p.first_name} ${p.last_name}</div>${p.safeguarding?'<span class="safe-flag">🔐 '+p.safeguarding+'</span>':''}</div></div></td><td style="font-size:11px;color:var(--txt3)">GC-${String(p.id).padStart(4,'0')}</td><td><span class="badge" style="background:rgba(16,185,129,.12);color:var(--em3)">${p.stage}</span></td><td style="font-size:12px">${p.advisor}</td><td>${conBadges}</td><td>${p.outcomes.map(o=>'<span class="badge b-active" style="margin:1px">'+o+'</span>').join('')||'<span style="font-size:11px;color:var(--txt3)">None yet</span>'}</td><td><span class="badge ${rCls(p.risk)}">${p.risk}</span></td><td style="font-size:11px;color:${ov?'var(--amber)':'var(--txt3)'}">${fmtD(p.last_contact)}${ov?' ⚠ '+d+'d':''}</td><td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm" onclick="openEditP(${p.id})">Edit</button><button class="btn btn-ghost btn-sm" onclick="openNotes(${p.id})">Notes</button><button class="btn btn-danger btn-sm" onclick="deleteP(${p.id})">Del</button></div></td></tr>`;
+  }).join('');
 }
-function openAddP(){_editPId=null;$('mp-title').textContent='Add participant';['mp-fn','mp-ln','mp-note','mp-conf','mp-work','mp-well','mp-skillsc'].forEach(f=>$(f).value='');$('mp-safe').value='';mkChkArr('barrier-checks',BARRIERS);mkChkArr('outcome-checks',OUT_TYPES);$('modal-p').classList.add('open');}
-function openEditP(id){const p=DB.participants.find(x=>x.id===id);if(!p)return;_editPId=id;$('mp-title').textContent='Edit participant';$('mp-fn').value=p.first_name;$('mp-ln').value=p.last_name;$('mp-rs').value=p.ref_source;$('mp-adv').value=p.advisor;$('mp-st').value=p.stage;$('mp-risk').value=p.risk;$('mp-safe').value=p.safeguarding||'';const sc=p.scores||{};$('mp-conf').value=sc.confidence||'';$('mp-work').value=sc.work_readiness||'';$('mp-well').value=sc.wellbeing||'';$('mp-skillsc').value=sc.skills||'';mkChkArr('barrier-checks',BARRIERS,p.barriers);mkChkArr('outcome-checks',OUT_TYPES,p.outcomes);$('mp-note').value='';$('modal-p').classList.add('open');}
+
+function openAddP(){
+  _editPId=null;$('mp-title').textContent='Add participant';
+  ['mp-fn','mp-ln','mp-note','mp-conf','mp-work','mp-well','mp-skillsc'].forEach(f=>$(f).value='');
+  $('mp-safe').value='';
+  mkChkArr('barrier-checks',BARRIERS);mkChkArr('outcome-checks',OUT_TYPES);
+  renderContractSelector([]);
+  $('modal-p').classList.add('open');
+}
+
+function openEditP(id){
+  const p=DB.participants.find(x=>x.id===id);if(!p)return;
+  _editPId=id;$('mp-title').textContent='Edit participant';
+  $('mp-fn').value=p.first_name;$('mp-ln').value=p.last_name;
+  $('mp-rs').value=p.ref_source;$('mp-adv').value=p.advisor;
+  $('mp-st').value=p.stage;$('mp-risk').value=p.risk;
+  $('mp-safe').value=p.safeguarding||'';
+  const sc=p.scores||{};
+  $('mp-conf').value=sc.confidence||'';$('mp-work').value=sc.work_readiness||'';
+  $('mp-well').value=sc.wellbeing||'';$('mp-skillsc').value=sc.skills||'';
+  mkChkArr('barrier-checks',BARRIERS,p.barriers);mkChkArr('outcome-checks',OUT_TYPES,p.outcomes);
+  renderContractSelector(toArr(p.contract_ids));
+  $('mp-note').value='';
+  $('modal-p').classList.add('open');
+}
+
 async function saveP(){
   const btn=$('p-save-btn');btn.textContent='Saving…';btn.disabled=true;
   try{
     const note=$('mp-note').value;
-    const d={first_name:$('mp-fn').value||'Unknown',last_name:$('mp-ln').value||'',ref_source:$('mp-rs').value,stage:$('mp-st').value,advisor:$('mp-adv').value,barriers:getChkArr('barrier-checks'),outcomes:getChkArr('outcome-checks'),safeguarding:$('mp-safe').value||null,risk:$('mp-risk').value,last_contact:today(),scores:{confidence:parseInt($('mp-conf').value)||null,work_readiness:parseInt($('mp-work').value)||null,wellbeing:parseInt($('mp-well').value)||null,skills:parseInt($('mp-skillsc').value)||null}};
-    if(_editPId){const ex=DB.participants.find(x=>x.id===_editPId);const notes=[...toArr(ex.notes)];if(note)notes.push({t:note,d:today(),s:'Staff'});await sbUpdate('participants',{...d,notes},_editPId);}
-    else{const notes=note?[{t:note,d:today(),s:'Staff'}]:[];await sbInsert('participants',{...d,notes});}
-    await refreshTable('participants');closeModal('modal-p');renderParticipants();
+    const contractIds=getSelectedContractIds();
+    const d={first_name:$('mp-fn').value||'Unknown',last_name:$('mp-ln').value||'',ref_source:$('mp-rs').value,stage:$('mp-st').value,advisor:$('mp-adv').value,barriers:getChkArr('barrier-checks'),outcomes:getChkArr('outcome-checks'),safeguarding:$('mp-safe').value||null,risk:$('mp-risk').value,last_contact:today(),contract_ids:contractIds,scores:{confidence:parseInt($('mp-conf').value)||null,work_readiness:parseInt($('mp-work').value)||null,wellbeing:parseInt($('mp-well').value)||null,skills:parseInt($('mp-skillsc').value)||null}};
+    if(_editPId){
+      const ex=DB.participants.find(x=>x.id===_editPId);
+      const notes=[...toArr(ex.notes)];if(note)notes.push({t:note,d:today(),s:'Staff'});
+      await sbUpdate('participants',{...d,notes},_editPId);
+      // update local
+      const idx=DB.participants.findIndex(x=>x.id===_editPId);
+      if(idx>=0)DB.participants[idx]={...DB.participants[idx],...d,notes};
+    } else {
+      const notes=note?[{t:note,d:today(),s:'Staff'}]:[];
+      const r=await sbInsert('participants',{...d,notes});
+      if(r)DB.participants.push({id:r.id,...d,notes});
+    }
+    if(sb)await refreshTable('participants');
+    closeModal('modal-p');renderParticipants();
   }catch(e){alert('Save failed: '+e.message);}
   finally{btn.textContent='Save';btn.disabled=false;}
 }
-async function deleteP(id){if(!confirm('Delete this participant?'))return;await sbDelete('participants',id);await refreshTable('participants');renderParticipants();}
+
+async function deleteP(id){if(!confirm('Delete this participant?'))return;await sbDelete('participants',id);DB.participants=DB.participants.filter(x=>x.id!==id);renderParticipants();}
+
 function openNotes(id){
   const p=DB.participants.find(x=>x.id===id);if(!p)return;
   const notes=toArr(p.notes).slice().reverse();
@@ -702,13 +896,15 @@ function openNotes(id){
 async function addNote(id){
   const p=DB.participants.find(x=>x.id===id);const txt=$('new-note-txt').value;if(!txt||!p)return;
   const notes=[...toArr(p.notes),{t:txt,d:today(),s:'Staff'}];
-  await sbUpdate('participants',{notes,last_contact:today()},id);await refreshTable('participants');$('modal-notes').remove();renderParticipants();
+  await sbUpdate('participants',{notes,last_contact:today()},id);
+  if(sb)await refreshTable('participants');
+  $('modal-notes').remove();renderParticipants();
 }
 
 // ══ CONTACTS ══
 function renderContacts(){
   $('c-sub').textContent=DB.contacts.length+' contacts';
-  $('c-table').innerHTML=DB.contacts.length?DB.contacts.map(c=>`<tr><td class="cn">${c.first_name} ${c.last_name}</td><td>${c.email||'—'}</td><td><span class="badge b-vol">${c.role||'—'}</span></td><td><span class="badge ${c.status==='Active Supporter'?'b-active':'b-prospect'}">${c.status}</span></td><td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm" onclick="openEditC(${c.id})">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteC(${c.id})">Del</button></div></td></tr>`).join(''):'<tr><td colspan="5" style="text-align:center;color:var(--txt3);padding:24px">No contacts yet.</td></tr>';
+  $('c-table').innerHTML=DB.contacts.length?DB.contacts.map(c=>`<tr><td class="cn">${c.first_name} ${c.last_name}</td><td>${c.email||'—'}</td><td><span class="badge b-vol">${c.role||'—'}</span></td><td><span class="badge ${c.status==='Active Supporter'?'b-active':'b-prospect'}">${c.status}</span></td><td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm" onclick="openEditC(${c.id})">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteC(${c.id})">Del</button></div></td></tr>`).join(''):`<tr><td colspan="5">${emptyState('📋','No contacts yet','Add donors, funders, partners, and trustees here.','+ Add contact',"openAddC()")}</td></tr>`;
 }
 function openAddC(){_editCId=null;$('c-title').textContent='Add contact';['cf-fn','cf-ln','cf-em'].forEach(f=>$(f).value='');$('modal-c').classList.add('open');}
 function openEditC(id){const c=DB.contacts.find(x=>x.id===id);if(!c)return;_editCId=id;$('c-title').textContent='Edit contact';$('cf-fn').value=c.first_name;$('cf-ln').value=c.last_name;$('cf-em').value=c.email;$('cf-role').value=c.role;$('cf-st').value=c.status;$('modal-c').classList.add('open');}
@@ -726,7 +922,7 @@ function renderVolunteers(){
   const sf=($('vol-filter-status')||{}).value||'';
   const vols=DB.volunteers.filter(v=>(!q||v.name.toLowerCase().includes(q)||v.email.toLowerCase().includes(q))&&(!sf||v.status===sf));
   $('vol-sub').textContent=DB.volunteers.length+' volunteers · '+DB.volunteers.reduce((a,v)=>a+num(v.hours),0)+' hrs total';
-  $('vol-list').innerHTML=vols.length?vols.map(v=>`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:14px;margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div style="display:flex;gap:12px;align-items:center"><div class="vol-avatar">${ini(v.name)}</div><div><div style="font-weight:600;font-size:14px;color:var(--txt)">${v.name}</div><div style="font-size:12px;color:var(--txt3)">${v.email}${v.phone?' · '+v.phone:''}</div></div></div><div style="display:flex;gap:6px"><button class="btn btn-ghost btn-sm" onclick="openEditVol(${v.id})">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteVol(${v.id})">Delete</button></div></div><div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap"><span class="badge b-vol">${v.role}</span>${toArr(v.skills).slice(0,4).map(s=>'<span class="badge b-teal">'+s+'</span>').join('')}<span style="font-size:11px;color:var(--txt3);margin-left:4px">${v.hours} hrs · ${v.status}</span></div></div>`).join(''):'<div style="color:var(--txt3);font-size:13px;text-align:center;padding:32px">No volunteers found.</div>';
+  $('vol-list').innerHTML=vols.length?vols.map(v=>`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:14px;margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div style="display:flex;gap:12px;align-items:center"><div class="vol-avatar">${ini(v.name)}</div><div><div style="font-weight:600;font-size:14px;color:var(--txt)">${v.name}</div><div style="font-size:12px;color:var(--txt3)">${v.email}${v.phone?' · '+v.phone:''}</div></div></div><div style="display:flex;gap:6px"><button class="btn btn-ghost btn-sm" onclick="openEditVol(${v.id})">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteVol(${v.id})">Delete</button></div></div><div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap"><span class="badge b-vol">${v.role}</span>${toArr(v.skills).slice(0,4).map(s=>'<span class="badge b-teal">'+s+'</span>').join('')}<span style="font-size:11px;color:var(--txt3);margin-left:4px">${v.hours} hrs · ${v.status}</span></div></div>`).join(''):emptyState('🤝','No volunteers yet','Register your team members, fixers, and advisors here.','+ Add volunteer',"openAddVol()");
 }
 function switchVTab(tab,btn){_vTab=tab;['vbasic','vskills','vonboard'].forEach(t=>{$('vtab-'+t).style.display=t===tab?'block':'none';});document.querySelectorAll('.vtab-btn').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');}
 function vTabNav(dir){const tabs=['vbasic','vskills','vonboard'];const next=tabs[Math.max(0,Math.min(2,tabs.indexOf(_vTab)+dir))];switchVTab(next,document.querySelectorAll('.vtab-btn')[tabs.indexOf(next)]);}
@@ -743,7 +939,7 @@ async function deleteVol(id){if(!confirm('Delete this volunteer?'))return;await 
 function exportCSV(type){
   let rows;
   if(type==='volunteers')rows=[['Name','Email','Phone','Role','Skills','Hours','Status'],...DB.volunteers.map(v=>[v.name,v.email,v.phone,v.role,toArr(v.skills).join(';'),v.hours,v.status])];
-  else rows=[['ID','Name','Stage','Advisor','Outcomes','Barriers','Risk','Last Contact'],...DB.participants.map(p=>['GC-'+String(p.id).padStart(4,'0'),p.first_name+' '+p.last_name,p.stage,p.advisor,p.outcomes.join(';'),p.barriers.join(';'),p.risk,p.last_contact])];
+  else rows=[['ID','Name','Stage','Advisor','Contracts','Outcomes','Barriers','Risk','Last Contact'],...DB.participants.map(p=>['GC-'+String(p.id).padStart(4,'0'),p.first_name+' '+p.last_name,p.stage,p.advisor,toArr(p.contract_ids).join(';'),p.outcomes.join(';'),p.barriers.join(';'),p.risk,p.last_contact])];
   const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(rows.map(r=>r.join(',')).join('\n'));a.download=type+'.csv';a.click();
 }
 
@@ -751,7 +947,7 @@ function exportCSV(type){
 function renderEmployers(){
   const rc={'Active partner':'b-active','Engaged':'b-engaged','Prospecting':'b-prospect','Dormant':'b-lapsed'};
   $('emp-sub').textContent=DB.employers.length+' employers';
-  $('emp-table').innerHTML=DB.employers.length?DB.employers.map(e=>`<tr><td class="cn">${e.name}</td><td><span class="badge b-part">${e.sector}</span></td><td style="font-size:12px">${e.contact_name||'—'}<br/><span style="color:var(--txt3)">${e.contact_email||''}</span></td><td style="color:var(--em);font-weight:600">${e.vacancies}</td><td style="color:var(--em3);font-weight:600">${e.placements}</td><td><span class="badge ${rc[e.relationship]||'b-prospect'}">${e.relationship}</span></td><td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm" onclick="openEditEmployer(${e.id})">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteEmployer(${e.id})">Del</button></div></td></tr>`).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--txt3);padding:24px">No employers yet.</td></tr>';
+  $('emp-table').innerHTML=DB.employers.length?DB.employers.map(e=>`<tr><td class="cn">${e.name}</td><td><span class="badge b-part">${e.sector}</span></td><td style="font-size:12px">${e.contact_name||'—'}<br/><span style="color:var(--txt3)">${e.contact_email||''}</span></td><td style="color:var(--em);font-weight:600">${e.vacancies}</td><td style="color:var(--em3);font-weight:600">${e.placements}</td><td><span class="badge ${rc[e.relationship]||'b-prospect'}">${e.relationship}</span></td><td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm" onclick="openEditEmployer(${e.id})">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteEmployer(${e.id})">Del</button></div></td></tr>`).join(''):`<tr><td colspan="7">${emptyState('🏢','No employers yet','Build your employer network to place participants into jobs.','+ Add employer',"openAddEmployer()")}</td></tr>`;
 }
 function openAddEmployer(){_editEmpId=null;$('emp-title').textContent='Add employer';['ef-nm','ef-con','ef-cem','ef-notes'].forEach(f=>$(f).value='');$('ef-vac').value='0';$('modal-emp').classList.add('open');}
 function openEditEmployer(id){const e=DB.employers.find(x=>x.id===id);if(!e)return;_editEmpId=id;$('emp-title').textContent='Edit employer';$('ef-nm').value=e.name;$('ef-sec').value=e.sector;$('ef-con').value=e.contact_name;$('ef-cem').value=e.contact_email;$('ef-vac').value=e.vacancies;$('ef-rel').value=e.relationship;$('ef-notes').value=e.notes;$('modal-emp').classList.add('open');}
@@ -767,7 +963,9 @@ async function deleteEmployer(id){if(!confirm('Delete this employer?'))return;aw
 function renderPipeline(){
   $('kanban').innerHTML=P_STAGES.map(stage=>{
     const cards=DB.participants.filter(p=>p.stage===stage);
-    return'<div class="k-col"><div class="k-col-hd">'+stage+'<span class="k-cnt">'+cards.length+'</span></div>'+cards.map(p=>'<div class="k-card" onclick="openEditP('+p.id+')"><div class="k-name">'+p.first_name+' '+p.last_name+'</div><div class="k-meta">'+p.advisor+'</div>'+(days(p.last_contact)>21?'<div class="k-flag">⚠ No contact '+days(p.last_contact)+'d</div>':'')+'</div>').join('')+'</div>';
+    return'<div class="k-col"><div class="k-col-hd">'+stage+'<span class="k-cnt">'+cards.length+'</span></div>'+
+    (cards.length?cards.map(p=>'<div class="k-card" onclick="openEditP('+p.id+')"><div class="k-name">'+p.first_name+' '+p.last_name+'</div><div class="k-meta">'+p.advisor+'</div>'+(days(p.last_contact)>21?'<div class="k-flag">⚠ No contact '+days(p.last_contact)+'d</div>':'')+'</div>').join(''):'<div style="color:var(--txt3);font-size:11px;text-align:center;padding:12px 4px">Empty</div>')+
+    '</div>';
   }).join('');
 }
 
@@ -776,7 +974,7 @@ function renderReferrals(){
   $('ref-sub').textContent=DB.referrals.length+' referrals';
   const stale=DB.referrals.filter(r=>r.status==='Referred'&&days(r.referred_date)>14);
   $('ref-alerts').innerHTML=stale.length?'<div class="alert alert-warn">⚠ '+stale.length+' stalled referral(s)</div>':'';
-  $('ref-table').innerHTML=DB.referrals.length?DB.referrals.map(r=>{const d=days(r.referred_date),st=r.status==='Referred'&&d>14;return`<tr><td class="cn">${r.first_name} ${r.last_name}</td><td><span class="badge b-part">${r.source}</span></td><td><span class="badge b-ref">${r.status}</span></td><td style="font-size:12px">${fmtD(r.referred_date)}</td><td style="font-size:12px">${r.advisor}</td><td>${st?'<span class="badge b-flag">⚠ '+d+'d</span>':'—'}</td><td><button class="btn btn-danger btn-sm" onclick="deleteRef(${r.id})">Del</button></td></tr>`;}).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--txt3);padding:24px">No referrals yet.</td></tr>';
+  $('ref-table').innerHTML=DB.referrals.length?DB.referrals.map(r=>{const d=days(r.referred_date),st=r.status==='Referred'&&d>14;return`<tr><td class="cn">${r.first_name} ${r.last_name}</td><td><span class="badge b-part">${r.source}</span></td><td><span class="badge b-ref">${r.status}</span></td><td style="font-size:12px">${fmtD(r.referred_date)}</td><td style="font-size:12px">${r.advisor}</td><td>${st?'<span class="badge b-flag">⚠ '+d+'d</span>':'—'}</td><td><button class="btn btn-danger btn-sm" onclick="deleteRef(${r.id})">Del</button></td></tr>`;}).join(''):`<tr><td colspan="7">${emptyState('📨','No referrals yet','Referrals from Jobcentre Plus, Probation, and partners will appear here.','+ New referral',"openAddR()")}</td></tr>`;
 }
 function openAddR(){$('rf-date').value=today();['rf-fn','rf-ln'].forEach(f=>$(f).value='');$('modal-r').classList.add('open');}
 async function saveR(){
@@ -792,7 +990,7 @@ function renderPartnerRefs(){
   const urg={Urgent:'b-flag',Crisis:'b-flag',Standard:'b-prospect'};
   const urgent=DB.partner_referrals.filter(r=>r.urgency==='Urgent'||r.urgency==='Crisis');
   $('pref-alerts').innerHTML=urgent.length?'<div class="alert alert-warn">⚠ '+urgent.length+' urgent partner referral(s)</div>':'';
-  $('pref-table').innerHTML=DB.partner_referrals.length?DB.partner_referrals.map(r=>`<tr><td class="cn">${r.first_name} ${r.last_name}</td><td style="font-size:12px">${r.partner_name||'—'}</td><td style="font-size:12px">${r.primary_need||'—'}</td><td><span class="badge ${urg[r.urgency]||'b-prospect'}">${r.urgency}</span></td><td>${r.safeguarding?'<span class="safe-flag">🔐 '+r.safeguarding+'</span>':'—'}</td><td style="font-size:12px">${fmtD(r.created_at)}</td><td><span class="badge b-ref">${r.status}</span></td><td><button class="btn btn-ghost btn-sm" onclick="openPartnerRef(${r.id})">View →</button></td></tr>`).join(''):'<tr><td colspan="8" style="text-align:center;color:var(--txt3);padding:24px">No partner referrals yet.</td></tr>';
+  $('pref-table').innerHTML=DB.partner_referrals.length?DB.partner_referrals.map(r=>`<tr><td class="cn">${r.first_name} ${r.last_name}</td><td style="font-size:12px">${r.partner_name||'—'}</td><td style="font-size:12px">${r.primary_need||'—'}</td><td><span class="badge ${urg[r.urgency]||'b-prospect'}">${r.urgency}</span></td><td>${r.safeguarding?'<span class="safe-flag">🔐 '+r.safeguarding+'</span>':'—'}</td><td style="font-size:12px">${fmtD(r.created_at)}</td><td><span class="badge b-ref">${r.status}</span></td><td><button class="btn btn-ghost btn-sm" onclick="openPartnerRef(${r.id})">View →</button></td></tr>`).join(''):`<tr><td colspan="8">${emptyState('🤝','No partner referrals yet','Referrals submitted via the Partner Portal will appear here.','')}</td></tr>`;
 }
 function openPartnerRef(id){
   const r=DB.partner_referrals.find(x=>x.id===id);if(!r)return;
@@ -802,7 +1000,6 @@ function openPartnerRef(id){
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">${[['Primary need',r.primary_need||'—'],['Urgency',r.urgency||'Standard'],['Phone',r.phone||'—'],['Email',r.email||'—'],['DOB',fmtD(r.dob)],['Partner ref',r.partner_ref||'—'],['Consent',r.consent?'✓ Yes':'✗ No'],['Partner org',r.partner_name||'—']].map(([k,v])=>'<div style="background:var(--card);padding:10px 12px;border-radius:var(--radius)"><div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">'+k+'</div><div style="font-size:13px;color:var(--txt)">'+v+'</div></div>').join('')}</div>
     ${r.safeguarding?'<div style="background:#2a1a2a;border:1px solid #5a2a3a;border-radius:var(--radius);padding:10px 14px;margin-bottom:14px;font-size:13px;color:#f9a8d4">🔐 Safeguarding: <strong>'+r.safeguarding+'</strong></div>':''}
     ${r.notes?'<div style="margin-bottom:14px"><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;margin-bottom:6px">Background</div><div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;font-size:13px;color:var(--txt2);line-height:1.7">'+r.notes+'</div></div>':''}
-    ${r.barriers&&r.barriers.length?'<div style="margin-bottom:14px"><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;margin-bottom:6px">Barriers</div><div style="display:flex;flex-wrap:wrap;gap:5px">'+toArr(r.barriers).map(b=>'<span class="badge b-amber">'+b+'</span>').join('')+'</div></div>':''}
     <div style="margin-bottom:18px"><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;margin-bottom:6px">Update status</div><div style="display:flex;gap:8px;flex-wrap:wrap">${['Referred','Engaged','In delivery','Outcome achieved','Closed'].map(s=>'<button class="btn btn-sm '+(r.status===s?'btn-p':'btn-ghost')+'" onclick="updatePrefStatus('+r.id+',\''+s+'\',this)">'+s+'</button>').join('')}</div></div>
     <div style="display:flex;justify-content:space-between"><button class="btn btn-ghost btn-sm" onclick="convertToParticipant(${r.id})">→ Convert to participant</button><button class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Close</button></div>
   </div>`;
@@ -818,7 +1015,14 @@ async function updatePrefStatus(id,status,btn){
 function convertToParticipant(id){
   const r=DB.partner_referrals.find(x=>x.id===id);if(!r)return;
   document.querySelector('.modal-overlay.open')?.remove();
-  _editPId=null;$('mp-title').textContent='Add participant (from referral)';$('mp-fn').value=r.first_name||'';$('mp-ln').value=r.last_name||'';$('mp-rs').value='Community org';$('mp-st').value='Referred';$('mp-risk').value='Medium';$('mp-safe').value=r.safeguarding||'';mkChkArr('barrier-checks',BARRIERS);mkChkArr('outcome-checks',OUT_TYPES);$('mp-note').value=r.notes?'Referred by '+(r.partner_name||'partner')+'. '+r.notes:'';$('modal-p').classList.add('open');
+  _editPId=null;$('mp-title').textContent='Add participant (from referral)';
+  $('mp-fn').value=r.first_name||'';$('mp-ln').value=r.last_name||'';
+  $('mp-rs').value='Community org';$('mp-st').value='Referred';$('mp-risk').value='Medium';
+  $('mp-safe').value=r.safeguarding||'';
+  mkChkArr('barrier-checks',BARRIERS);mkChkArr('outcome-checks',OUT_TYPES);
+  renderContractSelector([]);
+  $('mp-note').value=r.notes?'Referred by '+(r.partner_name||'partner')+'. '+r.notes:'';
+  $('modal-p').classList.add('open');
 }
 
 // ══ EVENTS ══
@@ -833,7 +1037,7 @@ function renderEvents(){
     const fb=DB.feedback.filter(f=>f.eventId==ev.id);
     const fill=Math.round(num(ev.attendees)/(num(ev.capacity)||1)*100);
     return`<div class="ev-card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px"><div><div style="font-size:15px;font-weight:600;color:var(--txt)">${ev.name}</div><div style="font-size:12px;color:var(--txt3)">${fmtD(ev.date)} · ${ev.location||'—'}</div></div><div style="text-align:right"><div style="font-size:26px;font-weight:800;color:var(--em)">${num(ev.attendees).toLocaleString()}</div><div style="font-size:11px;color:var(--txt3)">participants</div></div></div><div class="fund-bar-wrap"><div class="fund-top"><span style="font-size:11px;color:var(--txt3)">Capacity ${ev.attendees}/${ev.capacity}</span><span style="font-size:11px;color:var(--txt3)">${fill}%</span></div><div class="fund-track"><div class="fund-fill ${fill>90?'warn':''}" style="width:${Math.min(fill,100)}%"></div></div></div><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="badge ${tCls[ev.type]||'b-engaged'}">${ev.type}</span>${fb.length?'<span class="badge b-part">'+fb.length+' feedback</span>':''}<div style="margin-left:auto;display:flex;gap:4px"><button class="btn btn-ghost btn-sm" onclick="openEditEv(${ev.id})">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteEv(${ev.id})">Delete</button></div></div></div>`;
-  }).join(''):'<div style="color:var(--txt3);font-size:13px;text-align:center;padding:32px">No events found.</div>';
+  }).join(''):emptyState('📅','No events yet','Create your first workshop or community event to start collecting attendance and feedback.','+ Create event',"openAddEv()");
   populateFbEvSelect();
 }
 function openAddEv(){_editEvId=null;$('ev-modal-title').textContent='Create event';['evf-name','evf-loc'].forEach(id=>$(id).value='');$('evf-type').value='Green Skills';$('evf-date').value=today();$('evf-att').value='';$('evf-cap').value='20';$('modal-ev').classList.add('open');}
@@ -861,7 +1065,7 @@ function renderFeedback(){
   const avgCA=items.length?(items.reduce((a,f)=>a+num(f.ca),0)/items.length).toFixed(1):'-';
   $('fb-sub').textContent=DB.feedback.length+' responses';
   $('fb-stats').innerHTML=[{l:'Responses',v:items.length},{l:'Enjoyed (4–5★)',v:enjoyed+'%'},{l:'Avg conf before',v:avgCB+'/5'},{l:'Avg conf after',v:avgCA+'/5',c:'color:var(--em)'}].map(s=>'<div class="stat-card"><div class="stat-lbl">'+s.l+'</div><div class="stat-val" style="'+(s.c||'')+'">'+s.v+'</div></div>').join('');
-  $('fb-list').innerHTML=items.length?items.map(f=>{const ev=DB.events.find(e=>e.id==f.eventId);return`<div class="ev-card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px"><div><div style="font-size:14px;font-weight:600;color:var(--txt)">${f.name||'Anonymous'}</div><div style="font-size:12px;color:var(--txt3)">${ev?.name||'Unknown event'}</div></div><div style="display:flex;gap:12px;align-items:center"><div style="text-align:center"><div style="font-size:18px;font-weight:700;color:var(--amber)">${f.cb}</div><div style="font-size:10px;color:var(--txt3)">before</div></div><div style="color:var(--txt3)">→</div><div style="text-align:center"><div style="font-size:18px;font-weight:700;color:var(--em)">${f.ca}</div><div style="font-size:10px;color:var(--txt3)">after</div></div><button class="btn btn-danger btn-sm" onclick="deleteFb(${f.id})">Del</button></div></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"><span class="badge ${f.enjoyed>=4?'b-active':'b-amber'}">★ ${f.enjoyed}/5</span>${f.learned?'<span class="badge b-teal">Learned</span>':''}${f.connected?'<span class="badge b-vol">Connected</span>':''}${f.friend?'<span class="badge b-engaged">New friend</span>':''}</div>${f.quote?'<div style="font-size:13px;font-style:italic;color:var(--txt2)">"'+f.quote+'"</div>':''}</div>`;}).join(''):'<div style="color:var(--txt3);font-size:13px;text-align:center;padding:32px">No feedback yet.</div>';
+  $('fb-list').innerHTML=items.length?items.map(f=>{const ev=DB.events.find(e=>e.id==f.eventId);return`<div class="ev-card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px"><div><div style="font-size:14px;font-weight:600;color:var(--txt)">${f.name||'Anonymous'}</div><div style="font-size:12px;color:var(--txt3)">${ev?.name||'Unknown event'}</div></div><div style="display:flex;gap:12px;align-items:center"><div style="text-align:center"><div style="font-size:18px;font-weight:700;color:var(--amber)">${f.cb}</div><div style="font-size:10px;color:var(--txt3)">before</div></div><div style="color:var(--txt3)">→</div><div style="text-align:center"><div style="font-size:18px;font-weight:700;color:var(--em)">${f.ca}</div><div style="font-size:10px;color:var(--txt3)">after</div></div><button class="btn btn-danger btn-sm" onclick="deleteFb(${f.id})">Del</button></div></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"><span class="badge ${f.enjoyed>=4?'b-active':'b-amber'}">★ ${f.enjoyed}/5</span>${f.learned?'<span class="badge b-teal">Learned</span>':''}${f.connected?'<span class="badge b-vol">Connected</span>':''}${f.friend?'<span class="badge b-engaged">New friend</span>':''}</div>${f.quote?'<div style="font-size:13px;font-style:italic;color:var(--txt2)">"'+f.quote+'"</div>':''}</div>`;}).join(''):emptyState('💬','No feedback yet','Collect participant feedback after events to build your impact evidence.','+ Add response',"openAddFb()");
 }
 function openAddFb(){
   _editFbId=null;_fbScores={enjoyed:5,cb:3,ca:5};$('fb-modal-title').textContent='Add feedback';
@@ -873,16 +1077,15 @@ async function saveFb(){
   const btn=$('fb-save-btn');btn.textContent='Saving…';btn.disabled=true;
   try{
     const d={event_id:evId,name:$('fbf-name').value,enjoyed:_fbScores.enjoyed,cb:_fbScores.cb,ca:_fbScores.ca,learned:$('fbf-learned').checked,connected:$('fbf-connected').checked,friend:$('fbf-friend').checked,quote:$('fbf-quote').value};
-    if(_editFbId){await sbUpdate('feedback',d,_editFbId);}
-    else{
-      if(sb){
-        const payload={...d};if(orgId)payload.org_id=orgId;
-        const{error}=await sb.from('feedback').insert([payload]);
-        if(error){if(error.message.includes('org_id')){const{error:e2}=await sb.from('feedback').insert([d]);if(e2)throw e2;}else throw error;}
-      }
+    if(sb){
+      const payload={...d};if(orgId)payload.org_id=orgId;
+      const{error}=await sb.from('feedback').insert([payload]);
+      if(error){if(error.message.includes('org_id')){const{error:e2}=await sb.from('feedback').insert([d]);if(e2)throw e2;}else throw error;}
+    } else {
+      DB.feedback.push({id:Date.now(),...d,eventId:d.event_id});
     }
-    await refreshTable('feedback');closeModal('modal-fb');renderFeedback();dbg('Feedback saved','ok');
-  }catch(e){alert('Save failed: '+e.message+'\n\nMake sure the feedback table exists. See earlier SQL.');}
+    await refreshTable('feedback');closeModal('modal-fb');renderFeedback();
+  }catch(e){alert('Save failed: '+e.message);}
   finally{btn.textContent='Save';btn.disabled=false;}
 }
 async function deleteFb(id){if(!confirm('Delete this feedback?'))return;await sbDelete('feedback',id);await refreshTable('feedback');renderFeedback();}
@@ -895,7 +1098,7 @@ function renderCircular(){
   $('eco-stats').innerHTML=[{l:'Items logged',v:items.length},{l:'Repaired/resold',v:items.filter(i=>['Repaired','Resold'].includes(i.status)).length},{l:'Kg diverted',v:diverted.toFixed(1)+'kg'},{l:'CO₂ saved',v:co2+'kg'}].map(s=>'<div class="stat-card"><div class="stat-lbl">'+s.l+'</div><div class="stat-val">'+s.v+'</div></div>').join('');
   $('eco-impact').innerHTML=['♻️ '+items.filter(i=>i.status==='Resold').length+' resold','🎁 '+items.filter(i=>i.status==='Donated').length+' donated','🌍 '+co2+'kg CO₂ saved','🌳 ~'+(parseFloat(co2)/21).toFixed(1)+' trees equivalent'].map(t=>'<span class="eco-stat">'+t+'</span>').join('');
   const sc={Collected:'b-prospect','In repair':'b-engaged',Repaired:'b-active',Resold:'b-active',Donated:'b-vol','Beyond repair':'b-lapsed'};
-  $('eco-table').innerHTML=items.length?items.map(i=>`<tr><td class="cn">${i.name}</td><td><span class="badge b-part">${i.category}</span></td><td style="color:var(--em)">${i.weight_kg}kg</td><td><span class="badge ${sc[i.status]||''}">${i.status}</span></td><td style="font-size:12px">${i.fixer||'—'}</td><td><span class="badge ${i.outcome?'b-active':'b-prospect'}">${i.outcome||'Pending'}</span></td><td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm" onclick="openEditItem(${i.id})">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteItem(${i.id})">Del</button></div></td></tr>`).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--txt3);padding:24px">No items yet.</td></tr>';
+  $('eco-table').innerHTML=items.length?items.map(i=>`<tr><td class="cn">${i.name}</td><td><span class="badge b-part">${i.category}</span></td><td style="color:var(--em)">${i.weight_kg}kg</td><td><span class="badge ${sc[i.status]||''}">${i.status}</span></td><td style="font-size:12px">${i.fixer||'—'}</td><td><span class="badge ${i.outcome?'b-active':'b-prospect'}">${i.outcome||'Pending'}</span></td><td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm" onclick="openEditItem(${i.id})">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteItem(${i.id})">Del</button></div></td></tr>`).join(''):`<tr><td colspan="7">${emptyState('♻️','No items logged yet','Start logging repair café items to track your environmental impact.','+ Log item',"openAddItem()")}</td></tr>`;
 }
 function openAddItem(){_editItemId=null;$('item-title').textContent='Log item';['it-name','it-kg','it-fixer'].forEach(f=>$(f).value='');$('it-st').value='Collected';$('it-cat').value='Small electrical';$('it-outcome').value='';$('modal-item').classList.add('open');}
 function openEditItem(id){const i=DB.circular.find(x=>x.id===id);if(!i)return;_editItemId=id;$('item-title').textContent='Edit item';$('it-name').value=i.name;$('it-cat').value=i.category;$('it-kg').value=i.weight_kg;$('it-st').value=i.status;$('it-fixer').value=i.fixer;$('it-outcome').value=i.outcome;$('modal-item').classList.add('open');}
@@ -909,7 +1112,11 @@ async function deleteItem(id){if(!confirm('Delete?'))return;await sbDelete('circ
 
 // ══ RAG ══
 function renderRAG(){
-  if(!DB.contracts.length){$('rag-list').innerHTML='<div class="alert alert-info">No contracts yet. Add contracts in Funding & Contracts first.</div>';return;}
+  if(!DB.contracts.length){
+    $('rag-list').innerHTML=`<div class="alert alert-info" style="margin-bottom:14px">No contracts yet. Add contracts in Funding & Contracts first.</div>`+
+    emptyState('🚦','Set up your RAG dashboard','Add a funding contract then link participants to it. The RAG dashboard will auto-calculate your performance against targets.','+ Add contract',"go('funding')");
+    return;
+  }
   $('rag-list').innerHTML=DB.contracts.map(c=>{
     const linked=DB.participants.filter(p=>toArr(p.contract_ids).includes(String(c.id)));
     const actualStarts=linked.length;
@@ -921,7 +1128,7 @@ function renderRAG(){
     const lbl={green:'🟢 On track',amber:'🟡 At risk',red:'🔴 Underperforming'}[rag];
     const daysLeft=c.end_date?Math.ceil((new Date(c.end_date)-Date.now())/86400000):null;
     const daysStr=daysLeft!==null?(daysLeft>0?daysLeft+' days remaining':'Contract ended'):'No end date';
-    return`<div class="card" style="border-left:4px solid ${col};margin-bottom:14px"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-size:15px;font-weight:700;color:var(--txt)">${c.name}</div><div style="font-size:12px;color:var(--txt3);margin-top:2px">${c.funder||'—'} · £${num(c.value).toLocaleString()} · ${daysStr}</div></div><span style="font-size:12px;font-weight:700;color:${col};background:rgba(0,0,0,.2);padding:4px 12px;border-radius:20px;white-space:nowrap">${lbl}</span></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px"><div class="stat-card"><div class="stat-lbl">Starts</div><div class="stat-val">${actualStarts}</div><div class="stat-sub">of ${c.target_starts||0} target</div></div><div class="stat-card"><div class="stat-lbl">Outcomes</div><div class="stat-val">${actualOutcomes}</div><div class="stat-sub">of ${c.target_outcomes||0} target</div></div><div class="stat-card"><div class="stat-lbl">Starts %</div><div class="stat-val" style="color:${sp>=80?'var(--em)':sp>=50?'var(--amber)':'var(--red)'}">${sp}%</div></div><div class="stat-card"><div class="stat-lbl">Outcomes %</div><div class="stat-val" style="color:${op>=80?'var(--em)':op>=50?'var(--amber)':'var(--red)'}">${op}%</div></div></div><div class="fund-bar-wrap"><div class="fund-top"><span>Starts</span><span>${actualStarts}/${c.target_starts||0}</span></div><div class="fund-track"><div class="fund-fill ${sp<50?'danger':sp<80?'warn':''}" style="width:${Math.min(sp,100)}%"></div></div></div><div class="fund-bar-wrap"><div class="fund-top"><span>Outcomes</span><span>${actualOutcomes}/${c.target_outcomes||0}</span></div><div class="fund-track"><div class="fund-fill ${op<50?'danger':op<80?'warn':''}" style="width:${Math.min(op,100)}%"></div></div></div>${linked.length?'<div style="margin-top:10px"><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;margin-bottom:6px">Linked participants</div><div style="display:flex;flex-wrap:wrap;gap:5px">'+linked.slice(0,8).map(p=>'<span class="badge b-engaged">'+p.first_name+' '+p.last_name+'</span>').join('')+(linked.length>8?'<span style="font-size:11px;color:var(--txt3)">+'+( linked.length-8)+' more</span>':'')+'</div></div>':'<div style="font-size:12px;color:var(--txt3);margin-top:8px">No participants linked yet. Edit participants and assign this contract ID.</div>'}</div>`;
+    return`<div class="card" style="border-left:4px solid ${col};margin-bottom:14px"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-size:15px;font-weight:700;color:var(--txt)">${c.name}</div><div style="font-size:12px;color:var(--txt3);margin-top:2px">${c.funder||'—'} · £${num(c.value).toLocaleString()} · ${daysStr}</div></div><span style="font-size:12px;font-weight:700;color:${col};background:rgba(0,0,0,.2);padding:4px 12px;border-radius:20px;white-space:nowrap">${lbl}</span></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px"><div class="stat-card"><div class="stat-lbl">Starts</div><div class="stat-val">${actualStarts}</div><div class="stat-sub">of ${c.target_starts||0} target</div></div><div class="stat-card"><div class="stat-lbl">Outcomes</div><div class="stat-val">${actualOutcomes}</div><div class="stat-sub">of ${c.target_outcomes||0} target</div></div><div class="stat-card"><div class="stat-lbl">Starts %</div><div class="stat-val" style="color:${sp>=80?'var(--em)':sp>=50?'var(--amber)':'var(--red)'}">${sp}%</div></div><div class="stat-card"><div class="stat-lbl">Outcomes %</div><div class="stat-val" style="color:${op>=80?'var(--em)':op>=50?'var(--amber)':'var(--red)'}">${op}%</div></div></div><div class="fund-bar-wrap"><div class="fund-top"><span>Starts</span><span>${actualStarts}/${c.target_starts||0}</span></div><div class="fund-track"><div class="fund-fill ${sp<50?'danger':sp<80?'warn':''}" style="width:${Math.min(sp,100)}%"></div></div></div><div class="fund-bar-wrap"><div class="fund-top"><span>Outcomes</span><span>${actualOutcomes}/${c.target_outcomes||0}</span></div><div class="fund-track"><div class="fund-fill ${op<50?'danger':op<80?'warn':''}" style="width:${Math.min(op,100)}%"></div></div></div>${linked.length?'<div style="margin-top:10px"><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;margin-bottom:6px">Linked participants ('+linked.length+')</div><div style="display:flex;flex-wrap:wrap;gap:5px">'+linked.slice(0,8).map(p=>'<span class="badge b-engaged" style="cursor:pointer" onclick="openEditP('+p.id+')">'+p.first_name+' '+p.last_name+'</span>').join('')+(linked.length>8?'<span style="font-size:11px;color:var(--txt3)">+'+( linked.length-8)+' more</span>':'')+'</div></div>':'<div style="font-size:12px;color:var(--amber);margin-top:8px;padding:8px;background:rgba(245,158,11,.08);border-radius:6px">⚡ No participants linked yet. Edit participants and link them to this contract.</div>'}</div>`;
   }).join('');
 }
 
@@ -946,26 +1153,36 @@ function renderOutcomes(){
 // ══ FUNDING ══
 function renderFunding(){
   $('fund-sub').textContent=DB.contracts.length+' contracts · £'+DB.contracts.reduce((a,c)=>a+num(c.value),0).toLocaleString()+' total';
-  $('fund-list').innerHTML=DB.contracts.length?DB.contracts.map(c=>{
+  if(!DB.contracts.length){
+    $('fund-list').innerHTML=emptyState('💰','No contracts yet','Add your funding contracts to track performance and power the RAG dashboard.','+ Add contract',"openAddCon()");
+    return;
+  }
+  $('fund-list').innerHTML=DB.contracts.map(c=>{
     const linked=DB.participants.filter(p=>toArr(p.contract_ids).includes(String(c.id)));
     const starts=linked.length,outcomes=linked.filter(p=>p.outcomes.length>0).length;
     const sp=Math.round(starts/(c.target_starts||1)*100),op=Math.round(outcomes/(c.target_outcomes||1)*100);
-    return`<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-size:14px;font-weight:600">${c.name}</div><div style="font-size:12px;color:var(--txt3)">${c.funder} · £${num(c.value).toLocaleString()} · ${fmtD(c.start_date)} – ${fmtD(c.end_date)}</div></div><div style="display:flex;gap:6px;align-items:center">${sp>=70&&op>=70?'<span class="badge b-active">On track</span>':'<span class="badge b-flag">⚠ At risk</span>'}<button class="btn btn-ghost btn-sm" onclick="openEditCon(${c.id})">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteCon(${c.id})">Del</button></div></div><div class="fund-bar-wrap"><div class="fund-top"><span>Starts: ${starts}/${c.target_starts||0}</span><span>${sp}%</span></div><div class="fund-track"><div class="fund-fill ${sp<60?'danger':sp<80?'warn':''}" style="width:${Math.min(sp,100)}%"></div></div></div><div class="fund-bar-wrap"><div class="fund-top"><span>Outcomes: ${outcomes}/${c.target_outcomes||0}</span><span>${op}%</span></div><div class="fund-track"><div class="fund-fill ${op<60?'danger':op<80?'warn':''}" style="width:${Math.min(op,100)}%"></div></div></div></div>`;
-  }).join(''):'<div style="color:var(--txt3);font-size:13px;padding:12px">No contracts yet.</div>';
+    return`<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-size:14px;font-weight:600">${c.name}</div><div style="font-size:12px;color:var(--txt3)">${c.funder} · £${num(c.value).toLocaleString()} · ${fmtD(c.start_date)} – ${fmtD(c.end_date)}</div></div><div style="display:flex;gap:6px;align-items:center">${sp>=70&&op>=70?'<span class="badge b-active">On track</span>':'<span class="badge b-flag">⚠ At risk</span>'}<button class="btn btn-ghost btn-sm" onclick="openEditCon(${c.id})">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteCon(${c.id})">Del</button></div></div><div class="fund-bar-wrap"><div class="fund-top"><span>Starts: ${starts}/${c.target_starts||0}</span><span>${sp}%</span></div><div class="fund-track"><div class="fund-fill ${sp<60?'danger':sp<80?'warn':''}" style="width:${Math.min(sp,100)}%"></div></div></div><div class="fund-bar-wrap"><div class="fund-top"><span>Outcomes: ${outcomes}/${c.target_outcomes||0}</span><span>${op}%</span></div><div class="fund-track"><div class="fund-fill ${op<60?'danger':op<80?'warn':''}" style="width:${Math.min(op,100)}%"></div></div></div><div style="font-size:11px;color:var(--txt3);margin-top:8px">🔗 ${linked.length} participant${linked.length===1?'':'s'} linked · <a onclick="go('participants')" style="color:var(--em);cursor:pointer">Link more via Participants →</a></div></div>`;
+  }).join('');
 }
 function openAddCon(){_editConId=null;$('con-title').textContent='Add contract';['con-name','con-funder','con-val','con-ts','con-to'].forEach(f=>$(f).value='');$('con-start').value='';$('con-end').value='';$('modal-con').classList.add('open');}
 function openEditCon(id){const c=DB.contracts.find(x=>x.id===id);if(!c)return;_editConId=id;$('con-title').textContent='Edit contract';$('con-name').value=c.name;$('con-funder').value=c.funder;$('con-val').value=c.value;$('con-ts').value=c.target_starts;$('con-to').value=c.target_outcomes;$('con-start').value=c.start_date;$('con-end').value=c.end_date;$('modal-con').classList.add('open');}
 async function saveCon(){
   const btn=$('con-save-btn');btn.textContent='Saving…';btn.disabled=true;
-  try{const d={name:$('con-name').value,funder:$('con-funder').value,value:parseInt($('con-val').value)||0,target_starts:parseInt($('con-ts').value)||0,target_outcomes:parseInt($('con-to').value)||0,start_date:$('con-start').value||null,end_date:$('con-end').value||null};if(_editConId)await sbUpdate('contracts',d,_editConId);else await sbInsert('contracts',d);await refreshTable('contracts');closeModal('modal-con');renderFunding();}
-  catch(e){alert('Save failed: '+e.message);}
+  try{
+    const d={name:$('con-name').value,funder:$('con-funder').value,value:parseInt($('con-val').value)||0,target_starts:parseInt($('con-ts').value)||0,target_outcomes:parseInt($('con-to').value)||0,start_date:$('con-start').value||null,end_date:$('con-end').value||null};
+    if(_editConId)await sbUpdate('contracts',d,_editConId);
+    else{const r=await sbInsert('contracts',d);if(r)DB.contracts.push({id:r.id,...d});}
+    await refreshTable('contracts');closeModal('modal-con');renderFunding();
+    // refresh participant modal contract list if open
+    if($('modal-p').classList.contains('open'))renderContractSelector(getSelectedContractIds());
+  }catch(e){alert('Save failed: '+e.message);}
   finally{btn.textContent='Save';btn.disabled=false;}
 }
 async function deleteCon(id){if(!confirm('Delete?'))return;await sbDelete('contracts',id);await refreshTable('contracts');renderFunding();}
 
 // ══ EVIDENCE ══
 function renderEvidence(){
-  $('evid-table').innerHTML=DB.evidence.length?DB.evidence.map(e=>`<tr><td class="cn">${e.participant_name}</td><td><span class="badge b-vol">${e.type}</span></td><td><span class="badge b-active">${e.linked_outcome}</span></td><td style="font-size:12px">${e.staff||'—'}</td><td style="font-size:12px">${fmtD(e.evidence_date)}</td><td><span class="badge b-prospect">${e.status}</span></td><td><button class="btn btn-danger btn-sm" onclick="deleteEvid(${e.id})">Del</button></td></tr>`).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--txt3);padding:24px">No evidence yet.</td></tr>';
+  $('evid-table').innerHTML=DB.evidence.length?DB.evidence.map(e=>`<tr><td class="cn">${e.participant_name}</td><td><span class="badge b-vol">${e.type}</span></td><td><span class="badge b-active">${e.linked_outcome}</span></td><td style="font-size:12px">${e.staff||'—'}</td><td style="font-size:12px">${fmtD(e.evidence_date)}</td><td><span class="badge b-prospect">${e.status}</span></td><td><button class="btn btn-danger btn-sm" onclick="deleteEvid(${e.id})">Del</button></td></tr>`).join(''):`<tr><td colspan="7">${emptyState('🗂️','No evidence yet','Upload payslips, certificates, and consent forms to build your compliance record.','+ Upload evidence',"openAddEvid()")}</td></tr>`;
 }
 function openAddEvid(){['evid-p','evid-staff'].forEach(f=>$(f).value='');$('evid-date').value=today();$('modal-evid').classList.add('open');}
 async function saveEvid(){
@@ -980,7 +1197,7 @@ async function deleteEvid(id){if(!confirm('Delete?'))return;await sbDelete('evid
 function renderSafeguarding(){
   const fl=DB.participants.filter(p=>p.safeguarding);
   $('safe-flags').innerHTML=fl.length?fl.map(p=>'<div class="tl-entry"><div class="tl-dot red"></div><div><div class="tl-lbl">'+p.first_name+' '+p.last_name+'</div><div class="tl-meta">'+p.safeguarding+' · '+p.advisor+'</div></div></div>').join(''):'<div style="color:var(--txt3);font-size:13px">No flagged cases.</div>';
-  $('consent-list').innerHTML=DB.participants.map(p=>'<div class="tl-entry"><div class="tl-dot '+(toArr(p.notes).length?'':'amber')+'"></div><div><div class="tl-lbl">'+p.first_name+' '+p.last_name+'</div><div class="tl-meta">Consent: '+(toArr(p.notes).length?'Recorded':'Pending')+' · GDPR active</div></div></div>').join('');
+  $('consent-list').innerHTML=DB.participants.length?DB.participants.map(p=>'<div class="tl-entry"><div class="tl-dot '+(toArr(p.notes).length?'':'amber')+'"></div><div><div class="tl-lbl">'+p.first_name+' '+p.last_name+'</div><div class="tl-meta">Consent: '+(toArr(p.notes).length?'Recorded':'Pending')+' · GDPR active</div></div></div>').join(''):'<div style="color:var(--txt3);font-size:13px">No participants yet.</div>';
 }
 
 // ══ SETTINGS ══
@@ -1079,7 +1296,7 @@ async function boot(){
       $('ob-plan').textContent=orgData.plan==='pro'?'✦ PRO':orgData.plan==='starter'?'Starter':orgData.plan==='network'?'Network':'Free';
       applyModules(orgData.modules||{});
       if(orgData.status==='suspended'){const warn=document.createElement('div');warn.style.cssText='background:#3a1a1a;color:#f87171;padding:8px 20px;font-size:13px;font-weight:600;text-align:center;position:sticky;top:0;z-index:999';warn.textContent='⚠ This organisation is suspended.';document.body.insertBefore(warn,$('shell'));}
-    }else dbg('Org not found: '+orgId,'warn');
+    }
   }
   await syncAll();
   renderSettings();
