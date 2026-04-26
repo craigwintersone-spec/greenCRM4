@@ -1,229 +1,350 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>GreenCRM Organisation</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>GreenCRM — Org Admin</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0a0f0a;color:#e2f5eb;font-family:system-ui,sans-serif;font-size:14px}
+.main{max-width:820px;margin:0 auto;padding:32px}
+a{color:#10b981;text-decoration:none}
+a:hover{text-decoration:underline}
+h1{font-size:26px;font-weight:800;color:#e2f5eb;margin-bottom:4px}
+h2{font-size:16px;font-weight:700;color:#e2f5eb;margin-bottom:12px}
+.sub{color:#6a8f76;font-size:13px;margin-bottom:28px}
+.card{background:#182018;border:1px solid #2a3a2a;border-radius:14px;padding:20px;margin-bottom:16px}
+.card-title{font-size:11px;color:#6a8f76;text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;font-weight:600}
+label{display:block;font-size:11px;color:#6a8f76;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;margin-top:12px}
+input,select{width:100%;padding:9px 12px;border-radius:8px;border:1px solid #2a3a2a;background:#111811;color:#e2f5eb;font-size:13px;font-family:inherit;outline:none}
+input:focus,select:focus{border-color:#10b981}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.btn{padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;display:inline-flex;align-items:center;gap:6px;transition:all .2s;font-family:inherit}
+.btn-p{background:#10b981;color:#fff}.btn-p:hover{background:#059669}
+.btn-ghost{background:#182018;color:#9ab8a4;border:1px solid #2a3a2a}.btn-ghost:hover{border-color:#10b981;color:#10b981}
+.btn-danger{background:none;color:#f87171;border:1px solid #2a3a2a}.btn-danger:hover{border-color:#f87171}
+.btn-sm{padding:5px 11px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btns{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+.msg{padding:9px 13px;border-radius:8px;font-size:13px;margin:12px 0;display:none}
+.msg-ok{background:#1a3a2a;border:1px solid #2a5a3a;color:#34d399}
+.msg-err{background:#2a1a1a;border:1px solid #5a2a2a;color:#f87171}
+.msg-info{background:#1a2a3a;border:1px solid #1a3a5a;color:#60a5fa}
 
-  <style>
-    body {
-      margin:0;
-      font-family:Arial,sans-serif;
-      background:#0a0f0a;
-      color:#e2f5eb;
-    }
+/* MODULES */
+.mod-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+.mod-item{background:#111811;border:1px solid #2a3a2a;border-radius:10px;padding:13px 15px;display:flex;align-items:center;justify-content:space-between;transition:border-color .2s}
+.mod-item.on{border-color:#10b981;background:rgba(16,185,129,.05)}
+.mod-name{font-size:13px;font-weight:600;color:#e2f5eb;margin-bottom:2px}
+.mod-desc{font-size:11px;color:#6a8f76}
+.toggle{position:relative;width:42px;height:22px;flex-shrink:0;cursor:pointer}
+.toggle input{opacity:0;width:0;height:0;position:absolute}
+.t-track{position:absolute;inset:0;background:#2a3a2a;border-radius:11px;transition:background .2s}
+.toggle input:checked+.t-track{background:#10b981}
+.t-thumb{position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s;pointer-events:none}
+.toggle input:checked~.t-thumb{transform:translateX(20px)}
 
-    .main {
-      padding:32px;
-      max-width:900px;
-      margin:auto;
-    }
+/* USERS TABLE */
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:11px;color:#6a8f76;text-transform:uppercase;padding:9px 12px;border-bottom:1px solid #2a3a2a}
+td{padding:10px 12px;border-bottom:1px solid #2a3a2a;font-size:13px;color:#9ab8a4;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(16,185,129,.02)}
+.badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px}
+.b-admin{background:#1a2a3a;color:#60a5fa}
+.b-advisor{background:#1a3a2a;color:#34d399}
+.b-viewer{background:#2a2a1a;color:#f59e0b}
+.b-pending{background:#2a2a2a;color:#9ca3af}
+.b-active{background:#1a3a2a;color:#34d399}
+.b-suspended{background:#2a1a1a;color:#f87171}
 
-    a {
-      color:#10b981;
-      text-decoration:none;
-    }
-
-    .card {
-      background:#182018;
-      border:1px solid #2a3a2a;
-      border-radius:14px;
-      padding:20px;
-      margin-top:18px;
-    }
-
-    label {
-      display:block;
-      color:#9ab8a4;
-      margin-top:14px;
-      font-size:13px;
-    }
-
-    input, select {
-      width:100%;
-      padding:10px;
-      margin-top:6px;
-      border-radius:8px;
-      border:1px solid #2a3a2a;
-      background:#111811;
-      color:#e2f5eb;
-    }
-
-    button {
-      background:#10b981;
-      color:white;
-      border:0;
-      padding:10px 14px;
-      border-radius:8px;
-      font-weight:bold;
-      cursor:pointer;
-      margin-top:18px;
-    }
-
-    .danger {
-      background:#ef4444;
-      margin-left:8px;
-    }
-
-    .status {
-      color:#9ab8a4;
-      margin-top:12px;
-    }
-
-    .modules {
-      margin-top:10px;
-    }
-
-    .modules label {
-      display:flex;
-      align-items:center;
-      gap:8px;
-      margin-top:6px;
-      font-size:14px;
-    }
-
-    .modules input {
-      width:auto;
-    }
-
-  </style>
+.status-bar{background:#182018;border:1px solid #2a3a2a;border-radius:8px;padding:9px 14px;font-size:13px;color:#9ab8a4;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+.spinner{width:16px;height:16px;border:2px solid #2a3a2a;border-top-color:#10b981;border-radius:50%;animation:spin .6s linear infinite;display:inline-block;vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
 </head>
-
 <body>
+<div class="main">
+  <div style="margin-bottom:20px"><a href="/super-admin.html">← Back to Super Admin</a></div>
 
-<main class="main">
-
-  <a href="/super-admin.html">← Back to Super Admin</a>
-
-  <h1 id="title">Organisation</h1>
-  <p id="status" class="status">Loading...</p>
-
-  <div class="card">
-
-    <label>Organisation name</label>
-    <input id="name">
-
-    <label>Sector</label>
-    <input id="sector">
-
-    <label>Plan</label>
-    <select id="plan">
-      <option value="free">Free</option>
-      <option value="starter">Starter (£9/mo)</option>
-      <option value="pro">Pro (£29/mo)</option>
-      <option value="network">Network (£79/mo)</option>
-    </select>
-
-    <label>Status</label>
-    <select id="org_status">
-      <option value="active">Active</option>
-      <option value="suspended">Suspended</option>
-    </select>
-
-    <label>Modules</label>
-    <div class="modules">
-      <label><input type="checkbox" id="mod_volunteers"> Volunteers</label>
-      <label><input type="checkbox" id="mod_events"> Events</label>
-      <label><input type="checkbox" id="mod_participants"> Participants</label>
-      <label><input type="checkbox" id="mod_circular"> Circular</label>
-      <label><input type="checkbox" id="mod_employers"> Employers</label>
-      <label><input type="checkbox" id="mod_funders"> Funders</label>
-    </div>
-
-    <button onclick="saveOrg()">Save changes</button>
-    <button class="danger" onclick="suspendOrg()">Suspend</button>
-
+  <div id="loading" style="text-align:center;padding:60px;color:#6a8f76">
+    <div class="spinner"></div> Loading organisation…
   </div>
 
-</main>
+  <div id="content" style="display:none">
+    <h1 id="org-title">Organisation</h1>
+    <div class="sub" id="org-meta"></div>
+
+    <div class="status-bar">
+      <span id="status-msg">Ready</span>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-p btn-sm" onclick="openCRM()">🚀 Open CRM</button>
+        <button class="btn btn-ghost btn-sm" onclick="loadAll()">↻ Refresh</button>
+      </div>
+    </div>
+
+    <!-- ORG DETAILS -->
+    <div class="card">
+      <div class="card-title">Organisation details</div>
+      <div class="form-grid">
+        <div><label>Name</label><input id="f-name"/></div>
+        <div><label>Sector</label><select id="f-sector">
+          <option>Charity / VCSE</option><option>Social enterprise</option>
+          <option>Local authority</option><option>NHS / healthcare</option>
+          <option>Education</option><option>Housing</option>
+          <option>Justice / probation</option><option>Other</option>
+        </select></div>
+        <div><label>Plan</label><select id="f-plan">
+          <option value="free">Free — £0/mo</option>
+          <option value="starter">Starter — £9/mo</option>
+          <option value="pro">Pro — £29/mo</option>
+          <option value="network">Network — £79/mo</option>
+        </select></div>
+        <div><label>Status</label><select id="f-status">
+          <option value="active">Active</option>
+          <option value="suspended">Suspended</option>
+          <option value="trial">Trial</option>
+        </select></div>
+      </div>
+      <div class="msg msg-ok" id="details-ok"></div>
+      <div class="msg msg-err" id="details-err"></div>
+      <div class="btns">
+        <button class="btn btn-p" onclick="saveDetails()">Save changes</button>
+        <button class="btn btn-danger" onclick="suspendOrg()">Suspend org</button>
+      </div>
+    </div>
+
+    <!-- MODULES -->
+    <div class="card">
+      <div class="card-title">Module access</div>
+      <p style="font-size:13px;color:#9ab8a4;margin-bottom:12px">Toggle modules on or off. Changes apply immediately when the CRM next loads.</p>
+      <div class="mod-grid" id="mod-grid"></div>
+      <div class="msg msg-ok" id="mod-ok"></div>
+      <div class="msg msg-err" id="mod-err"></div>
+      <div class="btns">
+        <button class="btn btn-p" onclick="saveModules()">Save modules</button>
+        <button class="btn btn-ghost btn-sm" onclick="enableAll()">Enable all</button>
+        <button class="btn btn-ghost btn-sm" onclick="disableAll()">Disable all</button>
+      </div>
+    </div>
+
+    <!-- STAFF & USERS -->
+    <div class="card">
+      <div class="card-title">Staff & users</div>
+      <div id="users-table"><div style="color:#6a8f76;font-size:13px">Loading users…</div></div>
+
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid #2a3a2a">
+        <h2>Invite a staff member</h2>
+        <p style="font-size:13px;color:#9ab8a4;margin-bottom:12px">They'll receive an email with a link to set their password and access this org's CRM.</p>
+        <div class="form-grid">
+          <div><label>Email address</label><input id="inv-email" type="email" placeholder="advisor@organisation.org"/></div>
+          <div><label>Role</label><select id="inv-role">
+            <option value="advisor">Advisor</option>
+            <option value="admin">Admin</option>
+            <option value="viewer">Viewer (read-only)</option>
+          </select></div>
+        </div>
+        <div class="msg msg-ok" id="inv-ok"></div>
+        <div class="msg msg-err" id="inv-err"></div>
+        <div class="msg msg-info" id="inv-info"></div>
+        <div class="btns">
+          <button class="btn btn-p" id="inv-btn" onclick="inviteStaff()">Send invite</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- DANGER ZONE -->
+    <div class="card" style="border-color:#3a1a1a">
+      <div class="card-title" style="color:#f87171">Danger zone</div>
+      <p style="font-size:13px;color:#9ab8a4;margin-bottom:14px">These actions cannot be undone.</p>
+      <div class="btns">
+        <button class="btn btn-danger" onclick="suspendOrg()">Suspend organisation</button>
+        <button class="btn btn-danger" onclick="deleteOrg()">Delete organisation</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-
 <script>
+const SB_URL='https://nznfrxzgvcjhfsdaphyp.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw';
+const sb=window.supabase.createClient(SB_URL,SB_KEY);
+const params=new URLSearchParams(window.location.search);
+const orgId=params.get('id');
+let orgData=null;
 
-const SUPABASE_URL = "https://nznfrxzgvcjhfsdaphyp.supabase.co";
+const $=id=>document.getElementById(id);
+const setStatus=msg=>$('status-msg').textContent=msg;
+const showMsg=(id,msg)=>{const e=$(id);e.textContent=msg;e.style.display='block';setTimeout(()=>e.style.display='none',4000);};
 
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw";
+const MODULES=[
+  {key:'participants', name:'Participants', desc:'Caseload, pipeline, referrals, outcomes, safeguarding'},
+  {key:'volunteers',   name:'Volunteers',   desc:'Volunteer registration, onboarding, hours tracking'},
+  {key:'events',       name:'Events & Feedback', desc:'Workshops, feedback surveys, impact wall'},
+  {key:'employers',    name:'Employers',    desc:'Employer CRM, vacancies, placements'},
+  {key:'circular',     name:'Circular Economy', desc:'Repair café, item logging, CO₂ tracking'},
+  {key:'funders',      name:'Funders & Reporting', desc:'Contracts, RAG dashboard, MoJ/GLA/CBF reports'},
+];
 
-const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-const params = new URLSearchParams(window.location.search);
-const orgId = params.get("id");
-
-async function loadOrg() {
-
-  if (!orgId) {
-    document.getElementById("status").textContent = "No organisation ID.";
-    return;
-  }
-
-  const { data, error } = await client
-    .from("organisations")
-    .select("*")
-    .eq("id", orgId)
-    .single();
-
-  if (error) {
-    document.getElementById("status").textContent = error.message;
-    return;
-  }
-
-  document.getElementById("title").textContent = data.name;
-  document.getElementById("name").value = data.name || "";
-  document.getElementById("sector").value = data.sector || "";
-  document.getElementById("plan").value = data.plan || "free";
-  document.getElementById("org_status").value = data.status || "active";
-
-  const modules = data.modules || {};
-
-  document.getElementById("mod_volunteers").checked = modules.volunteers ?? true;
-  document.getElementById("mod_events").checked = modules.events ?? true;
-  document.getElementById("mod_participants").checked = modules.participants ?? true;
-  document.getElementById("mod_circular").checked = modules.circular ?? false;
-  document.getElementById("mod_employers").checked = modules.employers ?? false;
-  document.getElementById("mod_funders").checked = modules.funders ?? false;
-
-  document.getElementById("status").textContent = "Loaded successfully";
-
+async function loadAll(){
+  if(!orgId){setStatus('No org ID in URL');return;}
+  setStatus('Loading…');
+  const{data,error}=await sb.from('organisations').select('*').eq('id',orgId).maybeSingle();
+  if(error||!data){setStatus('Error: '+(error?.message||'Not found'));return;}
+  orgData=data;
+  $('loading').style.display='none';
+  $('content').style.display='block';
+  $('org-title').textContent=data.name;
+  $('org-meta').textContent=(data.sector||'')+(data.plan?' · Plan: '+data.plan:'')+(data.status?' · '+data.status:'');
+  $('f-name').value=data.name||'';
+  $('f-sector').value=data.sector||'Charity / VCSE';
+  $('f-plan').value=data.plan||'free';
+  $('f-status').value=data.status||'active';
+  renderModules(data.modules||{});
+  await loadUsers();
+  setStatus('Loaded — '+data.name);
 }
 
-async function saveOrg() {
-
-  document.getElementById("status").textContent = "Saving...";
-
-  const { error } = await client
-    .from("organisations")
-    .update({
-      name: document.getElementById("name").value,
-      sector: document.getElementById("sector").value,
-      plan: document.getElementById("plan").value,
-      status: document.getElementById("org_status").value,
-      modules: {
-        volunteers: document.getElementById("mod_volunteers").checked,
-        events: document.getElementById("mod_events").checked,
-        participants: document.getElementById("mod_participants").checked,
-        circular: document.getElementById("mod_circular").checked,
-        employers: document.getElementById("mod_employers").checked,
-        funders: document.getElementById("mod_funders").checked
-      }
-    })
-    .eq("id", orgId);
-
-  if (error) {
-    document.getElementById("status").textContent = "Error: " + error.message;
-  } else {
-    document.getElementById("status").textContent = "Saved successfully ✅";
-  }
-
+function renderModules(mods){
+  $('mod-grid').innerHTML=MODULES.map(m=>{
+    const on=mods[m.key]??false;
+    return`<div class="mod-item ${on?'on':''}" id="mod-item-${m.key}">
+      <div>
+        <div class="mod-name">${m.name}</div>
+        <div class="mod-desc">${m.desc}</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="mod-${m.key}" ${on?'checked':''} onchange="updateModItem('${m.key}',this.checked)"/>
+        <div class="t-track"></div>
+        <div class="t-thumb"></div>
+      </label>
+    </div>`;
+  }).join('');
 }
 
-async function suspendOrg() {
-  document.getElementById("org_status").value = "suspended";
-  await saveOrg();
+function updateModItem(key,on){
+  const item=$('mod-item-'+key);
+  if(item)item.className='mod-item'+(on?' on':'');
 }
 
-loadOrg();
+function enableAll(){ MODULES.forEach(m=>{$('mod-'+m.key).checked=true;updateModItem(m.key,true);}); }
+function disableAll(){ MODULES.forEach(m=>{$('mod-'+m.key).checked=false;updateModItem(m.key,false);}); }
 
+function getModules(){
+  const mods={};
+  MODULES.forEach(m=>mods[m.key]=$('mod-'+m.key).checked);
+  return mods;
+}
+
+async function saveDetails(){
+  setStatus('Saving details…');
+  const{error}=await sb.from('organisations').update({
+    name:$('f-name').value,
+    sector:$('f-sector').value,
+    plan:$('f-plan').value,
+    status:$('f-status').value,
+  }).eq('id',orgId);
+  if(error){showMsg('details-err','Error: '+error.message);setStatus('Save failed');}
+  else{showMsg('details-ok','✓ Details saved');setStatus('Saved — '+$('f-name').value);$('org-title').textContent=$('f-name').value;}
+}
+
+async function saveModules(){
+  setStatus('Saving modules…');
+  const mods=getModules();
+  const{error}=await sb.from('organisations').update({modules:mods}).eq('id',orgId);
+  if(error){showMsg('mod-err','Error: '+error.message);setStatus('Module save failed');}
+  else{showMsg('mod-ok','✓ Modules saved — changes apply on next CRM load');setStatus('Modules saved');}
+}
+
+async function suspendOrg(){
+  if(!confirm('Suspend this organisation? Their CRM will show a warning banner.'))return;
+  $('f-status').value='suspended';
+  await saveDetails();
+}
+
+async function deleteOrg(){
+  if(!confirm('PERMANENTLY DELETE this organisation and ALL their data? This cannot be undone.'))return;
+  if(!confirm('Are you absolutely sure? Type OK to confirm — this deletes everything.'))return;
+  setStatus('Deleting…');
+  const{error}=await sb.from('organisations').delete().eq('id',orgId);
+  if(error){setStatus('Delete failed: '+error.message);}
+  else{alert('Organisation deleted.');window.location.href='/super-admin.html';}
+}
+
+function openCRM(){
+  window.open('/app.html?org_id='+orgId,'_blank');
+}
+
+// ── USERS ──
+async function loadUsers(){
+  const{data:profiles}=await sb.from('profiles').select('*').eq('org_id',orgId);
+  const{data:invites}=await sb.from('invites').select('*').eq('org_id',orgId);
+  const users=profiles||[];
+  const pending=(invites||[]).filter(i=>!i.accepted);
+  const roleBadge=r=>`<span class="badge b-${r||'advisor'}">${r||'advisor'}</span>`;
+  const rows=[
+    ...users.map(u=>`<tr>
+      <td style="color:#e2f5eb;font-weight:500">${u.full_name||u.email||'—'}</td>
+      <td>${u.email||'—'}</td>
+      <td>${roleBadge(u.role)}</td>
+      <td><span class="badge b-active">Active</span></td>
+      <td><button class="btn btn-danger btn-sm" onclick="removeUser('${u.id}')">Remove</button></td>
+    </tr>`),
+    ...pending.map(i=>`<tr>
+      <td style="color:#9ab8a4;font-style:italic">Pending invite</td>
+      <td>${i.email}</td>
+      <td>${roleBadge(i.role)}</td>
+      <td><span class="badge b-pending">Invite sent</span></td>
+      <td><button class="btn btn-danger btn-sm" onclick="cancelInvite('${i.id}')">Cancel</button></td>
+    </tr>`),
+  ].join('');
+  $('users-table').innerHTML=rows.length
+    ?`<table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    :'<div style="color:#6a8f76;font-size:13px">No staff users yet. Invite someone below.</div>';
+}
+
+async function inviteStaff(){
+  const email=$('inv-email').value.trim();
+  const role=$('inv-role').value;
+  if(!email){showMsg('inv-err','Please enter an email address.');return;}
+  const btn=$('inv-btn');btn.textContent='Sending…';btn.disabled=true;
+  // Check not already a user
+  const{data:existing}=await sb.from('profiles').select('id').eq('email',email).maybeSingle();
+  if(existing){showMsg('inv-err','This email already has an account.');btn.textContent='Send invite';btn.disabled=false;return;}
+  // Generate token
+  const token=Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
+  const{error}=await sb.from('invites').insert([{
+    org_id:orgId,
+    email,
+    role,
+    token,
+    accepted:false,
+  }]);
+  btn.textContent='Send invite';btn.disabled=false;
+  if(error){showMsg('inv-err','Error: '+error.message);return;}
+  // Build invite link
+  const inviteLink=`${window.location.origin}/accept-invite.html?token=${token}`;
+  showMsg('inv-ok','✓ Invite created for '+email);
+  $('inv-info').innerHTML=`Share this link with ${email}:<br/><a href="${inviteLink}" target="_blank" style="word-break:break-all;font-size:12px">${inviteLink}</a>`;
+  $('inv-info').style.display='block';
+  $('inv-email').value='';
+  await loadUsers();
+}
+
+async function cancelInvite(id){
+  if(!confirm('Cancel this invite?'))return;
+  await sb.from('invites').delete().eq('id',id);
+  await loadUsers();
+}
+
+async function removeUser(id){
+  if(!confirm('Remove this user from the org?'))return;
+  await sb.from('profiles').update({org_id:null}).eq('id',id);
+  await loadUsers();
+}
+
+loadAll();
 </script>
-
 </body>
 </html>
