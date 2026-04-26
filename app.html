@@ -140,7 +140,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <button class="nav-btn" onclick="go('circular')"><span class="icon">♻️</span><span>Circular Economy</span></button>
   <div class="nav-section">Reporting</div>
   <button class="nav-btn" onclick="go('outcomes')"><span class="icon">🎯</span><span>Outcomes</span></button>
-  <button class="nav-btn" onclick="go('funding')"><span class="icon">💰</span><span>Funding</span></button>
+  <button class="nav-btn" onclick="go('funding')"><span class="icon">💰</span><span>Contracts</span></button>
   <button class="nav-btn" onclick="go('reports')"><span class="icon">📄</span><span>Funder Reports</span></button>
   <button class="nav-btn" onclick="go('evidence')"><span class="icon">🗂️</span><span>Evidence Hub</span></button>
   <div class="nav-section">Settings</div>
@@ -281,7 +281,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
 </div>
 
 <div id="page-funding" class="page">
-  <div class="page-header"><div><div class="page-title">Funding & Contracts</div><div class="page-sub" id="fund-sub"></div></div><button class="btn btn-p btn-sm" onclick="openAddCon()">+ Add contract</button></div>
+  <div class="page-header"><div><div class="page-title">Contracts</div><div class="page-sub" id="fund-sub"></div></div><button class="btn btn-p btn-sm" onclick="openAddCon()">+ Add contract</button></div>
   <div id="fund-list"></div>
 </div>
 
@@ -347,6 +347,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <div class="form-grid-2"><div class="form-row"><label>Stage</label><select id="mp-st"><option>Referred</option><option>Engaged</option><option>In Support</option><option>Job Ready</option><option>Outcome Achieved</option><option>Sustained</option><option>Closed</option></select></div><div class="form-row"><label>Risk level</label><select id="mp-risk"><option>Low</option><option>Medium</option><option>High</option></select></div></div>
   <div class="form-row"><label>Barriers</label><div id="barrier-checks" class="chk-group"></div></div>
   <div class="form-row"><label>Outcomes achieved</label><div id="outcome-checks" class="chk-group"></div></div>
+  <div class="form-row"><label>Linked contracts</label><div id="mp-contracts" class="chk-group"></div><div style="font-size:11px;color:var(--txt3);margin-top:4px">Link this participant to contracts for RAG & starts tracking</div></div>
   <div class="form-row"><label>Safeguarding flag</label><select id="mp-safe"><option value="">None</option><option>Domestic abuse</option><option>Mental health</option><option>Substance misuse</option><option>Homelessness risk</option></select></div>
   <div class="score-box"><div class="score-label">Distance Travelled (1–10)</div>
     <div class="form-grid-2"><div class="form-row"><label>Confidence</label><input type="number" id="mp-conf" min="1" max="10"/></div><div class="form-row"><label>Work readiness</label><input type="number" id="mp-work" min="1" max="10"/></div></div>
@@ -679,14 +680,48 @@ function renderParticipants(){
   }).join(''):'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--txt3)">No participants found.</td></tr>';
 }
 function openAddP(){_editPId=null;$('mp-title').textContent='Add participant';['mp-fn','mp-ln','mp-note','mp-conf','mp-work','mp-well','mp-skillsc'].forEach(f=>$(f).value='');$('mp-safe').value='';mkChkArr('barrier-checks',BARRIERS);mkChkArr('outcome-checks',OUT_TYPES);$('modal-p').classList.add('open');}
-function openEditP(id){const p=DB.participants.find(x=>x.id===id);if(!p)return;_editPId=id;$('mp-title').textContent='Edit participant';$('mp-fn').value=p.first_name;$('mp-ln').value=p.last_name;$('mp-rs').value=p.ref_source;$('mp-adv').value=p.advisor;$('mp-st').value=p.stage;$('mp-risk').value=p.risk;$('mp-safe').value=p.safeguarding||'';const sc=p.scores||{};$('mp-conf').value=sc.confidence||'';$('mp-work').value=sc.work_readiness||'';$('mp-well').value=sc.wellbeing||'';$('mp-skillsc').value=sc.skills||'';mkChkArr('barrier-checks',BARRIERS,p.barriers);mkChkArr('outcome-checks',OUT_TYPES,p.outcomes);$('mp-note').value='';$('modal-p').classList.add('open');}
+function openEditP(id){
+  const p=DB.participants.find(x=>x.id===id);if(!p)return;
+  _editPId=id;$('mp-title').textContent='Edit participant';
+  $('mp-fn').value=p.first_name;$('mp-ln').value=p.last_name;
+  $('mp-rs').value=p.ref_source;$('mp-adv').value=p.advisor;
+  $('mp-st').value=p.stage;$('mp-risk').value=p.risk;$('mp-safe').value=p.safeguarding||'';
+  const sc=p.scores||{};
+  $('mp-conf').value=sc.confidence||'';$('mp-work').value=sc.work_readiness||'';
+  $('mp-well').value=sc.wellbeing||'';$('mp-skillsc').value=sc.skills||'';
+  mkChkArr('barrier-checks',BARRIERS,p.barriers);
+  mkChkArr('outcome-checks',OUT_TYPES,p.outcomes);
+  populateContractChks(toArr(p.contract_ids).map(String));
+  $('mp-note').value='';
+  $('modal-p').classList.add('open');
+}
 async function saveP(){
   const btn=$('p-save-btn');btn.textContent='Saving…';btn.disabled=true;
   try{
     const note=$('mp-note').value;
-    const d={first_name:$('mp-fn').value||'Unknown',last_name:$('mp-ln').value||'',ref_source:$('mp-rs').value,stage:$('mp-st').value,advisor:$('mp-adv').value,barriers:getChkArr('barrier-checks'),outcomes:getChkArr('outcome-checks'),safeguarding:$('mp-safe').value||null,risk:$('mp-risk').value,last_contact:today(),scores:{confidence:parseInt($('mp-conf').value)||null,work_readiness:parseInt($('mp-work').value)||null,wellbeing:parseInt($('mp-well').value)||null,skills:parseInt($('mp-skillsc').value)||null}};
-    if(_editPId){const ex=DB.participants.find(x=>x.id===_editPId);const notes=[...toArr(ex.notes)];if(note)notes.push({t:note,d:today(),s:'Staff'});await sbUpdate('participants',{...d,notes},_editPId);}
-    else{const notes=note?[{t:note,d:today(),s:'Staff'}]:[];await sbInsert('participants',{...d,notes});}
+    const contractIds=[...document.querySelectorAll('#mp-contracts input[type=checkbox]:checked')].map(x=>String(x.value));
+    const d={
+      first_name:$('mp-fn').value||'Unknown',
+      last_name:$('mp-ln').value||'',
+      ref_source:$('mp-rs').value,
+      stage:$('mp-st').value,
+      advisor:$('mp-adv').value,
+      barriers:getChkArr('barrier-checks'),
+      outcomes:getChkArr('outcome-checks'),
+      safeguarding:$('mp-safe').value||null,
+      risk:$('mp-risk').value,
+      last_contact:today(),
+      contract_ids:contractIds,
+      scores:{confidence:parseInt($('mp-conf').value)||null,work_readiness:parseInt($('mp-work').value)||null,wellbeing:parseInt($('mp-well').value)||null,skills:parseInt($('mp-skillsc').value)||null}
+    };
+    if(_editPId){
+      const ex=DB.participants.find(x=>x.id===_editPId);
+      const notes=[...toArr(ex.notes)];if(note)notes.push({t:note,d:today(),s:'Staff'});
+      await sbUpdate('participants',{...d,notes},_editPId);
+    }else{
+      const notes=note?[{t:note,d:today(),s:'Staff'}]:[];
+      await sbInsert('participants',{...d,notes});
+    }
     await refreshTable('participants');closeModal('modal-p');renderParticipants();
   }catch(e){alert('Save failed: '+e.message);}
   finally{btn.textContent='Save';btn.disabled=false;}
