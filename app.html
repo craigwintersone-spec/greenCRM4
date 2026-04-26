@@ -541,11 +541,14 @@ function initSB(){
   else dbg('Supabase missing','error');
 }
 
+// Tables that have no org_id column
+const NO_ORG_ID=['partner_referrals','feedback'];
+
 async function sbQ(table){
   if(!sb)return null;
   try{
     let q=sb.from(table).select('*');
-    if(orgId)q=q.eq('org_id',orgId);
+    if(orgId&&!NO_ORG_ID.includes(table))q=q.eq('org_id',orgId);
     const{data,error}=await q;
     if(error){dbg(`${table}: ${error.message}`,'error');return null;}
     dbg(`${table}: ${data.length} rows`,'ok');
@@ -555,7 +558,7 @@ async function sbQ(table){
 
 async function sbInsert(table,payload){
   if(!sb)return null;
-  if(orgId)payload.org_id=orgId;
+  if(orgId&&!NO_ORG_ID.includes(table))payload.org_id=orgId;
   const{data,error}=await sb.from(table).insert([payload]).select();
   if(error){dbg(`insert ${table}: ${error.message}`,'error');throw error;}
   return data?.[0];
