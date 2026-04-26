@@ -698,6 +698,45 @@ function showLoginErr(msg){
   const el=$('login-err');el.textContent=msg;el.style.display='block';
 }
 
+function applyModules(mods){
+  // Default everything to on if not specified
+  const m={
+    participants: mods.participants ?? true,
+    volunteers:   mods.volunteers   ?? true,
+    events:       mods.events       ?? true,
+    circular:     mods.circular     ?? false,
+    employers:    mods.employers    ?? false,
+    funders:      mods.funders      ?? false,
+  };
+
+  // Map module keys to which nav buttons + pages they control
+  const gates={
+    participants: ['participants','pipeline','referrals','partnerrefs','outcomes','safeguarding','evidence'],
+    volunteers:   ['volunteers'],
+    events:       ['events','feedback','impact'],
+    circular:     ['circular'],
+    employers:    ['employers'],
+    funders:      ['funding','reports','rag'],
+  };
+
+  Object.entries(gates).forEach(([mod, pages])=>{
+    const enabled = m[mod];
+    pages.forEach(page=>{
+      // Hide/show nav button
+      const btn=document.querySelector(`.nav-btn[onclick="go('${page}')"]`);
+      if(btn) btn.style.display=enabled?'':'none';
+    });
+  });
+
+  // If org is suspended, show a banner
+  if(currentOrg?.status==='suspended'){
+    const warn=document.createElement('div');
+    warn.style.cssText='background:#3a1a1a;color:#f87171;padding:8px 20px;font-size:13px;font-weight:600;text-align:center';
+    warn.textContent='⚠ This organisation is suspended. Contact support to reactivate.';
+    document.body.insertBefore(warn,$('shell'));
+  }
+}
+
 async function afterLogin(){
   // Get profile to find org
   const{data:profile}=await sb.from('profiles').select('*').eq('id',currentUser.id).single();
