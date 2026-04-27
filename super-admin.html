@@ -14,7 +14,7 @@ body{background:var(--bg);color:var(--txt);font-family:system-ui,sans-serif;font
 .nav{display:block;color:var(--txt2);padding:9px 20px;font-size:13px;cursor:pointer;border:none;background:none;width:100%;text-align:left;font-family:inherit;border-left:2px solid transparent;transition:all .15s}
 .nav:hover{color:var(--txt);background:rgba(16,185,129,.06)}
 .nav.active{color:var(--em);background:rgba(16,185,129,.1);border-left-color:var(--em)}
-.sidebar-bottom{margin-top:auto;padding:16px 20px;border-top:1px solid var(--border)}
+.sidebar-bottom{margin-top:auto;padding:16px 20px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
 .main{flex:1;padding:32px;overflow-y:auto}
 .page{display:none}.page.active{display:block}
 .page-title{font-size:24px;font-weight:800;color:var(--txt);margin-bottom:4px}
@@ -30,13 +30,9 @@ th{text-align:left;font-size:11px;color:var(--txt3);text-transform:uppercase;pad
 td{padding:11px 12px;border-bottom:1px solid var(--border);font-size:13px;color:var(--txt2);vertical-align:middle}
 tr:hover td{background:rgba(16,185,129,.02)}
 .badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px}
-.b-free{background:#2a2a1a;color:#f59e0b}
-.b-starter{background:#1a2a3a;color:#60a5fa}
-.b-pro{background:#1a3a2a;color:#34d399}
-.b-network{background:#1a1a3a;color:#a78bfa}
-.b-active{background:#1a3a2a;color:#34d399}
-.b-suspended{background:#2a1a1a;color:#f87171}
-.b-trial{background:#2a2a1a;color:#f59e0b}
+.b-free{background:#2a2a1a;color:#f59e0b}.b-starter{background:#1a2a3a;color:#60a5fa}
+.b-pro{background:#1a3a2a;color:#34d399}.b-network{background:#1a1a3a;color:#a78bfa}
+.b-active{background:#1a3a2a;color:#34d399}.b-suspended{background:#2a1a1a;color:#f87171}.b-trial{background:#2a2a1a;color:#f59e0b}
 .btn{padding:7px 14px;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
 .btn-p{background:var(--em);color:#fff}.btn-p:hover{background:var(--em2)}
 .btn-ghost{background:var(--card);color:var(--txt2);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--em);color:var(--em)}
@@ -48,7 +44,6 @@ input,select,textarea{font-family:inherit;font-size:13px;background:var(--bg);bo
 input:focus,select:focus,textarea:focus{border-color:var(--em)}
 .form-row{margin-bottom:12px}
 .form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.form-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
 .msg{padding:10px 14px;border-radius:var(--radius);font-size:13px;margin-bottom:12px;display:none}
 .msg-ok{background:#1a3a2a;border:1px solid #2a5a3a;color:#34d399}
 .msg-err{background:#2a1a1a;border:1px solid #5a2a2a;color:var(--red)}
@@ -79,7 +74,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--em)}
   <button class="nav" onclick="showPage('subscriptions')">💳 Subscriptions</button>
   <button class="nav" onclick="showPage('modules')">🧩 Modules</button>
   <div class="sidebar-bottom">
-    <button class="btn btn-ghost btn-sm" style="width:100%" onclick="window.location.href='/app.html'">← Back to CRM</button>
+    <button class="btn btn-ghost btn-sm" style="width:100%" onclick="window.location.href='app.html'">← Back to CRM</button>
+    <a href="index.html" class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;text-decoration:none">🏠 Home</a>
   </div>
 </aside>
 
@@ -89,14 +85,12 @@ input:focus,select:focus,textarea:focus{border-color:var(--em)}
 <div id="page-dashboard" class="page active">
   <div class="page-title">Super Admin Dashboard</div>
   <div class="page-sub" id="dash-status">Loading…</div>
-
   <div class="stats-grid">
     <div class="stat"><div class="stat-lbl">Total Organisations</div><div class="stat-val" id="st-total">—</div></div>
     <div class="stat"><div class="stat-lbl">Paid Orgs</div><div class="stat-val" id="st-paid">—</div></div>
     <div class="stat"><div class="stat-lbl">Free Orgs</div><div class="stat-val" id="st-free">—</div></div>
     <div class="stat"><div class="stat-lbl">Monthly Revenue</div><div class="stat-val" id="st-rev">—</div></div>
   </div>
-
   <div class="revenue-highlight">
     <div>
       <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.7);margin-bottom:4px">Annual Recurring Revenue</div>
@@ -107,7 +101,6 @@ input:focus,select:focus,textarea:focus{border-color:var(--em)}
       <div style="font-size:24px;font-weight:700;color:#fff" id="st-active-orgs">—</div>
     </div>
   </div>
-
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
       <div class="card-title" style="margin:0">Recent organisations</div>
@@ -127,13 +120,11 @@ input:focus,select:focus,textarea:focus{border-color:var(--em)}
     <button class="btn btn-p" onclick="openCreateOrg()">+ Create new org</button>
   </div>
   <div class="page-sub">View, edit and open each organisation's CRM</div>
-
   <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
     <input id="org-search" placeholder="Search by name…" oninput="filterOrgs()" style="max-width:220px"/>
     <select id="org-filter-plan" onchange="filterOrgs()" style="max-width:140px"><option value="">All plans</option><option value="free">Free</option><option value="starter">Starter</option><option value="pro">Pro</option><option value="network">Network</option></select>
     <select id="org-filter-status" onchange="filterOrgs()" style="max-width:140px"><option value="">All statuses</option><option value="active">Active</option><option value="suspended">Suspended</option><option value="trial">Trial</option></select>
   </div>
-
   <div class="card" style="padding:0;overflow:hidden">
     <table>
       <thead><tr><th>Organisation</th><th>Sector</th><th>Plan</th><th>Status</th><th>Monthly</th><th>Actions</th></tr></thead>
@@ -146,18 +137,13 @@ input:focus,select:focus,textarea:focus{border-color:var(--em)}
 <div id="page-subscriptions" class="page">
   <div class="page-title">Subscriptions & Pricing</div>
   <div class="page-sub">Plan tiers and revenue breakdown</div>
-
   <div class="plan-cards">
-    <div class="plan-card"><div class="plan-card-name">Free</div><div class="plan-card-price">£0</div><div class="plan-card-desc">Basic CRM access · 1 user</div><div style="margin-top:10px;font-size:18px;font-weight:700;color:var(--txt3)" id="plan-count-free">—</div><div style="font-size:11px;color:var(--txt3)">organisations</div></div>
+    <div class="plan-card"><div class="plan-card-name">Free</div><div class="plan-card-price">£0</div><div class="plan-card-desc">Basic CRM · 1 user</div><div style="margin-top:10px;font-size:18px;font-weight:700;color:var(--txt3)" id="plan-count-free">—</div><div style="font-size:11px;color:var(--txt3)">organisations</div></div>
     <div class="plan-card"><div class="plan-card-name">Starter</div><div class="plan-card-price">£9</div><div class="plan-card-desc">Small orgs · core features</div><div style="margin-top:10px;font-size:18px;font-weight:700;color:var(--blue)" id="plan-count-starter">—</div><div style="font-size:11px;color:var(--txt3)">organisations</div></div>
     <div class="plan-card"><div class="plan-card-name">Pro</div><div class="plan-card-price">£29</div><div class="plan-card-desc">Reporting · employers · funders</div><div style="margin-top:10px;font-size:18px;font-weight:700;color:var(--em)" id="plan-count-pro">—</div><div style="font-size:11px;color:var(--txt3)">organisations</div></div>
     <div class="plan-card"><div class="plan-card-name">Network</div><div class="plan-card-price">£79</div><div class="plan-card-desc">Multi-site networks</div><div style="margin-top:10px;font-size:18px;font-weight:700;color:#a78bfa" id="plan-count-network">—</div><div style="font-size:11px;color:var(--txt3)">organisations</div></div>
   </div>
-
-  <div class="card">
-    <div class="card-title">Revenue by plan</div>
-    <div id="revenue-breakdown"></div>
-  </div>
+  <div class="card"><div class="card-title">Revenue by plan</div><div id="revenue-breakdown"></div></div>
 </div>
 
 <!-- MODULES -->
@@ -182,7 +168,6 @@ input:focus,select:focus,textarea:focus{border-color:var(--em)}
   <h2>Create new organisation</h2>
   <div class="msg msg-err" id="create-err"></div>
   <div class="msg msg-ok" id="create-ok"></div>
-
   <div class="form-grid-2">
     <div class="form-row"><label>Organisation name *</label><input id="co-name" placeholder="e.g. Waltham Forest CVS"/></div>
     <div class="form-row"><label>Sector</label><select id="co-sector">
@@ -193,19 +178,14 @@ input:focus,select:focus,textarea:focus{border-color:var(--em)}
   </div>
   <div class="form-grid-2">
     <div class="form-row"><label>Plan</label><select id="co-plan">
-      <option value="free">Free — £0/mo</option>
-      <option value="starter">Starter — £9/mo</option>
-      <option value="pro">Pro — £29/mo</option>
-      <option value="network">Network — £79/mo</option>
+      <option value="free">Free — £0/mo</option><option value="starter">Starter — £9/mo</option>
+      <option value="pro">Pro — £29/mo</option><option value="network">Network — £79/mo</option>
     </select></div>
     <div class="form-row"><label>Status</label><select id="co-status">
-      <option value="active">Active</option>
-      <option value="trial">Trial</option>
-      <option value="suspended">Suspended</option>
+      <option value="active">Active</option><option value="trial">Trial</option><option value="suspended">Suspended</option>
     </select></div>
   </div>
-
-  <div class="form-row" style="margin-top:4px">
+  <div class="form-row">
     <label>Modules to enable</label>
     <div class="mod-grid" id="co-modules">
       <div class="mod-item on" id="cmod-item-participants"><span style="font-size:13px;color:var(--txt)">👤 Participants</span><input type="checkbox" id="cmod-participants" checked style="width:auto;cursor:pointer"/></div>
@@ -217,13 +197,11 @@ input:focus,select:focus,textarea:focus{border-color:var(--em)}
     </div>
     <div style="font-size:11px;color:var(--txt3);margin-top:6px">You can change these anytime from the org's View page</div>
   </div>
-
   <div class="modal-footer">
     <button class="btn btn-ghost" onclick="closeCreate()">Cancel</button>
     <button class="btn btn-p" id="create-btn" onclick="createOrg()">Create organisation</button>
   </div>
-</div>
-</div>
+</div></div>
 
 <!-- EDIT ORG MODAL -->
 <div class="modal-overlay" id="modal-edit">
@@ -241,23 +219,18 @@ input:focus,select:focus,textarea:focus{border-color:var(--em)}
   </div>
   <div class="form-grid-2">
     <div class="form-row"><label>Plan</label><select id="eo-plan">
-      <option value="free">Free — £0/mo</option>
-      <option value="starter">Starter — £9/mo</option>
-      <option value="pro">Pro — £29/mo</option>
-      <option value="network">Network — £79/mo</option>
+      <option value="free">Free — £0/mo</option><option value="starter">Starter — £9/mo</option>
+      <option value="pro">Pro — £29/mo</option><option value="network">Network — £79/mo</option>
     </select></div>
     <div class="form-row"><label>Status</label><select id="eo-status">
-      <option value="active">Active</option>
-      <option value="trial">Trial</option>
-      <option value="suspended">Suspended</option>
+      <option value="active">Active</option><option value="trial">Trial</option><option value="suspended">Suspended</option>
     </select></div>
   </div>
   <div class="modal-footer">
     <button class="btn btn-ghost" onclick="closeEdit()">Cancel</button>
     <button class="btn btn-p" id="edit-btn" onclick="saveEdit()">Save changes</button>
   </div>
-</div>
-</div>
+</div></div>
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script>
@@ -267,20 +240,13 @@ const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZ
 const sb=window.supabase.createClient(SB_URL,SB_KEY);
 const PRICES={free:0,starter:9,pro:29,network:79};
 const $=id=>document.getElementById(id);
+let allOrgs=[],editOrgId=null;
 
-let allOrgs=[];
-let editOrgId=null;
-
-// ── MODULE CHECKBOX STYLING ──
 ['participants','volunteers','events','employers','circular','funders'].forEach(k=>{
   const cb=$('cmod-'+k);
-  if(cb) cb.addEventListener('change',()=>{
-    const item=$('cmod-item-'+k);
-    if(item) item.classList.toggle('on',cb.checked);
-  });
+  if(cb)cb.addEventListener('change',()=>{const item=$('cmod-item-'+k);if(item)item.classList.toggle('on',cb.checked);});
 });
 
-// ── NAV ──
 function showPage(p){
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.nav').forEach(b=>b.classList.remove('active'));
@@ -289,13 +255,10 @@ function showPage(p){
   if(p==='subscriptions')renderSubscriptions();
 }
 
-// ── LOAD ──
 async function loadOrgs(){
   const{data,error}=await sb.from('organisations').select('*').order('created_at',{ascending:false});
   if(error){$('dash-status').textContent='Error: '+error.message;return;}
-  allOrgs=data||[];
-  renderStats();
-  renderOrgTable(allOrgs);
+  allOrgs=data||[];renderStats();renderOrgTable(allOrgs);
   $('dash-status').textContent='Loaded — '+allOrgs.length+' organisations';
 }
 
@@ -303,10 +266,8 @@ function renderStats(){
   const paid=allOrgs.filter(o=>o.plan&&o.plan!=='free');
   const free=allOrgs.filter(o=>!o.plan||o.plan==='free');
   const rev=allOrgs.reduce((s,o)=>s+(PRICES[o.plan]||0),0);
-  $('st-total').textContent=allOrgs.length;
-  $('st-paid').textContent=paid.length;
-  $('st-free').textContent=free.length;
-  $('st-rev').textContent='£'+rev;
+  $('st-total').textContent=allOrgs.length;$('st-paid').textContent=paid.length;
+  $('st-free').textContent=free.length;$('st-rev').textContent='£'+rev;
   $('st-arr').textContent='£'+(rev*12).toLocaleString();
   $('st-active-orgs').textContent=allOrgs.filter(o=>o.status==='active'||!o.status).length;
 }
@@ -318,35 +279,26 @@ function renderOrgTable(orgs){
   const tbody=orgs.length?orgs.map(o=>`<tr>
     <td style="color:var(--txt);font-weight:500">${o.name||'Unnamed'}</td>
     <td style="font-size:12px;color:var(--txt2)">${o.sector||'—'}</td>
-    <td>${planBadge(o.plan)}</td>
-    <td>${statusBadge(o.status)}</td>
+    <td>${planBadge(o.plan)}</td><td>${statusBadge(o.status)}</td>
     <td style="color:var(--em);font-weight:600">£${PRICES[o.plan]||0}/mo</td>
     <td><div style="display:flex;gap:5px;flex-wrap:wrap">
-      <button class="btn btn-ghost btn-sm" onclick="window.location.href='/org.html?id=${o.id}'">View</button>
       <button class="btn btn-ghost btn-sm" onclick="openEdit('${o.id}')">Edit</button>
-      <button class="btn btn-p btn-sm" onclick="window.open('/app.html?org_id=${o.id}','_blank')">Open CRM</button>
+      <button class="btn btn-p btn-sm" onclick="window.open('app.html?org_id=${o.id}','_blank')">Open CRM</button>
       <button class="btn btn-danger btn-sm" onclick="deleteOrg('${o.id}','${(o.name||'').replace(/'/g,'')}')">Del</button>
     </div></td>
   </tr>`).join(''):'<tr><td colspan="6" style="text-align:center;color:var(--txt3);padding:24px">No organisations yet.</td></tr>';
-  $('dash-org-table').innerHTML=tbody;
-  $('org-table').innerHTML=tbody;
+  $('dash-org-table').innerHTML=tbody;$('org-table').innerHTML=tbody;
 }
 
 function filterOrgs(){
   const q=($('org-search')||{}).value?.toLowerCase()||'';
   const fp=($('org-filter-plan')||{}).value||'';
   const fs=($('org-filter-status')||{}).value||'';
-  renderOrgTable(allOrgs.filter(o=>
-    (!q||(o.name||'').toLowerCase().includes(q))&&
-    (!fp||o.plan===fp)&&
-    (!fs||(o.status||'active')===fs)
-  ));
+  renderOrgTable(allOrgs.filter(o=>(!q||(o.name||'').toLowerCase().includes(q))&&(!fp||o.plan===fp)&&(!fs||(o.status||'active')===fs)));
 }
 
-// ── CREATE ORG ──
 function openCreateOrg(){
-  ['co-name'].forEach(f=>$(f).value='');
-  $('co-plan').value='free';$('co-status').value='active';
+  $('co-name').value='';$('co-plan').value='free';$('co-status').value='active';
   ['create-err','create-ok'].forEach(id=>$(id).style.display='none');
   $('create-btn').textContent='Create organisation';$('create-btn').disabled=false;
   $('modal-create').classList.add('open');
@@ -358,40 +310,20 @@ async function createOrg(){
   ['create-err','create-ok'].forEach(id=>$(id).style.display='none');
   if(!name){$('create-err').textContent='Organisation name is required.';$('create-err').style.display='block';return;}
   const btn=$('create-btn');btn.textContent='Creating…';btn.disabled=true;
-  const modules={
-    participants:$('cmod-participants').checked,
-    volunteers:$('cmod-volunteers').checked,
-    events:$('cmod-events').checked,
-    employers:$('cmod-employers').checked,
-    circular:$('cmod-circular').checked,
-    funders:$('cmod-funders').checked,
-  };
-  const{data,error}=await sb.from('organisations').insert([{
-    name,
-    sector:$('co-sector').value,
-    plan:$('co-plan').value,
-    status:$('co-status').value,
-    modules,
-    settings:{}
-  }]).select().single();
+  const modules={participants:$('cmod-participants').checked,volunteers:$('cmod-volunteers').checked,events:$('cmod-events').checked,employers:$('cmod-employers').checked,circular:$('cmod-circular').checked,funders:$('cmod-funders').checked};
+  const{data,error}=await sb.from('organisations').insert([{name,sector:$('co-sector').value,plan:$('co-plan').value,status:$('co-status').value,modules,settings:{}}]).select().single();
   btn.textContent='Create organisation';btn.disabled=false;
   if(error){$('create-err').textContent='Error: '+error.message;$('create-err').style.display='block';return;}
-  $('create-ok').textContent='✓ Organisation created! ID: '+data.id;$('create-ok').style.display='block';
-  await loadOrgs();
-  // Show links to open
-  $('create-ok').innerHTML='✓ <strong>'+name+'</strong> created! <a href="/org.html?id='+data.id+'" style="color:var(--em)">View settings →</a> &nbsp; <a href="/app.html?org_id='+data.id+'" target="_blank" style="color:var(--em)">Open CRM →</a>';
-  setTimeout(closeCreate,4000);
+  $('create-ok').innerHTML='✓ <strong>'+name+'</strong> created! <a href="app.html?org_id='+data.id+'" target="_blank" style="color:var(--em)">Open CRM →</a>';
+  $('create-ok').style.display='block';
+  await loadOrgs();setTimeout(closeCreate,4000);
 }
 
-// ── EDIT ORG ──
 function openEdit(id){
   const o=allOrgs.find(x=>x.id===id);if(!o)return;
-  editOrgId=id;
-  $('edit-title').textContent='Edit — '+o.name;
-  $('eo-name').value=o.name||'';
-  $('eo-sector').value=o.sector||'Charity / VCSE';
-  $('eo-plan').value=o.plan||'free';
-  $('eo-status').value=o.status||'active';
+  editOrgId=id;$('edit-title').textContent='Edit — '+o.name;
+  $('eo-name').value=o.name||'';$('eo-sector').value=o.sector||'Charity / VCSE';
+  $('eo-plan').value=o.plan||'free';$('eo-status').value=o.status||'active';
   ['edit-err','edit-ok'].forEach(id=>$(id).style.display='none');
   $('edit-btn').textContent='Save changes';$('edit-btn').disabled=false;
   $('modal-edit').classList.add('open');
@@ -404,34 +336,24 @@ async function saveEdit(){
   btn.textContent='Save changes';btn.disabled=false;
   if(error){$('edit-err').textContent='Error: '+error.message;$('edit-err').style.display='block';return;}
   $('edit-ok').textContent='✓ Saved';$('edit-ok').style.display='block';
-  await loadOrgs();
-  setTimeout(closeEdit,1500);
+  await loadOrgs();setTimeout(closeEdit,1500);
 }
 
-// ── DELETE ORG ──
 async function deleteOrg(id,name){
   if(!confirm('DELETE "'+name+'"?\n\nThis will permanently delete the organisation and ALL their data. This cannot be undone.'))return;
-  if(!confirm('Are you absolutely sure? Click OK to confirm permanent deletion.'))return;
+  if(!confirm('Are you absolutely sure?'))return;
   const{error}=await sb.from('organisations').delete().eq('id',id);
   if(error){alert('Delete failed: '+error.message);return;}
   await loadOrgs();
 }
 
-// ── SUBSCRIPTIONS ──
 function renderSubscriptions(){
   const counts={free:0,starter:0,pro:0,network:0};
   allOrgs.forEach(o=>counts[o.plan||'free']=(counts[o.plan||'free']||0)+1);
   ['free','starter','pro','network'].forEach(p=>{const el=$('plan-count-'+p);if(el)el.textContent=counts[p]||0;});
-  const breakdown=[
-    {plan:'Network',count:counts.network,price:79,color:'#a78bfa'},
-    {plan:'Pro',count:counts.pro,price:29,color:'#10b981'},
-    {plan:'Starter',count:counts.starter,price:9,color:'#60a5fa'},
-    {plan:'Free',count:counts.free,price:0,color:'#6a8f76'},
-  ];
+  const breakdown=[{plan:'Network',count:counts.network,price:79,color:'#a78bfa'},{plan:'Pro',count:counts.pro,price:29,color:'#10b981'},{plan:'Starter',count:counts.starter,price:9,color:'#60a5fa'},{plan:'Free',count:counts.free,price:0,color:'#6a8f76'}];
   $('revenue-breakdown').innerHTML=breakdown.map(b=>{
-    const rev=b.count*b.price;
-    const max=Math.max(...breakdown.map(x=>x.count*x.price))||1;
-    const pct=Math.round(rev/max*100);
+    const rev=b.count*b.price;const max=Math.max(...breakdown.map(x=>x.count*x.price))||1;const pct=Math.round(rev/max*100);
     return`<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:13px;color:var(--txt2);margin-bottom:4px"><span>${b.plan} (${b.count} orgs × £${b.price})</span><span style="font-weight:600;color:var(--txt)">£${rev}/mo</span></div><div style="height:8px;background:var(--border);border-radius:4px"><div style="height:100%;border-radius:4px;background:${b.color};width:${pct}%"></div></div></div>`;
   }).join('');
 }
