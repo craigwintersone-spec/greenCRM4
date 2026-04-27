@@ -123,7 +123,7 @@ tr:hover td{background:rgba(16,185,129,.02)}
   <div class="header-logo">Green<span>CRM</span> <span style="font-size:11px;color:var(--txt3);font-weight:400">Org Admin</span></div>
   <div class="header-right">
     <a href="index.html" class="btn btn-ghost btn-sm">🏠 Home</a>
-    <button class="btn btn-ghost btn-sm" onclick="window.location.href='admin.html'">← Super Admin</button>
+    <button class="btn btn-ghost btn-sm" onclick="window.location.href='super-admin.html'">← Super Admin</button>
   </div>
 </div>
 
@@ -367,7 +367,7 @@ async function deleteOrg(){
   setStatus('Deleting…',false);
   const{error}=await sb.from('organisations').delete().eq('id',orgId);
   if(error){setStatus('Delete failed: '+error.message,false);}
-  else{alert('Organisation deleted.');window.location.href='admin.html';}
+  else{alert('Organisation deleted.');window.location.href='super-admin.html';}
 }
 
 function openCRM(){window.open('app.html?org_id='+orgId,'_blank');}
