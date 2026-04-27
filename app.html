@@ -258,6 +258,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
       <div style="text-align:center"><div style="font-size:40px;font-weight:800;color:var(--em)" id="imp-ca">—</div><div style="font-size:11px;color:var(--txt3)">avg after</div></div>
     </div>
   </div>
+  <div class="card"><div class="card-title">Confidence timeline</div><div id="imp-timeline"></div></div>
   <div class="card"><div class="card-title">Participant voices</div><div id="imp-quotes"></div></div>
 </div>
 
@@ -448,6 +449,12 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <div class="form-grid-2"><div class="form-row"><label>First name</label><input id="mp-fn"/></div><div class="form-row"><label>Last name</label><input id="mp-ln"/></div></div>
   <div class="form-grid-2"><div class="form-row"><label>Referral source</label><select id="mp-rs"><option>Self-referral</option><option>Probation</option><option>Jobcentre Plus</option><option>Community org</option><option>School / college</option></select></div><div class="form-row"><label>Advisor</label><select id="mp-adv"><option>Sarah T.</option><option>Marcus O.</option><option>Priya S.</option><option>Unassigned</option></select></div></div>
   <div class="form-grid-2"><div class="form-row"><label>Stage</label><select id="mp-st"><option>Referred</option><option>Engaged</option><option>In Support</option><option>Job Ready</option><option>Outcome Achieved</option><option>Sustained</option><option>Closed</option></select></div><div class="form-row"><label>Risk level</label><select id="mp-risk"><option>Low</option><option>Medium</option><option>High</option></select></div></div>
+  <div class="form-grid-2"><div class="form-row"><label>Phone</label><input id="mp-phone" placeholder="07700 900000"/></div><div class="form-row"><label>Email</label><input type="email" id="mp-email" placeholder="participant@email.com"/></div></div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Engagement type</label><select id="mp-engtype"><option value="">Select…</option><option>Phone call</option><option>Face to face</option><option>Group session</option><option>Email</option><option>Home visit</option><option>Other</option></select></div>
+    <div class="form-row"><label>Next contact due</label><input type="date" id="mp-due"/></div>
+  </div>
+  <div class="form-row" id="mp-engtype-other-row" style="display:none"><label>Other engagement type</label><input id="mp-engtype-other" placeholder="Describe…"/></div>
   <div class="form-row"><label>Referral background (for AI intake)</label><textarea id="mp-intake-text" placeholder="Paste referral letter or background notes here…" style="min-height:80px"></textarea></div>
   <div id="mp-ai-intake-result"></div>
   <div style="margin-bottom:12px"><button class="btn btn-ai btn-sm" onclick="runIntakeAI()">✦ AI Suggest barriers & risk</button></div>
@@ -470,7 +477,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
 </div></div>
 
 <div class="modal-overlay" id="modal-c"><div class="modal"><h2 id="c-title">Add contact</h2><div class="form-grid-2"><div class="form-row"><label>First name</label><input id="cf-fn"/></div><div class="form-row"><label>Last name</label><input id="cf-ln"/></div></div><div class="form-row"><label>Email</label><input id="cf-em" type="email"/></div><div class="form-grid-2"><div class="form-row"><label>Role</label><select id="cf-role"><option>Donor</option><option>Partner</option><option>Funder</option><option>Trustee</option></select></div><div class="form-row"><label>Status</label><select id="cf-st"><option>Prospect</option><option>Engaged</option><option>Active Supporter</option><option>Lapsed</option></select></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-c')">Cancel</button><button class="btn btn-p" id="c-save-btn" onclick="saveC()">Save</button></div></div></div>
-<div class="modal-overlay" id="modal-vol"><div class="modal" style="max-width:600px"><h2 id="vol-modal-title">Add volunteer</h2><div class="vtab-bar"><button class="vtab-btn active" onclick="switchVTab('vbasic',this)">Basic info</button><button class="vtab-btn" onclick="switchVTab('vskills',this)">Skills</button><button class="vtab-btn" onclick="switchVTab('vonboard',this)">Onboarding</button></div><div id="vtab-vbasic"><div class="form-grid-2"><div class="form-row"><label>Full name *</label><input id="vf-name"/></div><div class="form-row"><label>Email</label><input id="vf-email" type="email"/></div></div><div class="form-grid-2"><div class="form-row"><label>Phone</label><input id="vf-phone"/></div><div class="form-row"><label>Hours logged</label><input type="number" id="vf-hours" min="0" placeholder="0"/></div></div><div class="form-grid-2"><div class="form-row"><label>Role</label><select id="vf-role"><option>Volunteer</option><option>Corporate volunteer</option><option>Fixer</option><option>Advisor</option><option>Manager</option><option>Admin</option><option>Staff</option></select></div><div class="form-row"><label>Status</label><select id="vf-status"><option>Active</option><option>Inactive</option><option>On leave</option></select></div></div></div><div id="vtab-vskills" style="display:none"><div class="form-row"><label>Skills</label><div class="chk-group" id="vf-skills"></div></div><div class="form-row"><label>Notes</label><textarea id="vf-notes" style="min-height:60px"></textarea></div></div><div id="vtab-vonboard" style="display:none"><div style="background:var(--card);border-radius:var(--radius);padding:14px"><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;margin-bottom:10px">Onboarding checklist</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div class="chk-pill"><label><input type="checkbox" id="vf-ob1"/> Call to book intro meeting</label></div><div class="chk-pill"><label><input type="checkbox" id="vf-ob2"/> Welcome email sent</label></div><div class="chk-pill"><label><input type="checkbox" id="vf-ob3"/> Onboarding forms complete</label></div><div class="chk-pill"><label><input type="checkbox" id="vf-ob4"/> Agreement signed</label></div></div></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-vol')">Cancel</button><button class="btn btn-ghost btn-sm" onclick="vTabNav(-1)">← Back</button><button class="btn btn-ghost btn-sm" onclick="vTabNav(1)">Next →</button><button class="btn btn-p" id="vol-save-btn" onclick="saveVol()">Save volunteer</button></div></div></div>
+<div class="modal-overlay" id="modal-vol"><div class="modal" style="max-width:600px"><h2 id="vol-modal-title">Add volunteer</h2><div class="vtab-bar"><button class="vtab-btn active" onclick="switchVTab('vbasic',this)">Basic info</button><button class="vtab-btn" onclick="switchVTab('vskills',this)">Skills</button><button class="vtab-btn" onclick="switchVTab('vonboard',this)">Onboarding</button></div><div id="vtab-vbasic"><div class="form-grid-2"><div class="form-row"><label>Full name *</label><input id="vf-name" required/></div><div class="form-row"><label>Email *</label><input id="vf-email" type="email" required/></div></div><div class="form-grid-2"><div class="form-row"><label>Phone *</label><input id="vf-phone" required placeholder="07700 900000"/></div><div class="form-row"><label>Hours logged</label><input type="number" id="vf-hours" min="0" placeholder="0"/></div></div><div class="form-grid-2"><div class="form-row"><label>Role *</label><select id="vf-role"><option>Volunteer</option><option>Corporate volunteer</option><option>Fixer</option><option>Advisor</option><option>Manager</option><option>Admin</option><option>Staff</option><option>Other</option></select></div><div class="form-row"><label>Status</label><select id="vf-status"><option>Active</option><option>Inactive</option><option>On leave</option></select></div></div><div class="form-row" id="vf-role-other-row" style="display:none"><label>Other role description *</label><input id="vf-role-other" placeholder="Describe role…"/></div><div class="form-grid-2"><div class="form-row"><label>Emergency contact name</label><input id="vf-ec-name" placeholder="Jane Smith"/></div><div class="form-row"><label>Emergency contact phone</label><input id="vf-ec-phone" placeholder="07700 900000"/></div></div></div><div id="vtab-vskills" style="display:none"><div class="form-row"><label>Skills</label><div class="chk-group" id="vf-skills"></div></div><div class="form-row"><label>Notes</label><textarea id="vf-notes" style="min-height:60px"></textarea></div></div><div id="vtab-vonboard" style="display:none"><div style="background:var(--card);border-radius:var(--radius);padding:14px"><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;margin-bottom:10px">Onboarding checklist</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div class="chk-pill"><label><input type="checkbox" id="vf-ob1"/> Call to book intro meeting</label></div><div class="chk-pill"><label><input type="checkbox" id="vf-ob2"/> Welcome email sent</label></div><div class="chk-pill"><label><input type="checkbox" id="vf-ob3"/> Onboarding forms complete</label></div><div class="chk-pill"><label><input type="checkbox" id="vf-ob4"/> Agreement signed</label></div></div></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-vol')">Cancel</button><button class="btn btn-ghost btn-sm" onclick="vTabNav(-1)">← Back</button><button class="btn btn-ghost btn-sm" onclick="vTabNav(1)">Next →</button><button class="btn btn-p" id="vol-save-btn" onclick="saveVol()">Save volunteer</button></div></div></div>
 <div class="modal-overlay" id="modal-emp"><div class="modal"><h2 id="emp-title">Add employer</h2><div class="form-grid-2"><div class="form-row"><label>Name</label><input id="ef-nm"/></div><div class="form-row"><label>Sector</label><select id="ef-sec"><option>Retail</option><option>Healthcare</option><option>Logistics</option><option>Construction</option><option>Hospitality</option><option>Admin / office</option><option>Tech</option><option>Social care</option><option>Other</option></select></div></div><div class="form-grid-2"><div class="form-row"><label>Contact name</label><input id="ef-con"/></div><div class="form-row"><label>Contact email</label><input id="ef-cem" type="email"/></div></div><div class="form-grid-2"><div class="form-row"><label>Open vacancies</label><input type="number" id="ef-vac" placeholder="0"/></div><div class="form-row"><label>Relationship</label><select id="ef-rel"><option>Prospecting</option><option>Engaged</option><option>Active partner</option><option>Dormant</option></select></div></div><div class="form-row"><label>Notes</label><textarea id="ef-notes"></textarea></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-emp')">Cancel</button><button class="btn btn-p" id="emp-save-btn" onclick="saveEmployer()">Save</button></div></div></div>
 <div class="modal-overlay" id="modal-r"><div class="modal"><h2>New referral</h2><div class="form-grid-2"><div class="form-row"><label>First name</label><input id="rf-fn"/></div><div class="form-row"><label>Last name</label><input id="rf-ln"/></div></div><div class="form-grid-2"><div class="form-row"><label>Source</label><select id="rf-src"><option>Probation</option><option>Jobcentre Plus</option><option>Community org</option><option>Self-referral</option></select></div><div class="form-row"><label>Advisor</label><select id="rf-adv"><option>Sarah T.</option><option>Marcus O.</option><option>Priya S.</option><option>Unassigned</option></select></div></div><div class="form-row"><label>Date referred</label><input type="date" id="rf-date"/></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-r')">Cancel</button><button class="btn btn-p" id="r-save-btn" onclick="saveR()">Save</button></div></div></div>
 <div class="modal-overlay" id="modal-ev"><div class="modal" style="max-width:520px"><h2 id="ev-modal-title">Create event</h2><div class="form-row"><label>Event name *</label><input id="evf-name"/></div><div class="form-grid-3"><div class="form-row"><label>Type</label><select id="evf-type"><option>Green Skills</option><option>Wellbeing</option><option>Community Event</option><option>Frailty</option><option>Other</option></select></div><div class="form-row"><label>Date</label><input type="date" id="evf-date"/></div><div class="form-row"><label>Attendees</label><input type="number" id="evf-att" min="0" placeholder="0"/></div></div><div class="form-grid-2"><div class="form-row"><label>Location</label><input id="evf-loc"/></div><div class="form-row"><label>Capacity</label><input type="number" id="evf-cap" placeholder="20"/></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-ev')">Cancel</button><button class="btn btn-p" id="ev-save-btn" onclick="saveEv()">Save event</button></div></div></div>
@@ -880,6 +887,8 @@ function renderDashboard(){
     {l:'Active volunteers',v:V.filter(v=>v.status==='Active').length,s:V.reduce((a,v)=>a+num(v.hours),0)+' hrs total'},
     {l:'Outcomes achieved',v:withOutcomes,s:pct(withOutcomes,P.length||1)+'% rate'},
   ].map(s=>`<div class="stat-card"><div class="stat-lbl">${s.l}</div><div class="stat-val">${s.v}</div><div class="stat-sub">${s.s}</div></div>`).join('');
+  const due=P.filter(p=>p.due_date&&new Date(p.due_date)<=new Date()&&p.stage!=='Closed');
+  if(due.length){const al=$('p-alert');al.style.display='flex';al.textContent='📅 '+due.length+' participant(s) have a contact chase due today or overdue';}
   const risk=P.filter(p=>p.risk==='High'||days(p.last_contact)>21);
   $('dash-risk').innerHTML=risk.length?risk.map(p=>`<div class="tl-entry"><div class="tl-dot ${p.risk==='High'?'red':'amber'}"></div><div><div class="tl-lbl">${p.first_name} ${p.last_name} <span class="badge ${rCls(p.risk)}">${p.risk}</span></div><div class="tl-meta">${days(p.last_contact)>21?'No contact '+days(p.last_contact)+'d · ':''}${p.advisor}</div></div></div>`).join(''):'<div style="color:var(--txt3);font-size:13px">No at-risk participants 🎉</div>';
   const recent=P.flatMap(p=>toArr(p.notes).map(nt=>({...nt,who:p.first_name+' '+p.last_name}))).sort((a,b)=>new Date(b.d)-new Date(a.d)).slice(0,5);
@@ -904,6 +913,36 @@ function renderImpact(){
   $('imp-cb').textContent=FB.length?(FB.reduce((a,f)=>a+num(f.cb),0)/FB.length).toFixed(1):'-';
   $('imp-ca').textContent=FB.length?(FB.reduce((a,f)=>a+num(f.ca),0)/FB.length).toFixed(1):'-';
   $('imp-quotes').innerHTML=FB.filter(f=>f.quote).map(f=>{const ev=DB.events.find(e=>e.id===f.eventId);return`<div class="quote-card"><div style="font-size:13px;font-style:italic">"${f.quote}"</div><div style="font-size:11px;color:var(--txt3);margin-top:4px">${f.name||'Anonymous'} · ${ev?.name||''}</div></div>`;}).join('')||'<div style="color:var(--txt3);font-size:13px">No quotes yet.</div>';
+  // Confidence timeline — group feedback by month
+  const timelineEl=$('imp-timeline');
+  if(timelineEl&&FB.length){
+    const byMonth={};
+    FB.forEach(f=>{
+      const ev=DB.events.find(e=>e.id==f.eventId);
+      const d=ev?.date?new Date(ev.date):null;
+      if(!d)return;
+      const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+      if(!byMonth[key])byMonth[key]={cb:[],ca:[],label:d.toLocaleDateString('en-GB',{month:'short',year:'2-digit'})};
+      byMonth[key].cb.push(num(f.cb));byMonth[key].ca.push(num(f.ca));
+    });
+    const months=Object.keys(byMonth).sort();
+    if(months.length>=2){
+      timelineEl.innerHTML=`<div style="display:flex;gap:0;align-items:flex-end;height:80px;border-bottom:1px solid var(--border);padding-bottom:4px;margin-bottom:6px">`+
+        months.map(m=>{
+          const d=byMonth[m];
+          const cb=d.cb.reduce((a,v)=>a+v,0)/d.cb.length;
+          const ca=d.ca.reduce((a,v)=>a+v,0)/d.ca.length;
+          const h=Math.round(ca/5*100);
+          return`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
+            <div style="font-size:10px;color:var(--em);font-weight:700">${ca.toFixed(1)}</div>
+            <div style="width:28px;background:var(--em);border-radius:3px 3px 0 0" title="After: ${ca.toFixed(1)}" style="height:${h}%"></div>
+            <div style="font-size:9px;color:var(--txt3)">${d.label}</div>
+          </div>`;
+        }).join('')+`</div><div style="font-size:11px;color:var(--txt3);text-align:center">Confidence after · monthly trend</div>`;
+    }else{
+      timelineEl.innerHTML='<div style="font-size:12px;color:var(--txt3)">Add feedback from multiple months to see the trend.</div>';
+    }
+  }else if(timelineEl){timelineEl.innerHTML='<div style="font-size:12px;color:var(--txt3)">No feedback data yet.</div>';}
 }
 
 function renderContractSelector(selectedIds=[]){
@@ -936,14 +975,14 @@ function mkChkArr(cid,items,sel=[]){const el=$(cid);if(!el)return;el.innerHTML=i
 function getChkArr(cid){return[...document.querySelectorAll(`#${cid} input[type=checkbox]:checked`)].map(x=>x.value);}
 function mkChkGroup(cid,items,sel=[]){const el=$(cid);if(!el)return;el.innerHTML=items.map(it=>`<div class="chk-pill"><label><input type="checkbox" value="${it}" ${sel.includes(it)?'checked':''}/> ${it}</label></div>`).join('');}
 
-function openAddP(){_editPId=null;$('mp-title').textContent='Add participant';['mp-fn','mp-ln','mp-note','mp-conf','mp-work','mp-well','mp-skillsc','mp-intake-text'].forEach(f=>$(f).value='');$('mp-safe').value='';$('mp-note-preview').style.display='none';$('mp-ai-intake-result').innerHTML='';mkChkArr('barrier-checks',BARRIERS);mkChkArr('outcome-checks',OUT_TYPES);renderContractSelector([]);$('modal-p').classList.add('open');}
-function openEditP(id){const p=DB.participants.find(x=>x.id===id);if(!p)return;_editPId=id;$('mp-title').textContent='Edit participant';$('mp-fn').value=p.first_name;$('mp-ln').value=p.last_name;$('mp-rs').value=p.ref_source;$('mp-adv').value=p.advisor;$('mp-st').value=p.stage;$('mp-risk').value=p.risk;$('mp-safe').value=p.safeguarding||'';$('mp-intake-text').value='';$('mp-note-preview').style.display='none';$('mp-ai-intake-result').innerHTML='';const sc=p.scores||{};$('mp-conf').value=sc.confidence||'';$('mp-work').value=sc.work_readiness||'';$('mp-well').value=sc.wellbeing||'';$('mp-skillsc').value=sc.skills||'';mkChkArr('barrier-checks',BARRIERS,p.barriers);mkChkArr('outcome-checks',OUT_TYPES,p.outcomes);renderContractSelector(toArr(p.contract_ids));$('mp-note').value='';$('modal-p').classList.add('open');}
+function openAddP(){_editPId=null;$('mp-title').textContent='Add participant';['mp-fn','mp-ln','mp-note','mp-conf','mp-work','mp-well','mp-skillsc','mp-intake-text','mp-phone','mp-email','mp-engtype-other'].forEach(f=>{if($(f))$(f).value='';});$('mp-safe').value='';$('mp-due').value='';$('mp-engtype').value='';$('mp-engtype-other-row').style.display='none';$('mp-note-preview').style.display='none';$('mp-ai-intake-result').innerHTML='';mkChkArr('barrier-checks',BARRIERS);mkChkArr('outcome-checks',OUT_TYPES);renderContractSelector([]);$('modal-p').classList.add('open');}
+function openEditP(id){const p=DB.participants.find(x=>x.id===id);if(!p)return;_editPId=id;$('mp-title').textContent='Edit participant';$('mp-fn').value=p.first_name;$('mp-ln').value=p.last_name;$('mp-rs').value=p.ref_source;$('mp-adv').value=p.advisor;$('mp-st').value=p.stage;$('mp-risk').value=p.risk;$('mp-safe').value=p.safeguarding||'';$('mp-intake-text').value='';$('mp-note-preview').style.display='none';$('mp-ai-intake-result').innerHTML='';if($('mp-phone'))$('mp-phone').value=p.phone||'';if($('mp-email'))$('mp-email').value=p.email||'';if($('mp-due'))$('mp-due').value=p.due_date||'';if($('mp-engtype'))$('mp-engtype').value=p.engagement_type||'';if($('mp-engtype-other'))$('mp-engtype-other').value=p.engagement_type_other||'';if($('mp-engtype-other-row'))$('mp-engtype-other-row').style.display=p.engagement_type==='Other'?'block':'none';const sc=p.scores||{};$('mp-conf').value=sc.confidence||'';$('mp-work').value=sc.work_readiness||'';$('mp-well').value=sc.wellbeing||'';$('mp-skillsc').value=sc.skills||'';mkChkArr('barrier-checks',BARRIERS,p.barriers);mkChkArr('outcome-checks',OUT_TYPES,p.outcomes);renderContractSelector(toArr(p.contract_ids));$('mp-note').value='';$('modal-p').classList.add('open');}
 
 async function saveP(){
   const btn=$('p-save-btn');btn.textContent='Saving…';btn.disabled=true;
   try{
     const note=$('mp-note').value;const contractIds=getSelectedContractIds();
-    const d={first_name:$('mp-fn').value||'Unknown',last_name:$('mp-ln').value||'',ref_source:$('mp-rs').value,stage:$('mp-st').value,advisor:$('mp-adv').value,barriers:getChkArr('barrier-checks'),outcomes:getChkArr('outcome-checks'),safeguarding:$('mp-safe').value||null,risk:$('mp-risk').value,last_contact:today(),contract_ids:contractIds,scores:{confidence:parseInt($('mp-conf').value)||null,work_readiness:parseInt($('mp-work').value)||null,wellbeing:parseInt($('mp-well').value)||null,skills:parseInt($('mp-skillsc').value)||null}};
+    const d={first_name:$('mp-fn').value||'Unknown',last_name:$('mp-ln').value||'',ref_source:$('mp-rs').value,stage:$('mp-st').value,advisor:$('mp-adv').value,barriers:getChkArr('barrier-checks'),outcomes:getChkArr('outcome-checks'),safeguarding:$('mp-safe').value||null,risk:$('mp-risk').value,last_contact:today(),contract_ids:contractIds,phone:$('mp-phone')?.value||null,email:$('mp-email')?.value||null,due_date:$('mp-due')?.value||null,engagement_type:$('mp-engtype')?.value||null,engagement_type_other:$('mp-engtype-other')?.value||null,scores:{confidence:parseInt($('mp-conf').value)||null,work_readiness:parseInt($('mp-work').value)||null,wellbeing:parseInt($('mp-well').value)||null,skills:parseInt($('mp-skillsc').value)||null}};
     if(_editPId){const ex=DB.participants.find(x=>x.id===_editPId);const notes=[...toArr(ex.notes)];if(note)notes.push({t:note,d:today(),s:'Staff'});await sbUpdate('participants',{...d,notes},_editPId);const idx=DB.participants.findIndex(x=>x.id===_editPId);if(idx>=0)DB.participants[idx]={...DB.participants[idx],...d,notes};}
     else{const notes=note?[{t:note,d:today(),s:'Staff'}]:[];const r=await sbInsert('participants',{...d,notes});if(r)DB.participants.push({id:r.id,...d,notes});}
     if(sb)await refreshTable('participants');closeModal('modal-p');renderParticipants();
@@ -992,9 +1031,34 @@ function renderVolunteers(){
 }
 function switchVTab(tab,btn){_vTab=tab;['vbasic','vskills','vonboard'].forEach(t=>{$('vtab-'+t).style.display=t===tab?'block':'none';});document.querySelectorAll('.vtab-btn').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');}
 function vTabNav(dir){const tabs=['vbasic','vskills','vonboard'];const next=tabs[Math.max(0,Math.min(2,tabs.indexOf(_vTab)+dir))];switchVTab(next,document.querySelectorAll('.vtab-btn')[tabs.indexOf(next)]);}
-function openAddVol(){_editVolId=null;$('vol-modal-title').textContent='Add volunteer';['vf-name','vf-email','vf-phone','vf-notes'].forEach(id=>$(id).value='');$('vf-hours').value='0';$('vf-role').value='Volunteer';$('vf-status').value='Active';['vf-ob1','vf-ob2','vf-ob3','vf-ob4'].forEach(id=>$(id).checked=false);mkChkGroup('vf-skills',VOL_SKILLS);switchVTab('vbasic',document.querySelectorAll('.vtab-btn')[0]);$('modal-vol').classList.add('open');}
-function openEditVol(id){const v=DB.volunteers.find(x=>x.id===id);if(!v)return;_editVolId=id;$('vol-modal-title').textContent='Edit volunteer';$('vf-name').value=v.name;$('vf-email').value=v.email;$('vf-phone').value=v.phone;$('vf-hours').value=v.hours;$('vf-role').value=v.role;$('vf-status').value=v.status;mkChkGroup('vf-skills',VOL_SKILLS,toArr(v.skills));switchVTab('vbasic',document.querySelectorAll('.vtab-btn')[0]);$('modal-vol').classList.add('open');}
-async function saveVol(){const fullName=$('vf-name').value.trim();if(!fullName){alert('Name required');return;}const btn=$('vol-save-btn');btn.textContent='Saving…';btn.disabled=true;try{const parts=fullName.split(' ');const payload={first_name:parts[0],last_name:parts.slice(1).join(' '),name:fullName,email:$('vf-email').value||null,phone:$('vf-phone').value||null,role:$('vf-role').value,hours:parseInt($('vf-hours').value)||0,status:$('vf-status').value,skills:JSON.stringify(getChkArr('vf-skills'))};if(_editVolId)await sbUpdate('volunteers',payload,_editVolId);else await sbInsert('volunteers',payload);await refreshTable('volunteers');closeModal('modal-vol');renderVolunteers();}catch(e){alert('Save failed: '+e.message);}finally{btn.textContent='Save volunteer';btn.disabled=false;}}
+function openAddVol(){_editVolId=null;$('vol-modal-title').textContent='Add volunteer';['vf-name','vf-email','vf-phone','vf-notes','vf-role-other','vf-ec-name','vf-ec-phone'].forEach(id=>{if($(id))$(id).value='';});$('vf-hours').value='0';$('vf-role').value='Volunteer';$('vf-status').value='Active';$('vf-role-other-row').style.display='none';['vf-ob1','vf-ob2','vf-ob3','vf-ob4'].forEach(id=>$(id).checked=false);mkChkGroup('vf-skills',VOL_SKILLS);switchVTab('vbasic',document.querySelectorAll('.vtab-btn')[0]);$('modal-vol').classList.add('open');}
+function openEditVol(id){const v=DB.volunteers.find(x=>x.id===id);if(!v)return;_editVolId=id;$('vol-modal-title').textContent='Edit volunteer';$('vf-name').value=v.name;$('vf-email').value=v.email;$('vf-phone').value=v.phone||'';$('vf-hours').value=v.hours;$('vf-role').value=VOL_SKILLS.includes(v.role)?v.role:'Other';if($('vf-role-other'))$('vf-role-other').value=v.role_other||'';$('vf-role-other-row').style.display=v.role==='Other'?'block':'none';$('vf-status').value=v.status;if($('vf-ec-name'))$('vf-ec-name').value=v.ec_name||'';if($('vf-ec-phone'))$('vf-ec-phone').value=v.ec_phone||'';mkChkGroup('vf-skills',VOL_SKILLS,toArr(v.skills));switchVTab('vbasic',document.querySelectorAll('.vtab-btn')[0]);$('modal-vol').classList.add('open');}
+async function saveVol(){
+  const fullName=$('vf-name').value.trim();
+  const email=$('vf-email').value.trim();
+  const phone=$('vf-phone').value.trim();
+  const role=$('vf-role').value;
+  const roleOther=$('vf-role-other')?.value.trim()||'';
+  if(!fullName){alert('Full name is required.');return;}
+  if(!email){alert('Email is required.');return;}
+  if(!phone){alert('Phone number is required.');return;}
+  if(role==='Other'&&!roleOther){alert('Please describe the role.');return;}
+  const btn=$('vol-save-btn');btn.textContent='Saving…';btn.disabled=true;
+  try{
+    const parts=fullName.split(' ');
+    const payload={
+      first_name:parts[0],last_name:parts.slice(1).join(' '),name:fullName,
+      email,phone,role:role==='Other'?roleOther:role,role_other:roleOther,
+      hours:parseInt($('vf-hours').value)||0,status:$('vf-status').value,
+      skills:JSON.stringify(getChkArr('vf-skills')),
+      ec_name:$('vf-ec-name')?.value||null,ec_phone:$('vf-ec-phone')?.value||null
+    };
+    if(_editVolId)await sbUpdate('volunteers',payload,_editVolId);
+    else await sbInsert('volunteers',payload);
+    await refreshTable('volunteers');closeModal('modal-vol');renderVolunteers();
+  }catch(e){alert('Save failed: '+e.message);}
+  finally{btn.textContent='Save volunteer';btn.disabled=false;}
+}
 async function deleteVol(id){if(!confirm('Delete?'))return;await sbDelete('volunteers',id);await refreshTable('volunteers');renderVolunteers();}
 
 function exportCSV(type){
@@ -1173,13 +1237,23 @@ function renderSettings(){
   try{$('set-sector').value=currentOrg.sector||'Charity / VCSE';}catch(e){}
   $('set-plan').textContent=currentOrg.plan==='pro'?'Pro ✦':currentOrg.plan==='starter'?'Starter':currentOrg.plan==='network'?'Network':'Free';
   $('set-status').textContent=currentOrg.status||'active';
+  // Seed _modState from saved modules
+  SET_MODULES.forEach(mod=>{ _modState[mod.k]=m[mod.k]??true; });
   $('set-modules-grid').innerHTML=SET_MODULES.map(mod=>{
-    const on=m[mod.k]??true;
-    return'<div class="mod-item '+(on?'on':'')+'" id="set-mod-item-'+mod.k+'"><div><div style="font-size:13px;font-weight:600;color:var(--txt)">'+mod.n+'</div><div style="font-size:11px;color:var(--txt3);margin-top:2px">'+mod.d+'</div></div><div style="position:relative;width:44px;height:24px;flex-shrink:0;cursor:pointer" onclick="toggleMod(\''+mod.k+'\')"><div id="set-mod-track-'+mod.k+'" style="position:absolute;inset:0;border-radius:12px;background:'+(on?'var(--em)':'var(--border)')+';transition:background .2s"></div><div id="set-mod-thumb-'+mod.k+'" style="position:absolute;top:3px;left:'+(on?'23':'3')+'px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;pointer-events:none"></div></div></div>';
+    const on=_modState[mod.k];
+    return'<div class="mod-item '+(on?'on':'')+'" id="set-mod-item-'+mod.k+'"><div><div style="font-size:13px;font-weight:600;color:var(--txt)">'+mod.n+'</div><div style="font-size:11px;color:var(--txt3);margin-top:2px">'+mod.d+'</div></div><div style="position:relative;width:44px;height:24px;flex-shrink:0;cursor:pointer" onclick="toggleMod(\''+mod.k+'\')"><div id="set-mod-track-'+mod.k+'" style="position:absolute;inset:0;border-radius:12px;background:'+(on?'#10b981':'#2a3a2a')+';transition:background .2s"></div><div id="set-mod-thumb-'+mod.k+'" style="position:absolute;top:3px;left:'+(on?'23':'3')+'px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;pointer-events:none"></div></div></div>';
   }).join('');
 }
-function toggleMod(key){const track=$('set-mod-track-'+key),thumb=$('set-mod-thumb-'+key),item=$('set-mod-item-'+key);const on=track.style.background.includes('#10b981')||track.style.background.includes('var(--em)');const nowOn=!on;track.style.background=nowOn?'#10b981':'#2a3a2a';thumb.style.left=nowOn?'23px':'3px';if(item)item.classList.toggle('on',nowOn);}
-function getModuleState(){const mods={};SET_MODULES.forEach(mod=>{const t=$('set-mod-track-'+mod.k);mods[mod.k]=t?t.style.background.includes('#10b981'):true;});return mods;}
+// Use a simple JS object to track module state reliably
+const _modState={};
+function toggleMod(key){
+  _modState[key]=!_modState[key];
+  const track=$('set-mod-track-'+key),thumb=$('set-mod-thumb-'+key),item=$('set-mod-item-'+key);
+  if(track)track.style.background=_modState[key]?'#10b981':'#2a3a2a';
+  if(thumb)thumb.style.left=_modState[key]?'23px':'3px';
+  if(item)item.classList.toggle('on',_modState[key]);
+}
+function getModuleState(){return{..._modState};}
 async function saveSettings(){const btn=$('set-save-btn');btn.textContent='Saving…';btn.disabled=true;try{const mods=getModuleState();const d={name:$('set-name').value,sector:$('set-sector').value,modules:mods};await sbUpdate('organisations',d,orgId);currentOrg={...currentOrg,...d};applyModules(mods);$('ob-txt').textContent=currentOrg.name;$('set-save-msg').style.display='flex';setTimeout(()=>$('set-save-msg').style.display='none',3000);}catch(e){alert('Save failed: '+e.message);}finally{btn.textContent='Save settings';btn.disabled=false;}}
 
 // ════════════════════════════════════════
@@ -1202,6 +1276,18 @@ async function boot(){
   renderSettings();
   go('dashboard');
 }
+// Wire up dynamic show/hide for "Other" fields
+document.addEventListener('change',e=>{
+  if(e.target.id==='vf-role'){
+    const row=$('vf-role-other-row');
+    if(row)row.style.display=e.target.value==='Other'?'block':'none';
+  }
+  if(e.target.id==='mp-engtype'){
+    const row=$('mp-engtype-other-row');
+    if(row)row.style.display=e.target.value==='Other'?'block':'none';
+  }
+});
+
 boot();
 </script>
 </body>
