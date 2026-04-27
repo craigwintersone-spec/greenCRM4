@@ -178,6 +178,8 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <button class="nav-btn" onclick="go('funding')"><span class="icon">💰</span><span>Funding</span></button>
   <button class="nav-btn" onclick="go('reports')"><span class="icon">📄</span><span>Funder Reports</span></button>
   <button class="nav-btn" onclick="go('evidence')"><span class="icon">🗂️</span><span>Evidence Hub</span></button>
+  <button class="nav-btn" onclick="go('social')"><span class="icon">📣</span><span>Social Media</span><span class="ai-dot"></span></button>
+<button class="nav-btn" onclick="go('bd')"><span class="icon">💼</span><span>BD Manager</span><span class="ai-dot"></span></button>
   <div class="nav-section">Settings</div>
   <button class="nav-btn" onclick="go('safeguarding')"><span class="icon">🔐</span><span>Safeguarding</span></button>
   <button class="nav-btn" onclick="go('settings')"><span class="icon">⚙️</span><span>Settings</span></button>
@@ -417,6 +419,90 @@ tr:hover td{background:rgba(16,185,129,.03)}
     <div class="card"><div class="card-title">Flagged cases</div><div id="safe-flags"></div></div>
     <div class="card"><div class="card-title">Consent tracker</div><div id="consent-list"></div></div>
   </div>
+</div>
+
+<!-- SOCIAL MEDIA MANAGER -->
+<div id="page-social" class="page">
+  <div class="page-header">
+    <div><div class="page-title">📣 Social Media Manager</div><div class="page-sub">AI-generated posts using your real impact data</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Generate a post</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px">
+      <div class="form-row"><label>Platform</label><select id="sm-platform"><option value="linkedin">LinkedIn</option><option value="twitter">X / Twitter</option><option value="instagram">Instagram</option><option value="facebook">Facebook</option></select></div>
+      <div class="form-row"><label>Post type</label><select id="sm-type"><option value="impact">Impact story</option><option value="milestone">Milestone / achievement</option><option value="event">Upcoming event</option><option value="volunteer">Volunteer spotlight</option><option value="funding">Funding success</option><option value="tip">Sector tip / thought leadership</option><option value="awareness">Awareness day</option><option value="hiring">We're hiring</option></select></div>
+      <div class="form-row"><label>Tone</label><select id="sm-tone"><option value="warm">Warm & human</option><option value="professional">Professional</option><option value="inspiring">Inspiring</option><option value="urgent">Urgent / call to action</option><option value="celebratory">Celebratory</option></select></div>
+    </div>
+    <div class="form-row"><label>Extra context (optional)</label><input id="sm-context" placeholder="e.g. We just hit 50 employment outcomes…"/></div>
+    <button class="btn btn-ai" onclick="runSocialAgent()">✦ Generate post</button>
+  </div>
+  <div id="sm-output" style="display:none">
+    <div class="ai-panel">
+      <div class="ai-panel-title"><span class="ai-icon">📣</span>Generated post</div>
+      <div id="sm-result"></div>
+      <div class="ai-action-row" id="sm-actions" style="margin-top:14px"></div>
+    </div>
+    <div class="card"><div class="card-title">3 variations</div><div id="sm-variations"></div></div>
+    <div class="card"><div class="card-title">Suggested hashtags</div><div id="sm-hashtags" style="display:flex;flex-wrap:wrap;gap:6px"></div></div>
+    <div class="card" id="sm-saved-wrap" style="display:none"><div class="card-title">Saved posts</div><div id="sm-saved-list"></div></div>
+  </div>
+</div>
+
+<!-- BD MANAGER -->
+<div id="page-bd" class="page">
+  <div class="page-header">
+    <div><div class="page-title">💼 BD Manager</div><div class="page-sub">Find funding contracts · Generate Expressions of Interest</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Find funding opportunities</div>
+    <p style="font-size:13px;color:var(--txt2);margin-bottom:14px">Tell the AI about your organisation and it will identify the best funding contracts, grants, and commissioning opportunities to pursue.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="form-row"><label>Primary delivery area</label><select id="bd-area"><option>London</option><option>Greater Manchester</option><option>Birmingham / West Midlands</option><option>Leeds / West Yorkshire</option><option>Bristol / South West</option><option>National / England-wide</option><option>Other</option></select></div>
+      <div class="form-row"><label>Org turnover (approx)</label><select id="bd-size"><option value="micro">Under £100k</option><option value="small">£100k–£500k</option><option value="medium">£500k–£2m</option><option value="large">£2m+</option></select></div>
+    </div>
+    <div class="form-row">
+      <label>What you deliver (tick all that apply)</label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px" id="bd-delivery-checks">
+        <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--txt2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 10px;cursor:pointer"><input type="checkbox" value="Employment support" style="width:auto;background:none;border:none;padding:0"/> Employment support</label>
+        <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--txt2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 10px;cursor:pointer"><input type="checkbox" value="Green skills training" style="width:auto;background:none;border:none;padding:0"/> Green skills training</label>
+        <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--txt2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 10px;cursor:pointer"><input type="checkbox" value="Repair café / circular economy" style="width:auto;background:none;border:none;padding:0"/> Repair café / circular economy</label>
+        <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--txt2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 10px;cursor:pointer"><input type="checkbox" value="Community wellbeing" style="width:auto;background:none;border:none;padding:0"/> Community wellbeing</label>
+        <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--txt2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 10px;cursor:pointer"><input type="checkbox" value="Housing support" style="width:auto;background:none;border:none;padding:0"/> Housing support</label>
+        <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--txt2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 10px;cursor:pointer"><input type="checkbox" value="Mentoring" style="width:auto;background:none;border:none;padding:0"/> Mentoring</label>
+        <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--txt2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 10px;cursor:pointer"><input type="checkbox" value="Youth work" style="width:auto;background:none;border:none;padding:0"/> Youth work</label>
+        <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--txt2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 10px;cursor:pointer"><input type="checkbox" value="Justice / probation" style="width:auto;background:none;border:none;padding:0"/> Justice / probation</label>
+        <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--txt2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 10px;cursor:pointer"><input type="checkbox" value="Skills & education" style="width:auto;background:none;border:none;padding:0"/> Skills & education</label>
+      </div>
+    </div>
+    <div class="form-row" style="margin-top:8px"><label>Any specific funders or programmes you're interested in?</label><input id="bd-specific" placeholder="e.g. MoJ HMPPS, GLA Good Work, National Lottery, UKSPF…"/></div>
+    <button class="btn btn-ai" onclick="runBDResearch()" style="margin-top:4px">✦ Find opportunities</button>
+  </div>
+  <div id="bd-opps-wrap" style="display:none">
+    <div class="ai-panel">
+      <div class="ai-panel-title"><span class="ai-icon">🔍</span>Funding opportunities identified</div>
+      <div id="bd-opps-result"></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:4px">
+    <div class="card-title">Generate an Expression of Interest</div>
+    <p style="font-size:13px;color:var(--txt2);margin-bottom:14px">Paste a funding brief — Claude will write a professional EOI using your real outcomes data.</p>
+    <div class="form-row"><label>Funder / contract name</label><input id="eoi-funder" placeholder="e.g. MoJ HMPPS Employment Support Programme 2025"/></div>
+    <div class="form-row"><label>Paste the brief or describe what they're looking for</label><textarea id="eoi-brief" style="min-height:100px" placeholder="Paste the funding brief, spec, or describe what outcomes they want…"></textarea></div>
+    <div class="form-row"><label>Your unique selling points (optional)</label><textarea id="eoi-usps" style="min-height:60px" placeholder="e.g. 3 years of MoJ delivery, strong probation relationships…"></textarea></div>
+    <button class="btn btn-ai" onclick="runEOIGenerator()">✦ Generate EOI</button>
+  </div>
+  <div id="eoi-output" style="display:none">
+    <div class="ai-panel">
+      <div class="ai-panel-title"><span class="ai-icon">📄</span>Expression of Interest draft</div>
+      <div id="eoi-result"></div>
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+        <button class="btn btn-p btn-sm" onclick="window.print()">🖨️ Print / PDF</button>
+        <button class="btn btn-ghost btn-sm" onclick="copyEOI()">📋 Copy text</button>
+        <button class="btn btn-ghost btn-sm" onclick="runEOIGenerator()">↻ Regenerate</button>
+      </div>
+    </div>
+  </div>
+  <div class="card" id="bd-saved-wrap" style="display:none"><div class="card-title">Saved EOIs</div><div id="bd-saved-list"></div></div>
 </div>
 
 <!-- SETTINGS -->
@@ -1276,16 +1362,110 @@ async function boot(){
   renderSettings();
   go('dashboard');
 }
+// ── SOCIAL MEDIA AGENT ───────────────────────────────────────
+let _savedPosts=[],_savedEOIs=[];
+
+async function runSocialAgent(){
+  const platform=document.getElementById('sm-platform').value;
+  const type=document.getElementById('sm-type').value;
+  const tone=document.getElementById('sm-tone').value;
+  const context=document.getElementById('sm-context').value;
+  const P=DB.participants,E=DB.events,FB=DB.feedback,V=DB.volunteers;
+  const orgName=currentOrg?.name||'our organisation';
+  const jobs=P.filter(p=>p.outcomes.includes('Employment')).length;
+  const avgCA=FB.length?(FB.reduce((a,f)=>a+num(f.ca),0)/FB.length).toFixed(1):null;
+  const totalEvP=E.reduce((a,e)=>a+num(e.attendees),0);
+  const quotes=FB.filter(f=>f.quote).map(f=>f.quote);
+  const platformGuide={linkedin:'LinkedIn — professional, 150-300 words, end with a question or CTA',twitter:'X/Twitter — max 280 characters, punchy, one strong stat, 2-3 hashtags max',instagram:'Instagram — warm and visual, 100-150 words, emoji-friendly, 5-8 hashtags at end',facebook:'Facebook — conversational, 100-200 words, ask a question to drive comments'};
+  const typeGuide={impact:`Focus on human impact — use real numbers (${jobs} employment outcomes). Tell a story of transformation.`,milestone:'Celebrate an achievement. Use the strongest stat available.',event:'Promote an upcoming session. Create urgency with a clear CTA.',volunteer:'Celebrate the volunteer community. Highlight hours given.',funding:'Announce funding success. Thank funders. Explain what it enables.',tip:'Share a genuine insight from delivery. Position the org as a sector expert.',awareness:'Connect to an awareness day. Make it relevant to your work.',hiring:'Exciting job opportunity. Sell the mission. Make good people want to apply.'};
+  const sys=`You are a social media manager for a UK charity. Write for ${platformGuide[platform]}. Tone: ${tone}. Post type: ${typeGuide[type]}\nWrite the main post first, then write 3 short variations labelled exactly "Variation 1:", "Variation 2:", "Variation 3:".\nThen on a new line write "HASHTAGS:" followed by 8-10 relevant hashtags.\nUse real data where available. Never make up statistics. Be authentic and sector-appropriate.`;
+  const prompt=`Organisation: ${orgName}\nSector: ${currentOrg?.sector||'Employability charity'}\nActive participants: ${P.filter(p=>p.stage!=='Closed').length}\nEmployment outcomes: ${jobs}\nEvents: ${E.length} (${totalEvP} people reached)\nVolunteers: ${V.filter(v=>v.status==='Active').length} (${V.reduce((a,v)=>a+num(v.hours),0)} hours)\nAvg confidence after: ${avgCA||'not recorded'}/5\n${quotes.length?'Quote: "'+quotes[Math.floor(Math.random()*quotes.length)]+'"':''}\nExtra context: ${context||'none'}\n\nWrite the post now.`;
+  const out=document.getElementById('sm-output');
+  const res=document.getElementById('sm-result');
+  out.style.display='block';
+  res.innerHTML='<div class="ai-thinking"><div class="ai-thinking-dots"><span></span><span></span><span></span></div>Writing your post…</div>';
+  document.getElementById('sm-variations').innerHTML='';
+  document.getElementById('sm-hashtags').innerHTML='';
+  try{
+    const r=await callClaude(sys,prompt,800);
+    const mainParts=r.split(/Variation\s*1:/i);
+    const mainPost=mainParts[0].replace(/HASHTAGS:.*/si,'').trim();
+    const rest=r.split(/Variation\s*[123]:/i).slice(1);
+    const hashMatch=r.match(/HASHTAGS:\s*(.+)/si);
+    const hashtags=hashMatch?hashMatch[1].trim().split(/\s+/).filter(h=>h.startsWith('#')):[];
+    res.innerHTML=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;font-size:14px;color:var(--txt2);line-height:1.8;white-space:pre-wrap">${mainPost}</div>`;
+    document.getElementById('sm-actions').innerHTML=`<button class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('sm-result').querySelector('div').textContent);this.textContent='✓ Copied!';setTimeout(()=>this.textContent='📋 Copy',2000)">📋 Copy</button><button class="btn btn-ghost btn-sm" onclick="savePost('${platform}','${type}')">💾 Save</button><button class="btn btn-ghost btn-sm" onclick="runSocialAgent()">↻ Regenerate</button>`;
+    document.getElementById('sm-variations').innerHTML=rest.map((v,i)=>{const clean=v.replace(/HASHTAGS:.*/si,'').trim();if(!clean)return'';return`<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px"><div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Variation ${i+1}</div><div style="font-size:13px;color:var(--txt2);line-height:1.7;white-space:pre-wrap">${clean}</div></div>`;}).join('');
+    document.getElementById('sm-hashtags').innerHTML=hashtags.map(h=>`<span style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);border-radius:20px;padding:3px 10px;font-size:12px;color:var(--em);cursor:pointer" onclick="navigator.clipboard.writeText('${h}')" title="Click to copy">${h}</span>`).join('');
+  }catch(e){if(e.message==='AI_PLAN_GATE')return;res.innerHTML=`<div style="color:var(--red);font-size:13px">Error: ${e.message}</div>`;}
+}
+
+function savePost(platform,type){
+  const text=document.getElementById('sm-result').querySelector('div')?.textContent||'';
+  if(!text)return;
+  _savedPosts.unshift({platform,type,text,date:new Date().toLocaleDateString('en-GB')});
+  document.getElementById('sm-saved-wrap').style.display='block';
+  document.getElementById('sm-saved-list').innerHTML=_savedPosts.map((p,i)=>`<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:11px;color:var(--txt3)">${p.platform} · ${p.type} · ${p.date}</span><button class="btn btn-danger btn-sm" onclick="_savedPosts.splice(${i},1);savePost()">Remove</button></div><div style="font-size:13px;color:var(--txt2);line-height:1.6">${p.text.slice(0,200)}${p.text.length>200?'…':''}</div></div>`).join('');
+}
+
+// ── BD MANAGER ───────────────────────────────────────────────
+async function runBDResearch(){
+  const area=document.getElementById('bd-area').value;
+  const size=document.getElementById('bd-size').value;
+  const delivery=[...document.querySelectorAll('#bd-delivery-checks input:checked')].map(x=>x.value);
+  const specific=document.getElementById('bd-specific').value;
+  const P=DB.participants;
+  const orgName=currentOrg?.name||'the organisation';
+  const wrap=document.getElementById('bd-opps-wrap');
+  const res=document.getElementById('bd-opps-result');
+  wrap.style.display='block';
+  res.innerHTML='<div class="ai-thinking"><div class="ai-thinking-dots"><span></span><span></span><span></span></div>Researching funding opportunities…</div>';
+  const sys=`You are a specialist funding and business development consultant for UK charities with 15 years experience in statutory commissioning and grant funding.\n\nIdentify the most relevant funding opportunities. For each use this format:\n**[Funder name]**\nWhat they fund: ...\nTypical value: ...\nDeadlines/cycles: ...\nWhy a strong fit: ...\nNext step: ...\n\nList 6-8 opportunities. Be specific and practical. Focus on real active UK funding streams.`;
+  const prompt=`Organisation: ${orgName}\nDelivery area: ${area}\nSize: ${size}\nDelivers: ${delivery.join(', ')||'not specified'}\nTrack record: ${P.filter(p=>p.outcomes.includes('Employment')).length} employment outcomes, ${P.filter(p=>p.stage!=='Closed').length} active participants\nSpecific interest: ${specific||'open to suggestions'}`;
+  try{
+    const r=await callClaude(sys,prompt,1200);
+    res.innerHTML=`<div class="ai-response">${r.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n\n/g,'<br/><br/>').replace(/\n/g,'<br/>')}</div>`;
+  }catch(e){if(e.message==='AI_PLAN_GATE')return;res.innerHTML=`<div style="color:var(--red);font-size:13px">Error: ${e.message}</div>`;}
+}
+
+async function runEOIGenerator(){
+  const funder=document.getElementById('eoi-funder').value.trim();
+  const brief=document.getElementById('eoi-brief').value.trim();
+  const usps=document.getElementById('eoi-usps').value.trim();
+  if(!funder||!brief){alert('Please enter the funder name and brief.');return;}
+  const P=DB.participants,E=DB.events,FB=DB.feedback,V=DB.volunteers;
+  const orgName=currentOrg?.name||'our organisation';
+  const jobs=P.filter(p=>p.outcomes.includes('Employment')).length;
+  const training=P.filter(p=>p.outcomes.includes('Training')).length;
+  const avgCA=FB.length?(FB.reduce((a,f)=>a+num(f.ca),0)/FB.length).toFixed(1):null;
+  const totalEvP=E.reduce((a,e)=>a+num(e.attendees),0);
+  const topBarriers=BARRIERS.filter(b=>P.some(p=>p.barriers.includes(b))).slice(0,4);
+  const out=document.getElementById('eoi-output');
+  const res=document.getElementById('eoi-result');
+  out.style.display='block';
+  res.innerHTML='<div class="ai-thinking"><div class="ai-thinking-dots"><span></span><span></span><span></span></div>Writing your EOI…</div>';
+  const sys=`You are an expert bid writer for UK charities with a proven track record winning statutory contracts and grants.\n\nWrite a compelling Expression of Interest that:\n- Opens with a strong positioning statement\n- Demonstrates clear alignment with the funder's objectives\n- Uses specific evidence and outcomes data provided\n- Is structured with sections: Organisation overview, Track record & evidence, Our approach, Why us\n- Aims for 500-700 words\n\nUse **bold** for key stats and section headings. Write in first person plural.`;
+  const prompt=`Funder: ${funder}\nBrief: ${brief}\nUSPs: ${usps||'use data below'}\n\nOUR DATA:\nOrg: ${orgName} (${currentOrg?.sector||'charity'})\nActive participants: ${P.filter(p=>p.stage!=='Closed').length}\nEmployment outcomes: ${jobs}\nTraining outcomes: ${training}\nEvents: ${E.length} reaching ${totalEvP} people\nVolunteers: ${V.filter(v=>v.status==='Active').length}\nConf score after: ${avgCA||'4.5'}/5\nBarriers addressed: ${topBarriers.join(', ')}\n${FB.filter(f=>f.quote)[0]?'Quote: "'+FB.filter(f=>f.quote)[0].quote+'"':''}`;
+  try{
+    const r=await callClaude(sys,prompt,1200);
+    res.innerHTML=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;font-size:14px;color:var(--txt2);line-height:1.9">${r.replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--txt)">$1</strong>').replace(/\n\n/g,'</p><p style="margin-top:12px">').replace(/\n/g,'<br/>')}</div>`;
+    _savedEOIs.unshift({funder,text:r,date:new Date().toLocaleDateString('en-GB')});
+    document.getElementById('bd-saved-wrap').style.display='block';
+    document.getElementById('bd-saved-list').innerHTML=_savedEOIs.map((e,i)=>`<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:12px;font-weight:600;color:var(--txt)">${e.funder}</span><span style="font-size:11px;color:var(--txt3)">${e.date}</span></div><button class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText(_savedEOIs[${i}].text);this.textContent='✓ Copied!';setTimeout(()=>this.textContent='📋 Copy',2000)">📋 Copy</button></div>`).join('');
+  }catch(e){if(e.message==='AI_PLAN_GATE')return;res.innerHTML=`<div style="color:var(--red);font-size:13px">Error: ${e.message}</div>`;}
+}
+
+function copyEOI(){
+  const text=document.getElementById('eoi-result').textContent||'';
+  navigator.clipboard.writeText(text);
+  event.target.textContent='✓ Copied!';
+  setTimeout(()=>event.target.textContent='📋 Copy text',2000);
+}
+
 // Wire up dynamic show/hide for "Other" fields
 document.addEventListener('change',e=>{
-  if(e.target.id==='vf-role'){
-    const row=$('vf-role-other-row');
-    if(row)row.style.display=e.target.value==='Other'?'block':'none';
-  }
-  if(e.target.id==='mp-engtype'){
-    const row=$('mp-engtype-other-row');
-    if(row)row.style.display=e.target.value==='Other'?'block':'none';
-  }
+  if(e.target.id==='vf-role'){const row=$('vf-role-other-row');if(row)row.style.display=e.target.value==='Other'?'block':'none';}
+  if(e.target.id==='mp-engtype'){const row=$('mp-engtype-other-row');if(row)row.style.display=e.target.value==='Other'?'block':'none';}
 });
 
 boot();
