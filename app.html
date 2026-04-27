@@ -540,20 +540,26 @@ const today=()=>new Date().toISOString().split('T')[0];
 // AI ENGINE
 // ════════════════════════════════════════
 async function callClaude(systemPrompt,userPrompt,maxTokens=1000){
-  const res=await fetch('/api/claude',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      model:CLAUDE_MODEL,
-      max_tokens:maxTokens,
-      system:systemPrompt,
-      messages:[{role:'user',content:userPrompt}]
-    })
-  });
-  const data=await res.json();
-  if(data.error)throw new Error(data.error);
-  if(!data.content?.[0]?.text)throw new Error('Empty response — full data: '+JSON.stringify(data).slice(0,200));
-  return data.content[0].text;
+  try{
+    const res=await fetch('/api/claude',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:CLAUDE_MODEL,
+        max_tokens:maxTokens,
+        system:systemPrompt,
+        messages:[{role:'user',content:userPrompt}]
+      })
+    });
+    const data=await res.json();
+    console.log('Claude response:',data);
+    if(data.error)throw new Error(data.error);
+    if(!data.content?.[0]?.text)throw new Error('Empty: '+JSON.stringify(data).slice(0,300));
+    return data.content[0].text;
+  }catch(e){
+    console.error('Claude error:',e);
+    throw e;
+  }
 }
 
 function aiThinking(el){
