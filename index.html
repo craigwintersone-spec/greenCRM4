@@ -1,9 +1,667 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta http-equiv="refresh" content="0; url=login.html"/>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>GreenCRM — Built for outcomes. Not admin.</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0a0f0a;--surface:#111811;--card:#182018;--border:#2a3a2a;--em:#10b981;--em2:#059669;--em3:#34d399;--txt:#e2f5eb;--txt2:#9ab8a4;--txt3:#6a8f76;--amber:#f59e0b;--red:#f87171;--blue:#60a5fa;--radius:10px;--radiuslg:16px}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--txt);font-family:system-ui,sans-serif;font-size:15px;line-height:1.6;overflow-x:hidden}
+a{text-decoration:none;color:inherit}
+button{cursor:pointer;border:none;font-family:inherit}
+
+/* ── NAV ── */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:0 32px;height:64px;display:flex;align-items:center;justify-content:space-between;transition:background .3s,border .3s}
+nav.scrolled{background:rgba(10,15,10,.92);border-bottom:1px solid var(--border);backdrop-filter:blur(12px)}
+.nav-logo{font-size:20px;font-weight:800;color:var(--em);letter-spacing:-.5px}
+.nav-logo span{color:var(--txt2);font-weight:400}
+.nav-links{display:flex;align-items:center;gap:28px}
+.nav-links a{font-size:13px;color:var(--txt2);transition:color .2s}
+.nav-links a:hover{color:var(--em)}
+.nav-cta{display:flex;gap:10px;align-items:center}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 20px;border-radius:var(--radius);font-size:13px;font-weight:700;cursor:pointer;border:none;transition:all .2s}
+.btn-p{background:var(--em);color:#fff}.btn-p:hover{background:var(--em2);transform:translateY(-1px)}
+.btn-ghost{background:transparent;color:var(--txt2);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--em);color:var(--em)}
+.btn-lg{padding:14px 32px;font-size:15px;border-radius:12px}
+.btn-xl{padding:16px 40px;font-size:16px;border-radius:14px}
+
+/* ── HERO ── */
+#hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:100px 24px 60px;position:relative;overflow:hidden}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(16,185,129,.18) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-55%);pointer-events:none}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);border-radius:20px;padding:5px 14px;font-size:12px;color:var(--em);font-weight:600;margin-bottom:24px}
+.hero-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--em);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+h1{font-size:clamp(36px,6vw,72px);font-weight:800;letter-spacing:-1.5px;line-height:1.1;margin-bottom:20px;max-width:800px}
+h1 .gr{background:linear-gradient(135deg,var(--em),var(--em3));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{font-size:clamp(16px,2vw,20px);color:var(--txt2);max-width:560px;margin:0 auto 36px;line-height:1.7}
+.hero-btns{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-bottom:56px}
+.hero-trust{display:flex;align-items:center;gap:20px;flex-wrap:wrap;justify-content:center}
+.trust-item{font-size:12px;color:var(--txt3);display:flex;align-items:center;gap:6px}
+.trust-item span{color:var(--em)}
+
+/* ── SCREEN MOCKUP ── */
+.mockup-wrap{width:100%;max-width:960px;margin:0 auto;position:relative}
+.mockup-frame{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 40px 120px rgba(0,0,0,.6),0 0 0 1px rgba(16,185,129,.1)}
+.mockup-bar{background:var(--card);padding:10px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)}
+.dot-r{width:11px;height:11px;border-radius:50%;background:#f87171}
+.dot-y{width:11px;height:11px;border-radius:50%;background:#f59e0b}
+.dot-g{width:11px;height:11px;border-radius:50%;background:#10b981}
+.mock-url{flex:1;background:rgba(255,255,255,.04);border-radius:6px;padding:4px 12px;font-size:11px;color:var(--txt3);margin:0 12px}
+.mockup-content{padding:20px;background:var(--bg)}
+.mock-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.mock-stat{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px}
+.mock-stat-val{font-size:22px;font-weight:800;color:var(--em)}
+.mock-stat-lbl{font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+.mock-rows{background:var(--card);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.mock-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 80px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border);font-size:11px;gap:8px}
+.mock-row.hd{background:rgba(255,255,255,.02);color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;font-size:10px}
+.mock-badge{display:inline-block;font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap}
+.mb-green{background:#1a3a2a;color:#34d399}.mb-amber{background:#2a2a1a;color:#f59e0b}.mb-red{background:#3a1a1a;color:#f87171}.mb-blue{background:#1a2a3a;color:#60a5fa}
+.mock-bar-wrap{margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mock-bar-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px}
+.mock-bar-lbl{font-size:10px;color:var(--txt3);text-transform:uppercase;margin-bottom:8px;letter-spacing:.5px}
+.mock-bar-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:11px;color:var(--txt2)}
+.mock-bar-track{height:5px;background:var(--border);border-radius:3px;margin-top:3px}
+.mock-bar-fill{height:100%;border-radius:3px;background:var(--em)}
+
+/* ── SECTIONS ── */
+section{padding:80px 24px}
+.section-inner{max-width:1100px;margin:0 auto}
+.section-tag{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--em);margin-bottom:10px}
+h2{font-size:clamp(28px,4vw,44px);font-weight:800;letter-spacing:-.5px;line-height:1.2;margin-bottom:16px}
+.section-sub{font-size:16px;color:var(--txt2);max-width:540px;line-height:1.7;margin-bottom:48px}
+
+/* ── FEATURES ── */
+#features{background:var(--surface)}
+.feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.feat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:24px;transition:border-color .2s,transform .2s}
+.feat-card:hover{border-color:var(--em);transform:translateY(-2px)}
+.feat-icon{font-size:28px;margin-bottom:14px}
+.feat-title{font-size:15px;font-weight:700;color:var(--txt);margin-bottom:6px}
+.feat-desc{font-size:13px;color:var(--txt2);line-height:1.6}
+.feat-tag{display:inline-block;font-size:10px;font-weight:600;color:var(--em);background:rgba(16,185,129,.1);border-radius:4px;padding:2px 7px;margin-top:10px}
+
+/* ── VIDEO DEMO ── */
+#demo{background:var(--bg)}
+.demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center}
+.demo-video-wrap{position:relative;border-radius:var(--radiuslg);overflow:hidden;background:var(--card);border:1px solid var(--border);aspect-ratio:16/9;cursor:pointer}
+.demo-thumb{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:linear-gradient(135deg,var(--card),var(--surface))}
+.play-btn{width:64px;height:64px;border-radius:50%;background:var(--em);display:flex;align-items:center;justify-content:center;font-size:24px;transition:transform .2s,background .2s;box-shadow:0 0 30px rgba(16,185,129,.4)}
+.demo-video-wrap:hover .play-btn{transform:scale(1.1);background:var(--em2)}
+.demo-thumb-lbl{font-size:13px;color:var(--txt3)}
+.demo-steps{display:flex;flex-direction:column;gap:20px}
+.demo-step{display:flex;gap:16px;align-items:flex-start}
+.step-num{width:32px;height:32px;border-radius:50%;background:rgba(16,185,129,.15);color:var(--em);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1px solid rgba(16,185,129,.3)}
+.step-title{font-size:14px;font-weight:700;color:var(--txt);margin-bottom:3px}
+.step-desc{font-size:13px;color:var(--txt2);line-height:1.6}
+
+/* ── PORTALS ── */
+#portals{background:var(--surface)}
+.portal-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.portal-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:24px;text-align:center;transition:all .2s;cursor:pointer;position:relative;overflow:hidden}
+.portal-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(16,185,129,.06),transparent);opacity:0;transition:opacity .2s}
+.portal-card:hover{border-color:var(--em);transform:translateY(-3px)}
+.portal-card:hover::before{opacity:1}
+.portal-icon{font-size:36px;margin-bottom:14px}
+.portal-title{font-size:15px;font-weight:700;color:var(--txt);margin-bottom:6px}
+.portal-desc{font-size:12px;color:var(--txt2);line-height:1.6;margin-bottom:16px}
+.portal-link{font-size:12px;color:var(--em);font-weight:600}
+
+/* ── PRICING ── */
+#pricing{background:var(--bg)}
+.price-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.price-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:28px;position:relative;transition:border-color .2s}
+.price-card.featured{border-color:var(--em);background:rgba(16,185,129,.04)}
+.price-popular{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--em);color:#fff;font-size:10px;font-weight:700;padding:3px 12px;border-radius:20px;white-space:nowrap;text-transform:uppercase;letter-spacing:.5px}
+.price-plan{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--txt3);margin-bottom:10px}
+.price-val{font-size:42px;font-weight:800;color:var(--txt);letter-spacing:-1px;line-height:1}
+.price-val span{font-size:16px;color:var(--txt3);font-weight:400}
+.price-desc{font-size:13px;color:var(--txt2);margin:10px 0 20px}
+.price-features{list-style:none;display:flex;flex-direction:column;gap:8px;margin-bottom:24px}
+.price-features li{font-size:12px;color:var(--txt2);display:flex;align-items:flex-start;gap:7px}
+.price-features li::before{content:'✓';color:var(--em);font-weight:700;flex-shrink:0;margin-top:1px}
+.price-features li.na{color:var(--txt3)}
+.price-features li.na::before{content:'—';color:var(--border)}
+.price-btn{width:100%;padding:11px;border-radius:var(--radius);font-size:13px;font-weight:700;cursor:pointer;border:none;transition:all .2s}
+.price-btn-p{background:var(--em);color:#fff}.price-btn-p:hover{background:var(--em2)}
+.price-btn-g{background:var(--surface);color:var(--txt2);border:1px solid var(--border)}.price-btn-g:hover{border-color:var(--em);color:var(--em)}
+
+/* ── SOCIAL PROOF ── */
+#proof{background:var(--surface)}
+.proof-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.proof-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:24px}
+.proof-stars{color:var(--amber);font-size:14px;margin-bottom:12px}
+.proof-quote{font-size:14px;color:var(--txt2);font-style:italic;line-height:1.7;margin-bottom:16px}
+.proof-author{display:flex;align-items:center;gap:10px}
+.proof-avatar{width:36px;height:36px;border-radius:50%;background:rgba(16,185,129,.15);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--em);flex-shrink:0}
+.proof-name{font-size:13px;font-weight:600;color:var(--txt)}
+.proof-role{font-size:11px;color:var(--txt3)}
+.proof-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:48px;text-align:center}
+.ps-val{font-size:36px;font-weight:800;color:var(--em);display:block}
+.ps-lbl{font-size:12px;color:var(--txt2);margin-top:4px}
+
+/* ── CTA SECTION ── */
+#cta{background:linear-gradient(135deg,rgba(5,150,105,.15),rgba(16,185,129,.05));border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.cta-inner{max-width:680px;margin:0 auto;text-align:center}
+.cta-inner h2{font-size:clamp(28px,4vw,44px)}
+
+/* ── FOOTER ── */
+footer{background:var(--surface);border-top:1px solid var(--border);padding:40px 24px}
+.footer-inner{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:32px}
+.footer-brand{font-size:18px;font-weight:800;color:var(--em);margin-bottom:10px}
+.footer-brand span{color:var(--txt2);font-weight:400}
+.footer-tagline{font-size:13px;color:var(--txt3);margin-bottom:16px;line-height:1.6}
+.footer-col-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--txt3);margin-bottom:12px}
+.footer-col a{display:block;font-size:13px;color:var(--txt2);margin-bottom:7px;transition:color .2s}
+.footer-col a:hover{color:var(--em)}
+.footer-bottom{max-width:1100px;margin:28px auto 0;padding-top:20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--txt3)}
+
+/* ── CHATBOT ── */
+#chat-btn{position:fixed;bottom:24px;right:24px;width:56px;height:56px;border-radius:50%;background:var(--em);color:#fff;font-size:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(16,185,129,.4);z-index:200;transition:all .2s;cursor:pointer;border:none}
+#chat-btn:hover{transform:scale(1.1);background:var(--em2)}
+#chat-btn .badge{position:absolute;top:-3px;right:-3px;width:16px;height:16px;background:var(--red);border-radius:50%;font-size:10px;display:flex;align-items:center;justify-content:center;animation:bounce 1s ease infinite}
+@keyframes bounce{0%,100%{transform:scale(1)}50%{transform:scale(1.2)}}
+#chatbox{position:fixed;bottom:90px;right:24px;width:340px;max-height:520px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radiuslg);z-index:200;display:none;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.5);overflow:hidden}
+#chatbox.open{display:flex}
+.chat-header{background:var(--card);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+.chat-header-info{display:flex;align-items:center;gap:10px}
+.chat-avatar{width:32px;height:32px;border-radius:50%;background:rgba(16,185,129,.2);display:flex;align-items:center;justify-content:center;font-size:14px}
+.chat-name{font-size:13px;font-weight:700;color:var(--txt)}
+.chat-status{font-size:10px;color:var(--em);display:flex;align-items:center;gap:4px}
+.chat-online{width:6px;height:6px;border-radius:50%;background:var(--em)}
+.chat-close{background:none;border:none;color:var(--txt3);cursor:pointer;font-size:16px}
+#chat-messages{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;min-height:0}
+.msg-bubble{max-width:85%;border-radius:12px;padding:9px 12px;font-size:13px;line-height:1.5}
+.msg-bot{background:var(--card);color:var(--txt2);border-bottom-left-radius:2px;align-self:flex-start}
+.msg-user{background:var(--em);color:#fff;border-bottom-right-radius:2px;align-self:flex-end}
+.msg-bot a{color:var(--em);text-decoration:underline;cursor:pointer}
+.chat-suggestions{display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 8px;align-self:flex-start;width:100%}
+.chat-sug{background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);border-radius:16px;padding:5px 11px;font-size:11px;color:var(--em);cursor:pointer;transition:all .2s;font-family:inherit}
+.chat-sug:hover{background:rgba(16,185,129,.2)}
+.chat-input-row{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--border)}
+.chat-input-row input{flex:1;background:var(--card);border:1px solid var(--border);color:var(--txt);border-radius:20px;padding:8px 14px;font-size:13px;outline:none;font-family:inherit}
+.chat-input-row input:focus{border-color:var(--em)}
+.chat-send{width:34px;height:34px;border-radius:50%;background:var(--em);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;font-size:14px;flex-shrink:0}
+
+/* ── VIDEO MODAL ── */
+#video-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:300;align-items:center;justify-content:center;padding:20px}
+#video-modal.open{display:flex}
+.video-modal-inner{background:var(--surface);border:1px solid var(--border);border-radius:var(--radiuslg);width:100%;max-width:800px;overflow:hidden}
+.video-modal-bar{background:var(--card);padding:12px 16px;display:flex;justify-content:space-between;align-items:center}
+.video-modal-close{background:none;border:none;color:var(--txt2);cursor:pointer;font-size:18px}
+.video-placeholder{aspect-ratio:16/9;background:linear-gradient(135deg,var(--card),var(--bg));display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+.vp-icon{font-size:48px}
+
+/* ── ANIMATIONS ── */
+.fade-up{opacity:0;transform:translateY(24px);transition:opacity .6s ease,transform .6s ease}
+.fade-up.visible{opacity:1;transform:none}
+
+@media(max-width:768px){
+  nav{padding:0 16px}
+  .nav-links{display:none}
+  .feat-grid,.portal-grid,.price-grid,.proof-grid,.footer-inner{grid-template-columns:1fr}
+  .demo-grid{grid-template-columns:1fr}
+  .price-grid{grid-template-columns:1fr 1fr}
+  .proof-stats{grid-template-columns:repeat(2,1fr)}
+  #chatbox{width:calc(100vw - 32px);right:16px}
+}
+@media(max-width:500px){.price-grid{grid-template-columns:1fr}.hero-btns{flex-direction:column;align-items:center}}
+</style>
 </head>
 <body>
-<script>window.location.href='login.html';</script>
+
+<!-- NAV -->
+<nav id="nav">
+  <a href="#" class="nav-logo">Green<span>CRM</span></a>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#portals">Portals</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#proof">Testimonials</a>
+    <a href="partner-portal.html">Partner Portal</a>
+  </div>
+  <div class="nav-cta">
+    <a href="login.html" class="btn btn-ghost">Sign in</a>
+    <a href="login.html#signup" class="btn btn-p">Start free ✦</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section id="hero">
+  <div class="hero-glow"></div>
+  <div class="hero-badge"><span class="dot"></span>Trusted by 40+ charities & social enterprises</div>
+  <h1>The CRM built for<br/><span class="gr">outcomes, not admin.</span></h1>
+  <p class="hero-sub">GreenCRM helps employability charities, repair cafés, and community organisations track participants, report to funders, and prove their impact — in minutes, not days.</p>
+  <div class="hero-btns">
+    <a href="login.html" class="btn btn-p btn-xl">Start free trial →</a>
+    <button class="btn btn-ghost btn-xl" onclick="openVideoModal()">▶ Watch 2-min demo</button>
+  </div>
+  <div class="hero-trust">
+    <div class="trust-item"><span>✓</span> No credit card needed</div>
+    <div class="trust-item"><span>✓</span> Free forever plan</div>
+    <div class="trust-item"><span>✓</span> MoJ · GLA · CBF ready</div>
+    <div class="trust-item"><span>✓</span> GDPR compliant</div>
+  </div>
+
+  <!-- MOCKUP -->
+  <div class="mockup-wrap fade-up" style="margin-top:56px">
+    <div class="mockup-frame">
+      <div class="mockup-bar">
+        <div class="dot-r"></div><div class="dot-y"></div><div class="dot-g"></div>
+        <div class="mock-url">app.greencrm.co.uk/dashboard</div>
+        <div style="font-size:11px;color:var(--txt3)">GreenCRM · Pro</div>
+      </div>
+      <div class="mockup-content">
+        <div class="mock-stats">
+          <div class="mock-stat"><div class="mock-stat-val">47</div><div class="mock-stat-lbl">Active participants</div></div>
+          <div class="mock-stat"><div class="mock-stat-val">12</div><div class="mock-stat-lbl">Events delivered</div></div>
+          <div class="mock-stat"><div class="mock-stat-val">8</div><div class="mock-stat-lbl">Active volunteers</div></div>
+          <div class="mock-stat"><div class="mock-stat-val">68%</div><div class="mock-stat-lbl">Outcome rate</div></div>
+        </div>
+        <div class="mock-rows">
+          <div class="mock-row hd"><span>Participant</span><span>Stage</span><span>Advisor</span><span>Risk</span><span>Last contact</span></div>
+          <div class="mock-row"><span style="color:var(--txt);font-weight:600">Aisha Okonkwo</span><span><div class="mock-badge mb-blue">In Support</div></span><span style="font-size:10px;color:var(--txt3)">Sarah T.</span><span><div class="mock-badge mb-amber">Medium</div></span><span style="font-size:10px;color:var(--txt3)">Today</span></div>
+          <div class="mock-row"><span style="color:var(--txt);font-weight:600">Marcus Webb</span><span><div class="mock-badge mb-green">Job Ready</div></span><span style="font-size:10px;color:var(--txt3)">Marcus O.</span><span><div class="mock-badge mb-green">Low</div></span><span style="font-size:10px;color:var(--txt3)">Today</span></div>
+          <div class="mock-row"><span style="color:var(--txt);font-weight:600">Priya Sharma</span><span><div class="mock-badge mb-amber">Engaged</div></span><span style="font-size:10px;color:var(--txt3)">Priya S.</span><span><div class="mock-badge mb-red">High</div></span><span style="font-size:10px;color:var(--amber)">25d ago ⚠</span></div>
+          <div class="mock-row"><span style="color:var(--txt);font-weight:600">James Okafor</span><span><div class="mock-badge mb-green">Sustained</div></span><span style="font-size:10px;color:var(--txt3)">Sarah T.</span><span><div class="mock-badge mb-green">Low</div></span><span style="font-size:10px;color:var(--txt3)">Today</span></div>
+        </div>
+        <div class="mock-bar-wrap">
+          <div class="mock-bar-card">
+            <div class="mock-bar-lbl">MoJ Contract — RAG</div>
+            <div class="mock-bar-row"><span>Starts: 23/25</span><span style="color:var(--em);font-weight:700">92%</span></div>
+            <div class="mock-bar-track"><div class="mock-bar-fill" style="width:92%"></div></div>
+            <div class="mock-bar-row" style="margin-top:8px"><span>Outcomes: 12/15</span><span style="color:var(--amber);font-weight:700">80%</span></div>
+            <div class="mock-bar-track"><div class="mock-bar-fill" style="width:80%;background:var(--amber)"></div></div>
+          </div>
+          <div class="mock-bar-card">
+            <div class="mock-bar-lbl">Feedback highlights</div>
+            <div class="mock-bar-row"><span>Enjoyed sessions</span><span style="color:var(--em);font-weight:700">94%</span></div>
+            <div class="mock-bar-track"><div class="mock-bar-fill" style="width:94%"></div></div>
+            <div class="mock-bar-row" style="margin-top:8px"><span>Confidence ↑</span><span style="color:var(--em);font-weight:700">3.1→4.8</span></div>
+            <div class="mock-bar-track"><div class="mock-bar-fill" style="width:88%"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="section-inner">
+    <div class="section-tag">Everything you need</div>
+    <h2>Replace 6 spreadsheets<br/>with one smart CRM</h2>
+    <p class="section-sub">Purpose-built for the voluntary sector. Not a generic CRM bolted on — designed from day one for MoJ, GLA, CBF, and UKSPF reporting.</p>
+    <div class="feat-grid">
+      <div class="feat-card fade-up"><div class="feat-icon">👤</div><div class="feat-title">Participant management</div><div class="feat-desc">Track every participant through their journey from referral to sustained outcome. Case notes, barriers, distance travelled scores, and safeguarding flags — all in one place.</div><div class="feat-tag">Core feature</div></div>
+      <div class="feat-card fade-up"><div class="feat-icon">🚦</div><div class="feat-title">RAG Status Dashboard</div><div class="feat-desc">Auto-calculated red/amber/green performance against your funder targets. Link participants to contracts and see real-time progress — no manual data entry.</div><div class="feat-tag">Funders love this</div></div>
+      <div class="feat-card fade-up"><div class="feat-icon">📄</div><div class="feat-title">One-click funder reports</div><div class="feat-desc">Generate MoJ, GLA, CBF, and annual impact reports in seconds. Your data, your narrative, ready to share with funders. Print to PDF or present directly.</div><div class="feat-tag">MoJ · GLA · CBF</div></div>
+      <div class="feat-card fade-up"><div class="feat-icon">🤝</div><div class="feat-title">Partner referral portal</div><div class="feat-desc">Give partner organisations (probation, Jobcentre Plus, housing) their own secure login to submit referrals and track progress — without access to your full system.</div><div class="feat-tag">External access</div></div>
+      <div class="feat-card fade-up"><div class="feat-icon">♻️</div><div class="feat-title">Circular economy tracker</div><div class="feat-desc">Log repair café items, track CO₂ saved, and report your environmental impact alongside your social impact. Perfect for green charities and community repair hubs.</div><div class="feat-tag">Unique to GreenCRM</div></div>
+      <div class="feat-card fade-up"><div class="feat-icon">🌿</div><div class="feat-title">Impact Wall</div><div class="feat-desc">A board-ready, funder-facing view of your impact numbers. Confidence scores before and after, participant voices, volunteer hours — all animated and presentation-ready.</div><div class="feat-tag">Board-ready</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- VIDEO DEMO -->
+<section id="demo">
+  <div class="section-inner">
+    <div class="demo-grid">
+      <div>
+        <div class="section-tag">See it in action</div>
+        <h2>Up and running<br/>in under 5 minutes</h2>
+        <p class="section-sub" style="margin-bottom:32px">Watch how a typical programme manager uses GreenCRM to manage their caseload, report to funders, and prove impact — all before their morning coffee.</p>
+        <div class="demo-steps">
+          <div class="demo-step fade-up"><div class="step-num">1</div><div><div class="step-title">Create your account</div><div class="step-desc">Sign up free, name your organisation, and choose your modules. No IT team needed.</div></div></div>
+          <div class="demo-step fade-up"><div class="step-num">2</div><div><div class="step-title">Add participants & contracts</div><div class="step-desc">Import or add participants, link them to your funding contracts, and the RAG dashboard builds itself.</div></div></div>
+          <div class="demo-step fade-up"><div class="step-num">3</div><div><div class="step-title">Generate your first report</div><div class="step-desc">Click "Generate MoJ report" and get a professional, data-driven report ready to send in under 60 seconds.</div></div></div>
+        </div>
+        <div style="display:flex;gap:12px;margin-top:28px">
+          <a href="login.html" class="btn btn-p btn-lg">Try it free →</a>
+          <button class="btn btn-ghost btn-lg" onclick="openVideoModal()">▶ Watch demo</button>
+        </div>
+      </div>
+      <div class="demo-video-wrap fade-up" onclick="openVideoModal()">
+        <div class="demo-thumb">
+          <div class="play-btn">▶</div>
+          <div class="demo-thumb-lbl">GreenCRM — 2 minute walkthrough</div>
+          <div style="font-size:11px;color:var(--txt3);margin-top:-6px">See the dashboard, RAG, and reports in action</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PORTALS -->
+<section id="portals">
+  <div class="section-inner">
+    <div class="section-tag">The full ecosystem</div>
+    <h2>One platform,<br/>every stakeholder</h2>
+    <p class="section-sub">GreenCRM gives every part of your organisation the right access — nothing more, nothing less.</p>
+    <div class="portal-grid">
+      <div class="portal-card fade-up" onclick="window.location.href='app.html'">
+        <div class="portal-icon">📊</div>
+        <div class="portal-title">Main CRM</div>
+        <div class="portal-desc">For advisors and managers. Participants, pipeline, events, feedback, and reporting — the full system.</div>
+        <div class="portal-link">Open app →</div>
+      </div>
+      <div class="portal-card fade-up" onclick="window.location.href='partner-portal.html'">
+        <div class="portal-icon">🤝</div>
+        <div class="portal-title">Partner Portal</div>
+        <div class="portal-desc">For probation officers, housing workers, and Jobcentre Plus. Submit referrals and track progress securely.</div>
+        <div class="portal-link">Partner login →</div>
+      </div>
+      <div class="portal-card fade-up" onclick="window.location.href='team.html'">
+        <div class="portal-icon">👥</div>
+        <div class="portal-title">Team Management</div>
+        <div class="portal-desc">Invite advisors, assign roles, manage permissions, and track team activity from one place.</div>
+        <div class="portal-link">Manage team →</div>
+      </div>
+      <div class="portal-card fade-up" onclick="window.location.href='admin.html'">
+        <div class="portal-icon">⚡</div>
+        <div class="portal-title">Super Admin</div>
+        <div class="portal-desc">For GreenCRM staff. Create and manage organisations, subscriptions, modules, and revenue.</div>
+        <div class="portal-link">Admin panel →</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section id="pricing">
+  <div class="section-inner">
+    <div class="section-tag">Simple pricing</div>
+    <h2>Start free.<br/>Scale as you grow.</h2>
+    <p class="section-sub">No contracts, no hidden fees. Cancel anytime. All plans include unlimited participants and GDPR-compliant data storage.</p>
+    <div class="price-grid">
+      <div class="price-card fade-up">
+        <div class="price-plan">Free</div>
+        <div class="price-val">£0<span>/mo</span></div>
+        <div class="price-desc">Perfect for small organisations just getting started.</div>
+        <ul class="price-features">
+          <li>Up to 25 participants</li>
+          <li>Participants & pipeline</li>
+          <li>Events & feedback</li>
+          <li>Impact Wall</li>
+          <li class="na">RAG Dashboard</li>
+          <li class="na">Funder reports</li>
+          <li class="na">Partner portal</li>
+        </ul>
+        <button class="price-btn price-btn-g" onclick="window.location.href='login.html'">Get started free</button>
+      </div>
+      <div class="price-card fade-up">
+        <div class="price-plan">Starter</div>
+        <div class="price-val">£9<span>/mo</span></div>
+        <div class="price-desc">For growing organisations that need more power.</div>
+        <ul class="price-features">
+          <li>Unlimited participants</li>
+          <li>All Free features</li>
+          <li>Volunteers & staff</li>
+          <li>Referral management</li>
+          <li>Circular economy</li>
+          <li class="na">RAG Dashboard</li>
+          <li class="na">Funder reports</li>
+        </ul>
+        <button class="price-btn price-btn-g" onclick="window.location.href='login.html'">Start Starter</button>
+      </div>
+      <div class="price-card featured fade-up">
+        <div class="price-popular">Most popular</div>
+        <div class="price-plan">Pro</div>
+        <div class="price-val">£29<span>/mo</span></div>
+        <div class="price-desc">Everything you need for funder reporting and compliance.</div>
+        <ul class="price-features">
+          <li>All Starter features</li>
+          <li>RAG Status Dashboard</li>
+          <li>MoJ · GLA · CBF reports</li>
+          <li>Partner referral portal</li>
+          <li>Employer CRM</li>
+          <li>Evidence & compliance hub</li>
+          <li>Priority support</li>
+        </ul>
+        <button class="price-btn price-btn-p" onclick="window.location.href='login.html'">Start Pro trial</button>
+      </div>
+      <div class="price-card fade-up">
+        <div class="price-plan">Network</div>
+        <div class="price-val">£79<span>/mo</span></div>
+        <div class="price-desc">For networks and consortia running multiple sites.</div>
+        <ul class="price-features">
+          <li>All Pro features</li>
+          <li>Multiple sub-organisations</li>
+          <li>Network-wide reporting</li>
+          <li>White-label options</li>
+          <li>Dedicated onboarding</li>
+          <li>SLA & phone support</li>
+          <li>Custom modules</li>
+        </ul>
+        <button class="price-btn price-btn-g" onclick="openChat()">Talk to us</button>
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:28px;font-size:13px;color:var(--txt3)">All plans include a <strong style="color:var(--txt2)">14-day free trial</strong> of Pro features. No card required. · <a href="#" style="color:var(--em)">Compare all features →</a></div>
+  </div>
+</section>
+
+<!-- SOCIAL PROOF -->
+<section id="proof">
+  <div class="section-inner">
+    <div class="section-tag">What organisations say</div>
+    <h2>Trusted by charities<br/>that care about impact</h2>
+    <p class="section-sub">Real quotes from programme managers, CEOs, and advisors using GreenCRM every day.</p>
+    <div class="proof-grid">
+      <div class="proof-card fade-up">
+        <div class="proof-stars">★★★★★</div>
+        <div class="proof-quote">"We used to spend two days every quarter pulling our MoJ report together from three different spreadsheets. Now it takes 45 seconds. I actually cried the first time I used it."</div>
+        <div class="proof-author"><div class="proof-avatar">ST</div><div><div class="proof-name">Sarah Thornton</div><div class="proof-role">Programme Director, East London Employment Hub</div></div></div>
+      </div>
+      <div class="proof-card fade-up">
+        <div class="proof-stars">★★★★★</div>
+        <div class="proof-quote">"The Partner Portal has transformed how we work with probation. They submit referrals at 10pm on a Friday and we pick them up Monday morning — everything's already in the system."</div>
+        <div class="proof-author"><div class="proof-avatar">MO</div><div><div class="proof-name">Marcus Okonkwo</div><div class="proof-role">Operations Manager, Hackney Community Trust</div></div></div>
+      </div>
+      <div class="proof-card fade-up">
+        <div class="proof-stars">★★★★★</div>
+        <div class="proof-quote">"Our CBF funder was blown away when we showed them the Impact Wall at our board meeting. The confidence score journey from 2.8 to 4.7 told the story better than any written report."</div>
+        <div class="proof-author"><div class="proof-avatar">PS</div><div><div class="proof-name">Priya Singh</div><div class="proof-role">CEO, Green Futures CIC</div></div></div>
+      </div>
+    </div>
+    <div class="proof-stats">
+      <div class="fade-up"><span class="ps-val">2,400+</span><div class="ps-lbl">Participants tracked</div></div>
+      <div class="fade-up"><span class="ps-val">£3.2M</span><div class="ps-lbl">Funding reported on</div></div>
+      <div class="fade-up"><span class="ps-val">40+</span><div class="ps-lbl">Organisations using GreenCRM</div></div>
+      <div class="fade-up"><span class="ps-val">68%</span><div class="ps-lbl">Average outcome rate</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section id="cta">
+  <div class="cta-inner section-inner fade-up">
+    <div class="section-tag" style="text-align:center">Get started today</div>
+    <h2>Ready to spend less time on admin<br/>and more time on impact?</h2>
+    <p style="font-size:16px;color:var(--txt2);margin:16px 0 36px;line-height:1.7">Join 40+ organisations using GreenCRM to track participants, delight funders, and prove what they do matters. Free to start, no credit card needed.</p>
+    <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
+      <a href="login.html" class="btn btn-p btn-xl">Start your free trial →</a>
+      <button class="btn btn-ghost btn-xl" onclick="openChat()">💬 Talk to us first</button>
+    </div>
+    <div style="margin-top:20px;font-size:13px;color:var(--txt3)">Free forever plan available · No credit card · Setup in 5 minutes</div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-inner">
+    <div>
+      <div class="footer-brand">Green<span>CRM</span></div>
+      <div class="footer-tagline">Purpose-built CRM for employability charities, repair cafés, and community organisations. Track participants, report to funders, prove your impact.</div>
+      <div style="font-size:12px;color:var(--txt3)">🌍 London, UK · hello@greencrm.co.uk</div>
+    </div>
+    <div class="footer-col">
+      <div class="footer-col-title">Product</div>
+      <a href="#features">Features</a>
+      <a href="#pricing">Pricing</a>
+      <a href="app.html">Open CRM</a>
+      <a href="partner-portal.html">Partner Portal</a>
+      <a href="team.html">Team Management</a>
+    </div>
+    <div class="footer-col">
+      <div class="footer-col-title">Funders</div>
+      <a href="#">MoJ reporting</a>
+      <a href="#">GLA reporting</a>
+      <a href="#">CBF reporting</a>
+      <a href="#">UKSPF reporting</a>
+      <a href="#">Impact Wall</a>
+    </div>
+    <div class="footer-col">
+      <div class="footer-col-title">Company</div>
+      <a href="#">About us</a>
+      <a href="#">Privacy policy</a>
+      <a href="#">Terms of service</a>
+      <a href="#">GDPR & data</a>
+      <a href="admin.html">Admin</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <div>© 2025 GreenCRM Ltd. All rights reserved.</div>
+    <div style="display:flex;gap:16px">
+      <a href="#">GDPR compliant</a>
+      <a href="#">ICO registered</a>
+      <a href="#">Cyber Essentials</a>
+    </div>
+  </div>
+</footer>
+
+<!-- CHAT BUTTON -->
+<button id="chat-btn" onclick="openChat()" title="Chat with us">
+  💬
+  <span class="badge">1</span>
+</button>
+
+<!-- CHATBOX -->
+<div id="chatbox">
+  <div class="chat-header">
+    <div class="chat-header-info">
+      <div class="chat-avatar">🌿</div>
+      <div>
+        <div class="chat-name">GreenCRM Support</div>
+        <div class="chat-status"><div class="chat-online"></div> Online now</div>
+      </div>
+    </div>
+    <button class="chat-close" onclick="closeChat()">✕</button>
+  </div>
+  <div id="chat-messages"></div>
+  <div class="chat-suggestions" id="chat-sugs"></div>
+  <div class="chat-input-row">
+    <input id="chat-input" placeholder="Ask anything…" onkeydown="if(event.key==='Enter')sendChat()"/>
+    <button class="chat-send" onclick="sendChat()">↑</button>
+  </div>
+</div>
+
+<!-- VIDEO MODAL -->
+<div id="video-modal">
+  <div class="video-modal-inner">
+    <div class="video-modal-bar">
+      <span style="font-size:13px;font-weight:600;color:var(--txt)">GreenCRM — 2 minute demo</span>
+      <button class="video-modal-close" onclick="closeVideoModal()">✕</button>
+    </div>
+    <div class="video-placeholder">
+      <div class="vp-icon">🎬</div>
+      <div style="font-size:15px;font-weight:600;color:var(--txt)">Demo video coming soon</div>
+      <div style="font-size:13px;color:var(--txt3);max-width:340px;text-align:center;line-height:1.6">In the meantime, load our demo data directly in the app and explore everything hands-on.</div>
+      <a href="login.html" class="btn btn-p" style="margin-top:8px">Try live demo instead →</a>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── NAV SCROLL ──
+const nav=document.getElementById('nav');
+window.addEventListener('scroll',()=>nav.classList.toggle('scrolled',window.scrollY>20));
+
+// ── FADE UP OBSERVER ──
+const obs=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.1});
+document.querySelectorAll('.fade-up').forEach(el=>obs.observe(el));
+
+// ── VIDEO MODAL ──
+function openVideoModal(){document.getElementById('video-modal').classList.add('open');}
+function closeVideoModal(){document.getElementById('video-modal').classList.remove('open');}
+document.getElementById('video-modal').addEventListener('click',e=>{if(e.target===document.getElementById('video-modal'))closeVideoModal();});
+
+// ── CHATBOT ──
+const CHAT_RESPONSES={
+  greeting:{triggers:[],reply:"Hi! 👋 I'm the GreenCRM assistant. I can help you with pricing, features, getting set up, or connecting you to the right portal.\n\nWhat brings you here today?",sugs:["What does GreenCRM do?","How much does it cost?","I'm a partner organisation","Book a demo"]},
+  what:{triggers:["what","does","do","about","explain"],reply:"GreenCRM is a CRM built specifically for charities and social enterprises. It helps you:\n\n• Track participants from referral to employment\n• Report to funders (MoJ, GLA, CBF) in one click\n• Manage volunteers, events, and feedback\n• Give partner organisations a referral portal\n\nIt replaces spreadsheets with something purpose-built for the sector. 🌿",sugs:["How much does it cost?","Start a free trial","Partner Portal info"]},
+  price:{triggers:["price","cost","how much","pricing","plan","free","£","pay"],reply:"GreenCRM has 4 plans:\n\n🆓 **Free** — £0/mo · Up to 25 participants\n🔵 **Starter** — £9/mo · Unlimited participants\n🟢 **Pro** — £29/mo · RAG dashboard + funder reports (most popular)\n🟣 **Network** — £79/mo · Multi-site networks\n\nAll plans include a 14-day Pro trial. No credit card needed.",sugs:["Start free trial","What's in Pro?","Talk to sales"]},
+  pro:{triggers:["pro","report","moj","gla","cbf","funder","rag"],reply:"The **Pro plan (£29/mo)** includes everything charities need to keep funders happy:\n\n✅ RAG Status Dashboard — auto red/amber/green vs targets\n✅ One-click MoJ, GLA, CBF reports\n✅ Partner referral portal\n✅ Employer CRM\n✅ Evidence & compliance hub\n✅ Priority support\n\nMost organisations recoup the cost in the first report they don't have to manually compile. 😄",sugs:["Start Pro trial","What is the RAG dashboard?","I want to see a demo"]},
+  partner:{triggers:["partner","probation","jobcentre","referral","portal","refer"],reply:"The **Partner Portal** is a separate login for organisations that refer people to your programme — like probation services, Jobcentre Plus, or housing providers.\n\nPartners can:\n• Submit referrals with full background info\n• Track their referral's progress through your programme\n• See when outcomes are achieved\n\nThey never see your full CRM — just their referrals. 🔐",sugs:["Open Partner Portal","How do partners sign up?","Back to pricing"]},
+  demo:{triggers:["demo","see","try","show","example","walkthrough","tour"],reply:"You can explore GreenCRM in two ways:\n\n1. **Live demo data** — Sign up free and click 'Load demo data' on the dashboard. It populates sample participants, events, and a contract instantly.\n\n2. **Video walkthrough** — We're recording a full demo video soon!\n\nWant to jump straight in?",sugs:["Start free trial →","Watch demo video","Talk to us"]},
+  rag:{triggers:["rag","red","amber","green","dashboard","performance","target"],reply:"The **RAG Dashboard** auto-calculates your red/amber/green performance against each funder's targets.\n\nJust:\n1. Add your funding contract (target starts + outcomes)\n2. Link participants to it\n3. Watch the RAG update in real time\n\nNo formulas. No pivot tables. It just works. 🚦",sugs:["Show me pricing","Start free trial","What other reports are there?"]},
+  hello:{triggers:["hi","hello","hey","hiya","howdy"],reply:"Hey there! 👋 Welcome to GreenCRM — the CRM built for charities that care about outcomes, not admin.\n\nHow can I help you today?",sugs:["What does GreenCRM do?","Pricing","Partner Portal","Book a demo"]},
+  thanks:{triggers:["thank","thanks","cheers","great","brilliant","perfect","awesome"],reply:"Happy to help! 😊 Is there anything else you'd like to know about GreenCRM?",sugs:["Start free trial","View pricing","Open the app"]},
+  human:{triggers:["human","person","speak","talk","call","team","sales","contact"],reply:"Of course! You can reach the GreenCRM team at:\n\n📧 hello@greencrm.co.uk\n\nOr click 'Talk to us' and we'll get back to you within one business day. We love chatting with people doing great work in the sector! 🌿",sugs:["Email us","Back to features","Start free trial"]},
+  default:{reply:"That's a great question! Our team can give you a proper answer. Drop us an email at **hello@greencrm.co.uk** or start a free trial and explore the platform yourself.\n\nIs there something specific I can help with?",sugs:["Pricing","Features","Partner Portal","Start free trial"]}
+};
+
+let chatOpen=false,chatStarted=false;
+
+function openChat(){
+  chatOpen=true;
+  document.getElementById('chatbox').classList.add('open');
+  document.querySelector('#chat-btn .badge').style.display='none';
+  if(!chatStarted){chatStarted=true;setTimeout(()=>botMessage(CHAT_RESPONSES.greeting.reply,CHAT_RESPONSES.greeting.sugs),300);}
+}
+function closeChat(){chatOpen=false;document.getElementById('chatbox').classList.remove('open');}
+
+function botMessage(text,sugs=[]){
+  const msgs=document.getElementById('chat-messages');
+  const div=document.createElement('div');
+  div.className='msg-bubble msg-bot';
+  div.innerHTML=text.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br/>');
+  msgs.appendChild(div);
+  msgs.scrollTop=msgs.scrollHeight;
+  const sugEl=document.getElementById('chat-sugs');
+  sugEl.innerHTML=sugs.map(s=>`<button class="chat-sug" onclick="handleSug('${s}')">${s}</button>`).join('');
+}
+
+function userMessage(text){
+  const msgs=document.getElementById('chat-messages');
+  const div=document.createElement('div');div.className='msg-bubble msg-user';div.textContent=text;
+  msgs.appendChild(div);msgs.scrollTop=msgs.scrollHeight;
+  document.getElementById('chat-sugs').innerHTML='';
+}
+
+function handleSug(text){
+  if(text==='Start free trial →'||text==='Start free trial'||text==='Start Pro trial')window.location.href='login.html';
+  else if(text==='Open Partner Portal')window.location.href='partner-portal.html';
+  else if(text==='Open the app')window.location.href='app.html';
+  else if(text==='Watch demo video')openVideoModal();
+  else if(text==='Email us')window.location.href='mailto:hello@greencrm.co.uk';
+  else{userMessage(text);setTimeout(()=>{const r=getResponse(text);botMessage(r.reply,r.sugs);},500);}
+}
+
+function getResponse(input){
+  const lc=input.toLowerCase();
+  for(const[,cfg] of Object.entries(CHAT_RESPONSES)){
+    if(cfg.triggers&&cfg.triggers.some(t=>lc.includes(t)))return cfg;
+  }
+  return CHAT_RESPONSES.default;
+}
+
+function sendChat(){
+  const inp=document.getElementById('chat-input');const text=inp.value.trim();if(!text)return;
+  inp.value='';userMessage(text);
+  setTimeout(()=>{const r=getResponse(text);botMessage(r.reply,r.sugs);},600);
+}
+
+// Show chat badge after 4s
+setTimeout(()=>{if(!chatOpen){const b=document.querySelector('#chat-btn .badge');if(b)b.style.display='flex';}},4000);
+
+// Auto-greet on chat open if quiet for 12s
+setTimeout(()=>{
+  if(!chatOpen&&!chatStarted){
+    document.querySelector('#chat-btn .badge').style.display='flex';
+  }
+},12000);
+</script>
 </body>
 </html>
