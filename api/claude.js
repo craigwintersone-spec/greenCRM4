@@ -8,7 +8,7 @@ module.exports = async function handler(req, res) {
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: 'ANTHROPIC_API_KEY environment variable is not set' });
+    return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not set in Vercel environment variables' });
   }
 
   try {
@@ -26,6 +26,6 @@ module.exports = async function handler(req, res) {
     return res.status(response.status).json(data);
   } catch (err) {
     console.error('Claude API error:', err);
-    return res.status(500).json({ error: 'Failed to reach Anthropic API', detail: err.message });
+    return res.status(500).json({ error: err.message });
   }
 };
