@@ -7,10 +7,44 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#0a0f0a;--surface:#111811;--card:#182018;--border:#2a3a2a;--em:#10b981;--em2:#059669;--txt:#e2f5eb;--txt2:#9ab8a4;--txt3:#6a8f76;--red:#f87171;--amber:#f59e0b;--blue:#60a5fa;--radius:10px;--radiuslg:14px}
-body{background:var(--bg);color:var(--txt);font-family:system-ui,sans-serif;font-size:14px;min-height:100vh;display:flex}
+body{background:var(--bg);color:var(--txt);font-family:system-ui,sans-serif;font-size:14px;min-height:100vh}
+button{cursor:pointer;border:none;font-family:inherit}
+input,select{font-family:inherit;font-size:13px;background:var(--card);border:1px solid var(--border);color:var(--txt);border-radius:var(--radius);padding:8px 12px;width:100%;outline:none;transition:border-color .2s}
+input:focus,select:focus{border-color:var(--em)}
+label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.btn{padding:7px 14px;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
+.btn-p{background:var(--em);color:#fff}.btn-p:hover{background:var(--em2)}
+.btn-ghost{background:var(--card);color:var(--txt2);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--em);color:var(--em)}
+.btn-danger{background:none;color:var(--red);border:1px solid var(--border)}.btn-danger:hover{border-color:var(--red)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* ── AUTH SCREEN ── */
+#auth-screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+#app-screen{display:none;min-height:100vh;flex-direction:column}
+#app-screen.visible{display:flex}
+.auth-logo{font-size:26px;font-weight:800;color:var(--em);margin-bottom:4px;letter-spacing:-.5px}
+.auth-logo span{color:var(--txt2);font-weight:400}
+.auth-sub{font-size:13px;color:var(--txt3);margin-bottom:6px}
+.auth-back{font-size:12px;color:var(--txt3);margin-bottom:24px;display:flex;align-items:center;gap:5px;text-decoration:none;transition:color .2s}
+.auth-back:hover{color:var(--em)}
+.auth-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:28px;width:100%;max-width:380px}
+.auth-card h2{font-size:16px;font-weight:700;color:var(--txt);margin-bottom:4px}
+.auth-card p{font-size:13px;color:var(--txt3);margin-bottom:20px}
+.form-row{margin-bottom:13px}
+.msg{padding:10px 13px;border-radius:var(--radius);font-size:13px;margin-bottom:13px;display:none}
+.msg-err{background:#2a1a1a;border:1px solid #5a2a2a;color:var(--red)}
+.hint{font-size:12px;color:var(--txt3);text-align:center;margin-top:13px}
+.hint a{color:var(--em);cursor:pointer;text-decoration:none}
+
+/* ── APP LAYOUT ── */
+.app-wrap{display:flex;flex:1}
 .sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);padding:20px 0;flex-shrink:0;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
-.logo{font-size:18px;font-weight:800;color:var(--em);padding:0 20px 16px;border-bottom:1px solid var(--border);margin-bottom:10px}
+.logo{font-size:18px;font-weight:800;color:var(--em);padding:0 20px 16px;border-bottom:1px solid var(--border);margin-bottom:10px;letter-spacing:-.5px}
 .logo span{color:var(--txt2);font-weight:400;font-size:13px}
+.user-strip{padding:10px 20px;margin-bottom:6px;border-bottom:1px solid var(--border)}
+.user-email{font-size:11px;color:var(--txt3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.user-role{font-size:10px;color:var(--em);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
 .nav{display:block;color:var(--txt2);padding:9px 20px;font-size:13px;cursor:pointer;border:none;background:none;width:100%;text-align:left;font-family:inherit;border-left:2px solid transparent;transition:all .15s}
 .nav:hover{color:var(--txt);background:rgba(16,185,129,.06)}
 .nav.active{color:var(--em);background:rgba(16,185,129,.1);border-left-color:var(--em)}
@@ -33,20 +67,8 @@ tr:hover td{background:rgba(16,185,129,.02)}
 .b-free{background:#2a2a1a;color:#f59e0b}.b-starter{background:#1a2a3a;color:#60a5fa}
 .b-pro{background:#1a3a2a;color:#34d399}.b-network{background:#1a1a3a;color:#a78bfa}
 .b-active{background:#1a3a2a;color:#34d399}.b-suspended{background:#2a1a1a;color:#f87171}.b-trial{background:#2a2a1a;color:#f59e0b}
-.btn{padding:7px 14px;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
-.btn-p{background:var(--em);color:#fff}.btn-p:hover{background:var(--em2)}
-.btn-ghost{background:var(--card);color:var(--txt2);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--em);color:var(--em)}
-.btn-danger{background:none;color:var(--red);border:1px solid var(--border)}.btn-danger:hover{border-color:var(--red)}
-.btn-sm{padding:5px 10px;font-size:12px}
-.btn:disabled{opacity:.5;cursor:not-allowed}
-label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
-input,select,textarea{font-family:inherit;font-size:13px;background:var(--bg);border:1px solid var(--border);color:var(--txt);border-radius:var(--radius);padding:8px 12px;width:100%;outline:none;transition:border-color .2s}
-input:focus,select:focus,textarea:focus{border-color:var(--em)}
-.form-row{margin-bottom:12px}
 .form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.msg{padding:10px 14px;border-radius:var(--radius);font-size:13px;margin-bottom:12px;display:none}
 .msg-ok{background:#1a3a2a;border:1px solid #2a5a3a;color:#34d399}
-.msg-err{background:#2a1a1a;border:1px solid #5a2a2a;color:var(--red)}
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:500;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
 .modal-overlay.open{display:flex}
 .modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radiuslg);padding:24px;width:100%;max-width:560px;margin:auto}
@@ -67,8 +89,31 @@ input:focus,select:focus,textarea:focus{border-color:var(--em)}
 </head>
 <body>
 
+<!-- ═══ AUTH SCREEN ═══ -->
+<div id="auth-screen">
+  <div class="auth-logo">Green<span>CRM</span></div>
+  <div class="auth-sub">Super Admin — restricted access</div>
+  <a href="index.html" class="auth-back">← Back to home</a>
+  <div class="auth-card">
+    <h2>Admin sign in</h2>
+    <p>This area is restricted to GreenCRM staff only.</p>
+    <div class="msg msg-err" id="si-err"></div>
+    <div class="form-row"><label>Email</label><input type="email" id="si-email" placeholder="admin@greencrm.co.uk" autocomplete="email"/></div>
+    <div class="form-row"><label>Password</label><input type="password" id="si-pass" placeholder="••••••••"/></div>
+    <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" id="si-btn" onclick="doSignIn()">Sign in to Admin</button>
+    <div class="hint"><a href="index.html">← Back to home</a></div>
+  </div>
+</div>
+
+<!-- ═══ APP SCREEN ═══ -->
+<div id="app-screen">
+<div class="app-wrap">
 <aside class="sidebar">
   <div class="logo">GreenCRM <span>Admin</span></div>
+  <div class="user-strip">
+    <div class="user-email" id="user-email">Loading…</div>
+    <div class="user-role">Super Admin</div>
+  </div>
   <button class="nav active" onclick="showPage('dashboard')">📊 Dashboard</button>
   <button class="nav" onclick="showPage('organisations')">🏢 Organisations</button>
   <button class="nav" onclick="showPage('subscriptions')">💳 Subscriptions</button>
@@ -76,6 +121,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--em)}
   <div class="sidebar-bottom">
     <button class="btn btn-ghost btn-sm" style="width:100%" onclick="window.location.href='app.html'">← Back to CRM</button>
     <a href="index.html" class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;text-decoration:none">🏠 Home</a>
+    <button class="btn btn-danger btn-sm" style="width:100%" onclick="doSignOut()">Sign out</button>
   </div>
 </aside>
 
@@ -103,7 +149,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--em)}
   </div>
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <div class="card-title" style="margin:0">Recent organisations</div>
+      <div class="card-title" style="margin:0">All organisations</div>
       <button class="btn btn-p btn-sm" onclick="openCreateOrg()">+ Create new org</button>
     </div>
     <table>
@@ -149,7 +195,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--em)}
 <!-- MODULES -->
 <div id="page-modules" class="page">
   <div class="page-title">Module Reference</div>
-  <div class="page-sub">Modules are controlled per-organisation from the View page</div>
+  <div class="page-sub">Modules are controlled per-organisation from the Org page</div>
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
     <div class="card"><div class="card-title">👤 People</div><p style="font-size:13px;color:var(--txt2)">Participants, Volunteers, Staff, Contacts & Donors</p></div>
     <div class="card"><div class="card-title">📅 Delivery</div><p style="font-size:13px;color:var(--txt2)">Events, Feedback, Referrals, Partner Referrals, Circular Economy</p></div>
@@ -161,6 +207,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--em)}
 </div>
 
 </main>
+</div>
+</div>
 
 <!-- CREATE ORG MODAL -->
 <div class="modal-overlay" id="modal-create">
@@ -169,25 +217,25 @@ input:focus,select:focus,textarea:focus{border-color:var(--em)}
   <div class="msg msg-err" id="create-err"></div>
   <div class="msg msg-ok" id="create-ok"></div>
   <div class="form-grid-2">
-    <div class="form-row"><label>Organisation name *</label><input id="co-name" placeholder="e.g. Waltham Forest CVS"/></div>
-    <div class="form-row"><label>Sector</label><select id="co-sector">
+    <div style="margin-bottom:12px"><label>Organisation name *</label><input id="co-name" placeholder="e.g. Waltham Forest CVS"/></div>
+    <div style="margin-bottom:12px"><label>Sector</label><select id="co-sector">
       <option>Charity / VCSE</option><option>Social enterprise</option><option>Local authority</option>
       <option>NHS / healthcare</option><option>Education</option><option>Housing</option>
       <option>Justice / probation</option><option>Circular economy / repair</option><option>Other</option>
     </select></div>
   </div>
   <div class="form-grid-2">
-    <div class="form-row"><label>Plan</label><select id="co-plan">
+    <div style="margin-bottom:12px"><label>Plan</label><select id="co-plan">
       <option value="free">Free — £0/mo</option><option value="starter">Starter — £9/mo</option>
       <option value="pro">Pro — £29/mo</option><option value="network">Network — £79/mo</option>
     </select></div>
-    <div class="form-row"><label>Status</label><select id="co-status">
+    <div style="margin-bottom:12px"><label>Status</label><select id="co-status">
       <option value="active">Active</option><option value="trial">Trial</option><option value="suspended">Suspended</option>
     </select></div>
   </div>
-  <div class="form-row">
+  <div style="margin-bottom:8px">
     <label>Modules to enable</label>
-    <div class="mod-grid" id="co-modules">
+    <div class="mod-grid">
       <div class="mod-item on" id="cmod-item-participants"><span style="font-size:13px;color:var(--txt)">👤 Participants</span><input type="checkbox" id="cmod-participants" checked style="width:auto;cursor:pointer"/></div>
       <div class="mod-item on" id="cmod-item-volunteers"><span style="font-size:13px;color:var(--txt)">🤝 Volunteers</span><input type="checkbox" id="cmod-volunteers" checked style="width:auto;cursor:pointer"/></div>
       <div class="mod-item on" id="cmod-item-events"><span style="font-size:13px;color:var(--txt)">📅 Events & Feedback</span><input type="checkbox" id="cmod-events" checked style="width:auto;cursor:pointer"/></div>
@@ -195,7 +243,6 @@ input:focus,select:focus,textarea:focus{border-color:var(--em)}
       <div class="mod-item" id="cmod-item-circular"><span style="font-size:13px;color:var(--txt)">♻️ Circular Economy</span><input type="checkbox" id="cmod-circular" style="width:auto;cursor:pointer"/></div>
       <div class="mod-item" id="cmod-item-funders"><span style="font-size:13px;color:var(--txt)">💰 Funders & Reports</span><input type="checkbox" id="cmod-funders" style="width:auto;cursor:pointer"/></div>
     </div>
-    <div style="font-size:11px;color:var(--txt3);margin-top:6px">You can change these anytime from the org's View page</div>
   </div>
   <div class="modal-footer">
     <button class="btn btn-ghost" onclick="closeCreate()">Cancel</button>
@@ -210,19 +257,19 @@ input:focus,select:focus,textarea:focus{border-color:var(--em)}
   <div class="msg msg-err" id="edit-err"></div>
   <div class="msg msg-ok" id="edit-ok"></div>
   <div class="form-grid-2">
-    <div class="form-row"><label>Name</label><input id="eo-name"/></div>
-    <div class="form-row"><label>Sector</label><select id="eo-sector">
+    <div style="margin-bottom:12px"><label>Name</label><input id="eo-name"/></div>
+    <div style="margin-bottom:12px"><label>Sector</label><select id="eo-sector">
       <option>Charity / VCSE</option><option>Social enterprise</option><option>Local authority</option>
       <option>NHS / healthcare</option><option>Education</option><option>Housing</option>
       <option>Justice / probation</option><option>Circular economy / repair</option><option>Other</option>
     </select></div>
   </div>
   <div class="form-grid-2">
-    <div class="form-row"><label>Plan</label><select id="eo-plan">
+    <div style="margin-bottom:12px"><label>Plan</label><select id="eo-plan">
       <option value="free">Free — £0/mo</option><option value="starter">Starter — £9/mo</option>
       <option value="pro">Pro — £29/mo</option><option value="network">Network — £79/mo</option>
     </select></div>
-    <div class="form-row"><label>Status</label><select id="eo-status">
+    <div style="margin-bottom:12px"><label>Status</label><select id="eo-status">
       <option value="active">Active</option><option value="trial">Trial</option><option value="suspended">Suspended</option>
     </select></div>
   </div>
@@ -239,14 +286,67 @@ const SB_URL='https://nznfrxzgvcjhfsdaphyp.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw';
 const sb=window.supabase.createClient(SB_URL,SB_KEY);
 const PRICES={free:0,starter:9,pro:29,network:79};
+// List of emails allowed into super admin
+const ADMIN_EMAILS=['admin@greencrm.co.uk','hello@greencrm.co.uk'];
 const $=id=>document.getElementById(id);
-let allOrgs=[],editOrgId=null;
+let allOrgs=[],editOrgId=null,currentUser=null;
 
+// ── AUTH ──
+async function boot(){
+  const{data:{session}}=await sb.auth.getSession();
+  if(session){
+    const email=session.user.email;
+    if(!ADMIN_EMAILS.includes(email)){
+      // signed in but not an admin — show error on auth screen
+      showAuthErr('This account does not have super admin access.');
+      return;
+    }
+    currentUser=session.user;
+    showApp();
+  }
+  // else stay on auth screen
+}
+
+function showApp(){
+  $('auth-screen').style.display='none';
+  $('app-screen').classList.add('visible');
+  $('user-email').textContent=currentUser.email;
+  loadOrgs();
+}
+
+function showAuthErr(msg){
+  const e=$('si-err');e.textContent=msg;e.style.display='block';
+}
+
+async function doSignIn(){
+  const email=$('si-email').value.trim(),pass=$('si-pass').value;
+  $('si-err').style.display='none';
+  if(!email||!pass){showAuthErr('Please enter your email and password.');return;}
+  if(!ADMIN_EMAILS.includes(email)){showAuthErr('This account does not have super admin access.');return;}
+  const btn=$('si-btn');btn.textContent='Signing in…';btn.disabled=true;
+  const{data,error}=await sb.auth.signInWithPassword({email,password:pass});
+  btn.textContent='Sign in to Admin';btn.disabled=false;
+  if(error){showAuthErr(error.message);return;}
+  currentUser=data.user;
+  showApp();
+}
+
+async function doSignOut(){
+  await sb.auth.signOut();
+  window.location.href='index.html';
+}
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&$('auth-screen').style.display!=='none')doSignIn();
+});
+
+// ── MODULE CHECKBOX STYLING ──
 ['participants','volunteers','events','employers','circular','funders'].forEach(k=>{
   const cb=$('cmod-'+k);
   if(cb)cb.addEventListener('change',()=>{const item=$('cmod-item-'+k);if(item)item.classList.toggle('on',cb.checked);});
 });
 
+// ── NAV ──
 function showPage(p){
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.nav').forEach(b=>b.classList.remove('active'));
@@ -255,6 +355,7 @@ function showPage(p){
   if(p==='subscriptions')renderSubscriptions();
 }
 
+// ── LOAD ORGS ──
 async function loadOrgs(){
   const{data,error}=await sb.from('organisations').select('*').order('created_at',{ascending:false});
   if(error){$('dash-status').textContent='Error: '+error.message;return;}
@@ -264,30 +365,33 @@ async function loadOrgs(){
 
 function renderStats(){
   const paid=allOrgs.filter(o=>o.plan&&o.plan!=='free');
-  const free=allOrgs.filter(o=>!o.plan||o.plan==='free');
   const rev=allOrgs.reduce((s,o)=>s+(PRICES[o.plan]||0),0);
-  $('st-total').textContent=allOrgs.length;$('st-paid').textContent=paid.length;
-  $('st-free').textContent=free.length;$('st-rev').textContent='£'+rev;
+  $('st-total').textContent=allOrgs.length;
+  $('st-paid').textContent=paid.length;
+  $('st-free').textContent=allOrgs.length-paid.length;
+  $('st-rev').textContent='£'+rev;
   $('st-arr').textContent='£'+(rev*12).toLocaleString();
   $('st-active-orgs').textContent=allOrgs.filter(o=>o.status==='active'||!o.status).length;
 }
 
-function planBadge(plan){const cls={free:'b-free',starter:'b-starter',pro:'b-pro',network:'b-network'};return`<span class="badge ${cls[plan]||'b-free'}">${plan||'free'}</span>`;}
-function statusBadge(s){const cls={active:'b-active',suspended:'b-suspended',trial:'b-trial'};return`<span class="badge ${cls[s]||'b-active'}">${s||'active'}</span>`;}
+function planBadge(p){const c={free:'b-free',starter:'b-starter',pro:'b-pro',network:'b-network'};return`<span class="badge ${c[p]||'b-free'}">${p||'free'}</span>`;}
+function statusBadge(s){const c={active:'b-active',suspended:'b-suspended',trial:'b-trial'};return`<span class="badge ${c[s]||'b-active'}">${s||'active'}</span>`;}
 
 function renderOrgTable(orgs){
-  const tbody=orgs.length?orgs.map(o=>`<tr>
+  const rows=orgs.length?orgs.map(o=>`<tr>
     <td style="color:var(--txt);font-weight:500">${o.name||'Unnamed'}</td>
     <td style="font-size:12px;color:var(--txt2)">${o.sector||'—'}</td>
     <td>${planBadge(o.plan)}</td><td>${statusBadge(o.status)}</td>
     <td style="color:var(--em);font-weight:600">£${PRICES[o.plan]||0}/mo</td>
     <td><div style="display:flex;gap:5px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="window.location.href='org.html?id=${o.id}'">View</button>
       <button class="btn btn-ghost btn-sm" onclick="openEdit('${o.id}')">Edit</button>
       <button class="btn btn-p btn-sm" onclick="window.open('app.html?org_id=${o.id}','_blank')">Open CRM</button>
       <button class="btn btn-danger btn-sm" onclick="deleteOrg('${o.id}','${(o.name||'').replace(/'/g,'')}')">Del</button>
     </div></td>
   </tr>`).join(''):'<tr><td colspan="6" style="text-align:center;color:var(--txt3);padding:24px">No organisations yet.</td></tr>';
-  $('dash-org-table').innerHTML=tbody;$('org-table').innerHTML=tbody;
+  $('dash-org-table').innerHTML=rows;
+  $('org-table').innerHTML=rows;
 }
 
 function filterOrgs(){
@@ -297,6 +401,7 @@ function filterOrgs(){
   renderOrgTable(allOrgs.filter(o=>(!q||(o.name||'').toLowerCase().includes(q))&&(!fp||o.plan===fp)&&(!fs||(o.status||'active')===fs)));
 }
 
+// ── CREATE ORG ──
 function openCreateOrg(){
   $('co-name').value='';$('co-plan').value='free';$('co-status').value='active';
   ['create-err','create-ok'].forEach(id=>$(id).style.display='none');
@@ -304,7 +409,6 @@ function openCreateOrg(){
   $('modal-create').classList.add('open');
 }
 function closeCreate(){$('modal-create').classList.remove('open');}
-
 async function createOrg(){
   const name=$('co-name').value.trim();
   ['create-err','create-ok'].forEach(id=>$(id).style.display='none');
@@ -314,18 +418,18 @@ async function createOrg(){
   const{data,error}=await sb.from('organisations').insert([{name,sector:$('co-sector').value,plan:$('co-plan').value,status:$('co-status').value,modules,settings:{}}]).select().single();
   btn.textContent='Create organisation';btn.disabled=false;
   if(error){$('create-err').textContent='Error: '+error.message;$('create-err').style.display='block';return;}
-  $('create-ok').innerHTML='✓ <strong>'+name+'</strong> created! <a href="app.html?org_id='+data.id+'" target="_blank" style="color:var(--em)">Open CRM →</a>';
+  $('create-ok').innerHTML='✓ <strong>'+name+'</strong> created! <a href="org.html?id='+data.id+'" style="color:var(--em)">View settings →</a> &nbsp;<a href="app.html?org_id='+data.id+'" target="_blank" style="color:var(--em)">Open CRM →</a>';
   $('create-ok').style.display='block';
   await loadOrgs();setTimeout(closeCreate,4000);
 }
 
+// ── EDIT ORG ──
 function openEdit(id){
   const o=allOrgs.find(x=>x.id===id);if(!o)return;
   editOrgId=id;$('edit-title').textContent='Edit — '+o.name;
   $('eo-name').value=o.name||'';$('eo-sector').value=o.sector||'Charity / VCSE';
   $('eo-plan').value=o.plan||'free';$('eo-status').value=o.status||'active';
   ['edit-err','edit-ok'].forEach(id=>$(id).style.display='none');
-  $('edit-btn').textContent='Save changes';$('edit-btn').disabled=false;
   $('modal-edit').classList.add('open');
 }
 function closeEdit(){$('modal-edit').classList.remove('open');editOrgId=null;}
@@ -339,26 +443,28 @@ async function saveEdit(){
   await loadOrgs();setTimeout(closeEdit,1500);
 }
 
+// ── DELETE ORG ──
 async function deleteOrg(id,name){
-  if(!confirm('DELETE "'+name+'"?\n\nThis will permanently delete the organisation and ALL their data. This cannot be undone.'))return;
+  if(!confirm('DELETE "'+name+'"?\n\nThis will permanently delete the organisation and ALL their data.'))return;
   if(!confirm('Are you absolutely sure?'))return;
   const{error}=await sb.from('organisations').delete().eq('id',id);
   if(error){alert('Delete failed: '+error.message);return;}
   await loadOrgs();
 }
 
+// ── SUBSCRIPTIONS ──
 function renderSubscriptions(){
   const counts={free:0,starter:0,pro:0,network:0};
   allOrgs.forEach(o=>counts[o.plan||'free']=(counts[o.plan||'free']||0)+1);
   ['free','starter','pro','network'].forEach(p=>{const el=$('plan-count-'+p);if(el)el.textContent=counts[p]||0;});
   const breakdown=[{plan:'Network',count:counts.network,price:79,color:'#a78bfa'},{plan:'Pro',count:counts.pro,price:29,color:'#10b981'},{plan:'Starter',count:counts.starter,price:9,color:'#60a5fa'},{plan:'Free',count:counts.free,price:0,color:'#6a8f76'}];
   $('revenue-breakdown').innerHTML=breakdown.map(b=>{
-    const rev=b.count*b.price;const max=Math.max(...breakdown.map(x=>x.count*x.price))||1;const pct=Math.round(rev/max*100);
+    const rev=b.count*b.price,max=Math.max(...breakdown.map(x=>x.count*x.price))||1,pct=Math.round(rev/max*100);
     return`<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:13px;color:var(--txt2);margin-bottom:4px"><span>${b.plan} (${b.count} orgs × £${b.price})</span><span style="font-weight:600;color:var(--txt)">£${rev}/mo</span></div><div style="height:8px;background:var(--border);border-radius:4px"><div style="height:100%;border-radius:4px;background:${b.color};width:${pct}%"></div></div></div>`;
   }).join('');
 }
 
-loadOrgs();
+boot();
 </script>
 </body>
 </html>
