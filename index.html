@@ -179,7 +179,7 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:48px
     <a href="#portals">Portals</a>
     <a href="#pricing">Pricing</a>
     <a href="#proof">Testimonials</a>
-    <a href="partner-portal.html">Partner Portal</a>
+    <a href="partner.html">Partner Portal</a>
   </div>
   <div class="nav-cta">
     <a href="login.html" class="btn btn-ghost">Sign in</a>
@@ -305,19 +305,19 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:48px
         <div class="portal-desc">For advisors, managers, and directors. Full participant management, pipeline, events, and funder reporting.</div>
         <div class="portal-link">Sign in →</div>
       </div>
-      <div class="portal-card fade-up" onclick="window.location.href='partner-portal.html'">
+      <div class="portal-card fade-up" onclick="window.location.href='partner.html'">
         <div class="portal-icon">🤝</div>
         <div class="portal-title">Partner Portal</div>
         <div class="portal-desc">For probation officers, housing workers, and Jobcentre Plus staff. Submit referrals and track progress securely.</div>
         <div class="portal-link">Partner login →</div>
       </div>
-      <div class="portal-card fade-up" onclick="window.location.href='team.html'">
+      <div class="portal-card fade-up" onclick="window.location.href='app.html'">
         <div class="portal-icon">👥</div>
         <div class="portal-title">Team Management</div>
-        <div class="portal-desc">Invite advisors, set roles and permissions, track team activity, and send invite links via WhatsApp or email.</div>
-        <div class="portal-link">Manage team →</div>
+        <div class="portal-desc">Invite advisors, set roles and permissions, and track team activity — inside the main CRM.</div>
+        <div class="portal-link">Open app →</div>
       </div>
-      <div class="portal-card fade-up" onclick="window.location.href='admin.html'">
+      <div class="portal-card fade-up" onclick="window.location.href='super-admin.html'">
         <div class="portal-icon">⚡</div>
         <div class="portal-title">Super Admin</div>
         <div class="portal-desc">For GreenCRM staff. Create organisations, manage subscriptions, toggle modules, and track revenue.</div>
@@ -463,7 +463,7 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:48px
       <a href="#features">Features</a>
       <a href="#pricing">Pricing</a>
       <a href="login.html">Sign in / Register</a>
-      <a href="partner-portal.html">Partner Portal</a>
+      <a href="partner.html">Partner Portal</a>
       <a href="team.html">Team Management</a>
     </div>
     <div class="footer-col">
@@ -480,7 +480,7 @@ footer{background:var(--surface);border-top:1px solid var(--border);padding:48px
       <a href="#">Privacy policy</a>
       <a href="#">Terms of service</a>
       <a href="#">GDPR & data</a>
-      <a href="admin.html">Super Admin</a>
+      <a href="super-admin.html">Super Admin</a>
     </div>
   </div>
   <div class="footer-bottom">
@@ -600,7 +600,7 @@ function userMsg(text){
 }
 
 function handleSug(text){
-  const routes={'Start free trial →':'login.html','Start free trial':'login.html','Start Pro trial →':'login.html','Open Partner Portal':'partner-portal.html','Open the Partner Portal':'partner-portal.html','Email us →':'mailto:hello@greencrm.co.uk','Watch demo video':'__video'};
+  const routes={'Start free trial →':'login.html','Start free trial':'login.html','Start Pro trial →':'login.html','Open Partner Portal':'partner.html','Open the Partner Portal':'partner.html','Email us →':'mailto:hello@greencrm.co.uk','Watch demo video':'__video'};
   if(routes[text]){
     if(routes[text]==='__video'){openVideoModal();return;}
     if(routes[text].startsWith('mailto')){window.location.href=routes[text];return;}
