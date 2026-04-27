@@ -863,7 +863,7 @@ function go(page){
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const el=$('page-'+page);if(!el)return;
   el.classList.add('active');
-  const renders={dashboard:renderDashboard,rag:renderRAG,impact:renderImpact,participants:renderParticipants,contacts:renderContacts,volunteers:renderVolunteers,employers:renderEmployers,pipeline:renderPipeline,referrals:renderReferrals,partnerrefs:renderPartnerRefs,events:renderEvents,feedback:renderFeedback,circular:renderCircular,outcomes:renderOutcomes,funding:renderFunding,evidence:renderEvidence,safeguarding:renderSafeguarding,settings:renderSettings,reports:()=>{}};
+  const renders={dashboard:renderDashboard,rag:renderRAG,impact:renderImpact,participants:renderParticipants,contacts:renderContacts,volunteers:renderVolunteers,employers:renderEmployers,pipeline:renderPipeline,referrals:renderReferrals,partnerrefs:renderPartnerRefs,events:renderEvents,feedback:renderFeedback,circular:renderCircular,outcomes:renderOutcomes,funding:renderFunding,evidence:renderEvidence,safeguarding:renderSafeguarding,settings:renderSettings,reports:()=>{},social:()=>{},bd:()=>{}};
   renders[page]?.();
   document.querySelectorAll('.nav-btn').forEach(b=>{if(b.getAttribute('onclick')?.includes("'"+page+"'"))b.classList.add('active');});
 }
