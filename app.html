@@ -551,7 +551,9 @@ async function callClaude(systemPrompt,userPrompt,maxTokens=1000){
     })
   });
   const data=await res.json();
-  return data.content?.[0]?.text||'No response received.';
+  if(data.error)throw new Error(data.error);
+  if(!data.content?.[0]?.text)throw new Error('Empty response — full data: '+JSON.stringify(data).slice(0,200));
+  return data.content[0].text;
 }
 
 function aiThinking(el){
