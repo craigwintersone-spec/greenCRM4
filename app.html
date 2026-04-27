@@ -178,8 +178,6 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <button class="nav-btn" onclick="go('funding')"><span class="icon">💰</span><span>Funding</span></button>
   <button class="nav-btn" onclick="go('reports')"><span class="icon">📄</span><span>Funder Reports</span></button>
   <button class="nav-btn" onclick="go('evidence')"><span class="icon">🗂️</span><span>Evidence Hub</span></button>
-  <button class="nav-btn" onclick="go('social')"><span class="icon">📣</span><span>Social Media</span><span class="ai-dot"></span></button>
-<button class="nav-btn" onclick="go('bd')"><span class="icon">💼</span><span>BD Manager</span><span class="ai-dot"></span></button>
   <div class="nav-section">Settings</div>
   <button class="nav-btn" onclick="go('safeguarding')"><span class="icon">🔐</span><span>Safeguarding</span></button>
   <button class="nav-btn" onclick="go('settings')"><span class="icon">⚙️</span><span>Settings</span></button>
@@ -631,7 +629,7 @@ function checkAIAccess(){
   }
 }
 
-async function callClaude(systemPrompt,userPrompt,maxTokens=1000){
+async function callClaude(systemPrompt,userPrompt,maxTokens=1000,useWebSearch=false){
   checkAIAccess();
   try{
     const res=await fetch('/api/claude',{
@@ -641,18 +639,21 @@ async function callClaude(systemPrompt,userPrompt,maxTokens=1000){
         model:CLAUDE_MODEL,
         max_tokens:maxTokens,
         system:systemPrompt,
-        messages:[{role:'user',content:userPrompt}]
+        messages:[{role:'user',content:userPrompt}],
+        useWebSearch
       })
     });
-    if(res.status===404)throw new Error('API route /api/claude not found. Check api/claude.js is deployed on Vercel.');
+    if(res.status===404)throw new Error('API route /api/claude not found.');
     const data=await res.json();
     console.log('Claude response:',data);
     if(data.type==='error'){
       const msg=data.error?.message||data.error?.type||JSON.stringify(data.error);
       throw new Error(msg);
     }
-    if(!data.content?.[0]?.text)throw new Error('Unexpected response: '+JSON.stringify(data).slice(0,300));
-    return data.content[0].text;
+    // Extract text from response — web search returns mixed content blocks
+    const text=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('\n')||'';
+    if(!text)throw new Error('Unexpected response: '+JSON.stringify(data).slice(0,300));
+    return text;
   }catch(e){
     console.error('Claude error:',e.message);
     throw e;
@@ -1419,13 +1420,93 @@ async function runBDResearch(){
   const wrap=document.getElementById('bd-opps-wrap');
   const res=document.getElementById('bd-opps-result');
   wrap.style.display='block';
-  res.innerHTML='<div class="ai-thinking"><div class="ai-thinking-dots"><span></span><span></span><span></span></div>Researching funding opportunities…</div>';
-  const sys=`You are a specialist funding and business development consultant for UK charities with 15 years experience in statutory commissioning and grant funding.\n\nIdentify the most relevant funding opportunities. For each use this format:\n**[Funder name]**\nWhat they fund: ...\nTypical value: ...\nDeadlines/cycles: ...\nWhy a strong fit: ...\nNext step: ...\n\nList 6-8 opportunities. Be specific and practical. Focus on real active UK funding streams.`;
-  const prompt=`Organisation: ${orgName}\nDelivery area: ${area}\nSize: ${size}\nDelivers: ${delivery.join(', ')||'not specified'}\nTrack record: ${P.filter(p=>p.outcomes.includes('Employment')).length} employment outcomes, ${P.filter(p=>p.stage!=='Closed').length} active participants\nSpecific interest: ${specific||'open to suggestions'}`;
+
+  // ── STEP 1: Researcher Agent (live web search) ──
+  res.innerHTML=`<div class="ai-thinking"><div class="ai-thinking-dots"><span></span><span></span><span></span></div><span>🔍 Researcher Agent searching for live contracts…</span></div>`;
+
+  const today=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
+
+  const researcherSys=`You are a specialist UK charity funding researcher. Today's date is ${today}.
+
+Your job is to find CURRENTLY OPEN funding contracts, grants, and commissioning opportunities for UK charities.
+
+CRITICAL RULES:
+- Only list opportunities that are currently open or opening within 3 months
+- Include the actual deadline or procurement timeline
+- Search for real current tenders on: Contracts Finder, Find a Tender, local authority portals, funder websites
+- If you cannot verify a deadline is current, say so clearly
+- Never list opportunities that closed before today
+- Include the source URL where possible
+
+Format each opportunity as:
+**[Funder / Programme name]**
+Status: Open / Opening soon / Rolling
+Deadline: [exact date or 'rolling']
+Value: [contract value or grant size]
+For: [who is eligible]
+Fit score: [High/Medium] — [one sentence why]
+Source: [URL or where to find it]
+Next step: [specific action]`;
+
+  const researchPrompt=`Find currently open funding opportunities for this UK charity:
+
+Organisation: ${orgName}
+Delivery area: ${area}
+Size: ${size} turnover
+What we deliver: ${delivery.join(', ')||'employment support'}
+Track record: ${P.filter(p=>p.outcomes.includes('Employment')).length} employment outcomes, ${P.filter(p=>p.stage!=='Closed').length} active participants
+Specific interest: ${specific||'any relevant opportunities'}
+Today's date: ${today}
+
+Search for live contracts and grants right now. Prioritise MoJ, DWP, GLA, NHS, local authority commissioning and major grant funders. List 5-7 verified current opportunities.`;
+
   try{
-    const r=await callClaude(sys,prompt,1200);
-    res.innerHTML=`<div class="ai-response">${r.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n\n/g,'<br/><br/>').replace(/\n/g,'<br/>')}</div>`;
-  }catch(e){if(e.message==='AI_PLAN_GATE')return;res.innerHTML=`<div style="color:var(--red);font-size:13px">Error: ${e.message}</div>`;}
+    // Run researcher with web search
+    const rawOpps=await callClaude(researcherSys,researchPrompt,1500,true);
+
+    // ── STEP 2: Quality Supervisor Agent ──
+    res.innerHTML=`<div class="ai-thinking"><div class="ai-thinking-dots"><span></span><span></span><span></span></div><span>✓ Supervisor Agent checking quality…</span></div>`;
+
+    const supervisorSys=`You are a Quality Supervisor Agent for a UK charity. Today's date is ${today}.
+
+You have received a list of funding opportunities from a Researcher Agent. Your job is to:
+1. Check each opportunity appears genuinely current (deadline hasn't passed)
+2. Remove or flag anything that looks outdated or unverified
+3. Add a confidence rating (High/Medium/Low) to each
+4. Add a "Human review needed" flag to any Low confidence items
+5. Reformat the final list clearly
+
+Output format for each opportunity:
+**[Funder name]** · Confidence: [High/Medium/Low]
+[Keep the original details but cleaned up]
+[Add: ⚠ HUMAN REVIEW NEEDED if Low confidence]
+
+End with a summary: "X opportunities verified · Y flagged for review"`;
+
+    const supervisorPrompt=`Review and quality-check these funding opportunities for ${orgName}:
+
+${rawOpps}
+
+Today is ${today}. Check deadlines, flag anything uncertain, add confidence ratings.`;
+
+    const verified=await callClaude(supervisorSys,supervisorPrompt,1500);
+
+    // ── DISPLAY RESULT ──
+    const hasFlags=verified.toLowerCase().includes('human review needed');
+    res.innerHTML=`
+      ${hasFlags?`<div class="alert alert-warn" style="margin-bottom:12px">⚠ Some opportunities flagged for human verification — check before applying</div>`:''}
+      <div style="font-size:11px;color:var(--purple);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;gap:6px">
+        <span>✦</span> Live search · Quality checked · ${today}
+      </div>
+      <div class="ai-response">${verified.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/⚠/g,'<span style="color:var(--amber)">⚠</span>').replace(/\n\n/g,'<br/><br/>').replace(/\n/g,'<br/>')}</div>
+      <div style="margin-top:14px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--txt3)">
+        🔍 Found using live web search · Always verify deadlines before applying · Data accurate as of ${today}
+      </div>`;
+
+  }catch(e){
+    if(e.message==='AI_PLAN_GATE')return;
+    res.innerHTML=`<div style="color:var(--red);font-size:13px">Error: ${e.message}</div>`;
+  }
 }
 
 async function runEOIGenerator(){
@@ -1443,16 +1524,102 @@ async function runEOIGenerator(){
   const out=document.getElementById('eoi-output');
   const res=document.getElementById('eoi-result');
   out.style.display='block';
-  res.innerHTML='<div class="ai-thinking"><div class="ai-thinking-dots"><span></span><span></span><span></span></div>Writing your EOI…</div>';
-  const sys=`You are an expert bid writer for UK charities with a proven track record winning statutory contracts and grants.\n\nWrite a compelling Expression of Interest that:\n- Opens with a strong positioning statement\n- Demonstrates clear alignment with the funder's objectives\n- Uses specific evidence and outcomes data provided\n- Is structured with sections: Organisation overview, Track record & evidence, Our approach, Why us\n- Aims for 500-700 words\n\nUse **bold** for key stats and section headings. Write in first person plural.`;
-  const prompt=`Funder: ${funder}\nBrief: ${brief}\nUSPs: ${usps||'use data below'}\n\nOUR DATA:\nOrg: ${orgName} (${currentOrg?.sector||'charity'})\nActive participants: ${P.filter(p=>p.stage!=='Closed').length}\nEmployment outcomes: ${jobs}\nTraining outcomes: ${training}\nEvents: ${E.length} reaching ${totalEvP} people\nVolunteers: ${V.filter(v=>v.status==='Active').length}\nConf score after: ${avgCA||'4.5'}/5\nBarriers addressed: ${topBarriers.join(', ')}\n${FB.filter(f=>f.quote)[0]?'Quote: "'+FB.filter(f=>f.quote)[0].quote+'"':''}`;
+
+  // ── STEP 1: Verify funder with web search ──
+  res.innerHTML=`<div class="ai-thinking"><div class="ai-thinking-dots"><span></span><span></span><span></span></div><span>🔍 Verifying funder and brief…</span></div>`;
+
+  const today=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
+
+  // Search for current funder info
+  const funderContext=await callClaude(
+    `You are a UK charity funding researcher. Today is ${today}. Search for current information about this funder/contract: "${funder}". Find: their current priorities, language they use, what they value, any specific requirements. Return a concise briefing in 150 words. If you cannot find current info, say so.`,
+    `Research current funder priorities for: ${funder}\nBrief context: ${brief.slice(0,300)}`,
+    400,
+    true // web search
+  ).catch(()=>'Could not retrieve live funder data — using brief only.');
+
+  // ── STEP 2: EOI Writer Agent ──
+  res.innerHTML=`<div class="ai-thinking"><div class="ai-thinking-dots"><span></span><span></span><span></span></div><span>✍️ Writer Agent drafting EOI…</span></div>`;
+
+  const writerSys=`You are an expert bid writer for UK charities with a proven track record winning statutory contracts and grants.
+
+Write a compelling Expression of Interest that:
+- Opens with a strong positioning statement that mirrors the funder's language
+- Demonstrates clear alignment with their stated priorities
+- Uses specific evidence and real outcomes data
+- Is structured: Executive summary, Organisation overview, Track record & evidence, Our approach, Why us, What we need from you
+- Aims for 600-800 words
+- Uses the funder's own terminology from the brief
+
+Use **bold** for key stats and section headings. Write in first person plural. Do NOT make up statistics — only use data provided.`;
+
+  const writerPrompt=`FUNDER: ${funder}
+THEIR BRIEF: ${brief}
+CURRENT FUNDER PRIORITIES (from live research): ${funderContext}
+OUR USPs: ${usps||'see data below'}
+
+OUR REAL DATA:
+Organisation: ${orgName} (${currentOrg?.sector||'charity'})
+Active participants: ${P.filter(p=>p.stage!=='Closed').length}
+Employment outcomes: ${jobs}
+Training outcomes: ${training}
+Events delivered: ${E.length} reaching ${totalEvP} people
+Volunteers: ${V.filter(v=>v.status==='Active').length}
+Confidence improvement: to ${avgCA||'4.5'}/5 after sessions
+Barriers we address: ${topBarriers.join(', ')}
+${FB.filter(f=>f.quote)[0]?'Participant voice: "'+FB.filter(f=>f.quote)[0].quote+'"':''}
+
+Write the EOI now.`;
+
   try{
-    const r=await callClaude(sys,prompt,1200);
-    res.innerHTML=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;font-size:14px;color:var(--txt2);line-height:1.9">${r.replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--txt)">$1</strong>').replace(/\n\n/g,'</p><p style="margin-top:12px">').replace(/\n/g,'<br/>')}</div>`;
-    _savedEOIs.unshift({funder,text:r,date:new Date().toLocaleDateString('en-GB')});
+    const draft=await callClaude(writerSys,writerPrompt,1500);
+
+    // ── STEP 3: Supervisor Agent reviews ──
+    res.innerHTML=`<div class="ai-thinking"><div class="ai-thinking-dots"><span></span><span></span><span></span></div><span>✓ Supervisor reviewing quality…</span></div>`;
+
+    const supervisorSys=`You are a Quality Supervisor for a UK charity bid writing team. Review this EOI draft and:
+1. Check it genuinely responds to the funder's brief
+2. Verify all statistics match the org data provided
+3. Check the tone matches the funder type (statutory vs trust vs lottery)
+4. Add a quality score at the top: ✅ Strong (80%+) / ⚠ Needs work (<80%)
+5. Add 2-3 specific improvement suggestions at the end
+6. Return the full EOI with your notes added
+
+Keep the EOI text intact — just add your review header and improvement notes.`;
+
+    const supervisorPrompt=`Review this EOI for ${funder}:
+
+ORIGINAL BRIEF: ${brief.slice(0,500)}
+
+EOI DRAFT:
+${draft}
+
+ORG DATA USED:
+- Participants: ${P.filter(p=>p.stage!=='Closed').length}
+- Employment outcomes: ${jobs}
+- Confidence: ${avgCA}/5
+
+Quality check it and return with your score and suggestions.`;
+
+    const reviewed=await callClaude(supervisorSys,supervisorPrompt,1800);
+
+    const today2=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
+    res.innerHTML=`
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;font-size:14px;color:var(--txt2);line-height:1.9">
+        <div style="font-size:11px;color:var(--purple);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;display:flex;gap:8px;align-items:center">
+          <span>✦</span> Written by EOI Agent · Quality checked by Supervisor · Funder verified via live search · ${today2}
+        </div>
+        ${reviewed.replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--txt)">$1</strong>').replace(/✅/g,'<span style="color:var(--em)">✅</span>').replace(/⚠/g,'<span style="color:var(--amber)">⚠</span>').replace(/\n\n/g,'</p><p style="margin-top:12px">').replace(/\n/g,'<br/>')}
+      </div>`;
+
+    _savedEOIs.unshift({funder,text:reviewed,date:today2});
     document.getElementById('bd-saved-wrap').style.display='block';
     document.getElementById('bd-saved-list').innerHTML=_savedEOIs.map((e,i)=>`<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:12px;font-weight:600;color:var(--txt)">${e.funder}</span><span style="font-size:11px;color:var(--txt3)">${e.date}</span></div><button class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText(_savedEOIs[${i}].text);this.textContent='✓ Copied!';setTimeout(()=>this.textContent='📋 Copy',2000)">📋 Copy</button></div>`).join('');
-  }catch(e){if(e.message==='AI_PLAN_GATE')return;res.innerHTML=`<div style="color:var(--red);font-size:13px">Error: ${e.message}</div>`;}
+
+  }catch(e){
+    if(e.message==='AI_PLAN_GATE')return;
+    res.innerHTML=`<div style="color:var(--red);font-size:13px">Error: ${e.message}</div>`;
+  }
 }
 
 function copyEOI(){
