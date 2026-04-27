@@ -41,8 +41,8 @@ input:focus,select:focus{border-color:var(--em)}
 
 <div class="card">
   <div class="tabs">
-    <button class="tab active" onclick="showTab('signin')">Sign in</button>
-    <button class="tab" id="signup-tab" onclick="showTab('signup')">Create account</button>
+    <button class="tab active" id="tab-signin" onclick="showTab('signin')">Sign in</button>
+    <button class="tab" id="tab-signup" onclick="showTab('signup')">Create account</button>
   </div>
 
   <!-- SIGN IN -->
@@ -102,15 +102,36 @@ let inviteData=null;
 const params=new URLSearchParams(window.location.search);
 const inviteToken=params.get('invite');
 
+// ── REDIRECT ──────────────────────────────────────────────────
+// Always redirect with org_id in URL so app.html can find the org
+async function redirectAfterAuth(userId){
+  const{data:profile}=await sb.from('profiles').select('org_id,role').eq('id',userId).single();
+  if(!profile?.org_id){
+    showMsg('si-err','Account found but no organisation linked. Contact support.');
+    return;
+  }
+  window.location.href='app.html?org_id='+profile.org_id;
+}
+
+// ── INIT ──────────────────────────────────────────────────────
 async function init(){
+  // If already logged in, redirect straight to app
   const{data:{session}}=await sb.auth.getSession();
-  if(session)redirectByRole(session.user);
+  if(session){
+    redirectAfterAuth(session.user.id);
+    return;
+  }
+
+  // Handle invite token
   if(inviteToken){
-    const{data:inv}=await sb.from('invites').select('*,organisations(name)').eq('token',inviteToken).eq('accepted',false).single();
+    const{data:inv}=await sb.from('invites')
+      .select('*,organisations(name)')
+      .eq('token',inviteToken)
+      .eq('accepted',false)
+      .single();
     if(inv){
       inviteData=inv;
       showTab('signup');
-      document.getElementById('signup-tab').click();
       document.getElementById('org-fields').style.display='none';
       document.getElementById('su-email').value=inv.email;
       document.getElementById('su-email').readOnly=true;
@@ -118,45 +139,39 @@ async function init(){
       document.getElementById('invite-info').style.display='block';
       document.getElementById('invite-info').innerHTML=`You've been invited to join <strong>${inv.organisations?.name||'an organisation'}</strong> as <strong style="color:${roleColors[inv.role]||'var(--em)'}">${inv.role}</strong>. Fill in your details to accept.`;
     }else{
+      showTab('signup');
       document.getElementById('invite-info').style.display='block';
-      document.getElementById('invite-info').innerHTML='This invite link has expired or already been used.';
+      document.getElementById('invite-info').innerHTML='⚠ This invite link has expired or already been used.';
       document.getElementById('su-btn').disabled=true;
     }
   }
+
+  // Handle password reset redirect from email
+  const hash=new URLSearchParams(window.location.hash.replace('#',''));
+  if(hash.get('type')==='recovery'){
+    showForgot();
+    document.getElementById('pane-forgot').innerHTML=`
+      <div class="msg msg-ok" id="pw-ok"></div>
+      <div class="msg msg-err" id="pw-err"></div>
+      <p style="font-size:13px;color:var(--txt2);margin-bottom:14px">Enter your new password.</p>
+      <div class="form-row"><label>New password</label><input type="password" id="new-pass" placeholder="Min 8 characters"/></div>
+      <button class="btn" onclick="doUpdatePassword()">Set new password</button>`;
+  }
 }
 
-async function redirectByRole(user){
-  const{data:profile}=await sb.from('profiles').select('role').eq('id',user.id).single();
-  const role=profile?.role||'advisor';
-  // read-only goes to index since reports.html doesn't exist yet
-  if(role==='read-only')window.location.href='index.html';
-  else window.location.href='app.html';
-}
-
-function showTab(t){
-  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',['signin','signup'][i]===t));
-  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
-  document.getElementById('pane-'+t).classList.add('active');
-}
-function showForgot(){
-  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
-  document.getElementById('pane-forgot').classList.add('active');
-}
-function showMsg(id,msg){const e=document.getElementById(id);e.textContent=msg;e.style.display='block';}
-function hideMsg(...ids){ids.forEach(id=>document.getElementById(id).style.display='none');}
-function setLoad(id,on,lbl){const b=document.getElementById(id);b.disabled=on;b.textContent=on?'Please wait…':lbl;}
-
+// ── SIGN IN ───────────────────────────────────────────────────
 async function doSignIn(){
-  const email=document.getElementById('si-email').value.trim(),pass=document.getElementById('si-pass').value;
+  const email=document.getElementById('si-email').value.trim();
+  const pass=document.getElementById('si-pass').value;
   hideMsg('si-err');
   if(!email||!pass){showMsg('si-err','Please enter your email and password.');return;}
   setLoad('si-btn',true,'Sign in');
   const{data,error}=await sb.auth.signInWithPassword({email,password:pass});
   if(error){setLoad('si-btn',false,'Sign in');showMsg('si-err',error.message);return;}
-  redirectByRole(data.user);
+  await redirectAfterAuth(data.user.id);
 }
 
+// ── SIGN UP ───────────────────────────────────────────────────
 async function doSignUp(){
   const name=document.getElementById('su-name').value.trim();
   const email=document.getElementById('su-email').value.trim();
@@ -168,34 +183,100 @@ async function doSignUp(){
   if(!inviteData&&!org){showMsg('su-err','Please enter your organisation name.');return;}
   if(pass.length<8){showMsg('su-err','Password must be at least 8 characters.');return;}
   setLoad('su-btn',true,'Create account');
+
+  // 1. Create auth account
   const{data,error}=await sb.auth.signUp({email,password:pass,options:{data:{full_name:name}}});
   if(error){setLoad('su-btn',false,'Create account');showMsg('su-err',error.message);return;}
   const uid=data?.user?.id;
-  if(!uid){setLoad('su-btn',false,'Create account');showMsg('su-err','Signup failed. Please try again.');return;}
+  if(!uid){setLoad('su-btn',false,'Create account');showMsg('su-err','Signup failed — please try again.');return;}
+
+  let orgId;
+
   if(inviteData){
-    await sb.from('profiles').insert({id:uid,full_name:name,email,org_id:inviteData.org_id,role:inviteData.role,status:'active'});
+    // Joining an existing org via invite
+    orgId=inviteData.org_id;
+    await sb.from('profiles').upsert({
+      id:uid,full_name:name,email,
+      org_id:orgId,role:inviteData.role,status:'active'
+    });
     await sb.from('invites').update({accepted:true}).eq('token',inviteToken);
+
   }else{
-    const{data:orgData}=await sb.from('organisations').insert({name:org,type:orgType,owner_id:uid,plan:'free'}).select().single();
-    const orgId=orgData?.id||uid;
-    await sb.from('profiles').insert({id:uid,full_name:name,email,org_id:orgId,role:'admin',status:'active'});
+    // Creating a brand new org
+    const{data:orgData,error:orgErr}=await sb.from('organisations').insert({
+      name:org,
+      sector:orgType,
+      owner_id:uid,
+      plan:'free',
+      status:'active',
+      modules:{participants:true,volunteers:true,events:true,employers:false,circular:false,funders:false}
+    }).select().single();
+
+    if(orgErr){
+      setLoad('su-btn',false,'Create account');
+      showMsg('su-err','Could not create organisation: '+orgErr.message);
+      return;
+    }
+
+    orgId=orgData.id;
+
+    await sb.from('profiles').upsert({
+      id:uid,full_name:name,email,
+      org_id:orgId,role:'admin',status:'active'
+    });
   }
-  setLoad('su-btn',false,'Create account');
+
   showMsg('su-ok','✓ Account created! Signing you in…');
+
+  // 2. Sign in immediately (no email confirmation required in most Supabase setups)
   setTimeout(async()=>{
-    const{error:e}=await sb.auth.signInWithPassword({email,password:pass});
-    if(!e)redirectByRole(data.user);
-  },1200);
+    const{data:signInData,error:signInErr}=await sb.auth.signInWithPassword({email,password:pass});
+    if(signInErr){
+      // Email confirmation might be required
+      showMsg('su-ok','✓ Account created! Check your email to confirm, then sign in.');
+      setLoad('su-btn',false,'Create account');
+      return;
+    }
+    window.location.href='app.html?org_id='+orgId;
+  },1000);
 }
 
+// ── PASSWORD RESET ────────────────────────────────────────────
 async function doReset(){
   const email=document.getElementById('fg-email').value.trim();
   hideMsg('fg-err','fg-ok');
   if(!email){showMsg('fg-err','Please enter your email.');return;}
-  const{error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin+'/login.html'});
+  const{error}=await sb.auth.resetPasswordForEmail(email,{
+    redirectTo:window.location.origin+'/login.html'
+  });
   if(error){showMsg('fg-err',error.message);return;}
   showMsg('fg-ok','Reset link sent! Check your inbox.');
 }
+
+async function doUpdatePassword(){
+  const pass=document.getElementById('new-pass').value;
+  if(pass.length<8){showMsg('pw-err','Password must be at least 8 characters.');return;}
+  const{error}=await sb.auth.updateUser({password:pass});
+  if(error){showMsg('pw-err',error.message);return;}
+  showMsg('pw-ok','✓ Password updated! Redirecting…');
+  setTimeout(()=>window.location.href='login.html',1500);
+}
+
+// ── HELPERS ───────────────────────────────────────────────────
+function showTab(t){
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tab-'+t)?.classList.add('active');
+  document.getElementById('pane-'+t).classList.add('active');
+}
+function showForgot(){
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
+  document.getElementById('pane-forgot').classList.add('active');
+}
+function showMsg(id,msg){const e=document.getElementById(id);if(!e)return;e.textContent=msg;e.style.display='block';}
+function hideMsg(...ids){ids.forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});}
+function setLoad(id,on,lbl){const b=document.getElementById(id);if(!b)return;b.disabled=on;b.textContent=on?'Please wait…':lbl;}
 
 document.addEventListener('keydown',e=>{
   if(e.key!=='Enter')return;
