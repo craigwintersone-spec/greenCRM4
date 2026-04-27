@@ -178,8 +178,6 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <button class="nav-btn" onclick="go('funding')"><span class="icon">💰</span><span>Funding</span></button>
   <button class="nav-btn" onclick="go('reports')"><span class="icon">📄</span><span>Funder Reports</span></button>
   <button class="nav-btn" onclick="go('evidence')"><span class="icon">🗂️</span><span>Evidence Hub</span></button>
-  <button class="nav-btn" onclick="go('social')"><span class="icon">📣</span><span>Social Media</span><span class="ai-dot"></span></button>
-<button class="nav-btn" onclick="go('bd')"><span class="icon">💼</span><span>BD Manager</span><span class="ai-dot"></span></button>
   <div class="nav-section">Settings</div>
   <button class="nav-btn" onclick="go('safeguarding')"><span class="icon">🔐</span><span>Safeguarding</span></button>
   <button class="nav-btn" onclick="go('settings')"><span class="icon">⚙️</span><span>Settings</span></button>
@@ -1428,70 +1426,44 @@ async function runBDResearch(){
 
   const today=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
 
-  const researcherSys=`You are a specialist UK charity funding researcher. Today's date is ${today}.
+  const researcherSys=`You are a specialist UK charity funding researcher AND quality checker. Today's date is ${today}.
 
-Your job is to find CURRENTLY OPEN funding contracts, grants, and commissioning opportunities for UK charities.
+STEP 1 — Find 5 currently open funding opportunities for this charity. Search live sources.
+STEP 2 — For each, self-check: is the deadline definitely in the future? Add a confidence rating.
 
 CRITICAL RULES:
-- Only list opportunities that are currently open or opening within 3 months
-- Include the actual deadline or procurement timeline
-- Search for real current tenders on: Contracts Finder, Find a Tender, local authority portals, funder websites
-- If you cannot verify a deadline is current, say so clearly
-- Never list opportunities that closed before today
-- Include the source URL where possible
+- Only list opportunities open or opening within 3 months of today
+- If deadline uncertain, mark as ⚠ VERIFY BEFORE APPLYING
+- Never list closed opportunities
 
-Format each opportunity as:
-**[Funder / Programme name]**
-Status: Open / Opening soon / Rolling
-Deadline: [exact date or 'rolling']
-Value: [contract value or grant size]
-For: [who is eligible]
-Fit score: [High/Medium] — [one sentence why]
-Source: [URL or where to find it]
-Next step: [specific action]`;
+Format each as:
+**[Funder name]** · Confidence: High/Medium/Low
+Status: Open/Opening soon/Rolling
+Deadline: [date or 'rolling' or '⚠ verify']
+Value: [amount]
+Fit: [one sentence]
+Next step: [specific action]
 
-  const researchPrompt=`Find currently open funding opportunities for this UK charity:
+End with: "X verified · Y need checking"`;
 
+  const researchPrompt=`Find live funding for:
 Organisation: ${orgName}
-Delivery area: ${area}
-Size: ${size} turnover
-What we deliver: ${delivery.join(', ')||'employment support'}
-Track record: ${P.filter(p=>p.outcomes.includes('Employment')).length} employment outcomes, ${P.filter(p=>p.stage!=='Closed').length} active participants
-Specific interest: ${specific||'any relevant opportunities'}
-Today's date: ${today}
-
-Search for live contracts and grants right now. Prioritise MoJ, DWP, GLA, NHS, local authority commissioning and major grant funders. List 5-7 verified current opportunities.`;
+Area: ${area} · Size: ${size}
+Delivers: ${delivery.join(', ')||'employment support'}
+Track record: ${P.filter(p=>p.outcomes.includes('Employment')).length} employment outcomes
+Interest: ${specific||'any relevant'}
+Today: ${today}`;
 
   try{
     // Run researcher with web search
-    const rawOpps=await callClaude(researcherSys,researchPrompt,1500,true);
+    const rawOpps=await callClaude(researcherSys,researchPrompt,800,true);
 
-    // ── STEP 2: Quality Supervisor Agent ──
-    res.innerHTML=`<div class="ai-thinking"><div class="ai-thinking-dots"><span></span><span></span><span></span></div><span>✓ Supervisor Agent checking quality…</span></div>`;
+    // ── STEP 2: Quality Supervisor (no web search needed) ──
+    res.innerHTML=`<div class="ai-thinking"><div class="ai-thinking-dots"><span></span><span></span><span></span></div><span>✓ Supervisor checking output…</span></div>`;
 
-    const supervisorSys=`You are a Quality Supervisor Agent for a UK charity. Today's date is ${today}.
+    const supervisorSys=`You are a Quality Supervisor. Today is ${today}. Review this funding list, remove anything clearly outdated, reformat cleanly, and add a one-line action plan at the end. Be concise.`;
 
-You have received a list of funding opportunities from a Researcher Agent. Your job is to:
-1. Check each opportunity appears genuinely current (deadline hasn't passed)
-2. Remove or flag anything that looks outdated or unverified
-3. Add a confidence rating (High/Medium/Low) to each
-4. Add a "Human review needed" flag to any Low confidence items
-5. Reformat the final list clearly
-
-Output format for each opportunity:
-**[Funder name]** · Confidence: [High/Medium/Low]
-[Keep the original details but cleaned up]
-[Add: ⚠ HUMAN REVIEW NEEDED if Low confidence]
-
-End with a summary: "X opportunities verified · Y flagged for review"`;
-
-    const supervisorPrompt=`Review and quality-check these funding opportunities for ${orgName}:
-
-${rawOpps}
-
-Today is ${today}. Check deadlines, flag anything uncertain, add confidence ratings.`;
-
-    const verified=await callClaude(supervisorSys,supervisorPrompt,1500);
+    const verified=await callClaude(supervisorSys,`Review and clean up:\n\n${rawOpps}`,600);
 
     // ── DISPLAY RESULT ──
     const hasFlags=verified.toLowerCase().includes('human review needed');
@@ -1574,36 +1546,16 @@ ${FB.filter(f=>f.quote)[0]?'Participant voice: "'+FB.filter(f=>f.quote)[0].quote
 Write the EOI now.`;
 
   try{
-    const draft=await callClaude(writerSys,writerPrompt,1500);
+    const draft=await callClaude(writerSys,writerPrompt,1000);
 
     // ── STEP 3: Supervisor Agent reviews ──
     res.innerHTML=`<div class="ai-thinking"><div class="ai-thinking-dots"><span></span><span></span><span></span></div><span>✓ Supervisor reviewing quality…</span></div>`;
 
-    const supervisorSys=`You are a Quality Supervisor for a UK charity bid writing team. Review this EOI draft and:
-1. Check it genuinely responds to the funder's brief
-2. Verify all statistics match the org data provided
-3. Check the tone matches the funder type (statutory vs trust vs lottery)
-4. Add a quality score at the top: ✅ Strong (80%+) / ⚠ Needs work (<80%)
-5. Add 2-3 specific improvement suggestions at the end
-6. Return the full EOI with your notes added
+    const supervisorSys=`You are a bid quality checker. Score this EOI: ✅ Strong or ⚠ Needs work. Give 2 specific improvement suggestions. Then return the full EOI text. Be concise.`;
 
-Keep the EOI text intact — just add your review header and improvement notes.`;
+    const supervisorPrompt=`Brief: ${brief.slice(0,300)}\n\nEOI:\n${draft}`;
 
-    const supervisorPrompt=`Review this EOI for ${funder}:
-
-ORIGINAL BRIEF: ${brief.slice(0,500)}
-
-EOI DRAFT:
-${draft}
-
-ORG DATA USED:
-- Participants: ${P.filter(p=>p.stage!=='Closed').length}
-- Employment outcomes: ${jobs}
-- Confidence: ${avgCA}/5
-
-Quality check it and return with your score and suggestions.`;
-
-    const reviewed=await callClaude(supervisorSys,supervisorPrompt,1800);
+    const reviewed=await callClaude(supervisorSys,supervisorPrompt,1200);
 
     const today2=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
     res.innerHTML=`
