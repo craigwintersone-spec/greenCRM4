@@ -604,7 +604,10 @@ Feedback responses: ${FB.length}`;
   try{
     const r=await callClaude(sys,prompt,300);
     el.innerHTML='<div class="mb-content">'+r.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n\n/g,'</div><div class="mb-section">').replace(/\n/g,'<br/>')+'</div>';
-  }catch(e){el.innerHTML='<div style="color:var(--red);font-size:13px">Could not connect to AI. Check your API key.</div>';}
+  }catch(e){
+    if(e.message==='AI_PLAN_GATE')return;
+    el.innerHTML='<div style="color:var(--red);font-size:13px">AI error: '+e.message+'</div>';
+  }
 }
 
 // ── AI INTAKE (participant) ──
