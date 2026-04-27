@@ -506,63 +506,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
 </div>
 
 <!-- SETTINGS -->
-  <!-- ══════════════════════════════════════
-     STEP 1: Add to sidebar under Settings section
-════════════════════════════════════════ -->
-<button class="nav-btn" onclick="go('hrflags')">
-  <span class="icon">🛡️</span>
-  <span>HR & Equality</span>
-</button>
-
-
-<!-- ══════════════════════════════════════
-     STEP 2: Add page div inside <div id="main">
-     Place just before <!-- SETTINGS --> 
-════════════════════════════════════════ -->
-<div id="page-hrflags" class="page"></div>
-
-
-<!-- ══════════════════════════════════════
-     STEP 3: Update renders map in go() function
-     Add this entry:
-════════════════════════════════════════ -->
-<!-- 
-  hrflags: renderHRFlags,
-  
-  Full line should read:
-  const renders={dashboard:renderDashboard,...,hrflags:renderHRFlags,social:()=>{},bd:()=>{}};
--->
-
-
-<!-- ══════════════════════════════════════
-     STEP 4: Create hr_flags table in Supabase
-     Run this SQL in Supabase → SQL Editor
-════════════════════════════════════════ -->
-<!--
-CREATE TABLE hr_flags (
-  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  org_id uuid REFERENCES organisations(id) ON DELETE CASCADE,
-  context text,
-  flags jsonb,
-  text_excerpt text,
-  staff_member text,
-  reviewed boolean DEFAULT false,
-  created_at timestamptz DEFAULT now()
-);
-
--- Row level security
-ALTER TABLE hr_flags ENABLE ROW LEVEL SECURITY;
-
--- Only org members can see their own flags
-CREATE POLICY "org_members_see_own_flags" ON hr_flags
-  FOR ALL USING (org_id = (
-    SELECT org_id FROM profiles WHERE id = auth.uid()
-  ));
-
--- Index for performance
-CREATE INDEX hr_flags_org_id_idx ON hr_flags(org_id);
-CREATE INDEX hr_flags_reviewed_idx ON hr_flags(reviewed);
--->
+ 
 <div id="page-settings" class="page">
   <div class="page-header"><div><div class="page-title">Settings</div><div class="page-sub">Organisation preferences & module access</div></div></div>
   <div class="card">
