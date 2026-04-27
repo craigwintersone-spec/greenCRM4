@@ -539,7 +539,22 @@ const today=()=>new Date().toISOString().split('T')[0];
 // ════════════════════════════════════════
 // AI ENGINE
 // ════════════════════════════════════════
+const AI_PLANS=['pro','network'];
+
+function checkAIAccess(){
+  const plan=currentOrg?.plan||'free';
+  if(!AI_PLANS.includes(plan)){
+    const msg=document.createElement('div');
+    msg.style.cssText='position:fixed;top:24px;right:24px;background:var(--surface);border:1px solid var(--amber);border-radius:var(--radiuslg);padding:16px 20px;z-index:999;max-width:320px;box-shadow:0 8px 32px rgba(0,0,0,.4)';
+    msg.innerHTML=`<div style="font-size:13px;font-weight:700;color:var(--amber);margin-bottom:4px">✦ AI features — Pro plan only</div><div style="font-size:12px;color:var(--txt2);line-height:1.6">AI agents are available on the Pro (£29/mo) and Network (£79/mo) plans. <a onclick="go('settings')" style="color:var(--em);cursor:pointer">Upgrade in Settings →</a></div><button onclick="this.parentElement.remove()" style="position:absolute;top:8px;right:10px;background:none;border:none;color:var(--txt3);cursor:pointer;font-size:16px">✕</button>`;
+    document.body.appendChild(msg);
+    setTimeout(()=>msg.remove(),5000);
+    throw new Error('AI_PLAN_GATE');
+  }
+}
+
 async function callClaude(systemPrompt,userPrompt,maxTokens=1000){
+  checkAIAccess();
   try{
     const res=await fetch('/api/claude',{
       method:'POST',
@@ -750,7 +765,7 @@ Avg confidence after: ${(FB.reduce((a,f)=>a+num(f.ca),0)/FB.length).toFixed(1)}/
 % made a new friend: ${pct(FB.filter(f=>f.friend).length,FB.length)}%
 Sample quotes: ${FB.filter(f=>f.quote).slice(0,3).map(f=>'"'+f.quote+'"').join(' | ')||'none'}`;
   try{const r=await callClaude(sys,prompt,300);aiResult(el,r);}
-  catch(e){el.innerHTML='<div style="color:var(--red);font-size:13px">AI unavailable.</div>';}
+  catch(e){if(e.message!=='AI_PLAN_GATE')el.innerHTML='<div style="color:var(--red);font-size:13px">AI unavailable.</div>';}
 }
 
 // ── AI OUTCOMES ANALYST ──
@@ -773,7 +788,7 @@ Employment outcomes: ${P.filter(p=>p.outcomes.includes('Employment')).length}
 Training outcomes: ${P.filter(p=>p.outcomes.includes('Training')).length}
 Advisors: ${[...new Set(P.map(p=>p.advisor))].map(a=>a+': '+P.filter(p=>p.advisor===a).length+' cases').join(', ')}`;
   try{const r=await callClaude(sys,prompt,500);aiResult(el,r);}
-  catch(e){el.innerHTML='<div style="color:var(--red);font-size:13px">AI unavailable.</div>';}
+  catch(e){if(e.message!=='AI_PLAN_GATE')el.innerHTML='<div style="color:var(--red);font-size:13px">AI unavailable.</div>';}
 }
 
 // ── AI EMPLOYER MATCHER ──
@@ -793,7 +808,7 @@ ${employers.map(e=>`- ${e.name} (${e.sector}): ${e.vacancies} vacancies, ${e.not
 
 Suggest 3-5 specific matches with brief reasoning.`;
   try{const r=await callClaude(sys,prompt,500);aiResult(el,r);}
-  catch(e){el.innerHTML='<div style="color:var(--red);font-size:13px">AI unavailable.</div>';}
+  catch(e){if(e.message!=='AI_PLAN_GATE')el.innerHTML='<div style="color:var(--red);font-size:13px">AI unavailable.</div>';}
 }
 
 // ── AI REFERRAL TRIAGE ──
