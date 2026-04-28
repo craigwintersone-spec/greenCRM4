@@ -669,19 +669,65 @@ async function runMorningBriefing(){
 
 async function runIntakeAI(){
   const text=$('mp-intake-text').value.trim();
-  if(!text){alert('Please paste referral background text first.');return;}
+  if(!text){alert('Please paste some referral background text first.');return;}
   const el=$('mp-ai-intake-result');
   el.innerHTML='<div class="ai-thinking" style="margin:10px 0"><div class="ai-thinking-dots"><span></span><span></span><span></span></div>Analysing referral…</div>';
-  const sys='You are an expert social worker assistant for a UK employability charity. Analyse referral text and return JSON only: {"risk":"Low|Medium|High","barriers":["barrier1"],"safeguarding":"none|Domestic abuse|Mental health|Substance misuse|Homelessness risk","suggested_advisor":"Sarah T.|Marcus O.|Priya S.","next_steps":"string"}. Barriers from: Housing,Confidence,Skills gap,Transport,Childcare,Mental health,Substance misuse,Criminal record,Language,Benefits,Disability,Financial.';
+  const sys=`You are an expert social worker assistant for a UK employability charity.
+Analyse the referral text and return ONLY a valid JSON object — no explanation, no markdown, no backticks, no preamble.
+The JSON must have exactly these fields:
+{
+  "risk": "Low" or "Medium" or "High",
+  "barriers": array of strings chosen only from: Housing, Confidence, Skills gap, Transport, Childcare, Mental health, Substance misuse, Criminal record, Language, Benefits, Disability, Financial,
+  "safeguarding": "none" or "Domestic abuse" or "Mental health" or "Substance misuse" or "Homelessness risk",
+  "suggested_advisor": "Sarah T." or "Marcus O." or "Priya S." or "Unassigned",
+  "next_steps": a short string of 1-2 sentences
+}
+Return nothing except the JSON object.`;
   try{
-    const r=await callClaude(sys,text,300);
-    const data=JSON.parse(r.replace(/```json|```/g,'').trim());
-    if(data.risk)$('mp-risk').value=data.risk;
-    if(data.safeguarding&&data.safeguarding!=='none')$('mp-safe').value=data.safeguarding;
-    if(data.suggested_advisor)$('mp-adv').value=data.suggested_advisor;
-    if(data.barriers?.length)document.querySelectorAll('#barrier-checks input[type=checkbox]').forEach(cb=>{cb.checked=data.barriers.includes(cb.value);});
-    el.innerHTML=`<div class="ai-panel" style="margin:10px 0;padding:12px"><div style="font-size:13px;color:var(--txt2)"><strong>Risk:</strong> ${data.risk} · <strong>Safeguarding:</strong> ${data.safeguarding||'none'}<br/><strong>Advisor:</strong> ${data.suggested_advisor||'—'}<br/><strong>Next steps:</strong> ${data.next_steps||'—'}</div></div>`;
-  }catch(e){el.innerHTML='<div style="color:var(--red);font-size:12px;margin-top:6px">Could not parse AI response.</div>';}
+    const r=await callClaude(sys,text,400);
+
+    // Robust JSON extraction — strip markdown fences, find the first { ... } block
+    let clean=r.replace(/```json|```/gi,'').trim();
+    const jsonMatch=clean.match(/\{[\s\S]*\}/);
+    if(!jsonMatch)throw new Error('No JSON found in response');
+    const data=JSON.parse(jsonMatch[0]);
+
+    // Apply values to form — with safe fallbacks
+    const validRisk=['Low','Medium','High'];
+    if(data.risk&&validRisk.includes(data.risk))$('mp-risk').value=data.risk;
+
+    const validSafe=['Domestic abuse','Mental health','Substance misuse','Homelessness risk'];
+    if(data.safeguarding&&validSafe.includes(data.safeguarding))$('mp-safe').value=data.safeguarding;
+
+    const validAdvisors=['Sarah T.','Marcus O.','Priya S.','Unassigned'];
+    if(data.suggested_advisor&&validAdvisors.includes(data.suggested_advisor))$('mp-adv').value=data.suggested_advisor;
+
+    if(Array.isArray(data.barriers)&&data.barriers.length){
+      document.querySelectorAll('#barrier-checks input[type=checkbox]').forEach(cb=>{
+        cb.checked=data.barriers.includes(cb.value);
+      });
+    }
+
+    el.innerHTML=`<div class="ai-panel" style="margin:10px 0;padding:12px">
+      <div class="ai-panel-title" style="margin-bottom:8px"><span class="ai-icon">✦</span>AI Intake Analysis — fields pre-filled above</div>
+      <div style="font-size:13px;color:var(--txt2);line-height:1.8">
+        <strong>Risk level:</strong> ${data.risk||'—'}<br/>
+        <strong>Safeguarding:</strong> ${data.safeguarding||'none'}<br/>
+        <strong>Suggested advisor:</strong> ${data.suggested_advisor||'—'}<br/>
+        <strong>Barriers identified:</strong> ${Array.isArray(data.barriers)&&data.barriers.length?data.barriers.join(', '):'none'}<br/>
+        <strong>Suggested next steps:</strong> ${data.next_steps||'—'}
+      </div>
+    </div>`;
+
+  }catch(e){
+    // Show a helpful message rather than a cryptic error
+    el.innerHTML=`<div style="background:#2a1a1a;border:1px solid #5a2a2a;border-radius:8px;padding:12px;margin:10px 0;font-size:12px;color:var(--txt2);line-height:1.7">
+      <strong style="color:var(--amber)">⚠ AI could not auto-fill fields</strong><br/>
+      The AI response couldn't be parsed automatically. Please fill in the risk, barriers and safeguarding fields manually.<br/>
+      <span style="color:var(--txt3);font-size:11px">You can still save the participant — the AI note writer and case note tools will work normally.</span>
+    </div>`;
+    console.error('runIntakeAI parse error:',e.message);
+  }
 }
 
 async function runCaseNoteAI(){
@@ -709,51 +755,192 @@ async function runRAGExplainer(cid,name,funder,sp,op,linked){
 }
 
 async function generateAIReport(type,contractId){
+  // ── Locate the report-output div ──
+  let el=document.getElementById('report-output');
+  if(!el){
+    const container=document.getElementById('reports-contract-list');
+    el=document.createElement('div');el.id='report-output';
+    if(container)container.appendChild(el);
+    else document.getElementById('main').appendChild(el);
+  }
+  el.style.display='block';
+  el.scrollIntoView({behavior:'smooth',block:'start'});
+
   const contract=DB.contracts.find(c=>String(c.id)===String(contractId));
   const funder=contract?.funder_id?(DB.funders||[]).find(f=>String(f.id)===String(contract.funder_id)):null;
   const reportType=contract?.report_type||type||'other';
-  const el=document.getElementById('report-output')||document.createElement('div');
-  el.id='report-output';el.style.display='block';
   const P=DB.participants,E=DB.events,FB=DB.feedback,V=DB.volunteers;
+  const orgName=currentOrg?.name||'Organisation';
+  const todayStr=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
   const jobs=P.filter(p=>p.outcomes.includes('Employment')).length;
   const training=P.filter(p=>p.outcomes.includes('Training')).length;
-  const avgCB=FB.length?(FB.reduce((a,f)=>a+num(f.cb),0)/FB.length).toFixed(1):0;
-  const avgCA=FB.length?(FB.reduce((a,f)=>a+num(f.ca),0)/FB.length).toFixed(1):0;
+  const sustained=P.filter(p=>p.stage==='Sustained').length;
   const totalEvP=E.reduce((a,e)=>a+num(e.attendees),0);
-  const orgName=currentOrg?.name||'the organisation';
-  const todayStr=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
-  const toneMap={
-    moj:'Write as a senior MoJ programme report. Use formal language and MoJ terminology: sustained employment, positive destinations, desistance from reoffending.',
-    gla:'Write for a GLA-funded programme. Use economic-impact language: good work, London Living Wage, skills escalator.',
-    cbf:'Write for City Bridge Foundation. Use warm, human-centred language: community resilience, wellbeing journeys, social connection.',
-    lottery:'Write for National Lottery. Use accessible, community-focused language. Emphasise reach and inclusion.',
-    other:'Write a professional funder report using clear evidence-based language.'
+  const avgCB=FB.length?(FB.reduce((a,f)=>a+num(f.cb),0)/FB.length).toFixed(1):'N/A';
+  const avgCA=FB.length?(FB.reduce((a,f)=>a+num(f.ca),0)/FB.length).toFixed(1):'N/A';
+  const enjoyPct=pct(FB.filter(f=>f.enjoyed>=4).length,FB.length||1);
+  const quotes=FB.filter(f=>f.quote).slice(0,2); // reduced to 2
+  const topBarriers=BARRIERS.filter(b=>P.some(p=>p.barriers.includes(b))).slice(0,4); // reduced to 4
+  const linked=P.filter(p=>toArr(p.contract_ids).includes(String(contractId)));
+  const linkedOutcomes=linked.filter(p=>p.outcomes.length>0).length;
+
+  el.innerHTML=`<div class="ai-panel" style="margin-bottom:0">
+    <div class="ai-panel-title"><span class="ai-icon">🧠</span>Org Brain — writing your report…</div>
+    <div class="ai-thinking" style="margin-top:8px"><div class="ai-thinking-dots"><span></span><span></span><span></span></div><span>Single-pass report agent running…</span></div>
+  </div>`;
+
+  // ── Funder type config ──
+  const configs={
+    moj:{icon:'⚖️',label:'Ministry of Justice',colour:'#60a5fa',
+      tone:'Write as a senior MoJ programme report. Use: "sustained employment", "positive destinations", "desistance from reoffending". Emphasise distance travelled and compliance.',
+      sections:'Executive Summary, Delivery & Participants, Outcomes & Evidence, Participant Voice, Forward Plan'},
+    gla:{icon:'🏙️',label:'Greater London Authority',colour:'#34d399',
+      tone:'Write for a GLA skills programme. Use: "good work", "London Living Wage", "skills escalator". Emphasise labour market contribution.',
+      sections:'Executive Summary, Delivery Overview, Skills & Employment Outcomes, Employer Engagement, Forward Plan'},
+    cbf:{icon:'🌉',label:'City Bridge Foundation',colour:'#a78bfa',
+      tone:'Write for CBF. Use: "community resilience", "wellbeing journeys", "social connection". Lead with human stories and confidence journeys.',
+      sections:'Executive Summary, Who We Reached, Wellbeing & Confidence Journeys, Participant Voices, Looking Forward'},
+    lottery:{icon:'🍀',label:'National Lottery',colour:'#10b981',
+      tone:'Write for National Lottery. Use accessible language. Emphasise reach, community benefit and stories of change.',
+      sections:'Executive Summary, Who We Reached, Impact & Stories, Participant Voice, Next Steps'},
+    ukspf:{icon:'🏛️',label:'UKSPF / Local Authority',colour:'#f59e0b',
+      tone:'Write for UKSPF. Clear, outcome-focused language. Reference local context and value for money.',
+      sections:'Executive Summary, Delivery Overview, Outcomes, Community Benefit, Forward Plan'},
+    other:{icon:'📋',label:'Funder',colour:'#9ab8a4',
+      tone:'Write a professional funder report. Clear, evidence-based, outcome-focused.',
+      sections:'Executive Summary, Delivery & Participants, Outcomes & Impact, Participant Voice, Looking Forward'}
   };
-  el.innerHTML=`<div class="ai-panel"><div class="ai-panel-title"><span class="ai-icon">✦</span>Generating report…</div><div class="ai-thinking"><div class="ai-thinking-dots"><span></span><span></span><span></span></div>Writing your report…</div></div>`;
-  const sys=`${toneMap[reportType]||toneMap.other}\n${funder?.notes?'FUNDER PRIORITIES: "'+funder.notes+'" — address these specifically.':''}\nWrite a complete funder report with sections: Executive Summary, Delivery Overview, Outcomes & Impact, Participant Voice, Looking Forward.\nUse ## for section headings. Write flowing paragraphs, no bullet points. Use **bold** for key stats. 600-800 words. Do not make up statistics.`;
-  const prompt=`Organisation: ${orgName}\nFunder: ${funder?.name||contract?.funder||'—'}\nContract: ${contract?.name||'—'} · £${num(contract?.value).toLocaleString()}\nDate: ${todayStr}\nActive participants: ${P.filter(p=>p.stage!=='Closed').length}\nEmployment outcomes: ${jobs} (${pct(jobs,P.length||1)}%)\nTraining outcomes: ${training}\nEvents: ${E.length} (${totalEvP} people)\nVolunteers: ${V.filter(v=>v.status==='Active').length}\nConf before: ${avgCB}/5 → after: ${avgCA}/5\nTarget starts: ${contract?.target_starts||0} · Target outcomes: ${contract?.target_outcomes||0}\nQuotes: ${FB.filter(f=>f.quote).slice(0,3).map(f=>'"'+f.quote+'"').join(' | ')||'none'}`;
+  const cfg=configs[reportType]||configs.other;
+
+  // ── Single combined prompt ──
+  const sys=`${cfg.tone}
+${funder?.notes?'FUNDER PRIORITIES: "'+funder.notes+'" — address these directly using their language.':''}
+Write a professional funder report with sections: ${cfg.sections}.
+RULES: ## for headings · flowing paragraphs, no bullets · **bold** key stats · 1-2 paragraphs per section · 500-700 words · first person plural · only use numbers provided, do not invent data.`;
+
+  const prompt=`Org: ${orgName} · Sector: ${currentOrg?.sector||'Employability charity'}
+Contract: ${contract?.name||'—'} · Funder: ${funder?.name||cfg.label} · Value: £${num(contract?.value).toLocaleString()}
+Period: ${contract?.start_date||'—'} to ${contract?.end_date||'—'} · Date: ${todayStr}
+Targets: ${contract?.target_starts||0} starts / ${contract?.target_outcomes||0} outcomes
+Actuals (linked): ${linked.length} starts / ${linkedOutcomes} outcomes
+All participants: ${P.filter(p=>p.stage!=='Closed').length} active of ${P.length}
+Employment: ${jobs} (${pct(jobs,P.length||1)}%) · Training: ${training} · Sustained: ${sustained}
+Events: ${E.length} · People reached: ${totalEvP}
+Volunteers: ${V.filter(v=>v.status==='Active').length} active · ${V.reduce((a,v)=>a+num(v.hours),0)} hrs
+Feedback: ${FB.length} responses · ${enjoyPct}% enjoyed · Conf: ${avgCB}→${avgCA}/5
+Barriers: ${topBarriers.join(', ')||'none recorded'}
+${quotes.length?'Quotes:\n'+quotes.map(f=>'"'+f.quote+'" — '+(f.name||'Participant')).join('\n'):'No quotes yet.'}`;
+
   try{
-    const report=await callClaude(sys,prompt,1200);
+    const report=await callClaude(sys,prompt,900);
+
+    // ── Render professional document ──
     const sections=report.split(/^## /m).filter(Boolean);
-    const html=sections.map(s=>{
-      const lines=s.split('\n');const h=lines[0].trim();const body=lines.slice(1).join('\n').trim();
-      return`<div style="margin-bottom:24px"><h3 style="font-size:15px;font-weight:700;color:var(--em);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">${h}</h3><div style="font-size:14px;color:var(--txt2);line-height:1.9">${body.replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--txt)">$1</strong>').replace(/\n\n/g,'</p><p style="margin-top:10px">').replace(/\n/g,'<br/>')}</div></div>`;
+    const sectionsHTML=sections.map(s=>{
+      const lines=s.split('\n');
+      const heading=lines[0].trim();
+      const body=lines.slice(1).join('\n').trim();
+      return`<div style="margin-bottom:24px">
+        <h3 style="font-size:15px;font-weight:700;color:${cfg.colour};margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.07)">${heading}</h3>
+        <div style="font-size:14px;color:var(--txt2);line-height:1.9">${
+          body.replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--txt)">$1</strong>')
+              .replace(/\n\n/g,'</p><p style="margin-top:12px">')
+              .replace(/\n/g,'<br/>')
+        }</div>
+      </div>`;
     }).join('');
-    el.innerHTML=`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);overflow:hidden;margin-bottom:16px">
-      <div style="padding:24px 28px;border-bottom:2px solid var(--em);background:rgba(16,185,129,.04)">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--em);margin-bottom:4px">${funder?.name||'Funder Report'}</div>
-        <div style="font-size:22px;font-weight:800;color:var(--txt);margin-bottom:4px">${contract?.name||'Programme Report'}</div>
-        <div style="font-size:12px;color:var(--txt3)">📅 ${todayStr} · 🏢 ${orgName} · ✦ AI-generated</div>
+
+    const metrics=[
+      {l:'Participants',v:linked.length,sub:'of '+(contract?.target_starts||0)+' target'},
+      {l:'Outcomes',v:linkedOutcomes,sub:'of '+(contract?.target_outcomes||0)+' target'},
+      {l:'Employment',v:jobs,sub:pct(jobs,P.length||1)+'% rate'},
+      {l:'Events',v:E.length,sub:totalEvP+' people'},
+      {l:'Conf ↑',v:avgCB+'→'+avgCA,sub:'per feedback'},
+      {l:'Feedback',v:FB.length,sub:enjoyPct+'% enjoyed'},
+    ];
+
+    el.innerHTML=`
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);overflow:hidden;margin-bottom:16px;max-width:860px">
+        <div style="background:linear-gradient(135deg,${cfg.colour}22,${cfg.colour}06);border-bottom:3px solid ${cfg.colour};padding:28px 32px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:${cfg.colour};margin-bottom:6px">${cfg.icon} ${cfg.label}</div>
+          <div style="font-size:24px;font-weight:800;color:var(--txt);margin-bottom:4px;line-height:1.2">${contract?.name||'Programme Report'}</div>
+          <div style="font-size:13px;color:var(--txt3);margin-bottom:12px">${orgName}</div>
+          <div style="display:flex;gap:16px;flex-wrap:wrap">
+            <span style="font-size:11px;color:var(--txt3)">📅 ${todayStr}</span>
+            <span style="font-size:11px;color:var(--txt3)">💰 £${num(contract?.value).toLocaleString()}</span>
+            <span style="font-size:11px;color:${cfg.colour}">✦ GreenCRM Org Brain</span>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(6,1fr);border-bottom:1px solid var(--border)">
+          ${metrics.map((m,i)=>`<div style="padding:12px 10px;text-align:center;${i<5?'border-right:1px solid var(--border)':''}">
+            <div style="font-size:18px;font-weight:800;color:${cfg.colour}">${m.v}</div>
+            <div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;margin-top:2px">${m.l}</div>
+            <div style="font-size:10px;color:var(--txt3);margin-top:1px">${m.sub}</div>
+          </div>`).join('')}
+        </div>
+        ${funder?.notes?`<div style="padding:10px 32px;background:rgba(124,58,237,.06);border-bottom:1px solid rgba(124,58,237,.15);font-size:12px;color:var(--txt2)"><strong style="color:var(--purple);font-size:10px;text-transform:uppercase;letter-spacing:.5px">Funder priorities addressed: </strong>${funder.notes}</div>`:''}
+        <div style="padding:28px 32px">
+          ${sectionsHTML||`<div style="font-size:14px;color:var(--txt2);line-height:1.9">${report.replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--txt)">$1</strong>').replace(/\n\n/g,'</p><p style="margin-top:12px">').replace(/\n/g,'<br/>')}</div>`}
+        </div>
+        ${quotes.length?`<div style="padding:0 32px 28px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3);margin-bottom:12px">Participant voices</div>
+          <div style="display:grid;grid-template-columns:${quotes.length>1?'1fr 1fr':'1fr'};gap:12px">
+            ${quotes.map(f=>`<div style="background:var(--surface);border-left:3px solid ${cfg.colour};border-radius:0 8px 8px 0;padding:12px 16px"><div style="font-size:13px;color:var(--txt2);font-style:italic;line-height:1.7;margin-bottom:6px">"${f.quote}"</div><div style="font-size:11px;color:var(--txt3)">${f.name||'Participant'}</div></div>`).join('')}
+          </div>
+        </div>`:''}
+        <div style="padding:12px 32px;background:var(--surface);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <div style="font-size:11px;color:var(--txt3)">${orgName} · ${todayStr} · Confidential</div>
+          <div style="font-size:11px;color:var(--txt3)">GreenCRM Org Brain · Powered by Claude AI</div>
+        </div>
       </div>
-      <div style="padding:28px">${html||report.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br/>')}</div>
-    </div>
-    <div style="display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap">
-      <button class="btn btn-p" onclick="window.print()">🖨️ Print / Save as PDF</button>
-      <button class="btn btn-ghost" onclick="navigator.clipboard.writeText(document.getElementById('report-output').innerText);this.textContent='✓ Copied!';setTimeout(()=>this.textContent='📋 Copy text',2000)">📋 Copy text</button>
-      <button class="btn btn-ghost btn-sm" onclick="generateAIReport('${type}','${contractId}')">↻ Regenerate</button>
-      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('report-output').style.display='none'">✕ Close</button>
-    </div>`;
-  }catch(e){el.innerHTML=`<div class="alert alert-warn">Could not generate report: ${e.message}</div>`;}
+      <div style="display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap">
+        <button class="btn btn-p" onclick="printGreenCRMReport()">🖨️ Print / Save as PDF</button>
+        <button class="btn btn-ghost" onclick="navigator.clipboard.writeText(document.getElementById('report-output').innerText);this.textContent='✓ Copied!';setTimeout(()=>this.textContent='📋 Copy text',2000)">📋 Copy text</button>
+        <button class="btn btn-ghost btn-sm" onclick="generateAIReport('${type}','${contractId}')">↻ Regenerate</button>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('report-output').style.display='none';document.getElementById('report-output').innerHTML=''">✕ Close</button>
+      </div>`;
+
+  }catch(e){
+    el.innerHTML=`<div class="alert alert-warn">Report generation failed: ${e.message}</div>`;
+  }
+}
+
+function printGreenCRMReport(){
+  const src=document.getElementById('report-output');
+  if(!src)return;
+  const w=window.open('','_blank','width=960,height=700');
+  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>GreenCRM Report</title><style>');
+  w.document.write('*{box-sizing:border-box;margin:0;padding:0}body{font-family:system-ui,sans-serif;background:#fff;color:#111;font-size:13px;line-height:1.8}');
+  w.document.write('.report-wrap{max-width:820px;margin:0 auto;padding:0}');
+  w.document.write('.report-header{padding:24px 32px;border-bottom:3px solid #10b981;background:#f0fdf4}');
+  w.document.write('.metrics{display:grid;grid-template-columns:repeat(6,1fr);border-bottom:1px solid #e5e7eb}');
+  w.document.write('.metric{padding:12px 8px;text-align:center;border-right:1px solid #e5e7eb}.metric:last-child{border-right:none}');
+  w.document.write('.metric-val{font-size:18px;font-weight:800;color:#10b981}.metric-lbl{font-size:9px;text-transform:uppercase;color:#6b7280;margin-top:2px}');
+  w.document.write('.body{padding:28px 32px}.section{margin-bottom:24px}');
+  w.document.write('h3{font-size:14px;font-weight:700;color:#059669;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid #e5e7eb}');
+  w.document.write('p{margin-top:10px;color:#374151}strong{color:#111;font-weight:700}');
+  w.document.write('.quotes{padding:0 32px 24px}.quote-box{border-left:3px solid #10b981;padding:10px 14px;background:#f9fafb;margin-bottom:8px;border-radius:0 6px 6px 0}');
+  w.document.write('.footer{padding:12px 32px;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;font-size:11px;color:#9ca3af}');
+  w.document.write('@media print{body{padding:0}@page{margin:12mm;size:A4}button{display:none!important}}');
+  w.document.write('</style></head><body><div class="report-wrap">');
+  // Strip dark-mode styles and copy content
+  const clone=src.cloneNode(true);
+  // Remove buttons
+  clone.querySelectorAll('button').forEach(b=>b.remove());
+  // Clean up inline dark styles to print-friendly
+  let html=clone.innerHTML
+    .replace(/background:var\(--card\)|background:var\(--surface\)|background:var\(--bg\)/g,'background:#fff')
+    .replace(/color:var\(--txt\)/g,'color:#111')
+    .replace(/color:var\(--txt2\)/g,'color:#374151')
+    .replace(/color:var\(--txt3\)/g,'color:#6b7280')
+    .replace(/border:1px solid var\(--border\)/g,'border:1px solid #e5e7eb')
+    .replace(/border-bottom:1px solid var\(--border\)/g,'border-bottom:1px solid #e5e7eb')
+    .replace(/border-right:1px solid var\(--border\)/g,'border-right:1px solid #e5e7eb')
+    .replace(/border-top:1px solid var\(--border\)/g,'border-top:1px solid #e5e7eb');
+  w.document.write(html);
+  w.document.write('<div style="text-align:center;padding:20px"><button onclick="window.print();window.close()" style="background:#10b981;color:#fff;border:none;border-radius:8px;padding:10px 28px;font-size:14px;font-weight:700;cursor:pointer;margin-right:8px">🖨️ Print / Save as PDF</button><button onclick="window.close()" style="background:#f3f4f6;color:#374151;border:none;border-radius:8px;padding:10px 20px;font-size:14px;cursor:pointer">Close</button></div>');
+  w.document.write('</div></body></html>');
+  w.document.close();w.focus();
 }
 
 async function runFeedbackAnalyst(){
