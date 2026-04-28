@@ -1772,7 +1772,7 @@ async function saveCon(){
     const d={
       name:$('con-name').value,
       funder:funderName,
-      funder_id:funderId,
+      funder_id:funderId||null,
       report_type:$('con-report-type').value||'other',
       value:parseInt($('con-val').value)||0,
       target_starts:parseInt($('con-ts').value)||0,
@@ -1781,15 +1781,17 @@ async function saveCon(){
       end_date:$('con-end').value||null,
       status:$('con-status').value||'live'
     };
-    if(_editConId)await sbUpdate('contracts',d,_editConId);
-    else{const r=await sbInsert('contracts',d);if(r)DB.contracts.push({id:r.id,...d});}
+    if(_editConId){
+      await sbUpdate('contracts',d,_editConId);
+    }else{
+      await sbInsert('contracts',d);
+    }
+    // Always re-fetch as single source of truth
     await refreshTable('contracts');
     closeModal('modal-con');
     renderFunding();
-    // Sync reports page too
-    const activePage=document.querySelector('.page.active')?.id;
-    if(activePage==='page-reports')renderReports();
-    if(activePage==='page-funders')renderFunders();
+    renderReports();
+    renderFunders();
     if($('modal-p').classList.contains('open'))renderContractSelector(getSelectedContractIds());
   }catch(e){alert('Save failed: '+e.message);}
   finally{btn.textContent='Save';btn.disabled=false;}
@@ -1947,30 +1949,25 @@ async function saveFunder(){
     const d={name,type:$('ff-type').value,contact_name:$('ff-contact').value||null,contact_email:$('ff-email').value||null,notes:$('ff-notes').value||null};
     if(_editFunderId){
       await sbUpdate('funders',d,_editFunderId);
-      const idx=DB.funders.findIndex(x=>x.id===_editFunderId);
-      if(idx>=0)DB.funders[idx]={...DB.funders[idx],...d};
     }else{
-      const r=await sbInsert('funders',d);
-      if(r)DB.funders.push({id:r.id,...d});
+      await sbInsert('funders',d);
     }
+    // Always re-fetch from Supabase as single source of truth
     await refreshTable('funders');
     closeModal('modal-funder');
     renderFunders();
     populateConFunderSelect();
-    // Also refresh reports and funding pages if open
-    const activePage=document.querySelector('.page.active')?.id;
-    if(activePage==='page-reports')renderReports();
-    if(activePage==='page-funding')renderFunding();
   }catch(e){alert('Save failed: '+e.message);}
   finally{btn.textContent='Save funder';btn.disabled=false;}
 }
 
 async function deleteFunder(id){
-  const f=(DB.funders||[]).find(x=>x.id===id);
+  const f=DB.funders.find(x=>x.id===id);
   if(!confirm(`Delete "${f?.name}"? Their contracts will remain but won't be linked to this funder profile.`))return;
   await sbDelete('funders',id);
-  DB.funders=(DB.funders||[]).filter(x=>x.id!==id);
+  await refreshTable('funders');
   renderFunders();
+  renderReports();
 }
 
 function populateConFunderSelect(){
