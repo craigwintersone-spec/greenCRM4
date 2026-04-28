@@ -670,7 +670,7 @@ let _editFbId=null,_editItemId=null,_editConId=null,_editCId=null;
 let _vTab='vbasic',_fbScores={enjoyed:5,cb:3,ca:5};
 let _demoLoaded=false,_aiNoteAccepted='',_originalNote='';
 
-const DB={participants:[],volunteers:[],events:[],feedback:[],contacts:[],employers:[],referrals:[],partner_referrals:[],circular:[],contracts:[],evidence:[]};
+const DB={participants:[],volunteers:[],events:[],feedback:[],contacts:[],employers:[],referrals:[],partner_referrals:[],circular:[],contracts:[],evidence:[],funders:[]};
 
 const $=id=>document.getElementById(id);
 const closeModal=id=>$(id).classList.remove('open');
@@ -1285,7 +1285,7 @@ async function syncAll(){
   if(refD)DB.referrals=refD.map(r=>({id:r.id,first_name:r.first_name||'',last_name:r.last_name||'',source:r.source||'',status:r.status||'Referred',advisor:r.advisor||'',referred_date:r.referred_date||''}));
   if(prefD)DB.partner_referrals=prefD.map(r=>({id:r.id,partner_name:r.partner_name||'',first_name:r.first_name||'',last_name:r.last_name||'',primary_need:r.primary_need||'',urgency:r.urgency||'Standard',notes:r.notes||'',barriers:toArr(r.barriers),safeguarding:r.safeguarding||'',consent:!!r.consent,status:r.status||'Referred',created_at:r.created_at||''}));
   if(fD)DB.funders=fD.map(f=>({id:f.id,name:f.name||'',type:f.type||'other',contact_name:f.contact_name||'',contact_email:f.contact_email||'',notes:f.notes||''}));
-  else DB.funders=DB.funders||[];
+  else DB.funders=[];
 }
 
 async function refreshTable(table){
@@ -1299,6 +1299,7 @@ async function refreshTable(table){
   else if(table==='referrals')DB.referrals=fresh.map(r=>({id:r.id,first_name:r.first_name||'',last_name:r.last_name||'',source:r.source||'',status:r.status||'Referred',advisor:r.advisor||'',referred_date:r.referred_date||''}));
   else if(table==='circular_items')DB.circular=fresh.map(i=>({id:i.id,name:i.name||'',category:i.category||'',weight_kg:num(i.weight_kg),status:i.status||'Collected',fixer:i.fixer||'',outcome:i.outcome||''}));
   else if(table==='evidence')DB.evidence=fresh.map(e=>({id:e.id,participant_name:e.participant_name||'',type:e.type||'',linked_outcome:e.linked_outcome||'',staff:e.staff||'',evidence_date:e.evidence_date||'',status:e.status||'Pending'}));
+  else if(table==='funders')DB.funders=(fresh||[]).map(f=>({id:f.id,name:f.name||'',type:f.type||'other',contact_name:f.contact_name||'',contact_email:f.contact_email||'',notes:f.notes||''}));
   else if(table==='contacts')DB.contacts=fresh.map(c=>({id:c.id,first_name:c.first_name||'',last_name:c.last_name||'',email:c.email||'',role:c.role||'',status:c.status||'Prospect'}));
 }
 
@@ -1727,12 +1728,17 @@ function renderOutcomes(){
 
 function renderFunding(){
   $('fund-sub').textContent=DB.contracts.length+' contracts · £'+DB.contracts.reduce((a,c)=>a+num(c.value),0).toLocaleString()+' total';
+  // Show funder name in funding page
+  const getFunderName=c=>{
+    if(c.funder_id){const f=DB.funders.find(x=>String(x.id)===String(c.funder_id));if(f)return f.name;}
+    return c.funder||'—';
+  };
   if(!DB.contracts.length){$('fund-list').innerHTML=emptyState('💰','No contracts yet','Add your funding contracts.','+ Add contract',"openAddCon()");return;}
   $('fund-list').innerHTML=DB.contracts.map(c=>{
     const linked=DB.participants.filter(p=>toArr(p.contract_ids).includes(String(c.id)));
     const starts=linked.length,outcomes=linked.filter(p=>p.outcomes.length>0).length;
     const sp=Math.round(starts/(c.target_starts||1)*100),op=Math.round(outcomes/(c.target_outcomes||1)*100);
-    return`<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-size:14px;font-weight:600">${c.name}</div><div style="font-size:12px;color:var(--txt3)">${c.funder} · £${num(c.value).toLocaleString()} · ${fmtD(c.start_date)} – ${fmtD(c.end_date)}</div></div><div style="display:flex;gap:6px">${sp>=70&&op>=70?'<span class="badge b-active">On track</span>':'<span class="badge b-flag">⚠ At risk</span>'}<button class="btn btn-ghost btn-sm" onclick="openEditCon(${c.id})">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteCon(${c.id})">Del</button></div></div><div class="fund-bar-wrap"><div class="fund-top"><span>Starts: ${starts}/${c.target_starts||0}</span><span>${sp}%</span></div><div class="fund-track"><div class="fund-fill ${sp<60?'danger':sp<80?'warn':''}" style="width:${Math.min(sp,100)}%"></div></div></div><div class="fund-bar-wrap"><div class="fund-top"><span>Outcomes: ${outcomes}/${c.target_outcomes||0}</span><span>${op}%</span></div><div class="fund-track"><div class="fund-fill ${op<60?'danger':op<80?'warn':''}" style="width:${Math.min(op,100)}%"></div></div></div><div style="font-size:11px;color:var(--txt3);margin-top:8px">🔗 ${linked.length} participant${linked.length===1?'':'s'} linked</div></div>`;
+    return`<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-size:14px;font-weight:600">${c.name}</div><div style="font-size:12px;color:var(--txt3)">${getFunderName(c)} · £${num(c.value).toLocaleString()} · ${fmtD(c.start_date)} – ${fmtD(c.end_date)}</div></div><div style="display:flex;gap:6px">${sp>=70&&op>=70?'<span class="badge b-active">On track</span>':'<span class="badge b-flag">⚠ At risk</span>'}<button class="btn btn-ghost btn-sm" onclick="openEditCon(${c.id})">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteCon(${c.id})">Del</button></div></div><div class="fund-bar-wrap"><div class="fund-top"><span>Starts: ${starts}/${c.target_starts||0}</span><span>${sp}%</span></div><div class="fund-track"><div class="fund-fill ${sp<60?'danger':sp<80?'warn':''}" style="width:${Math.min(sp,100)}%"></div></div></div><div class="fund-bar-wrap"><div class="fund-top"><span>Outcomes: ${outcomes}/${c.target_outcomes||0}</span><span>${op}%</span></div><div class="fund-track"><div class="fund-fill ${op<60?'danger':op<80?'warn':''}" style="width:${Math.min(op,100)}%"></div></div></div><div style="font-size:11px;color:var(--txt3);margin-top:8px">🔗 ${linked.length} participant${linked.length===1?'':'s'} linked</div></div>`;
   }).join('');
 }
 function openAddCon(funderId){
@@ -1778,7 +1784,12 @@ async function saveCon(){
     if(_editConId)await sbUpdate('contracts',d,_editConId);
     else{const r=await sbInsert('contracts',d);if(r)DB.contracts.push({id:r.id,...d});}
     await refreshTable('contracts');
-    closeModal('modal-con');renderFunding();
+    closeModal('modal-con');
+    renderFunding();
+    // Sync reports page too
+    const activePage=document.querySelector('.page.active')?.id;
+    if(activePage==='page-reports')renderReports();
+    if(activePage==='page-funders')renderFunders();
     if($('modal-p').classList.contains('open'))renderContractSelector(getSelectedContractIds());
   }catch(e){alert('Save failed: '+e.message);}
   finally{btn.textContent='Save';btn.disabled=false;}
@@ -1936,15 +1947,20 @@ async function saveFunder(){
     const d={name,type:$('ff-type').value,contact_name:$('ff-contact').value||null,contact_email:$('ff-email').value||null,notes:$('ff-notes').value||null};
     if(_editFunderId){
       await sbUpdate('funders',d,_editFunderId);
-      const idx=(DB.funders||[]).findIndex(x=>x.id===_editFunderId);
+      const idx=DB.funders.findIndex(x=>x.id===_editFunderId);
       if(idx>=0)DB.funders[idx]={...DB.funders[idx],...d};
     }else{
       const r=await sbInsert('funders',d);
-      if(r){if(!DB.funders)DB.funders=[];DB.funders.push({id:r.id,...d});}
+      if(r)DB.funders.push({id:r.id,...d});
     }
-    closeModal('modal-funder');renderFunders();
-    // Refresh contract funder dropdown
+    await refreshTable('funders');
+    closeModal('modal-funder');
+    renderFunders();
     populateConFunderSelect();
+    // Also refresh reports and funding pages if open
+    const activePage=document.querySelector('.page.active')?.id;
+    if(activePage==='page-reports')renderReports();
+    if(activePage==='page-funding')renderFunding();
   }catch(e){alert('Save failed: '+e.message);}
   finally{btn.textContent='Save funder';btn.disabled=false;}
 }
