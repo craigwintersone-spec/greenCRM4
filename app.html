@@ -175,6 +175,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <div class="nav-section">Growth</div>
   <button class="nav-btn" onclick="go('social')"><span class="icon">📣</span><span>Social Media</span><span class="ai-dot"></span></button>
   <button class="nav-btn" onclick="go('bd')"><span class="icon">💼</span><span>BD Manager</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" onclick="go('hr')"><span class="icon">🛡️</span><span>HR &amp; Equality</span><span class="ai-dot"></span></button>
   <div class="nav-section">Settings</div>
   <button class="nav-btn" onclick="go('safeguarding')"><span class="icon">🔐</span><span>Safeguarding</span></button>
   <button class="nav-btn" onclick="go('settings')"><span class="icon">⚙️</span><span>Settings</span></button>
@@ -516,7 +517,51 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <div class="card" id="bd-saved-wrap" style="display:none"><div class="card-title">Saved EOIs</div><div id="bd-saved-list"></div></div>
 </div>
 
-<!-- SETTINGS -->
+<!-- HR & EQUALITY -->
+<div id="page-hr" class="page">
+  <div class="page-header">
+    <div><div class="page-title">🛡️ HR &amp; Equality Agent</div><div class="page-sub">Equality Act 2010 · GDPR · Always on</div></div>
+  </div>
+  <div class="ai-panel">
+    <div class="ai-panel-title"><span class="ai-icon">🛡️</span>How it works</div>
+    <div style="font-size:13px;color:var(--txt2);line-height:1.7">The HR &amp; Equality Agent scans text across your caseload — case notes, referral backgrounds, feedback — for language that may breach the Equality Act 2010 across all 9 protected characteristics. Paste any text below to check it manually, or run a full caseload scan.</div>
+  </div>
+
+  <!-- MANUAL CHECK -->
+  <div class="card">
+    <div class="card-title">Manual text check</div>
+    <div class="form-row">
+      <label>Paste text to check (case note, referral background, email etc.)</label>
+      <textarea id="hr-text-input" style="min-height:100px" placeholder="Paste any text here to check for potential equality or GDPR concerns…"></textarea>
+    </div>
+    <button class="btn btn-ai" onclick="runHRCheck()">🛡️ Check for concerns</button>
+    <div id="hr-check-result" style="margin-top:14px"></div>
+  </div>
+
+  <!-- CASELOAD SCAN -->
+  <div class="card">
+    <div class="card-title">Caseload scan</div>
+    <div style="font-size:13px;color:var(--txt2);margin-bottom:14px">Scan all case notes across your active participants for potential equality concerns.</div>
+    <button class="btn btn-ai" onclick="runCaseloadScan()">🔍 Scan all case notes</button>
+    <div id="hr-scan-result" style="margin-top:14px"></div>
+  </div>
+
+  <!-- FLAGS LOG -->
+  <div class="card">
+    <div class="card-title">Flags log</div>
+    <div id="hr-flags-list"><div style="color:var(--txt3);font-size:13px">No flags raised yet. Run a scan or use the manual check above.</div></div>
+  </div>
+
+  <!-- PROTECTED CHARACTERISTICS -->
+  <div class="card">
+    <div class="card-title">Protected characteristics monitored</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+      ${['Age','Disability','Gender reassignment','Marriage &amp; civil partnership','Pregnancy &amp; maternity','Race','Religion or belief','Sex','Sexual orientation'].map(c=>`<div style="background:var(--surface);border:1px solid rgba(124,58,237,.2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--txt2);display:flex;align-items:center;gap:6px"><span style="color:var(--purple)">✦</span>${c}</div>`).join('')}
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS (keep existing) -->
 <div id="page-settings" class="page">
   <div class="page-header"><div><div class="page-title">Settings</div><div class="page-sub">Organisation preferences &amp; module access</div></div></div>
   <div class="card">
@@ -1140,7 +1185,7 @@ function go(page){
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const el=$('page-'+page);if(!el)return;
   el.classList.add('active');
-  const renders={dashboard:renderDashboard,rag:renderRAG,impact:renderImpact,participants:renderParticipants,contacts:renderContacts,volunteers:renderVolunteers,employers:renderEmployers,pipeline:renderPipeline,referrals:renderReferrals,partnerrefs:()=>{renderPartnerRefs();initPartnerPortal();},events:renderEvents,feedback:renderFeedback,circular:renderCircular,outcomes:renderOutcomes,funding:renderFunding,funders:renderFunders,evidence:renderEvidence,safeguarding:renderSafeguarding,settings:renderSettings,reports:renderReports,social:()=>{},bd:()=>{}};
+  const renders={dashboard:renderDashboard,rag:renderRAG,impact:renderImpact,participants:renderParticipants,contacts:renderContacts,volunteers:renderVolunteers,employers:renderEmployers,pipeline:renderPipeline,referrals:renderReferrals,partnerrefs:()=>{renderPartnerRefs();initPartnerPortal();},events:renderEvents,feedback:renderFeedback,circular:renderCircular,outcomes:renderOutcomes,funding:renderFunding,funders:renderFunders,evidence:renderEvidence,safeguarding:renderSafeguarding,settings:renderSettings,reports:renderReports,hr:renderHR,social:()=>{},bd:()=>{}};
   renders[page]?.();
   document.querySelectorAll('.nav-btn').forEach(b=>{if(b.getAttribute('onclick')?.includes("'"+page+"'"))b.classList.add('active');});
 }
