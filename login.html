@@ -150,9 +150,16 @@ input:focus,select:focus{border-color:var(--em)}
           <input type="text" id="su-color-hex" value="#10b981" style="flex:1;font-family:monospace;font-size:13px" oninput="if(this.value.match(/^#[0-9a-f]{6}$/i)){document.getElementById('su-color').value=this.value;onSignupColorChange(this.value)}"/>
         </div>
         <div class="color-presets" id="su-presets">
-          ${['#10b981','#3b82f6','#8b5cf6','#f59e0b','#ef4444','#ec4899','#14b8a6','#f97316','#6366f1','#0ea5e9'].map(c=>
-            `<div class="color-swatch${c==='#10b981'?' selected':''}" style="background:${c}" onclick="setSignupColor('${c}')" title="${c}"></div>`
-          ).join('')}
+          <div class="color-swatch selected" style="background:#10b981" onclick="setSignupColor('#10b981')" title="#10b981"></div>
+          <div class="color-swatch" style="background:#3b82f6" onclick="setSignupColor('#3b82f6')" title="#3b82f6"></div>
+          <div class="color-swatch" style="background:#8b5cf6" onclick="setSignupColor('#8b5cf6')" title="#8b5cf6"></div>
+          <div class="color-swatch" style="background:#f59e0b" onclick="setSignupColor('#f59e0b')" title="#f59e0b"></div>
+          <div class="color-swatch" style="background:#ef4444" onclick="setSignupColor('#ef4444')" title="#ef4444"></div>
+          <div class="color-swatch" style="background:#ec4899" onclick="setSignupColor('#ec4899')" title="#ec4899"></div>
+          <div class="color-swatch" style="background:#14b8a6" onclick="setSignupColor('#14b8a6')" title="#14b8a6"></div>
+          <div class="color-swatch" style="background:#f97316" onclick="setSignupColor('#f97316')" title="#f97316"></div>
+          <div class="color-swatch" style="background:#6366f1" onclick="setSignupColor('#6366f1')" title="#6366f1"></div>
+          <div class="color-swatch" style="background:#0ea5e9" onclick="setSignupColor('#0ea5e9')" title="#0ea5e9"></div>
         </div>
         <div class="color-preview" id="su-color-preview" style="background:#10b981;margin-top:10px"></div>
       </div>
