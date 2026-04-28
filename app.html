@@ -2002,6 +2002,12 @@ function onConFunderChange(){
 // ════════════════════════════════════════
 // REPORTS PAGE — contract-driven
 // ════════════════════════════════════════
+function generateReportByIdx(idx){
+  const c=window._reportContracts?.[idx];
+  if(!c){alert('Contract not found. Try refreshing the page.');return;}
+  generateAIReport(c.report_type||'other',c.id);
+}
+
 function renderReports(){
   const contracts=DB.contracts||[];
   $('reports-contract-list').innerHTML='';
@@ -2019,7 +2025,7 @@ function renderReports(){
   const live=contracts.filter(c=>c.status!=='expired');
   const expired=contracts.filter(c=>c.status==='expired');
 
-  const renderContractCard=(c,isExpired)=>{
+  const renderContractCard=(c,isExpired,idx)=>{
     const ft=FUNDER_TYPES[c.report_type||c.type]||FUNDER_TYPES.other;
     const funder=(DB.funders||[]).find(f=>String(f.id)===String(c.funder_id));
     const linked=DB.participants.filter(p=>toArr(p.contract_ids).includes(String(c.id)));
@@ -2042,7 +2048,7 @@ function renderReports(){
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <span style="font-size:11px;font-weight:700;color:${ragCol}">${{green:'🟢 On track',amber:'🟡 At risk',red:'🔴 Under'}[rag]}</span>
-          ${!isExpired?`<button class="btn btn-ai btn-sm" onclick="generateAIReport('${c.report_type||'other'}','${c.id}')">✦ Generate report</button>`:'<span class="badge b-lapsed">Expired</span>'}
+          ${!isExpired?`<button class="btn btn-ai btn-sm" onclick="generateReportByIdx(${idx})">✦ Generate report</button>`:'<span class="badge b-lapsed">Expired</span>'}
         </div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
@@ -2054,15 +2060,16 @@ function renderReports(){
     </div>`;
   };
 
-  let html='';
+  let _reportContracts=[];
   if(live.length){
     html+=`<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--em);margin-bottom:10px">Live contracts — ${live.length}</div>`;
-    html+=live.map(c=>renderContractCard(c,false)).join('');
+    live.forEach(c=>{html+=renderContractCard(c,false,_reportContracts.length);_reportContracts.push(c);});
   }
   if(expired.length){
     html+=`<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3);margin:16px 0 10px">Expired contracts — ${expired.length}</div>`;
-    html+=expired.map(c=>renderContractCard(c,true)).join('');
+    expired.forEach(c=>{html+=renderContractCard(c,true,_reportContracts.length);_reportContracts.push(c);});
   }
+  window._reportContracts=_reportContracts;
   html+=`<div id="report-output" style="display:none;margin-top:16px"></div>`;
   $('reports-contract-list').innerHTML=html;
 }
