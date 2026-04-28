@@ -178,14 +178,12 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <button class="nav-btn" onclick="go('funding')"><span class="icon">💰</span><span>Funding</span></button>
   <button class="nav-btn" onclick="go('reports')"><span class="icon">📄</span><span>Funder Reports</span></button>
   <button class="nav-btn" onclick="go('evidence')"><span class="icon">🗂️</span><span>Evidence Hub</span></button>
-  <button class="nav-btn" onclick="go('social')"><span class="icon">📣</span><span>Social Media</span><span class="ai-dot"></span></button>
-<button class="nav-btn" onclick="go('bd')"><span class="icon">💼</span><span>BD Manager</span><span class="ai-dot"></span></button>
   <div class="nav-section">Settings</div>
-  <button class="nav-btn" onclick="go('hrflags')"><span class="icon">🛡️</span><span>HR & Equality</span></button>
   <button class="nav-btn" onclick="go('safeguarding')"><span class="icon">🔐</span><span>Safeguarding</span></button>
   <button class="nav-btn" onclick="go('settings')"><span class="icon">⚙️</span><span>Settings</span></button>
   <div class="sidebar-bottom">
     <div style="font-size:10px;color:var(--purple);text-align:center;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:4px"><span>●</span> AI agents active</div>
+    <div id="upgrade-btn-wrap"></div>
     <button class="btn btn-ghost btn-sm" style="width:100%" onclick="signOut()">Sign out</button>
   </div>
 </div>
@@ -505,9 +503,8 @@ tr:hover td{background:rgba(16,185,129,.03)}
   </div>
   <div class="card" id="bd-saved-wrap" style="display:none"><div class="card-title">Saved EOIs</div><div id="bd-saved-list"></div></div>
 </div>
-<div id="page-hrflags" class="page"></div>
+
 <!-- SETTINGS -->
- 
 <div id="page-settings" class="page">
   <div class="page-header"><div><div class="page-title">Settings</div><div class="page-sub">Organisation preferences & module access</div></div></div>
   <div class="card">
@@ -954,7 +951,7 @@ function go(page){
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const el=$('page-'+page);if(!el)return;
   el.classList.add('active');
-  const renders={dashboard:renderDashboard,rag:renderRAG,impact:renderImpact,participants:renderParticipants,contacts:renderContacts,volunteers:renderVolunteers,employers:renderEmployers,pipeline:renderPipeline,referrals:renderReferrals,partnerrefs:renderPartnerRefs,events:renderEvents,feedback:renderFeedback,circular:renderCircular,outcomes:renderOutcomes,funding:renderFunding,evidence:renderEvidence,safeguarding:renderSafeguarding,settings:renderSettings,reports:()=>{},social:()=>{},bd:()=>{},hrflags:renderHRFlags};
+  const renders={dashboard:renderDashboard,rag:renderRAG,impact:renderImpact,participants:renderParticipants,contacts:renderContacts,volunteers:renderVolunteers,employers:renderEmployers,pipeline:renderPipeline,referrals:renderReferrals,partnerrefs:renderPartnerRefs,events:renderEvents,feedback:renderFeedback,circular:renderCircular,outcomes:renderOutcomes,funding:renderFunding,evidence:renderEvidence,safeguarding:renderSafeguarding,settings:renderSettings,reports:()=>{},social:()=>{},bd:()=>{}};
   renders[page]?.();
   document.querySelectorAll('.nav-btn').forEach(b=>{if(b.getAttribute('onclick')?.includes("'"+page+"'"))b.classList.add('active');});
 }
@@ -1361,10 +1358,17 @@ async function boot(){
   if(sb&&currentUser){const{data:profile}=await sb.from('profiles').select('*').eq('id',currentUser.id).maybeSingle();if(profile?.org_id)orgId=profile.org_id;}
   if(orgId&&sb){
     const{data:orgData}=await sb.from('organisations').select('*').eq('id',orgId).maybeSingle();
-    if(orgData){currentOrg=orgData;const b=$('org-banner');b.style.display='flex';$('ob-txt').textContent=orgData.name+(orgData.sector?' · '+orgData.sector:'');$('ob-plan').textContent=orgData.plan==='pro'?'✦ PRO':orgData.plan==='starter'?'Starter':orgData.plan==='network'?'Network':'Free';applyModules(orgData.modules||{});if(orgData.status==='suspended'){const warn=document.createElement('div');warn.style.cssText='background:#3a1a1a;color:#f87171;padding:8px 20px;font-size:13px;font-weight:600;text-align:center';warn.textContent='⚠ This organisation is suspended.';document.body.insertBefore(warn,$('shell'));}}
+    if(orgData){currentOrg=orgData;applyBranding(orgData);const b=$('org-banner');b.style.display='flex';$('ob-txt').textContent=orgData.name+(orgData.sector?' · '+orgData.sector:'');$('ob-plan').textContent=orgData.plan==='pro'?'✦ PRO':orgData.plan==='starter'?'Starter':orgData.plan==='network'?'Network':'Free';applyModules(orgData.modules||{});if(orgData.status==='suspended'){const warn=document.createElement('div');warn.style.cssText='background:#3a1a1a;color:#f87171;padding:8px 20px;font-size:13px;font-weight:600;text-align:center';warn.textContent='⚠ This organisation is suspended.';document.body.insertBefore(warn,$('shell'));}}
   }
   await syncAll();
   renderSettings();
+  // Show upgrade button for free/starter plans
+  const plan=currentOrg?.plan||'free';
+  const wrap=document.getElementById('upgrade-btn-wrap');
+  if(wrap&&!['pro','network'].includes(plan)){
+    wrap.innerHTML=`<button class="btn btn-sm" style="width:100%;margin-bottom:8px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border:none" onclick="showUpgradeModal()">✦ Upgrade to Pro</button>`;
+  }
+  checkWelcomeFlow();
   go('dashboard');
 }
 // ── SOCIAL MEDIA AGENT ───────────────────────────────────────
@@ -1587,443 +1591,276 @@ function copyEOI(){
   setTimeout(()=>event.target.textContent='📋 Copy text',2000);
 }
 
+// ════════════════════════════════════════
+// WHITE-LABEL SYSTEM
+// ════════════════════════════════════════
+const BRAND_DEFAULTS={primary:'#10b981',logo_url:null,org_name:'GreenCRM'};
+
+function applyBranding(org){
+  if(!org)return;
+  const primary=org.brand_color||BRAND_DEFAULTS.primary;
+  const logoUrl=org.logo_url||null;
+  const orgName=org.name||BRAND_DEFAULTS.org_name;
+  const root=document.documentElement;
+  root.style.setProperty('--em',primary);
+  root.style.setProperty('--em2',darkenColor(primary,15));
+  root.style.setProperty('--em3',lightenColor(primary,20));
+  document.title=orgName+' · GreenCRM';
+  const favicon=document.querySelector('link[rel="icon"]')||document.createElement('link');
+  favicon.rel='icon';favicon.type='image/svg+xml';
+  favicon.href=`data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='${encodeURIComponent(primary)}'/><text y='22' x='5' font-size='20'>🌿</text></svg>`;
+  document.head.appendChild(favicon);
+  const logoEl=document.querySelector('.logo');
+  if(logoEl&&logoUrl){logoEl.innerHTML=`<img src="${logoUrl}" alt="${orgName}" style="height:32px;max-width:160px;object-fit:contain;filter:brightness(0) invert(1)"/>`;}
+  else if(logoEl){logoEl.innerHTML=`${orgName}<span style="color:var(--txt2);font-weight:400"> CRM</span>`;}
+  const banner=document.getElementById('org-banner');
+  if(banner)banner.style.background=`linear-gradient(90deg,${darkenColor(primary,15)},${primary})`;
+  window._orgBranding={primary,logoUrl,orgName};
+}
+
+function hexToRgb(hex){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return{r,g,b};}
+function rgbToHex(r,g,b){return'#'+[r,g,b].map(v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join('');}
+function darkenColor(hex,pct){try{const{r,g,b}=hexToRgb(hex);const f=1-pct/100;return rgbToHex(r*f,g*f,b*f);}catch{return hex;}}
+function lightenColor(hex,pct){try{const{r,g,b}=hexToRgb(hex);const f=pct/100;return rgbToHex(r+(255-r)*f,g+(255-g)*f,b+(255-b)*f);}catch{return hex;}}
+
+async function uploadLogo(file){
+  if(!sb||!orgId)return null;
+  if(file.size>2*1024*1024){alert('Logo must be under 2MB');return null;}
+  if(!['image/png','image/jpeg','image/svg+xml','image/webp'].includes(file.type)){alert('Please upload PNG, JPG, SVG or WebP');return null;}
+  try{
+    const ext=file.name.split('.').pop();
+    const path=`logos/${orgId}.${ext}`;
+    const{error}=await sb.storage.from('org-assets').upload(path,file,{upsert:true});
+    if(error)throw error;
+    const{data}=sb.storage.from('org-assets').getPublicUrl(path);
+    return data.publicUrl;
+  }catch(e){console.error('Logo upload:',e.message);return null;}
+}
+
+function renderBrandingSettings(){
+  const existing=document.getElementById('branding-card');if(existing)existing.remove();
+  const b=window._orgBranding||BRAND_DEFAULTS;
+  const card=document.createElement('div');card.id='branding-card';card.className='card';
+  card.innerHTML=`<div class="card-title">Branding & white-label</div>
+    <p style="font-size:13px;color:var(--txt2);margin-bottom:16px;line-height:1.6">Your logo and colours appear in reports, the Impact Wall, and the app header.</p>
+    <div class="form-grid-2">
+      <div class="form-row"><label>Brand colour</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="color" id="brand-color-pick" value="${b.primary}" style="width:48px;height:38px;padding:2px;cursor:pointer;border-radius:8px" oninput="previewColor(this.value)"/>
+          <input type="text" id="brand-color-hex" value="${b.primary}" style="flex:1;font-family:monospace" oninput="if(this.value.match(/^#[0-9a-f]{6}$/i)){document.getElementById('brand-color-pick').value=this.value;previewColor(this.value)}"/>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+          ${['#10b981','#3b82f6','#8b5cf6','#f59e0b','#ef4444','#ec4899','#14b8a6','#f97316'].map(c=>`<div onclick="setColor('${c}')" style="width:24px;height:24px;border-radius:6px;background:${c};cursor:pointer;border:2px solid ${c===b.primary?'#fff':'transparent'}" title="${c}"></div>`).join('')}
+        </div>
+      </div>
+      <div class="form-row"><label>Organisation logo</label>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
+          ${b.logoUrl?`<img src="${b.logoUrl}" style="max-height:48px;max-width:160px;object-fit:contain;margin-bottom:10px;display:block;margin-left:auto;margin-right:auto"/>`:'<div style="font-size:28px;margin-bottom:8px">🖼️</div>'}
+          <div style="font-size:12px;color:var(--txt3);margin-bottom:10px">PNG, JPG, SVG · Max 2MB</div>
+          <label style="display:inline-block;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;color:var(--txt2);cursor:pointer;text-transform:none;letter-spacing:0">Upload logo<input type="file" accept="image/*" style="display:none" onchange="handleLogoUpload(this)"/></label>
+          ${b.logoUrl?`<button class="btn btn-danger btn-sm" style="margin-left:6px" onclick="removeLogo()">Remove</button>`:''}
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:8px"><label>Preview</label>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;display:flex;align-items:center;gap:12px;margin-top:6px">
+        <div id="preview-swatch" style="width:40px;height:40px;border-radius:8px;background:${b.primary}"></div>
+        <div><div id="preview-name" style="font-size:15px;font-weight:700;color:var(--txt)">${currentOrg?.name||'Your Organisation'}</div>
+        <div style="font-size:12px;color:var(--txt3)">Reports · Impact Wall · App header</div></div>
+        ${b.logoUrl?`<img src="${b.logoUrl}" style="max-height:32px;max-width:120px;object-fit:contain;margin-left:auto"/>`:''}
+      </div>
+    </div>
+    <div class="alert alert-ok" id="brand-save-msg" style="display:none;margin-top:12px">✓ Branding saved</div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn btn-p" onclick="saveBranding()">Save branding</button>
+      <button class="btn btn-ghost btn-sm" onclick="resetBranding()">Reset to default</button>
+    </div>`;
+  const settingsPage=document.getElementById('page-settings');
+  const firstCard=settingsPage?.querySelector('.card');
+  if(firstCard)firstCard.after(card);
+}
+
+function previewColor(color){
+  document.getElementById('brand-color-hex').value=color;
+  const swatch=document.getElementById('preview-swatch');if(swatch)swatch.style.background=color;
+  document.documentElement.style.setProperty('--em',color);
+  document.documentElement.style.setProperty('--em2',darkenColor(color,15));
+  document.documentElement.style.setProperty('--em3',lightenColor(color,20));
+}
+function setColor(color){document.getElementById('brand-color-pick').value=color;previewColor(color);}
+
+async function handleLogoUpload(input){
+  const file=input.files[0];if(!file)return;
+  const url=await uploadLogo(file);
+  if(url){await sb.from('organisations').update({logo_url:url}).eq('id',orgId);currentOrg.logo_url=url;window._orgBranding={...window._orgBranding,logoUrl:url};applyBranding(currentOrg);renderBrandingSettings();}
+}
+async function removeLogo(){if(!confirm('Remove logo?'))return;await sb.from('organisations').update({logo_url:null}).eq('id',orgId);currentOrg.logo_url=null;applyBranding(currentOrg);renderBrandingSettings();}
+async function saveBranding(){
+  const color=document.getElementById('brand-color-pick').value;
+  await sbUpdate('organisations',{brand_color:color},orgId);
+  currentOrg.brand_color=color;window._orgBranding={...window._orgBranding,primary:color};applyBranding(currentOrg);
+  const msg=document.getElementById('brand-save-msg');if(msg){msg.style.display='flex';setTimeout(()=>msg.style.display='none',3000);}
+}
+async function resetBranding(){await sbUpdate('organisations',{brand_color:'#10b981',logo_url:null},orgId);currentOrg.brand_color='#10b981';currentOrg.logo_url=null;applyBranding(currentOrg);renderBrandingSettings();}
+
+// ════════════════════════════════════════
+// PRO UPGRADE & WELCOME MODALS
+// ════════════════════════════════════════
+function checkWelcomeFlow(){
+  const params=new URLSearchParams(window.location.search);
+  if(params.get('welcome')==='1'){setTimeout(()=>showWelcomeModal(),1200);window.history.replaceState({},'','app.html?org_id='+orgId);}
+  if(params.get('upgraded')==='1'){setTimeout(()=>showProBrandingModal(),800);window.history.replaceState({},'','app.html?org_id='+orgId);}
+}
+
+function showWelcomeModal(){
+  const orgName=currentOrg?.name||'your organisation';
+  const modal=document.createElement('div');modal.id='welcome-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,sans-serif';
+  modal.innerHTML=`<div style="background:#111811;border:1px solid #2a3a2a;border-radius:16px;padding:32px;max-width:500px;width:100%;text-align:center">
+    <div style="font-size:48px;margin-bottom:16px">🌿</div>
+    <div style="font-size:22px;font-weight:800;color:#e2f5eb;margin-bottom:8px">Welcome to GreenCRM, ${orgName}!</div>
+    <div style="font-size:14px;color:#9ab8a4;line-height:1.7;margin-bottom:24px">Your workspace is ready. Here's what to do first.</div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px;text-align:left">
+      ${[['👤','Add your first participant','Participants → + Add participant'],['💰','Add a funding contract','Funding → + Add contract'],['📅','Create an event','Events → + Create event'],['🎭','Explore with demo data','Click demo data on the dashboard']].map(([icon,title,desc])=>`<div style="background:#182018;border:1px solid #2a3a2a;border-radius:10px;padding:12px 14px;display:flex;gap:12px;align-items:flex-start"><div style="font-size:20px;flex-shrink:0">${icon}</div><div><div style="font-size:13px;font-weight:600;color:#e2f5eb;margin-bottom:2px">${title}</div><div style="font-size:12px;color:#6a8f76">${desc}</div></div></div>`).join('')}
+    </div>
+    <div style="background:linear-gradient(135deg,rgba(79,70,229,.15),rgba(16,185,129,.08));border:1px solid rgba(124,58,237,.3);border-radius:10px;padding:14px;margin-bottom:20px">
+      <div style="font-size:12px;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">✦ Upgrade to Pro — £49/mo</div>
+      <div style="font-size:13px;color:#9ab8a4;line-height:1.6">Unlock AI funder reports, live funding finder, social media manager, HR equality agent, and full white-labelling.</div>
+      <button onclick="closeWelcomeModal();showUpgradeModal();" style="background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;margin-top:10px;width:100%">✦ Start Pro trial — 14 days free</button>
+    </div>
+    <button onclick="closeWelcomeModal()" style="background:#182018;color:#9ab8a4;border:1px solid #2a3a2a;border-radius:8px;padding:10px 24px;font-size:13px;font-weight:600;cursor:pointer;width:100%">Take me to my dashboard →</button>
+  </div>`;
+  document.body.appendChild(modal);
+}
+function closeWelcomeModal(){document.getElementById('welcome-modal')?.remove();}
+
+function showProBrandingModal(){
+  const b=window._orgBranding||{};
+  const modal=document.createElement('div');modal.id='pro-brand-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,sans-serif;overflow-y:auto';
+  modal.innerHTML=`<div style="background:#111811;border:1px solid rgba(124,58,237,.4);border-radius:16px;padding:32px;max-width:560px;width:100%;position:relative;margin:auto">
+    <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#4f46e5,#7c3aed,#10b981);border-radius:16px 16px 0 0"></div>
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(124,58,237,.15);border:1px solid rgba(124,58,237,.3);border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px">✦ Pro unlocked</div>
+      <div style="font-size:22px;font-weight:800;color:#e2f5eb;margin-bottom:6px">Make GreenCRM yours</div>
+      <div style="font-size:14px;color:#9ab8a4">Set up your branding — it'll appear in all reports, the Impact Wall, and your app header.</div>
+    </div>
+    <div style="margin-bottom:18px">
+      <label style="display:block;font-size:11px;color:#6a8f76;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Brand colour</label>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+        <input type="color" id="pb-color" value="${b.primary||'#10b981'}" style="width:44px;height:38px;padding:2px;cursor:pointer;border-radius:8px;background:#182018;border:1px solid #2a3a2a" oninput="pbColorChange(this.value)"/>
+        <input type="text" id="pb-color-hex" value="${b.primary||'#10b981'}" style="flex:1;background:#182018;border:1px solid #2a3a2a;color:#e2f5eb;border-radius:8px;padding:8px 12px;font-family:monospace;font-size:13px;outline:none" oninput="if(this.value.match(/^#[0-9a-f]{6}$/i)){document.getElementById('pb-color').value=this.value;pbColorChange(this.value)}"/>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${['#10b981','#3b82f6','#8b5cf6','#f59e0b','#ef4444','#ec4899','#14b8a6','#f97316','#6366f1','#0ea5e9','#84cc16','#06b6d4'].map(c=>`<div onclick="pbSetColor('${c}')" style="width:28px;height:28px;border-radius:7px;background:${c};cursor:pointer;border:3px solid ${c===(b.primary||'#10b981')?'#fff':'transparent'};transition:all .2s" title="${c}"></div>`).join('')}
+      </div>
+    </div>
+    <div style="margin-bottom:18px">
+      <label style="display:block;font-size:11px;color:#6a8f76;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Organisation logo</label>
+      <div style="border:2px dashed #2a3a2a;border-radius:10px;padding:20px;text-align:center;cursor:pointer;position:relative" onmouseenter="this.style.borderColor='#10b981'" onmouseleave="this.style.borderColor='#2a3a2a'">
+        <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" onchange="pbHandleLogo(this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%"/>
+        <div id="pb-logo-preview">${b.logoUrl?`<img src="${b.logoUrl}" style="max-height:48px;max-width:160px;object-fit:contain;margin:0 auto 8px;display:block"/><div style="font-size:11px;color:#10b981">✓ Logo uploaded</div>`:'<div style="font-size:28px;margin-bottom:6px">🖼️</div><div style="font-size:13px;color:#9ab8a4">Drop logo here or click to upload</div><div style="font-size:11px;color:#6a8f76;margin-top:4px">PNG, JPG, SVG · Max 2MB</div>'}</div>
+      </div>
+    </div>
+    <div style="background:#0a0f0a;border:1px solid #2a3a2a;border-radius:10px;padding:14px;margin-bottom:20px">
+      <div style="font-size:10px;color:#6a8f76;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Preview — how your reports will look</div>
+      <div style="display:flex;align-items:center;gap:10px;padding-bottom:10px;border-bottom:2px solid ${b.primary||'#10b981'}" id="pb-preview-border">
+        <div id="pb-preview-logo-wrap">${b.logoUrl?`<img src="${b.logoUrl}" style="max-height:32px;max-width:120px;object-fit:contain"/>`:''}</div>
+        <div><div id="pb-preview-name" style="font-size:15px;font-weight:800;color:#e2f5eb">${currentOrg?.name||'Your Organisation'}</div>
+        <div style="font-size:11px;color:#6a8f76">MoJ Programme Report · ${new Date().toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</div></div>
+        <div id="pb-preview-dot" style="margin-left:auto;width:36px;height:36px;border-radius:8px;background:${b.primary||'#10b981'}"></div>
+      </div>
+      <div style="margin-top:10px;font-size:12px;color:#6a8f76;font-style:italic">Your branding appears in all funder reports, Impact Wall, and morning briefing</div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button id="pb-save-btn" onclick="saveProBranding()" style="flex:1;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:700;cursor:pointer">✦ Save branding & enter →</button>
+      <button onclick="document.getElementById('pro-brand-modal').remove()" style="background:#182018;color:#9ab8a4;border:1px solid #2a3a2a;border-radius:10px;padding:12px 16px;font-size:13px;font-weight:600;cursor:pointer">Skip</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+let _pbLogoFile=null;
+function pbColorChange(color){
+  document.getElementById('pb-color-hex').value=color;
+  const dot=document.getElementById('pb-preview-dot');const border=document.getElementById('pb-preview-border');
+  if(dot)dot.style.background=color;if(border)border.style.borderColor=color;
+  document.documentElement.style.setProperty('--em',color);
+  document.documentElement.style.setProperty('--em2',darkenColor(color,15));
+}
+function pbSetColor(color){document.getElementById('pb-color').value=color;pbColorChange(color);}
+function pbHandleLogo(input){
+  const file=input.files[0];if(!file)return;
+  if(file.size>2*1024*1024){alert('Logo must be under 2MB');return;}
+  _pbLogoFile=file;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    document.getElementById('pb-logo-preview').innerHTML=`<img src="${e.target.result}" style="max-height:48px;max-width:160px;object-fit:contain;margin:0 auto 8px;display:block"/><div style="font-size:11px;color:#10b981">✓ ${file.name}</div>`;
+    document.getElementById('pb-preview-logo-wrap').innerHTML=`<img src="${e.target.result}" style="max-height:32px;max-width:120px;object-fit:contain"/>`;
+  };
+  reader.readAsDataURL(file);
+}
+async function saveProBranding(){
+  const btn=document.getElementById('pb-save-btn');btn.textContent='Saving…';btn.disabled=true;
+  const color=document.getElementById('pb-color').value;
+  let logoUrl=currentOrg?.logo_url||null;
+  if(_pbLogoFile&&orgId){
+    try{
+      const ext=_pbLogoFile.name.split('.').pop();
+      const path=`logos/${orgId}.${ext}`;
+      const{error}=await sb.storage.from('org-assets').upload(path,_pbLogoFile,{upsert:true});
+      if(!error){const{data}=sb.storage.from('org-assets').getPublicUrl(path);logoUrl=data.publicUrl;}
+    }catch(e){console.log('Logo:',e);}
+  }
+  const update={brand_color:color};if(logoUrl)update.logo_url=logoUrl;
+  await sb.from('organisations').update(update).eq('id',orgId);
+  currentOrg.brand_color=color;if(logoUrl)currentOrg.logo_url=logoUrl;
+  applyBranding(currentOrg);
+  document.getElementById('pro-brand-modal').remove();
+  const toast=document.createElement('div');
+  toast.style.cssText='position:fixed;top:24px;right:24px;background:#1a3a2a;border:1px solid #2a5a3a;border-radius:10px;padding:12px 18px;font-size:13px;color:#34d399;z-index:9999;font-family:system-ui,sans-serif';
+  toast.textContent='✓ Branding saved — your reports are now branded!';
+  document.body.appendChild(toast);setTimeout(()=>toast.remove(),4000);
+}
+
+function showUpgradeModal(){
+  const modal=document.createElement('div');modal.id='upgrade-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,sans-serif';
+  modal.innerHTML=`<div style="background:#111811;border:1px solid rgba(124,58,237,.4);border-radius:16px;padding:32px;max-width:480px;width:100%;text-align:center;position:relative">
+    <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#4f46e5,#7c3aed,#10b981);border-radius:16px 16px 0 0"></div>
+    <div style="font-size:36px;margin-bottom:14px">✦</div>
+    <div style="font-size:20px;font-weight:800;color:#e2f5eb;margin-bottom:8px">Upgrade to Pro</div>
+    <div style="font-size:14px;color:#9ab8a4;margin-bottom:24px;line-height:1.7">Unlock everything — AI agents, funder reports, live funding finder, your logo in reports, and more.</div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:24px;text-align:left">
+      ${['RAG Dashboard & AI report generation','Live funding contract finder','EOI generator','Social Media Manager','HR & Equality Agent','Your logo & colours in all reports','Partner referral portal','Unlimited users'].map(f=>`<div style="display:flex;gap:8px;align-items:center;font-size:13px;color:#9ab8a4"><span style="color:#10b981;font-weight:700">✓</span>${f}</div>`).join('')}
+    </div>
+    <div style="font-size:28px;font-weight:800;color:#e2f5eb;margin-bottom:4px">£49<span style="font-size:16px;font-weight:400;color:#6a8f76">/month</span></div>
+    <div style="font-size:12px;color:#6a8f76;margin-bottom:20px">14-day free trial · Cancel anytime</div>
+    <button onclick="startProUpgrade()" style="width:100%;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">Start free trial →</button>
+    <button onclick="document.getElementById('upgrade-modal').remove()" style="width:100%;background:none;color:#6a8f76;border:none;font-size:13px;cursor:pointer;padding:8px">Maybe later</button>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+async function startProUpgrade(){
+  document.getElementById('upgrade-modal')?.remove();
+  // TODO: Replace with Stripe checkout when ready:
+  // window.location.href='/api/stripe-checkout?org_id='+orgId+'&plan=pro';
+  alert('Stripe integration coming soon! Contact hello@greencrm.co.uk to upgrade.');
+}
+
+// ── ALSO update renderSettings to include branding ──
+const _origRenderSettings=window.renderSettings;
+
+// ── UPDATE renderImpact to show org logo ──
+// ── UPDATE generateAIReport to show org branding ──
+
 // Wire up dynamic show/hide for "Other" fields
 document.addEventListener('change',e=>{
   if(e.target.id==='vf-role'){const row=$('vf-role-other-row');if(row)row.style.display=e.target.value==='Other'?'block':'none';}
   if(e.target.id==='mp-engtype'){const row=$('mp-engtype-other-row');if(row)row.style.display=e.target.value==='Other'?'block':'none';}
 });
-// ════════════════════════════════════════
-// HR AGENT — Equality Act 2010 Compliance
-// Covers all 9 protected characteristics
-// Soft warning + manager log + GDPR audit trail
-// ════════════════════════════════════════
 
-const HR_AGENT = {
-
-  // ── PROTECTED CHARACTERISTICS (Equality Act 2010) ──
-  CHARACTERISTICS: [
-    'age', 'disability', 'gender reassignment', 'marriage and civil partnership',
-    'pregnancy and maternity', 'race', 'religion or belief', 'sex', 'sexual orientation'
-  ],
-
-  // ── PATTERN LIBRARY ──
-  // Catches both overt language and subtle bias
-  PATTERNS: {
-    race: {
-      label: 'Racial bias',
-      severity: 'high',
-      patterns: [
-        /\b(those people|these people)\b/i,
-        /\b(ghetto|thug|gangster)\b/i,
-        /\bcriminal (background|record|history)\b.*\b(asian|black|white|arab|muslim|jewish|sikh|hindu)\b/i,
-        /\b(coloured|colored)\b/i,
-        /\bnot from (here|this country|around here)\b/i,
-        /\b(foreigner|illegal|immigrant)\b/i,
-        /\bdoesn'?t speak (english|proper english)\b/i,
-      ]
-    },
-    sex: {
-      label: 'Sex / gender bias',
-      severity: 'high',
-      patterns: [
-        /\b(too emotional|very emotional)\b/i,
-        /\b(hysterical|irrational)\b.*\bshe\b/i,
-        /\bshe (can'?t|cannot|won'?t) handle\b/i,
-        /\bnot (suited|appropriate) for (a woman|women|men|a man)\b/i,
-        /\b(bossy|aggressive)\b.*\bshe\b/i,
-        /\b(weak|soft)\b.*\bhe\b/i,
-        /\bwoman'?s (job|work|place)\b/i,
-        /\bman'?s (job|work|world)\b/i,
-      ]
-    },
-    disability: {
-      label: 'Disability bias',
-      severity: 'high',
-      patterns: [
-        /\b(retard|retarded|spastic|mong)\b/i,
-        /\b(crazy|mad|psycho|mental)\b/i,
-        /\bbound to (fail|struggle|not cope)\b.*\b(disability|condition|illness)\b/i,
-        /\b(wheelchair bound|confined to)\b/i,
-        /\b(suffers from|suffering from)\b/i,
-        /\bnot capable\b.*\b(disability|autism|adhd|dyslexia)\b/i,
-        /\b(slow|stupid)\b.*\b(learning difficulty|disability)\b/i,
-      ]
-    },
-    age: {
-      label: 'Age discrimination',
-      severity: 'medium',
-      patterns: [
-        /\btoo old (to|for)\b/i,
-        /\btoo young (to|for)\b/i,
-        /\bover the hill\b/i,
-        /\b(old fashioned|set in (his|her|their) ways)\b/i,
-        /\bdigital (native|skills).*\bage\b/i,
-        /\bnot (worth|worth training)\b.*\b(age|older|retirement)\b/i,
-        /\bpast (it|their best|retirement)\b/i,
-      ]
-    },
-    religion: {
-      label: 'Religious discrimination',
-      severity: 'high',
-      patterns: [
-        /\b(muslim|islamic|jewish|christian|sikh|hindu|buddhist)\b.*\b(terrorist|extremist|radical)\b/i,
-        /\b(those|these)\b.*\b(muslims|jews|christians)\b/i,
-        /\breligion (prevents|stops|means they can'?t)\b/i,
-        /\bnot (culturally|religiously) compatible\b/i,
-        /\bwon'?t (fit in|integrate)\b.*\b(religion|faith|belief|muslim|jewish|sikh)\b/i,
-      ]
-    },
-    sexual_orientation: {
-      label: 'Sexual orientation bias',
-      severity: 'high',
-      patterns: [
-        /\b(gay|lesbian|bisexual|queer)\b.*\b(lifestyle|choice|preference)\b/i,
-        /\b(openly gay|admitted|confessed)\b.*\b(gay|lesbian|bisexual)\b/i,
-        /\bnot (suitable|appropriate)\b.*\b(gay|lesbian|lgbt)\b/i,
-      ]
-    },
-    gender_reassignment: {
-      label: 'Gender identity bias',
-      severity: 'high',
-      patterns: [
-        /\b(tranny|transvestite|tr\*nny)\b/i,
-        /\b(real|biological|actual)\b.*\b(man|woman|male|female)\b.*\btrans\b/i,
-        /\b(confused|pretending|claiming to be)\b.*\b(trans|gender)\b/i,
-      ]
-    },
-    pregnancy: {
-      label: 'Pregnancy / maternity bias',
-      severity: 'high',
-      patterns: [
-        /\bpregnant\b.*\b(liability|problem|issue|concern)\b/i,
-        /\b(maternity|pregnancy)\b.*\b(cost|expensive|inconvenient)\b/i,
-        /\bnot (reliable|committed)\b.*\b(pregnant|maternity|baby|child)\b/i,
-        /\bwon'?t (return|come back)\b.*\b(maternity|baby|children)\b/i,
-      ]
-    },
-    marriage: {
-      label: 'Marriage / civil partnership bias',
-      severity: 'medium',
-      patterns: [
-        /\b(married|single|divorced)\b.*\b(less committed|not serious|unreliable)\b/i,
-        /\bwife\b.*\b(won'?t allow|won'?t let|restrict)\b/i,
-        /\bhusband\b.*\b(won'?t allow|won'?t let)\b/i,
-      ]
-    },
-    gdpr: {
-      label: 'GDPR / data concern',
-      severity: 'medium',
-      patterns: [
-        /\b(date of birth|dob|d\.o\.b)\b/i,
-        /\b(national insurance|ni number|nino)\b/i,
-        /\b(passport number|driving licence number)\b/i,
-        /\b(bank account|sort code|account number)\b/i,
-        /\b(home address|full address|postcode)\b.*\b(note|record|log)\b/i,
-        /\b(medical record|diagnosis|condition)\b.*\bshared\b/i,
-      ]
-    }
-  },
-
-  // ── MAIN SCAN FUNCTION ──
-  async scan(text, context='general') {
-    if (!text || text.trim().length < 10) return null;
-
-    const flags = [];
-
-    // Pattern-based quick scan first
-    for (const [key, cat] of Object.entries(this.PATTERNS)) {
-      for (const pattern of cat.patterns) {
-        if (pattern.test(text)) {
-          flags.push({
-            category: cat.label,
-            severity: cat.severity,
-            type: 'pattern',
-            characteristic: key
-          });
-          break; // one flag per category
-        }
-      }
-    }
-
-    // AI deep scan for subtle bias (only if no obvious patterns found or text is long)
-    if (flags.length === 0 || text.length > 200) {
-      try {
-        const aiFlag = await this.aiScan(text, context);
-        if (aiFlag) flags.push(...aiFlag);
-      } catch(e) {
-        // AI scan failed — pattern scan result still valid
-        console.log('HR Agent AI scan skipped:', e.message);
-      }
-    }
-
-    return flags.length > 0 ? flags : null;
-  },
-
-  // ── AI DEEP SCAN ──
-  async aiScan(text, context) {
-    if (!window.callClaude) return null;
-    const sys = `You are an HR compliance officer trained in UK Equality Act 2010. 
-Analyse this text for discriminatory language, unconscious bias, or inappropriate assumptions about people based on their protected characteristics.
-
-Protected characteristics: age, disability, gender reassignment, marriage/civil partnership, pregnancy/maternity, race, religion/belief, sex, sexual orientation.
-
-Also flag: GDPR risks (personal data recorded inappropriately), safeguarding concerns, or unprofessional language.
-
-Respond with JSON only. If no issues found return: {"issues": []}
-If issues found return: {"issues": [{"category": "string", "severity": "high|medium|low", "quote": "exact problematic phrase", "reason": "brief explanation", "suggestion": "how to rewrite it"}]}
-
-Be sensitive but thorough. Flag subtle bias not just overt language.`;
-
-    try {
-      const r = await fetch('/api/claude', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 400,
-          system: sys,
-          messages: [{role: 'user', content: `Context: ${context}\n\nText to analyse:\n"${text.slice(0, 800)}"`}]
-        })
-      });
-      const data = await r.json();
-      const txt = data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
-      const clean = txt.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(clean);
-      return parsed.issues?.length > 0 ? parsed.issues : null;
-    } catch(e) {
-      return null;
-    }
-  },
-
-  // ── LOG TO MANAGER ──
-  async logFlag(flags, text, context, staffMember) {
-    if (!window.sb || !window.orgId) return;
-    try {
-      await window.sb.from('hr_flags').insert([{
-        org_id: window.orgId,
-        context,
-        flags: JSON.stringify(flags),
-        text_excerpt: text.slice(0, 200), // GDPR — store excerpt not full text
-        staff_member: staffMember || 'Unknown',
-        reviewed: false,
-        created_at: new Date().toISOString()
-      }]);
-    } catch(e) {
-      console.log('HR log failed:', e.message);
-    }
-  },
-
-  // ── SHOW WARNING UI ──
-  showWarning(flags, onProceed, onEdit) {
-    const existing = document.getElementById('hr-warning-modal');
-    if (existing) existing.remove();
-
-    const highFlags = flags.filter(f => f.severity === 'high');
-    const medFlags = flags.filter(f => f.severity === 'medium');
-    const isHigh = highFlags.length > 0;
-
-    const modal = document.createElement('div');
-    modal.id = 'hr-warning-modal';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,sans-serif';
-    modal.innerHTML = `
-      <div style="background:#111811;border:1px solid ${isHigh ? '#f87171' : '#f59e0b'};border-radius:14px;padding:28px;max-width:540px;width:100%">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-          <div style="font-size:28px">${isHigh ? '🚨' : '⚠️'}</div>
-          <div>
-            <div style="font-size:16px;font-weight:700;color:${isHigh ? '#f87171' : '#f59e0b'}">
-              ${isHigh ? 'Potential discrimination flagged' : 'Bias concern detected'}
-            </div>
-            <div style="font-size:12px;color:#6a8f76;margin-top:2px">
-              GreenCRM HR Agent · Equality Act 2010 compliance
-            </div>
-          </div>
-        </div>
-
-        <div style="font-size:13px;color:#9ab8a4;margin-bottom:16px;line-height:1.6">
-          The following content may contain language that conflicts with the Equality Act 2010 or your organisation's values. Please review before saving.
-        </div>
-
-        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px">
-          ${flags.map(f => `
-            <div style="background:#182018;border:1px solid ${f.severity==='high'?'#3a1a1a':'#2a2a1a'};border-left:3px solid ${f.severity==='high'?'#f87171':'#f59e0b'};border-radius:8px;padding:12px">
-              <div style="font-size:12px;font-weight:700;color:${f.severity==='high'?'#f87171':'#f59e0b'};margin-bottom:4px">
-                ${f.category} · ${f.severity === 'high' ? 'High concern' : 'Medium concern'}
-              </div>
-              ${f.quote ? `<div style="font-size:12px;color:#6a8f76;font-style:italic;margin-bottom:4px">"${f.quote}"</div>` : ''}
-              ${f.reason ? `<div style="font-size:12px;color:#9ab8a4">${f.reason}</div>` : ''}
-              ${f.suggestion ? `<div style="font-size:11px;color:#10b981;margin-top:4px">✦ Suggestion: ${f.suggestion}</div>` : ''}
-            </div>
-          `).join('')}
-        </div>
-
-        <div style="background:#1a2a3a;border:1px solid #1a3a5a;border-radius:8px;padding:10px 14px;font-size:12px;color:#60a5fa;margin-bottom:18px">
-          ℹ️ This flag has been logged for your manager to review. Your organisation's GDPR and equality policies apply.
-        </div>
-
-        <div style="display:flex;gap:10px;justify-content:flex-end">
-          <button onclick="document.getElementById('hr-warning-modal').remove();if(typeof hrEditCallback==='function')hrEditCallback();" 
-            style="background:#182018;color:#e2f5eb;border:1px solid #2a3a2a;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer">
-            ← Edit text
-          </button>
-          <button onclick="document.getElementById('hr-warning-modal').remove();if(typeof hrProceedCallback==='function')hrProceedCallback();"
-            style="background:${isHigh?'#3a1a1a':'#2a2a1a'};color:${isHigh?'#f87171':'#f59e0b'};border:1px solid ${isHigh?'#5a2a2a':'#3a3a1a'};border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer">
-            I understand — save anyway
-          </button>
-        </div>
-        <div style="font-size:11px;color:#6a8f76;text-align:center;margin-top:10px">
-          Saving this content confirms you have reviewed it and take responsibility for its accuracy and appropriateness.
-        </div>
-      </div>`;
-
-    document.body.appendChild(modal);
-
-    // Set callbacks
-    window.hrProceedCallback = onProceed;
-    window.hrEditCallback = onEdit;
-  }
-};
-
-// ── GDPR CONSENT BANNER ──
-function showGDPRBanner(){
-  if(localStorage.getItem('gdpr_accepted'))return;
-  const b=document.createElement('div');
-  b.id='gdpr-banner';
-  b.style.cssText='position:fixed;bottom:0;left:0;right:0;background:#111811;border-top:1px solid #2a3a2a;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;z-index:9998;font-family:system-ui,sans-serif;flex-wrap:wrap';
-  b.innerHTML=`
-    <div style="font-size:13px;color:#9ab8a4;max-width:600px;line-height:1.6">
-      🔐 <strong style="color:#e2f5eb">GreenCRM</strong> stores participant data securely in the UK. We are GDPR compliant. Data is used only for your organisation's case management. 
-      <a href="privacy.html" style="color:#10b981">Privacy policy</a> · <a href="dpa.html" style="color:#10b981">Data processing agreement</a>
-    </div>
-    <div style="display:flex;gap:8px;flex-shrink:0">
-      <button onclick="localStorage.setItem('gdpr_accepted','true');document.getElementById('gdpr-banner').remove()" 
-        style="background:#10b981;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer">
-        Accept
-      </button>
-      <button onclick="window.location.href='privacy.html'"
-        style="background:none;color:#9ab8a4;border:1px solid #2a3a2a;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer">
-        Learn more
-      </button>
-    </div>`;
-  document.body.appendChild(b);
-}
-
-// ── INTERCEPT saveCaseNote ──
-// Wraps the existing addNote function with HR scan
-const _originalAddNote = window.addNote;
-async function addNote(id) {
-  const txt = document.getElementById('new-note-txt')?.value || '';
-  if (!txt) return;
-
-  const flags = await HR_AGENT.scan(txt, 'case-note');
-  if (flags && flags.length > 0) {
-    await HR_AGENT.logFlag(flags, txt, 'case-note', currentUser?.email || 'staff');
-    HR_AGENT.showWarning(
-      flags,
-      async () => { // proceed
-        const p = DB.participants.find(x => x.id === id);
-        if (!p) return;
-        const notes = [...toArr(p.notes), {t: txt, d: today(), s: 'Staff', flagged: true}];
-        await sbUpdate('participants', {notes, last_contact: today()}, id);
-        if (sb) await refreshTable('participants');
-        const modal = document.getElementById('modal-notes');
-        if (modal) modal.remove();
-        renderParticipants();
-      },
-      () => {} // edit — just close warning, user edits
-    );
-    return;
-  }
-
-  // No flags — save normally
-  const p = DB.participants.find(x => x.id === id);
-  if (!p) return;
-  const notes = [...toArr(p.notes), {t: txt, d: today(), s: 'Staff'}];
-  await sbUpdate('participants', {notes, last_contact: today()}, id);
-  if (sb) await refreshTable('participants');
-  const modal = document.getElementById('modal-notes');
-  if (modal) modal.remove();
-  renderParticipants();
-}
-
-// ── INTERCEPT saveP (participant save) ──
-const _originalSaveP = window.saveP;
-async function saveP() {
-  const note = document.getElementById('mp-note')?.value || '';
-  const intake = document.getElementById('mp-intake-text')?.value || '';
-  const textToCheck = [note, intake].filter(Boolean).join(' ');
-
-  if (textToCheck.length > 10) {
-    const flags = await HR_AGENT.scan(textToCheck, 'participant-record');
-    if (flags && flags.length > 0) {
-      await HR_AGENT.logFlag(flags, textToCheck, 'participant-record', currentUser?.email || 'staff');
-      HR_AGENT.showWarning(
-        flags,
-        async () => _originalSaveP(), // proceed with save
-        () => {} // edit
-      );
-      return;
-    }
-  }
-  await _originalSaveP();
-}
-
-// ── HR FLAGS PAGE ──
-// Add this to your go() renders map: hrflags: renderHRFlags
-async function renderHRFlags() {
-  const el = document.getElementById('page-hrflags');
-  if (!el) return;
-  el.innerHTML = `
-    <div class="page-header">
-      <div><div class="page-title">🛡️ HR & Equality Flags</div>
-      <div class="page-sub">Equality Act 2010 · GDPR compliance log</div></div>
-      <button class="btn btn-ghost btn-sm" onclick="renderHRFlags()">↻ Refresh</button>
-    </div>
-    <div class="alert alert-info" style="margin-bottom:16px">
-      All flags are logged automatically when discriminatory or biased language is detected. Staff are warned before saving. This log is confidential and for manager review only.
-    </div>
-    <div id="hr-flags-list"><div class="ai-thinking"><div class="ai-thinking-dots"><span></span><span></span><span></span></div>Loading flags…</div></div>`;
-
-  if (!sb || !orgId) {
-    document.getElementById('hr-flags-list').innerHTML = '<div style="color:var(--txt3);font-size:13px">Connect to Supabase to view flags.</div>';
-    return;
-  }
-
-  try {
-    const {data: flags} = await sb.from('hr_flags').select('*').eq('org_id', orgId).order('created_at', {ascending: false}).limit(50);
-    if (!flags?.length) {
-      document.getElementById('hr-flags-list').innerHTML = '<div style="color:var(--em);font-size:14px;padding:20px 0">✅ No flags recorded — your team is writing with care.</div>';
-      return;
-    }
-    document.getElementById('hr-flags-list').innerHTML = flags.map(f => {
-      const flagData = JSON.parse(f.flags || '[]');
-      const isHigh = flagData.some(x => x.severity === 'high');
-      return `<div class="card" style="border-left:4px solid ${isHigh ? '#f87171' : '#f59e0b'};margin-bottom:12px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
-          <div>
-            <div style="font-size:13px;font-weight:700;color:${isHigh ? '#f87171' : '#f59e0b'}">${isHigh ? '🚨 High concern' : '⚠ Medium concern'}</div>
-            <div style="font-size:11px;color:var(--txt3)">${f.context} · ${f.staff_member} · ${new Date(f.created_at).toLocaleDateString('en-GB')}</div>
-          </div>
-          <div style="display:flex;gap:6px">
-            ${f.reviewed ? '<span class="badge b-active">✓ Reviewed</span>' : '<span class="badge b-amber">Pending review</span>'}
-            <button class="btn btn-ghost btn-sm" onclick="markHRReviewed('${f.id}')">Mark reviewed</button>
-          </div>
-        </div>
-        <div style="font-size:12px;color:var(--txt3);font-style:italic;margin-bottom:8px;background:var(--surface);padding:8px;border-radius:6px">"${f.text_excerpt}"</div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px">
-          ${flagData.map(flag => `<span class="badge b-flag">${flag.category || flag.label}</span>`).join('')}
-        </div>
-      </div>`;
-    }).join('');
-  } catch(e) {
-    document.getElementById('hr-flags-list').innerHTML = `<div style="color:var(--red);font-size:13px">Error loading flags: ${e.message}</div>`;
-  }
-}
-
-async function markHRReviewed(id) {
-  if (!sb) return;
-  await sb.from('hr_flags').update({reviewed: true}).eq('id', id);
-  renderHRFlags();
-}
 boot();
 </script>
 </body>
