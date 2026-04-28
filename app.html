@@ -309,6 +309,43 @@ tr:hover td{background:rgba(16,185,129,.03)}
 <!-- PARTNER REFERRALS -->
 <div id="page-partnerrefs" class="page">
   <div class="page-header"><div><div class="page-title">Partner Referrals</div><div class="page-sub">Submitted via Partner Portal</div></div></div>
+
+  <!-- PARTNER PORTAL SETUP CARD -->
+  <div class="card" id="partner-portal-setup">
+    <div class="card-title">🔗 Your partner portal link &amp; QR code</div>
+    <div style="display:grid;grid-template-columns:1fr auto;gap:20px;align-items:start">
+      <div>
+        <div style="font-size:13px;color:var(--txt2);margin-bottom:14px;line-height:1.7">Share this link or QR code with your referral partners — probation, Jobcentre Plus, housing providers. When they register via this link they are automatically linked to your organisation and all their referrals come straight to you.</div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <div id="partner-link-display" style="font-size:12px;color:var(--em);font-family:monospace;flex:1;word-break:break-all">Loading…</div>
+          <button class="btn btn-ghost btn-sm" onclick="copyPartnerLink()" id="copy-link-btn">📋 Copy</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-p btn-sm" onclick="copyPartnerLink()">📋 Copy link</button>
+          <button class="btn btn-ghost btn-sm" onclick="downloadQR()">⬇ Download QR</button>
+          <button class="btn btn-ghost btn-sm" onclick="sharePartnerLink()">📤 Share</button>
+          <button class="btn btn-ghost btn-sm" onclick="printPartnerCard()">🖨️ Print referral card</button>
+        </div>
+      </div>
+      <!-- QR CODE -->
+      <div style="text-align:center;flex-shrink:0">
+        <div id="qr-container" style="background:#fff;padding:12px;border-radius:10px;display:inline-block;border:1px solid var(--border)">
+          <canvas id="qr-canvas" width="140" height="140"></canvas>
+        </div>
+        <div style="font-size:10px;color:var(--txt3);margin-top:6px">Scan to open portal</div>
+      </div>
+    </div>
+    <!-- Email template toggle -->
+    <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
+      <button class="btn btn-ghost btn-sm" onclick="toggleEmailTemplate()" id="email-tpl-btn">✉️ Show email template to send to partners</button>
+      <div id="email-template" style="display:none;margin-top:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px">
+        <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Ready-to-send email template</div>
+        <div id="email-tpl-body" style="font-size:13px;color:var(--txt2);line-height:1.8;white-space:pre-wrap"></div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="copyEmailTemplate()">📋 Copy email</button>
+      </div>
+    </div>
+  </div>
+
   <div id="pref-alerts"></div>
   <div class="ai-panel" id="pref-ai-panel" style="display:none">
     <div class="ai-panel-title"><span class="ai-icon">🔍</span>AI Triage — unreviewed referrals</div>
@@ -1103,7 +1140,7 @@ function go(page){
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const el=$('page-'+page);if(!el)return;
   el.classList.add('active');
-  const renders={dashboard:renderDashboard,rag:renderRAG,impact:renderImpact,participants:renderParticipants,contacts:renderContacts,volunteers:renderVolunteers,employers:renderEmployers,pipeline:renderPipeline,referrals:renderReferrals,partnerrefs:renderPartnerRefs,events:renderEvents,feedback:renderFeedback,circular:renderCircular,outcomes:renderOutcomes,funding:renderFunding,funders:renderFunders,evidence:renderEvidence,safeguarding:renderSafeguarding,settings:renderSettings,reports:renderReports,social:()=>{},bd:()=>{}};
+  const renders={dashboard:renderDashboard,rag:renderRAG,impact:renderImpact,participants:renderParticipants,contacts:renderContacts,volunteers:renderVolunteers,employers:renderEmployers,pipeline:renderPipeline,referrals:renderReferrals,partnerrefs:()=>{renderPartnerRefs();initPartnerPortal();},events:renderEvents,feedback:renderFeedback,circular:renderCircular,outcomes:renderOutcomes,funding:renderFunding,funders:renderFunders,evidence:renderEvidence,safeguarding:renderSafeguarding,settings:renderSettings,reports:renderReports,social:()=>{},bd:()=>{}};
   renders[page]?.();
   document.querySelectorAll('.nav-btn').forEach(b=>{if(b.getAttribute('onclick')?.includes("'"+page+"'"))b.classList.add('active');});
 }
@@ -1263,6 +1300,135 @@ function renderReferrals(){
 function openAddR(){$('rf-date').value=today();['rf-fn','rf-ln'].forEach(f=>$(f).value='');$('modal-r').classList.add('open');}
 async function saveR(){const btn=$('r-save-btn');btn.textContent='Saving…';btn.disabled=true;try{await sbInsert('referrals',{first_name:$('rf-fn').value,last_name:$('rf-ln').value,source:$('rf-src').value,status:'Referred',advisor:$('rf-adv').value,referred_date:$('rf-date').value});await refreshTable('referrals');closeModal('modal-r');renderReferrals();}catch(e){alert('Save failed: '+e.message);}finally{btn.textContent='Save';btn.disabled=false;}}
 async function deleteRef(id){if(!confirm('Delete?'))return;await sbDelete('referrals',id);await refreshTable('referrals');renderReferrals();}
+
+// ════════════════════════════════════════
+// PARTNER PORTAL LINK + QR GENERATOR
+// ════════════════════════════════════════
+function getPartnerLink(){
+  const base=window.location.origin+window.location.pathname.replace('app.html','')+'partner.html';
+  return orgId?`${base}?org=${orgId}`:`${base}?org=YOUR_ORG_ID`;
+}
+
+function generateQR(url){
+  const canvas=$('qr-canvas');if(!canvas)return;
+  const ctx=canvas.getContext('2d');
+  const size=140;
+  // Simple QR-like visual using a URL hash — loads real QR via Google Charts API
+  const img=new Image();
+  img.crossOrigin='anonymous';
+  img.onload=()=>{ctx.drawImage(img,0,0,size,size);};
+  img.onerror=()=>{
+    // Fallback: draw a placeholder with the text
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,size,size);
+    ctx.fillStyle='#10b981';ctx.font='bold 11px system-ui';ctx.textAlign='center';
+    ctx.fillText('QR Code',size/2,size/2-6);
+    ctx.fillStyle='#6a8f76';ctx.font='9px system-ui';
+    ctx.fillText('(requires internet)',size/2,size/2+10);
+  };
+  img.src=`https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(url)}&color=10b981&bgcolor=ffffff`;
+}
+
+function initPartnerPortal(){
+  const link=getPartnerLink();
+  const el=$('partner-link-display');
+  if(el)el.textContent=link;
+  generateQR(link);
+  // Build email template
+  const orgName=currentOrg?.name||'our organisation';
+  const tpl=`Subject: Referral portal access — ${orgName}
+
+Dear colleague,
+
+We use GreenCRM to manage our participant caseload and we would like to give you direct access to submit referrals to us.
+
+Please use the secure link below to register for our partner portal. Once registered you can submit referrals, track their progress in real time, and receive status updates.
+
+Your portal link:
+${link}
+
+Or scan the QR code attached to this email.
+
+Once you register your account will be linked directly to ${orgName} — all referrals will come straight to our team.
+
+If you have any questions please don't hesitate to get in touch.
+
+Kind regards,
+${orgName} Team`;
+  const tplEl=$('email-tpl-body');
+  if(tplEl)tplEl.textContent=tpl;
+}
+
+function copyPartnerLink(){
+  const link=getPartnerLink();
+  navigator.clipboard.writeText(link);
+  const btn=$('copy-link-btn');if(btn){btn.textContent='✓ Copied!';setTimeout(()=>btn.textContent='📋 Copy',2000);}
+}
+
+function toggleEmailTemplate(){
+  const el=$('email-template');const btn=$('email-tpl-btn');
+  if(!el)return;
+  const open=el.style.display==='none';
+  el.style.display=open?'block':'none';
+  if(btn)btn.textContent=open?'✉️ Hide email template':'✉️ Show email template to send to partners';
+}
+
+function copyEmailTemplate(){
+  const text=$('email-tpl-body')?.textContent||'';
+  navigator.clipboard.writeText(text);
+  event.target.textContent='✓ Copied!';
+  setTimeout(()=>event.target.textContent='📋 Copy email',2000);
+}
+
+function downloadQR(){
+  const canvas=$('qr-canvas');if(!canvas)return;
+  const link=document.createElement('a');
+  link.download=(currentOrg?.name||'GreenCRM')+'-partner-portal-QR.png';
+  link.href=canvas.toDataURL('image/png');
+  link.click();
+}
+
+function sharePartnerLink(){
+  const link=getPartnerLink();
+  const orgName=currentOrg?.name||'GreenCRM';
+  if(navigator.share){
+    navigator.share({title:orgName+' Partner Portal',text:'Submit referrals to '+orgName+' via our secure partner portal.',url:link});
+  }else{
+    copyPartnerLink();
+    alert('Link copied to clipboard — paste it into WhatsApp, email, or Teams.');
+  }
+}
+
+function printPartnerCard(){
+  const link=getPartnerLink();
+  const orgName=currentOrg?.name||'GreenCRM';
+  const canvas=$('qr-canvas');
+  const qrDataUrl=canvas?canvas.toDataURL('image/png'):'';
+  const w=window.open('','_blank','width=600,height=500');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Partner Referral Card</title>
+  <style>body{font-family:system-ui,sans-serif;background:#fff;color:#111;padding:40px;max-width:500px;margin:0 auto}
+  h1{font-size:22px;font-weight:800;color:#10b981;margin-bottom:4px}
+  .sub{font-size:13px;color:#6b7280;margin-bottom:24px}
+  .url{font-size:12px;font-family:monospace;background:#f3f4f6;padding:10px 14px;border-radius:8px;word-break:break-all;color:#059669;margin-bottom:20px}
+  .steps{font-size:13px;color:#374151;line-height:1.8}
+  .qr{text-align:center;margin:24px 0}
+  .qr img{width:160px;height:160px;border:1px solid #e5e7eb;border-radius:8px;padding:8px}
+  .footer{margin-top:24px;font-size:11px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:12px}
+  @media print{button{display:none}@page{margin:15mm}}</style></head><body>
+  <h1>${orgName}</h1>
+  <div class="sub">Partner Referral Portal</div>
+  <div class="qr">${qrDataUrl?`<img src="${qrDataUrl}" alt="QR Code"/>`:'<div style="width:160px;height:160px;background:#f3f4f6;border-radius:8px;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:12px;color:#6b7280">Scan QR via portal</div>'}</div>
+  <div style="font-size:13px;font-weight:600;color:#111;margin-bottom:8px">Or visit:</div>
+  <div class="url">${link}</div>
+  <div class="steps"><strong>How to refer:</strong><br/>
+  1. Scan the QR code or visit the link above<br/>
+  2. Register your account (one-time, takes 2 minutes)<br/>
+  3. Submit referrals and track progress in real time<br/>
+  4. All referrals go directly to the ${orgName} team</div>
+  <div class="footer">Powered by GreenCRM · Secure · GDPR compliant · ${new Date().toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</div>
+  <div style="margin-top:16px;text-align:center"><button onclick="window.print()" style="background:#10b981;color:#fff;border:none;border-radius:8px;padding:10px 24px;font-size:14px;font-weight:700;cursor:pointer">🖨️ Print this card</button></div>
+  </body></html>`);
+  w.document.close();w.focus();
+}
 
 function renderPartnerRefs(){
   const urg={Urgent:'b-flag',Crisis:'b-flag',Standard:'b-prospect'};
