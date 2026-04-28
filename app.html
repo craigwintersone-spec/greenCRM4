@@ -2231,7 +2231,327 @@ async function boot(){
   if(wrap&&!['pro','network'].includes(plan)){wrap.innerHTML='<button class="btn btn-sm" style="width:100%;margin-bottom:8px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border:none" onclick="showUpgradeModal()">✦ Upgrade to Pro</button>';}
   go('dashboard');
 }
+// ════════════════════════════════════════════════════════════════
+// PIECE 2 — RBAC: role loading + can() helper + org switcher
+// ════════════════════════════════════════════════════════════════
+//
+// HOW TO INSTALL:
+// 1. Find your existing `async function boot()` near the bottom of app.html
+// 2. REPLACE it entirely with the version below
+// 3. ADD the new globals + helpers + permission matrix above boot()
+// 4. Save & reload — nothing visible changes yet, but `can()` is now usable everywhere
+//
+// VERIFY by opening the browser console and typing:
+//   currentRole       → 'manager' / 'advisor' / 'admin' / 'super_admin'
+//   can('edit','participants')  → true/false
+//   userMemberships   → array of {org_id, role, org_name}
+//
+// ════════════════════════════════════════════════════════════════
 
+// ─── NEW GLOBALS (add near top with other lets) ──────────────────
+let currentRole = null;          // 'manager' | 'advisor' | 'admin' | 'super_admin' | null
+let isSuperAdmin = false;        // boolean — true if in super_admins table
+let userMemberships = [];        // [{org_id, role, org_name, status}]
+
+
+// ─── PERMISSION MATRIX — single source of truth ──────────────────
+// Edit this matrix to change permissions globally.
+// Format: PERMS[role][resource] = ['view','create','edit','delete', ...] or 'all'
+const PERMS = {
+  manager: {
+    participants:    'all',
+    case_notes:      'all',
+    volunteers:      'all',
+    events:          'all',
+    feedback:        'all',
+    employers:       'all',
+    contacts:        'all',
+    referrals:       'all',
+    partner_refs:    'all',
+    circular:        'all',
+    contracts:       'all',
+    funders:         'all',
+    evidence:        'all',
+    reports:         'all',
+    safeguarding:    'all',
+    hr_equality:     'all',     // Manager-only per your decision
+    bd_manager:      'all',
+    social_media:    'all',
+    settings:        'all',
+    team:            'all',     // invite/remove users
+    billing:         []         // even managers can't touch billing — that's super-admin only
+  },
+  advisor: {
+    participants:    ['view_own','create','edit_own'],   // scoped to owner_user_id
+    case_notes:      ['view_own','create','edit_own'],
+    volunteers:      [],                                 // blocked entirely
+    events:          ['view','create','edit'],
+    feedback:        ['view','create'],
+    employers:       ['view'],                           // read-only
+    contacts:        [],
+    referrals:       ['view','create','edit_own'],
+    partner_refs:    [],
+    circular:        [],
+    contracts:       ['view'],                           // see contracts they're attached to
+    funders:         ['view'],
+    evidence:        ['view_own','create'],
+    reports:         ['view_own','create_own'],          // own caseload reports only
+    safeguarding:    ['view_own'],
+    hr_equality:     [],
+    bd_manager:      [],
+    social_media:    [],
+    settings:        [],
+    team:            [],
+    billing:         []
+  },
+  admin: {
+    participants:    [],          // BLOCKED — preserves participant confidentiality
+    case_notes:      [],          // BLOCKED — that's the whole point of Admin role
+    volunteers:      'all',
+    events:          'all',
+    feedback:        'all',
+    employers:       'all',
+    contacts:        'all',
+    referrals:       ['view','create','edit'],
+    partner_refs:    'all',
+    circular:        'all',
+    contracts:       ['view','create','edit'],
+    funders:         ['view','create','edit'],
+    evidence:        ['view','create','edit'],
+    reports:         ['view','create'],
+    safeguarding:    [],
+    hr_equality:     [],
+    bd_manager:      'all',
+    social_media:    'all',
+    settings:        [],
+    team:            [],
+    billing:         []
+  },
+  // Super admins get everything (used when you open someone else's CRM from the admin panel)
+  super_admin: {
+    _all: true
+  }
+};
+
+
+// ─── THE can() HELPER ─────────────────────────────────────────────
+// Usage:
+//   can('edit','participants')           → can edit ANY participant?
+//   can('edit','participants', participantObj)  → can edit THIS participant? (scoping)
+//   can('view','case_notes', participant)
+//
+function can(action, resource, record = null){
+  // Super admins bypass everything
+  if(isSuperAdmin || currentRole === 'super_admin') return true;
+  if(!currentRole) return false;
+
+  const perms = PERMS[currentRole]?.[resource];
+  if(perms === 'all') return true;
+  if(!perms || perms.length === 0) return false;
+
+  // Check for direct action match
+  if(perms.includes(action)) return true;
+
+  // Check for "_own" scoped variant — requires record + ownership match
+  const ownAction = action + '_own';
+  if(perms.includes(ownAction)){
+    if(!record) return true; // permission exists in principle (used for showing UI)
+    return record.owner_user_id === currentUser?.id;
+  }
+
+  // 'view' implied by view_own when no record passed (so menu items show up)
+  if(action === 'view' && perms.some(p => p.startsWith('view'))) return true;
+
+  return false;
+}
+
+// Convenience wrappers — readable in templates
+const canView   = (resource, record) => can('view',   resource, record);
+const canEdit   = (resource, record) => can('edit',   resource, record);
+const canCreate = (resource)         => can('create', resource);
+const canDelete = (resource, record) => can('delete', resource, record);
+
+
+// ─── LOAD MEMBERSHIPS & ROLE ─────────────────────────────────────
+async function loadUserAccess(){
+  if(!sb || !currentUser) return;
+
+  // 1. Check super-admin first (gives access to any org)
+  const { data: saRow } = await sb.from('super_admins')
+    .select('user_id').eq('user_id', currentUser.id).maybeSingle();
+  isSuperAdmin = !!saRow;
+
+  // 2. Load all memberships for this user
+  const { data: memData } = await sb.from('memberships')
+    .select('org_id, role, status, organisations(id, name)')
+    .eq('user_id', currentUser.id)
+    .eq('status', 'active');
+
+  userMemberships = (memData || []).map(m => ({
+    org_id: m.org_id,
+    role: m.role,
+    status: m.status,
+    org_name: m.organisations?.name || 'Unnamed org'
+  }));
+
+  // 3. Resolve which org we're in
+  const urlOrg = new URLSearchParams(window.location.search).get('org_id');
+
+  if(urlOrg){
+    // URL specifies an org — use that
+    orgId = urlOrg;
+    const membership = userMemberships.find(m => m.org_id === orgId);
+    if(membership){
+      currentRole = membership.role;
+    } else if(isSuperAdmin){
+      // Super admin opening a CRM they're not a member of — grant manager-like view
+      currentRole = 'super_admin';
+    } else {
+      // Not a member, not super admin — deny
+      alert('You do not have access to this organisation.');
+      window.location.href = 'login.html';
+      return;
+    }
+  } else if(userMemberships.length > 0){
+    // No URL org — pick first membership
+    orgId = userMemberships[0].org_id;
+    currentRole = userMemberships[0].role;
+  } else if(isSuperAdmin){
+    // Super admin with no memberships — they need to pick an org
+    window.location.href = 'admin.html';
+    return;
+  } else {
+    alert('You are not a member of any organisation.');
+    await sb.auth.signOut();
+    window.location.href = 'login.html';
+    return;
+  }
+}
+
+
+// ─── ORG SWITCHER (header dropdown for multi-org users) ──────────
+function renderOrgSwitcher(){
+  // Don't render if user only has 1 org (and isn't super admin)
+  if(userMemberships.length < 2 && !isSuperAdmin) return;
+
+  const banner = document.getElementById('org-banner');
+  if(!banner) return;
+
+  const orgs = userMemberships.map(m =>
+    `<option value="${m.org_id}" ${m.org_id === orgId ? 'selected' : ''}>${m.org_name} (${m.role})</option>`
+  ).join('');
+
+  // Inject switcher into the org-banner area
+  const switcherEl = document.createElement('div');
+  switcherEl.style.cssText = 'display:flex;align-items:center;gap:8px;margin-left:16px';
+  switcherEl.innerHTML = `
+    <label style="font-size:11px;color:rgba(255,255,255,.85);text-transform:uppercase;letter-spacing:.5px;margin:0">Org:</label>
+    <select id="org-switcher" onchange="switchOrg(this.value)" style="background:rgba(0,0,0,.25);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;font-family:inherit;width:auto">
+      ${orgs}
+    </select>
+  `;
+
+  // Append next to the existing org name text
+  const obTxt = document.getElementById('ob-txt');
+  if(obTxt && !document.getElementById('org-switcher')){
+    obTxt.parentNode.insertBefore(switcherEl, obTxt.nextSibling);
+  }
+}
+
+function switchOrg(newOrgId){
+  if(newOrgId === orgId) return;
+  // Reload with new org_id in URL — cleanest way; preserves session
+  window.location.href = 'app.html?org_id=' + newOrgId;
+}
+
+
+// ─── ROLE BADGE in user strip ────────────────────────────────────
+function showRoleBadge(){
+  // Find the sidebar bottom area and inject a small role indicator
+  const sidebarBottom = document.querySelector('.sidebar-bottom');
+  if(!sidebarBottom || document.getElementById('current-role-badge')) return;
+
+  const roleLabels = {
+    manager: { txt: '👑 Manager', col: '#10b981' },
+    advisor: { txt: '👤 Advisor', col: '#60a5fa' },
+    admin:   { txt: '⚙️ Admin',   col: '#a78bfa' },
+    super_admin: { txt: '🛡️ Super Admin', col: '#f59e0b' }
+  };
+  const cfg = roleLabels[currentRole] || { txt: currentRole, col: 'var(--txt3)' };
+
+  const badge = document.createElement('div');
+  badge.id = 'current-role-badge';
+  badge.style.cssText = `font-size:10px;color:${cfg.col};text-align:center;margin-bottom:8px;font-weight:700;letter-spacing:.5px;text-transform:uppercase`;
+  badge.textContent = cfg.txt;
+  sidebarBottom.insertBefore(badge, sidebarBottom.firstChild);
+}
+
+
+// ─── UPDATED boot() — REPLACES YOUR EXISTING boot() FUNCTION ─────
+async function boot(){
+  initSB();
+
+  if(sb){
+    const { data: { session } } = await sb.auth.getSession();
+    if(!session){
+      const orgParam = new URLSearchParams(window.location.search).get('org_id');
+      window.location.href = 'login.html' + (orgParam ? '?org_id=' + orgParam : '');
+      return;
+    }
+    currentUser = session.user;
+  }
+
+  // ─── NEW: Load access (super admin status + memberships + active role) ───
+  await loadUserAccess();
+
+  // Load the active org details
+  if(orgId && sb){
+    const { data: orgData } = await sb.from('organisations').select('*').eq('id', orgId).maybeSingle();
+    if(orgData){
+      currentOrg = orgData;
+      applyBranding(orgData);
+      const b = $('org-banner');
+      if(b) b.style.display = 'flex';
+      $('ob-txt').textContent = orgData.name + (orgData.sector ? ' · ' + orgData.sector : '');
+      $('ob-plan').textContent =
+        orgData.plan === 'pro' ? '✦ PRO'
+        : orgData.plan === 'network' ? 'Network'
+        : orgData.plan === 'starter' ? 'Starter'
+        : 'Free';
+      applyModules(orgData.modules || {});
+
+      if(orgData.status === 'suspended'){
+        const warn = document.createElement('div');
+        warn.style.cssText = 'background:#3a1a1a;color:#f87171;padding:8px 20px;font-size:13px;font-weight:600;text-align:center';
+        warn.textContent = '⚠ This organisation is suspended.';
+        document.body.insertBefore(warn, $('shell'));
+      }
+    }
+  }
+
+  await syncAll();
+  renderSettings();
+
+  // ─── NEW: render role-aware UI bits ───
+  renderOrgSwitcher();
+  showRoleBadge();
+
+  const plan = currentOrg?.plan || 'free';
+  const wrap = $('upgrade-btn-wrap');
+  if(wrap && !['pro','network'].includes(plan)){
+    wrap.innerHTML = '<button class="btn btn-sm" style="width:100%;margin-bottom:8px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border:none" onclick="showUpgradeModal()">✦ Upgrade to Pro</button>';
+  }
+
+  go('dashboard');
+}
+
+// ════════════════════════════════════════════════════════════════
+// END OF PIECE 2 — verify in console:
+//   currentRole, isSuperAdmin, userMemberships
+//   can('edit','participants')   → true if manager/super_admin/advisor
+//   can('view','hr_equality')    → true only for manager/super_admin
+//   can('view','case_notes')     → false for admin, true for manager
+// ════════════════════════════════════════════════════════════════
 boot();
 </script>
 </body>
