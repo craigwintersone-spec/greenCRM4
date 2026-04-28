@@ -1896,7 +1896,279 @@ async function saveSettings(){
   try{const mods={};SET_MODULES.forEach(mod=>mods[mod.k]=_modState[mod.k]??true);const d={name:$('set-name').value,sector:$('set-sector').value,modules:mods};await sbUpdate('organisations',d,orgId);currentOrg={...currentOrg,...d};applyModules(mods);$('ob-txt').textContent=currentOrg.name;$('set-save-msg').style.display='flex';setTimeout(()=>$('set-save-msg').style.display='none',3000);}
   catch(e){alert('Save failed: '+e.message);}finally{btn.textContent='Save settings';btn.disabled=false;}
 }
+const PROTECTED_CHARS = ['Age','Disability','Gender reassignment','Marriage & civil partnership','Pregnancy & maternity','Race','Religion or belief','Sex','Sexual orientation'];
+let _hrFlags = []; // in-memory flag store (manager review queue)
+let _editEqPId = null;
 
+// ── MAIN RENDER ──
+function renderHR(){
+  // Fix the protected characteristics grid that uses template literal in HTML
+  const charsGrid = document.querySelector('#hr-tab-flags .card:last-child > div[style*="grid"]');
+  if(charsGrid && charsGrid.innerHTML.includes('${')){
+    charsGrid.innerHTML = PROTECTED_CHARS.map(c =>
+      `<div style="background:var(--surface);border:1px solid rgba(124,58,237,.2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--txt2);display:flex;align-items:center;gap:6px"><span style="color:var(--purple)">✦</span>${c}</div>`
+    ).join('');
+  }
+
+  // Load saved HR mode
+  const savedMode = localStorage.getItem('hr_mode') || 'advisory';
+  const radio = document.querySelector(`input[name="hr-mode"][value="${savedMode}"]`);
+  if(radio) radio.checked = true;
+  const savedEmail = localStorage.getItem('hr_manager_email') || '';
+  if($('hr-manager-email')) $('hr-manager-email').value = savedEmail;
+
+  updateHRModeBanner();
+  renderHRFlags();
+  renderEqMonitoringList();
+}
+
+function updateHRModeBanner(){
+  const mode = (document.querySelector('input[name="hr-mode"]:checked')||{}).value || 'advisory';
+  const banner = $('hr-mode-banner'); if(!banner) return;
+  const cfg = {
+    strict: { txt:'⚖️ Strict mode active — flags block save, manager alerted instantly. Best for justice programmes.', cls:'alert-warn' },
+    advisory: { txt:'💬 Advisory mode active — soft warnings, can proceed, flags logged for manager review.', cls:'alert-info' },
+    silent: { txt:'🔕 Silent mode active — no interruption, flags logged quietly, weekly digest to manager.', cls:'alert-ok' }
+  }[mode];
+  banner.className = 'alert ' + cfg.cls;
+  banner.style.marginBottom = '16px';
+  banner.textContent = cfg.txt;
+}
+
+// ── TAB SWITCHING ──
+function switchHRTab(tab, btn){
+  ['flags','equity','monitoring','wellbeing','benchmark','settings'].forEach(t => {
+    const el = $('hr-tab-' + t);
+    if(el) el.style.display = (t === tab) ? 'block' : 'none';
+  });
+  // Update active button styling within HR tab
+  document.querySelectorAll('#page-hr .vtab-btn').forEach(b => b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+}
+
+// ── FLAGS QUEUE ──
+function renderHRFlags(){
+  const el = $('hr-flags-list'); if(!el) return;
+  if(!_hrFlags.length){
+    el.innerHTML = '<div style="color:var(--txt3);font-size:13px;padding:10px 0">No flags in the review queue. Run a full language scan to check existing notes.</div>';
+    return;
+  }
+  el.innerHTML = _hrFlags.map((f,i) => `
+    <div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:8px;padding:12px 14px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:600;color:var(--txt);margin-bottom:4px">${f.who||'Unknown'} · <span style="color:var(--txt3);font-weight:400">${f.context||'Case note'}</span></div>
+          <div style="font-size:13px;color:var(--txt2);font-style:italic;margin-bottom:6px">"${f.snippet||''}"</div>
+          <div style="font-size:12px;color:var(--purple)">✦ ${f.suggestion||'Consider person-first language'}</div>
+        </div>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-ghost btn-sm" onclick="dismissHRFlag(${i})">Dismiss</button>
+          <button class="btn btn-p btn-sm" onclick="resolveHRFlag(${i})">✓ Resolved</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+function dismissHRFlag(i){ _hrFlags.splice(i,1); renderHRFlags(); }
+function resolveHRFlag(i){ _hrFlags.splice(i,1); renderHRFlags(); }
+
+// ── LANGUAGE SCAN ──
+async function runFullLanguageScan(){
+  const el = $('language-scan-result');
+  if(!el) return;
+  aiThinking(el);
+
+  // Gather case notes from participants
+  const samples = [];
+  DB.participants.forEach(p => {
+    toArr(p.notes).forEach(nt => {
+      if(nt.t) samples.push({ who: p.first_name+' '+p.last_name, text: nt.t, context: 'Case note ('+(nt.d||'')+')' });
+    });
+  });
+
+  if(!samples.length){
+    el.innerHTML = '<div style="color:var(--txt3);font-size:13px">No case notes to scan yet. Add some participant notes first.</div>';
+    return;
+  }
+
+  const sys = `You are a positive language coach for a UK charity. Scan case notes for language that may be deficit-based, stigmatising, or non-person-first.
+Return ONLY a JSON array (no markdown, no preamble) of flagged items, max 5. Each item:
+{"who":"name","context":"case note","snippet":"the problematic phrase (under 12 words)","suggestion":"a brief, kind reframe suggestion"}
+If nothing concerning, return []. Be measured — only flag genuine concerns, not normal clinical language.`;
+
+  const prompt = samples.slice(0,15).map(s => `[${s.who}] ${s.text}`).join('\n\n');
+
+  try {
+    const r = await callClaude(sys, prompt, 600);
+    const match = r.match(/\[[\s\S]*\]/);
+    const flags = match ? JSON.parse(match[0]) : [];
+    _hrFlags = flags;
+    renderHRFlags();
+    el.innerHTML = `<div class="ai-response">Scan complete. <strong>${flags.length}</strong> item${flags.length===1?'':'s'} added to the manager review queue below.${flags.length===0?' Nothing concerning detected — well done team.':''}</div>`;
+  } catch(e){
+    if(e.message === 'AI_PLAN_GATE') return;
+    el.innerHTML = `<div style="color:var(--red);font-size:13px">Scan failed: ${e.message}</div>`;
+  }
+}
+
+// ── EQUITY ANALYSIS ──
+async function runEquityAnalysis(){
+  const el = $('equity-result'); if(!el) return;
+  el.innerHTML = `<div class="ai-panel"><div class="ai-thinking"><div class="ai-thinking-dots"><span></span><span></span><span></span></div>Analysing outcome equity across protected characteristics…</div></div>`;
+
+  const P = DB.participants;
+  if(!P.length){
+    el.innerHTML = '<div class="alert alert-info">No participant data yet. Add participants to run equity analysis.</div>';
+    return;
+  }
+
+  // Build summary stats
+  const totalOutcomes = P.filter(p => p.outcomes.length > 0).length;
+  const overallRate = pct(totalOutcomes, P.length);
+  const safeguardingFlagged = P.filter(p => p.safeguarding).length;
+  const highRisk = P.filter(p => p.risk === 'High').length;
+
+  const sys = 'You are an equality and diversity analyst for a UK charity. Provide a concise outcome equity summary. Use **bold** for key findings. Flag any gap over 15% as a potential concern. End with one specific recommendation. Be evidence-based — only use the data provided. 200 words max.';
+  const prompt = `Total participants: ${P.length}\nOverall outcome rate: ${overallRate}%\nSafeguarding flags: ${safeguardingFlagged}\nHigh risk: ${highRisk}\nStages: ${P_STAGES.map(s=>s+': '+P.filter(p=>p.stage===s).length).join(', ')}\nNote: equality monitoring data is limited at this scale — flag where more data collection is needed.`;
+
+  try {
+    const r = await callClaude(sys, prompt, 400);
+    el.innerHTML = `<div class="ai-panel"><div class="ai-panel-title"><span class="ai-icon">📊</span>Equity analysis</div><div class="ai-response">${r.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br/>')}</div></div>`;
+  } catch(e){
+    if(e.message === 'AI_PLAN_GATE') return;
+    el.innerHTML = `<div class="alert alert-warn">Analysis failed: ${e.message}</div>`;
+  }
+}
+
+// ── EQUALITY MONITORING LIST ──
+function renderEqMonitoringList(){
+  const el = $('eq-monitoring-list'); if(!el) return;
+  const badge = $('eq-completion-badge');
+  const P = DB.participants;
+  if(!P.length){
+    el.innerHTML = emptyState('📋','No participants yet','Equality monitoring will appear once participants are added.','','');
+    if(badge) badge.textContent = '';
+    return;
+  }
+  const completed = P.filter(p => p.equality_data && Object.keys(p.equality_data).length > 0).length;
+  if(badge) badge.textContent = completed + ' of ' + P.length + ' completed (' + pct(completed,P.length) + '%)';
+
+  el.innerHTML = P.map(p => {
+    const has = p.equality_data && Object.keys(p.equality_data).length > 0;
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--txt)">${p.first_name} ${p.last_name}</div>
+        <div style="font-size:11px;color:var(--txt3)">${has ? '✓ Completed' : 'Not yet recorded'}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="openEqualityModal(${p.id})">${has ? 'Edit' : '+ Add data'}</button>
+    </div>`;
+  }).join('');
+}
+
+function openEqualityModal(pid){
+  const p = DB.participants.find(x => x.id === pid); if(!p) return;
+  _editEqPId = pid;
+  $('eq-modal-title').textContent = 'Equality monitoring — ' + p.first_name + ' ' + p.last_name;
+  const ed = p.equality_data || {};
+  ['eq-age','eq-ethnicity','eq-gender','eq-trans','eq-orientation','eq-religion','eq-disability','eq-pregnancy','eq-marriage'].forEach(id => {
+    const key = id.replace('eq-','');
+    if($(id)) $(id).value = ed[key] || '';
+  });
+  $('modal-eq').classList.add('open');
+}
+
+async function saveEqualityData(){
+  if(!_editEqPId) return;
+  const btn = $('eq-save-btn'); btn.textContent = 'Saving…'; btn.disabled = true;
+  try {
+    const data = {
+      age: $('eq-age').value, ethnicity: $('eq-ethnicity').value, gender: $('eq-gender').value,
+      trans: $('eq-trans').value, orientation: $('eq-orientation').value, religion: $('eq-religion').value,
+      disability: $('eq-disability').value, pregnancy: $('eq-pregnancy').value, marriage: $('eq-marriage').value
+    };
+    // Strip empty
+    Object.keys(data).forEach(k => { if(!data[k]) delete data[k]; });
+
+    await sbUpdate('participants', { equality_data: data }, _editEqPId);
+    const idx = DB.participants.findIndex(x => x.id === _editEqPId);
+    if(idx >= 0) DB.participants[idx].equality_data = data;
+    closeModal('modal-eq');
+    renderEqMonitoringList();
+  } catch(e){
+    alert('Save failed: ' + e.message);
+  } finally {
+    btn.textContent = 'Save'; btn.disabled = false;
+  }
+}
+
+// ── WELLBEING SCAN ──
+async function runWellbeingScan(){
+  const el = $('wellbeing-result'); if(!el) return;
+  el.innerHTML = `<div class="ai-panel"><div class="ai-thinking"><div class="ai-thinking-dots"><span></span><span></span><span></span></div>Scanning advisor case notes for stress patterns…</div></div>`;
+
+  // Group notes by advisor
+  const byAdvisor = {};
+  DB.participants.forEach(p => {
+    if(!p.advisor || p.advisor === 'Unassigned') return;
+    if(!byAdvisor[p.advisor]) byAdvisor[p.advisor] = [];
+    toArr(p.notes).forEach(nt => { if(nt.t) byAdvisor[p.advisor].push(nt.t); });
+  });
+
+  const advisors = Object.keys(byAdvisor).filter(a => byAdvisor[a].length >= 2);
+  if(!advisors.length){
+    el.innerHTML = '<div class="alert alert-info">Not enough advisor case notes yet to scan for patterns. Need at least 2 notes per advisor.</div>';
+    return;
+  }
+
+  const sys = 'You are a staff wellbeing analyst for a UK charity manager. Scan an advisor\'s case notes for repeated patterns suggesting stress, burnout, or compassion fatigue (overwhelm language, declining note quality, reduced empathy). Be measured — only flag genuine repeated patterns, not single tough cases. Suggest a quiet check-in if warranted. Use **bold** for advisor names. Max 250 words. This is for the manager only.';
+  const prompt = advisors.map(a => `Advisor: ${a}\nNotes (${byAdvisor[a].length}):\n${byAdvisor[a].slice(0,8).map((n,i)=>(i+1)+'. '+n).join('\n')}`).join('\n\n---\n\n');
+
+  try {
+    const r = await callClaude(sys, prompt, 500);
+    el.innerHTML = `<div class="ai-panel"><div class="ai-panel-title"><span class="ai-icon">💚</span>Manager-only wellbeing summary</div><div class="ai-response">${r.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br/>')}</div></div>`;
+  } catch(e){
+    if(e.message === 'AI_PLAN_GATE') return;
+    el.innerHTML = `<div class="alert alert-warn">Scan failed: ${e.message}</div>`;
+  }
+}
+
+// ── BENCHMARKING ──
+async function runBenchmarking(){
+  const el = $('benchmark-result'); if(!el) return;
+  el.innerHTML = `<div class="ai-panel"><div class="ai-thinking"><div class="ai-thinking-dots"><span></span><span></span><span></span></div>Comparing against anonymised sector aggregates…</div></div>`;
+
+  const P = DB.participants;
+  const outcomeRate = P.length ? pct(P.filter(p=>p.outcomes.length>0).length, P.length) : 0;
+  const flaggedNotes = _hrFlags.length;
+
+  const sys = 'You are a sector benchmarking analyst for UK employability charities. Provide an anonymised comparison vs typical similar-size organisations. Use **bold** for the org\'s position. Be honest but constructive. Note that benchmark figures are illustrative sector averages, not guaranteed. 200 words max.';
+  const prompt = `Org: ${currentOrg?.name||'this org'}\nSector: ${currentOrg?.sector||'employability charity'}\nParticipants: ${P.length}\nOutcome rate: ${outcomeRate}%\nLanguage flags in queue: ${flaggedNotes}\nHR mode: ${(document.querySelector('input[name="hr-mode"]:checked')||{}).value||'advisory'}`;
+
+  try {
+    const r = await callClaude(sys, prompt, 400);
+    el.innerHTML = `<div class="ai-panel"><div class="ai-panel-title"><span class="ai-icon">🏆</span>Benchmark report</div><div class="ai-response">${r.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br/>')}</div><div style="margin-top:12px;font-size:11px;color:var(--txt3);padding:8px 12px;background:var(--surface);border-radius:6px">🔒 No organisation names ever shared in benchmarking data.</div></div>`;
+  } catch(e){
+    if(e.message === 'AI_PLAN_GATE') return;
+    el.innerHTML = `<div class="alert alert-warn">Benchmark failed: ${e.message}</div>`;
+  }
+}
+
+// ── HR SETTINGS ──
+function saveHRMode(){
+  const mode = (document.querySelector('input[name="hr-mode"]:checked')||{}).value || 'advisory';
+  localStorage.setItem('hr_mode', mode);
+  updateHRModeBanner();
+}
+
+function saveHRSettings(){
+  const mode = (document.querySelector('input[name="hr-mode"]:checked')||{}).value || 'advisory';
+  const email = $('hr-manager-email').value.trim();
+  localStorage.setItem('hr_mode', mode);
+  localStorage.setItem('hr_manager_email', email);
+  updateHRModeBanner();
+  const msg = $('hr-settings-saved');
+  if(msg){ msg.style.display = 'flex'; setTimeout(()=> msg.style.display = 'none', 2500); }
+}
 function applyBranding(org){
   if(!org)return;
   const primary=org.brand_color||'#10b981';
