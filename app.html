@@ -175,9 +175,8 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <button class="nav-btn" onclick="go('circular')"><span class="icon">♻️</span><span>Circular Economy</span></button>
   <div class="nav-section">Reporting</div>
   <button class="nav-btn" onclick="go('outcomes')"><span class="icon">🎯</span><span>Outcomes</span><span class="ai-dot"></span></button>
-  <button class="nav-btn" onclick="go('funders')"><span class="icon">🏦</span><span>Funders</span></button>
-  <button class="nav-btn" onclick="go('funding')"><span class="icon">💰</span><span>Contracts</span></button>
-  <button class="nav-btn" onclick="go('reports')"><span class="icon">📄</span><span>Reports</span></button>
+  <button class="nav-btn" onclick="go('funding')"><span class="icon">💰</span><span>Funding</span></button>
+  <button class="nav-btn" onclick="go('reports')"><span class="icon">📄</span><span>Funder Reports</span></button>
   <button class="nav-btn" onclick="go('evidence')"><span class="icon">🗂️</span><span>Evidence Hub</span></button>
   <div class="nav-section">Settings</div>
   <button class="nav-btn" onclick="go('safeguarding')"><span class="icon">🔐</span><span>Safeguarding</span></button>
@@ -389,25 +388,20 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <div id="fund-list"></div>
 </div>
 
-<!-- FUNDERS -->
-<div id="page-funders" class="page">
-  <div class="page-header">
-    <div><div class="page-title">Funders</div><div class="page-sub" id="funders-sub">Manage your funder relationships</div></div>
-    <button class="btn btn-p btn-sm" onclick="openAddFunder()">+ Add funder</button>
-  </div>
-  <div id="funders-list"></div>
-</div>
-
 <!-- REPORTS -->
 <div id="page-reports" class="page">
-  <div class="page-header">
-    <div><div class="page-title">Funder Reports</div><div class="page-sub">AI-generated · Powered by Org Brain</div></div>
-  </div>
-  <div class="ai-panel" style="margin-bottom:20px">
+  <div class="page-header"><div><div class="page-title">AI Funder Report Generator</div><div class="page-sub">Powered by Claude — real narrative, real data</div></div></div>
+  <div class="ai-panel" style="margin-bottom:24px">
     <div class="ai-panel-title"><span class="ai-icon">✦</span>How it works</div>
-    <div style="font-size:13px;color:var(--txt2);line-height:1.7">Select a contract below and click Generate. The Org Brain reads your live data, matches it to the funder's specific requirements, and writes a professional report in the right tone. Opens as a clean printable document.</div>
+    <div style="font-size:13px;color:var(--txt2);line-height:1.7">Claude reads your live participant data, outcomes, events, and feedback — then writes a professional, funder-appropriate report narrative in the right tone for each funder.</div>
   </div>
-  <div id="reports-contract-list"></div>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:20px">
+    <div class="report-card card"><div style="font-size:28px;margin-bottom:8px">⚖️</div><div style="font-size:15px;font-weight:700;margin-bottom:4px">MoJ Report</div><div style="font-size:12px;color:var(--txt3);margin-bottom:12px">Ministry of Justice · Employment & desistance · evidence-focused</div><button class="btn btn-ai btn-sm" onclick="generateAIReport('moj')">✦ Generate with AI</button></div>
+    <div class="report-card card"><div style="font-size:28px;margin-bottom:8px">🏙️</div><div style="font-size:15px;font-weight:700;margin-bottom:4px">GLA Report</div><div style="font-size:12px;color:var(--txt3);margin-bottom:12px">Greater London Authority · Good jobs · Skills · economic narrative</div><button class="btn btn-ai btn-sm" onclick="generateAIReport('gla')">✦ Generate with AI</button></div>
+    <div class="report-card card"><div style="font-size:28px;margin-bottom:8px">🌉</div><div style="font-size:15px;font-weight:700;margin-bottom:4px">CBF Report</div><div style="font-size:12px;color:var(--txt3);margin-bottom:12px">City Bridge Foundation · Wellbeing · Community · human stories</div><button class="btn btn-ai btn-sm" onclick="generateAIReport('cbf')">✦ Generate with AI</button></div>
+    <div class="report-card card"><div style="font-size:28px;margin-bottom:8px">🌿</div><div style="font-size:15px;font-weight:700;margin-bottom:4px">Annual Impact Report</div><div style="font-size:12px;color:var(--txt3);margin-bottom:12px">Board & public · Workshops · Volunteers · Feedback · SDGs</div><button class="btn btn-ai btn-sm" onclick="generateAIReport('impact')">✦ Generate with AI</button></div>
+  </div>
+  <div id="report-output" style="display:none"></div>
 </div>
 
 <!-- EVIDENCE -->
@@ -536,30 +530,6 @@ tr:hover td{background:rgba(16,185,129,.03)}
 
 <div id="report-print-area" style="display:none"></div>
 
-<div class="modal-overlay" id="modal-funder"><div class="modal" style="max-width:560px"><h2 id="funder-modal-title">Add funder</h2>
-  <div class="form-grid-2">
-    <div class="form-row"><label>Funder name *</label><input id="ff-name" placeholder="e.g. Ministry of Justice"/></div>
-    <div class="form-row"><label>Funder type</label><select id="ff-type">
-      <option value="moj">Ministry of Justice (MoJ)</option>
-      <option value="gla">Greater London Authority (GLA)</option>
-      <option value="cbf">City Bridge Foundation (CBF)</option>
-      <option value="ukspf">UKSPF / Local Authority</option>
-      <option value="lottery">National Lottery</option>
-      <option value="trust">Grant-making trust</option>
-      <option value="dwp">DWP / Jobcentre Plus</option>
-      <option value="nhs">NHS / ICB</option>
-      <option value="impact">Annual / Board report</option>
-      <option value="other">Other</option>
-    </select></div>
-  </div>
-  <div class="form-grid-2">
-    <div class="form-row"><label>Contact name</label><input id="ff-contact" placeholder="Programme manager name"/></div>
-    <div class="form-row"><label>Contact email</label><input type="email" id="ff-email" placeholder="contact@funder.gov.uk"/></div>
-  </div>
-  <div class="form-row"><label>Reporting requirements / priorities</label><textarea id="ff-notes" style="min-height:70px" placeholder="What does this funder care about most? Key metrics, language, priorities…"></textarea></div>
-  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-funder')">Cancel</button><button class="btn btn-p" id="funder-save-btn" onclick="saveFunder()">Save funder</button></div>
-</div></div>
-
 <!-- MODALS -->
 <div class="modal-overlay" id="modal-p">
 <div class="modal"><h2 id="mp-title">Add participant</h2>
@@ -600,45 +570,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
 <div class="modal-overlay" id="modal-ev"><div class="modal" style="max-width:520px"><h2 id="ev-modal-title">Create event</h2><div class="form-row"><label>Event name *</label><input id="evf-name"/></div><div class="form-grid-3"><div class="form-row"><label>Type</label><select id="evf-type"><option>Green Skills</option><option>Wellbeing</option><option>Community Event</option><option>Frailty</option><option>Other</option></select></div><div class="form-row"><label>Date</label><input type="date" id="evf-date"/></div><div class="form-row"><label>Attendees</label><input type="number" id="evf-att" min="0" placeholder="0"/></div></div><div class="form-grid-2"><div class="form-row"><label>Location</label><input id="evf-loc"/></div><div class="form-row"><label>Capacity</label><input type="number" id="evf-cap" placeholder="20"/></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-ev')">Cancel</button><button class="btn btn-p" id="ev-save-btn" onclick="saveEv()">Save event</button></div></div></div>
 <div class="modal-overlay" id="modal-fb"><div class="modal"><h2 id="fb-modal-title">Add feedback</h2><div class="form-grid-2"><div class="form-row"><label>Event *</label><select id="fbf-ev"><option value="">Select event…</option></select></div><div class="form-row"><label>Participant name</label><input id="fbf-name"/></div></div><div class="form-row"><label>Enjoyment (1–5)</label><div style="display:flex;gap:5px;margin-top:4px" id="fbf-enjoyed-stars"></div></div><div class="form-grid-2"><div class="form-row"><label>Confidence before</label><div style="display:flex;gap:5px;margin-top:4px" id="fbf-cb-stars"></div></div><div class="form-row"><label>Confidence after</label><div style="display:flex;gap:5px;margin-top:4px" id="fbf-ca-stars"></div></div></div><div class="form-row"><label>Outcomes</label><div class="chk-group"><div class="chk-pill"><label><input type="checkbox" id="fbf-learned"/> Learned something new</label></div><div class="chk-pill"><label><input type="checkbox" id="fbf-connected"/> Felt more connected</label></div><div class="chk-pill"><label><input type="checkbox" id="fbf-friend"/> Made a new friend</label></div></div></div><div class="form-row"><label>Quote</label><textarea id="fbf-quote" style="min-height:55px"></textarea></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-fb')">Cancel</button><button class="btn btn-p" id="fb-save-btn" onclick="saveFb()">Save</button></div></div></div>
 <div class="modal-overlay" id="modal-item"><div class="modal"><h2 id="item-title">Log item</h2><div class="form-grid-2"><div class="form-row"><label>Item name</label><input id="it-name"/></div><div class="form-row"><label>Category</label><select id="it-cat"><option>Small electrical</option><option>Clothing</option><option>Furniture</option><option>Bike</option><option>Electronics</option></select></div></div><div class="form-grid-2"><div class="form-row"><label>Weight (kg)</label><input type="number" id="it-kg" step="0.1"/></div><div class="form-row"><label>Status</label><select id="it-st"><option>Collected</option><option>In repair</option><option>Repaired</option><option>Resold</option><option>Donated</option><option>Beyond repair</option></select></div></div><div class="form-grid-2"><div class="form-row"><label>Fixer</label><input id="it-fixer"/></div><div class="form-row"><label>Outcome</label><select id="it-outcome"><option value="">Pending</option><option>Resold</option><option>Donated</option><option>Returned to owner</option><option>Scrapped</option></select></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-item')">Cancel</button><button class="btn btn-p" id="item-save-btn" onclick="saveItem()">Save</button></div></div></div>
-<div class="modal-overlay" id="modal-con"><div class="modal"><h2 id="con-title">Add contract</h2>
-  <div class="form-row"><label>Contract name</label><input id="con-name"/></div>
-  <div class="form-grid-2">
-    <div class="form-row"><label>Funder</label>
-      <select id="con-funder-id" onchange="onConFunderChange()">
-        <option value="">— Select funder —</option>
-      </select>
-    </div>
-    <div class="form-row"><label>Or type funder name</label><input id="con-funder" placeholder="If not in list above"/></div>
-  </div>
-  <div class="form-row"><label>Report type</label><select id="con-report-type">
-    <option value="moj">MoJ — Employment & desistance</option>
-    <option value="gla">GLA — Skills & employment</option>
-    <option value="cbf">CBF — Wellbeing & community</option>
-    <option value="ukspf">UKSPF / Local authority</option>
-    <option value="lottery">National Lottery</option>
-    <option value="trust">Grant-making trust</option>
-    <option value="dwp">DWP / Jobcentre Plus</option>
-    <option value="impact">Annual / Board report</option>
-    <option value="other">Other / Generic</option>
-  </select></div>
-  <div class="form-grid-2">
-    <div class="form-row"><label>Value (£)</label><input type="number" id="con-val"/></div>
-    <div class="form-row"><label>Status</label><select id="con-status">
-      <option value="live">Live</option>
-      <option value="pipeline">Pipeline</option>
-      <option value="expired">Expired</option>
-    </select></div>
-  </div>
-  <div class="form-grid-2">
-    <div class="form-row"><label>Start date</label><input type="date" id="con-start"/></div>
-    <div class="form-row"><label>End date</label><input type="date" id="con-end"/></div>
-  </div>
-  <div class="form-grid-2">
-    <div class="form-row"><label>Target starts</label><input type="number" id="con-ts"/></div>
-    <div class="form-row"><label>Target outcomes</label><input type="number" id="con-to"/></div>
-  </div>
-  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-con')">Cancel</button><button class="btn btn-p" id="con-save-btn" onclick="saveCon()">Save</button></div>
-</div></div>
+<div class="modal-overlay" id="modal-con"><div class="modal"><h2 id="con-title">Add contract</h2><div class="form-row"><label>Contract name</label><input id="con-name"/></div><div class="form-grid-2"><div class="form-row"><label>Funder</label><input id="con-funder"/></div><div class="form-row"><label>Value (£)</label><input type="number" id="con-val"/></div></div><div class="form-grid-2"><div class="form-row"><label>Start date</label><input type="date" id="con-start"/></div><div class="form-row"><label>End date</label><input type="date" id="con-end"/></div></div><div class="form-grid-2"><div class="form-row"><label>Target starts</label><input type="number" id="con-ts"/></div><div class="form-row"><label>Target outcomes</label><input type="number" id="con-to"/></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-con')">Cancel</button><button class="btn btn-p" id="con-save-btn" onclick="saveCon()">Save</button></div></div></div>
 <div class="modal-overlay" id="modal-evid"><div class="modal"><h2>Upload evidence</h2><div class="form-row"><label>Participant name</label><input id="evid-p"/></div><div class="form-grid-2"><div class="form-row"><label>Type</label><select id="evid-type"><option>Payslip</option><option>Contract</option><option>Certificate</option><option>ID document</option><option>Consent form</option></select></div><div class="form-row"><label>Linked outcome</label><select id="evid-out"><option>Employment</option><option>Training</option><option>Qualification</option><option>Volunteering</option></select></div></div><div class="form-grid-2"><div class="form-row"><label>Staff member</label><input id="evid-staff"/></div><div class="form-row"><label>Date</label><input type="date" id="evid-date"/></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-evid')">Cancel</button><button class="btn btn-p" id="evid-save-btn" onclick="saveEvid()">Save</button></div></div></div>
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
@@ -670,7 +602,7 @@ let _editFbId=null,_editItemId=null,_editConId=null,_editCId=null;
 let _vTab='vbasic',_fbScores={enjoyed:5,cb:3,ca:5};
 let _demoLoaded=false,_aiNoteAccepted='',_originalNote='';
 
-const DB={participants:[],volunteers:[],events:[],feedback:[],contacts:[],employers:[],referrals:[],partner_referrals:[],circular:[],contracts:[],evidence:[],funders:[]};
+const DB={participants:[],volunteers:[],events:[],feedback:[],contacts:[],employers:[],referrals:[],partner_referrals:[],circular:[],contracts:[],evidence:[]};
 
 const $=id=>document.getElementById(id);
 const closeModal=id=>$(id).classList.remove('open');
@@ -803,18 +735,8 @@ async function runRAGExplainer(contractId,name,funder,sp,op,linked){
   catch(e){modalEl.querySelector('#rag-ai-body').innerHTML='<div style="color:var(--red)">AI unavailable.</div>';}
 }
 
-async function generateAIReport(type,contractId){
-  const contract=contractId?DB.contracts.find(c=>String(c.id)===String(contractId)):null;
-  const reportType=contract?.report_type||type||'other';
-  const out=document.getElementById('report-output');
-  if(out){out.style.display='block';out.scrollIntoView({behavior:'smooth',block:'start'});}
-
-  // ── Pull funder profile and their specific requirements ──
-  const funder=contract?.funder_id
-    ?(DB.funders||[]).find(f=>String(f.id)===String(contract.funder_id))
-    :null;
-  const funderNotes=funder?.notes||null;
-  const funderContact=funder?.contact_name||null;
+async function generateAIReport(type){
+  const out=$('report-output');out.style.display='block';
   const P=DB.participants,E=DB.events,FB=DB.feedback,V=DB.volunteers,C=DB.contracts;
   const totalEvP=E.reduce((a,e)=>a+num(e.attendees),0);
   const jobs=P.filter(p=>p.outcomes.includes('Employment')).length;
@@ -898,11 +820,6 @@ Contracts: ${C.map(c=>c.name+' (£'+num(c.value).toLocaleString()+')').join(', '
   // ── Step 3: Report writer prompt ──
   const writerSys=`${cfg.tone}
 
-${funderNotes?`FUNDER-SPECIFIC REQUIREMENTS FROM THEIR PROFILE:
-"${funderNotes}"
-
-You MUST address these specific requirements in the report. Use the funder's own language and priorities where possible. This is what they have told us they care about — make sure the report speaks directly to these points.`:''}
-
 Write a complete, professional funder report with these sections: ${cfg.sections.join(', ')}.
 
 FORMATTING RULES:
@@ -913,13 +830,12 @@ FORMATTING RULES:
 - Include specific numbers throughout
 - Aim for 800-1000 words total
 - Do NOT make up statistics — only use data provided
-- End with a forward-looking conclusion
-${funderContact?`- This report may be read by ${funderContact} — write accordingly`:''}`;
+- End with a forward-looking conclusion`;
 
   const writerPrompt=`Organisation: ${orgName}
-Report: ${cfg.title} for ${cfg.funder}${funder?` (${funder.name})`:''}
+Report: ${cfg.title} for ${cfg.funder}
 Date: ${todayStr}
-${funderNotes?`\nFUNDER PRIORITIES TO ADDRESS:\n${funderNotes}\n`:''}
+
 DATA ANALYSIS:
 ${dataAnalysis}
 
@@ -935,13 +851,13 @@ FULL DATA:
 - Learned something new: ${learnedPct}%
 - Confidence before: ${avgCB}/5 → after: ${avgCA}/5
 - Primary barriers addressed: ${topBarriers.join(', ')}
-${contract?`- Contract: ${contract.name} · Target starts: ${contract.target_starts} · Target outcomes: ${contract.target_outcomes} · Value: £${num(contract.value).toLocaleString()}`:''}
+- Funding contracts: ${C.map(c=>c.name+' (£'+num(c.value).toLocaleString()+')').join(', ')||'none'}
 - Sector: ${currentOrg?.sector||'Employability charity'}
 
 PARTICIPANT QUOTES:
 ${quotes.map(f=>`"${f.quote}" — ${f.name||'Participant'}`).join('\n')||'No quotes collected yet.'}
 
-Write the complete report now. Make sure you directly address the funder's stated priorities and use their language.`;
+Write the complete report now.`;
 
   try{
     const report=await callClaude(writerSys,writerPrompt,1200);
@@ -1268,10 +1184,10 @@ async function sbDelete(table,id){if(!sb)return;await sb.from(table).delete().eq
 
 async function syncAll(){
   if(!sb)return;
-  const[pD,vD,eD,fbD,cD,empD,ciD,conD,evD,refD,prefD,fD]=await Promise.all([
+  const[pD,vD,eD,fbD,cD,empD,ciD,conD,evD,refD,prefD]=await Promise.all([
     sbQ('participants'),sbQ('volunteers'),sbQ('events'),sbQ('feedback'),
     sbQ('contacts'),sbQ('employers'),sbQ('circular_items'),sbQ('contracts'),
-    sbQ('evidence'),sbQ('referrals'),sbQ('partner_referrals'),sbQ('funders')
+    sbQ('evidence'),sbQ('referrals'),sbQ('partner_referrals')
   ]);
   if(pD)DB.participants=pD.map(p=>({id:p.id,first_name:p.first_name||'',last_name:p.last_name||'',ref_source:p.ref_source||'Self-referral',stage:p.stage||'Referred',advisor:p.advisor||'Unassigned',barriers:toArr(p.barriers),outcomes:toArr(p.outcomes),safeguarding:p.safeguarding||null,risk:p.risk||'Low',last_contact:p.last_contact||null,notes:toArr(p.notes),scores:p.scores||{},contract_ids:toArr(p.contract_ids)}));
   if(vD)DB.volunteers=vD.map(v=>({id:v.id,name:v.name||[v.first_name,v.last_name].filter(Boolean).join(' ')||'Unknown',email:v.email||'',phone:v.phone||'',role:v.role||'Volunteer',skills:toArr(v.skills),hours:num(v.hours),status:v.status||'Active'}));
@@ -1284,8 +1200,6 @@ async function syncAll(){
   if(evD)DB.evidence=evD.map(e=>({id:e.id,participant_name:e.participant_name||'',type:e.type||'',linked_outcome:e.linked_outcome||'',staff:e.staff||'',evidence_date:e.evidence_date||'',status:e.status||'Pending'}));
   if(refD)DB.referrals=refD.map(r=>({id:r.id,first_name:r.first_name||'',last_name:r.last_name||'',source:r.source||'',status:r.status||'Referred',advisor:r.advisor||'',referred_date:r.referred_date||''}));
   if(prefD)DB.partner_referrals=prefD.map(r=>({id:r.id,partner_name:r.partner_name||'',first_name:r.first_name||'',last_name:r.last_name||'',primary_need:r.primary_need||'',urgency:r.urgency||'Standard',notes:r.notes||'',barriers:toArr(r.barriers),safeguarding:r.safeguarding||'',consent:!!r.consent,status:r.status||'Referred',created_at:r.created_at||''}));
-  if(fD)DB.funders=fD.map(f=>({id:f.id,name:f.name||'',type:f.type||'other',contact_name:f.contact_name||'',contact_email:f.contact_email||'',notes:f.notes||''}));
-  else DB.funders=[];
 }
 
 async function refreshTable(table){
@@ -1299,7 +1213,6 @@ async function refreshTable(table){
   else if(table==='referrals')DB.referrals=fresh.map(r=>({id:r.id,first_name:r.first_name||'',last_name:r.last_name||'',source:r.source||'',status:r.status||'Referred',advisor:r.advisor||'',referred_date:r.referred_date||''}));
   else if(table==='circular_items')DB.circular=fresh.map(i=>({id:i.id,name:i.name||'',category:i.category||'',weight_kg:num(i.weight_kg),status:i.status||'Collected',fixer:i.fixer||'',outcome:i.outcome||''}));
   else if(table==='evidence')DB.evidence=fresh.map(e=>({id:e.id,participant_name:e.participant_name||'',type:e.type||'',linked_outcome:e.linked_outcome||'',staff:e.staff||'',evidence_date:e.evidence_date||'',status:e.status||'Pending'}));
-  else if(table==='funders')DB.funders=(fresh||[]).map(f=>({id:f.id,name:f.name||'',type:f.type||'other',contact_name:f.contact_name||'',contact_email:f.contact_email||'',notes:f.notes||''}));
   else if(table==='contacts')DB.contacts=fresh.map(c=>({id:c.id,first_name:c.first_name||'',last_name:c.last_name||'',email:c.email||'',role:c.role||'',status:c.status||'Prospect'}));
 }
 
@@ -1728,74 +1641,17 @@ function renderOutcomes(){
 
 function renderFunding(){
   $('fund-sub').textContent=DB.contracts.length+' contracts · £'+DB.contracts.reduce((a,c)=>a+num(c.value),0).toLocaleString()+' total';
-  // Show funder name in funding page
-  const getFunderName=c=>{
-    if(c.funder_id){const f=DB.funders.find(x=>String(x.id)===String(c.funder_id));if(f)return f.name;}
-    return c.funder||'—';
-  };
   if(!DB.contracts.length){$('fund-list').innerHTML=emptyState('💰','No contracts yet','Add your funding contracts.','+ Add contract',"openAddCon()");return;}
   $('fund-list').innerHTML=DB.contracts.map(c=>{
     const linked=DB.participants.filter(p=>toArr(p.contract_ids).includes(String(c.id)));
     const starts=linked.length,outcomes=linked.filter(p=>p.outcomes.length>0).length;
     const sp=Math.round(starts/(c.target_starts||1)*100),op=Math.round(outcomes/(c.target_outcomes||1)*100);
-    return`<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-size:14px;font-weight:600">${c.name}</div><div style="font-size:12px;color:var(--txt3)">${getFunderName(c)} · £${num(c.value).toLocaleString()} · ${fmtD(c.start_date)} – ${fmtD(c.end_date)}</div></div><div style="display:flex;gap:6px">${sp>=70&&op>=70?'<span class="badge b-active">On track</span>':'<span class="badge b-flag">⚠ At risk</span>'}<button class="btn btn-ghost btn-sm" onclick="openEditCon(${c.id})">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteCon(${c.id})">Del</button></div></div><div class="fund-bar-wrap"><div class="fund-top"><span>Starts: ${starts}/${c.target_starts||0}</span><span>${sp}%</span></div><div class="fund-track"><div class="fund-fill ${sp<60?'danger':sp<80?'warn':''}" style="width:${Math.min(sp,100)}%"></div></div></div><div class="fund-bar-wrap"><div class="fund-top"><span>Outcomes: ${outcomes}/${c.target_outcomes||0}</span><span>${op}%</span></div><div class="fund-track"><div class="fund-fill ${op<60?'danger':op<80?'warn':''}" style="width:${Math.min(op,100)}%"></div></div></div><div style="font-size:11px;color:var(--txt3);margin-top:8px">🔗 ${linked.length} participant${linked.length===1?'':'s'} linked</div></div>`;
+    return`<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-size:14px;font-weight:600">${c.name}</div><div style="font-size:12px;color:var(--txt3)">${c.funder} · £${num(c.value).toLocaleString()} · ${fmtD(c.start_date)} – ${fmtD(c.end_date)}</div></div><div style="display:flex;gap:6px">${sp>=70&&op>=70?'<span class="badge b-active">On track</span>':'<span class="badge b-flag">⚠ At risk</span>'}<button class="btn btn-ghost btn-sm" onclick="openEditCon(${c.id})">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteCon(${c.id})">Del</button></div></div><div class="fund-bar-wrap"><div class="fund-top"><span>Starts: ${starts}/${c.target_starts||0}</span><span>${sp}%</span></div><div class="fund-track"><div class="fund-fill ${sp<60?'danger':sp<80?'warn':''}" style="width:${Math.min(sp,100)}%"></div></div></div><div class="fund-bar-wrap"><div class="fund-top"><span>Outcomes: ${outcomes}/${c.target_outcomes||0}</span><span>${op}%</span></div><div class="fund-track"><div class="fund-fill ${op<60?'danger':op<80?'warn':''}" style="width:${Math.min(op,100)}%"></div></div></div><div style="font-size:11px;color:var(--txt3);margin-top:8px">🔗 ${linked.length} participant${linked.length===1?'':'s'} linked</div></div>`;
   }).join('');
 }
-function openAddCon(funderId){
-  _editConId=null;$('con-title').textContent='Add contract';
-  ['con-name','con-funder','con-val','con-ts','con-to'].forEach(f=>$(f).value='');
-  $('con-start').value='';$('con-end').value='';$('con-status').value='live';
-  populateConFunderSelect();
-  if(funderId){
-    $('con-funder-id').value=funderId;
-    onConFunderChange();
-  }
-  $('modal-con').classList.add('open');
-}
-function openEditCon(id){
-  const c=DB.contracts.find(x=>x.id===id);if(!c)return;
-  _editConId=id;$('con-title').textContent='Edit contract';
-  $('con-name').value=c.name;$('con-funder').value=c.funder||'';
-  $('con-val').value=c.value;$('con-ts').value=c.target_starts;$('con-to').value=c.target_outcomes;
-  $('con-start').value=c.start_date;$('con-end').value=c.end_date;
-  $('con-status').value=c.status||'live';
-  $('con-report-type').value=c.report_type||'other';
-  populateConFunderSelect();
-  if(c.funder_id)$('con-funder-id').value=c.funder_id;
-  $('modal-con').classList.add('open');
-}
-async function saveCon(){
-  const btn=$('con-save-btn');btn.textContent='Saving…';btn.disabled=true;
-  try{
-    const funderId=$('con-funder-id').value||null;
-    const funderName=$('con-funder').value||($('con-funder-id').options[$('con-funder-id').selectedIndex]?.textContent)||'';
-    const d={
-      name:$('con-name').value,
-      funder:funderName,
-      funder_id:funderId||null,
-      report_type:$('con-report-type').value||'other',
-      value:parseInt($('con-val').value)||0,
-      target_starts:parseInt($('con-ts').value)||0,
-      target_outcomes:parseInt($('con-to').value)||0,
-      start_date:$('con-start').value||null,
-      end_date:$('con-end').value||null,
-      status:$('con-status').value||'live'
-    };
-    if(_editConId){
-      await sbUpdate('contracts',d,_editConId);
-    }else{
-      await sbInsert('contracts',d);
-    }
-    // Always re-fetch as single source of truth
-    await refreshTable('contracts');
-    closeModal('modal-con');
-    renderFunding();
-    renderReports();
-    renderFunders();
-    if($('modal-p').classList.contains('open'))renderContractSelector(getSelectedContractIds());
-  }catch(e){alert('Save failed: '+e.message);}
-  finally{btn.textContent='Save';btn.disabled=false;}
-}
+function openAddCon(){_editConId=null;$('con-title').textContent='Add contract';['con-name','con-funder','con-val','con-ts','con-to'].forEach(f=>$(f).value='');$('con-start').value='';$('con-end').value='';$('modal-con').classList.add('open');}
+function openEditCon(id){const c=DB.contracts.find(x=>x.id===id);if(!c)return;_editConId=id;$('con-title').textContent='Edit contract';$('con-name').value=c.name;$('con-funder').value=c.funder;$('con-val').value=c.value;$('con-ts').value=c.target_starts;$('con-to').value=c.target_outcomes;$('con-start').value=c.start_date;$('con-end').value=c.end_date;$('modal-con').classList.add('open');}
+async function saveCon(){const btn=$('con-save-btn');btn.textContent='Saving…';btn.disabled=true;try{const d={name:$('con-name').value,funder:$('con-funder').value,value:parseInt($('con-val').value)||0,target_starts:parseInt($('con-ts').value)||0,target_outcomes:parseInt($('con-to').value)||0,start_date:$('con-start').value||null,end_date:$('con-end').value||null};if(_editConId)await sbUpdate('contracts',d,_editConId);else{const r=await sbInsert('contracts',d);if(r)DB.contracts.push({id:r.id,...d});}await refreshTable('contracts');closeModal('modal-con');renderFunding();if($('modal-p').classList.contains('open'))renderContractSelector(getSelectedContractIds());}catch(e){alert('Save failed: '+e.message);}finally{btn.textContent='Save';btn.disabled=false;}}
 async function deleteCon(id){if(!confirm('Delete?'))return;await sbDelete('contracts',id);await refreshTable('contracts');renderFunding();}
 
 function renderEvidence(){$('evid-table').innerHTML=DB.evidence.length?DB.evidence.map(e=>`<tr><td class="cn">${e.participant_name}</td><td><span class="badge b-vol">${e.type}</span></td><td><span class="badge b-active">${e.linked_outcome}</span></td><td style="font-size:12px">${e.staff||'—'}</td><td style="font-size:12px">${fmtD(e.evidence_date)}</td><td><span class="badge b-prospect">${e.status}</span></td><td><button class="btn btn-danger btn-sm" onclick="deleteEvid(${e.id})">Del</button></td></tr>`).join(''):`<tr><td colspan="7">${emptyState('🗂️','No evidence yet','Upload payslips and certificates.','+ Upload evidence',"openAddEvid()")}</td></tr>`;}
@@ -1862,204 +1718,7 @@ async function boot(){
   checkWelcomeFlow();
   go('dashboard');
 }
-// ════════════════════════════════════════
-// FUNDERS
-// ════════════════════════════════════════
-const FUNDER_TYPES={
-  moj:{label:'Ministry of Justice',icon:'⚖️',color:'#60a5fa'},
-  gla:{label:'Greater London Authority',icon:'🏙️',color:'#34d399'},
-  cbf:{label:'City Bridge Foundation',icon:'🌉',color:'#a78bfa'},
-  ukspf:{label:'UKSPF / Local Authority',icon:'🏛️',color:'#f59e0b'},
-  lottery:{label:'National Lottery',icon:'🍀',color:'#10b981'},
-  trust:{label:'Grant-making trust',icon:'🎗️',color:'#ec4899'},
-  dwp:{label:'DWP / Jobcentre Plus',icon:'💼',color:'#60a5fa'},
-  nhs:{label:'NHS / ICB',icon:'🏥',color:'#34d399'},
-  impact:{label:'Annual / Board report',icon:'🌿',color:'#10b981'},
-  other:{label:'Other funder',icon:'📋',color:'#9ab8a4'}
-};
-
-let _editFunderId=null;
-
-function renderFunders(){
-  const funders=DB.funders||[];
-  $('funders-sub').textContent=funders.length+' funders';
-  if(!funders.length){
-    $('funders-list').innerHTML=emptyState('🏦','No funders yet','Add your funders to organise contracts and generate targeted reports.','+ Add funder',"openAddFunder()");
-    return;
-  }
-  $('funders-list').innerHTML=funders.map(f=>{
-    const ft=FUNDER_TYPES[f.type]||FUNDER_TYPES.other;
-    const contracts=(DB.contracts||[]).filter(c=>c.funder_id===f.id||c.funder===f.name);
-    const totalValue=contracts.reduce((a,c)=>a+num(c.value),0);
-    const liveContracts=contracts.filter(c=>c.status!=='expired');
-    return`<div class="card" style="border-left:4px solid ${ft.color}">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
-        <div style="display:flex;gap:12px;align-items:center">
-          <div style="font-size:28px">${ft.icon}</div>
-          <div>
-            <div style="font-size:15px;font-weight:700;color:var(--txt)">${f.name}</div>
-            <div style="font-size:12px;color:var(--txt3)">${ft.label}</div>
-          </div>
-        </div>
-        <div style="display:flex;gap:6px;align-items:center">
-          <span class="badge" style="background:rgba(16,185,129,.12);color:var(--em)">${liveContracts.length} live contract${liveContracts.length!==1?'s':''}</span>
-          <button class="btn btn-ghost btn-sm" onclick="openEditFunder(${f.id})">Edit</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteFunder(${f.id})">Delete</button>
-        </div>
-      </div>
-      ${f.contact_name||f.contact_email?`<div style="font-size:12px;color:var(--txt3);margin-bottom:10px">👤 ${f.contact_name||''}${f.contact_email?' · '+f.contact_email:''}</div>`:''}
-      ${f.notes?`<div style="font-size:12px;color:var(--txt2);background:var(--surface);border-radius:8px;padding:8px 12px;margin-bottom:10px;line-height:1.6">${f.notes}</div>`:''}
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <span style="font-size:12px;color:var(--txt3)">£${totalValue.toLocaleString()} total contracted</span>
-        <div style="margin-left:auto;display:flex;gap:6px">
-          <button class="btn btn-ghost btn-sm" onclick="openAddCon(${f.id})">+ Add contract</button>
-          ${liveContracts.length?`<button class="btn btn-ai btn-sm" onclick="go('reports')">✦ Generate report</button>`:''}
-        </div>
-      </div>
-      ${contracts.length?`<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px">${contracts.map(c=>`<span class="badge ${c.status==='expired'?'b-lapsed':'b-part'}" style="cursor:pointer" onclick="go('funding')">${c.name}${c.status==='expired'?' (expired)':''}</span>`).join('')}</div>`:''}
-    </div>`;
-  }).join('');
-}
-
-function openAddFunder(prefillFunderId){
-  _editFunderId=null;
-  $('funder-modal-title').textContent='Add funder';
-  ['ff-name','ff-contact','ff-email','ff-notes'].forEach(id=>$(id).value='');
-  $('ff-type').value='moj';
-  $('modal-funder').classList.add('open');
-}
-
-function openEditFunder(id){
-  const f=(DB.funders||[]).find(x=>x.id===id);if(!f)return;
-  _editFunderId=id;
-  $('funder-modal-title').textContent='Edit funder';
-  $('ff-name').value=f.name||'';
-  $('ff-type').value=f.type||'other';
-  $('ff-contact').value=f.contact_name||'';
-  $('ff-email').value=f.contact_email||'';
-  $('ff-notes').value=f.notes||'';
-  $('modal-funder').classList.add('open');
-}
-
-async function saveFunder(){
-  const name=$('ff-name').value.trim();
-  if(!name){alert('Funder name required');return;}
-  const btn=$('funder-save-btn');btn.textContent='Saving…';btn.disabled=true;
-  try{
-    const d={name,type:$('ff-type').value,contact_name:$('ff-contact').value||null,contact_email:$('ff-email').value||null,notes:$('ff-notes').value||null};
-    if(_editFunderId){
-      await sbUpdate('funders',d,_editFunderId);
-    }else{
-      await sbInsert('funders',d);
-    }
-    // Always re-fetch from Supabase as single source of truth
-    await refreshTable('funders');
-    closeModal('modal-funder');
-    renderFunders();
-    populateConFunderSelect();
-  }catch(e){alert('Save failed: '+e.message);}
-  finally{btn.textContent='Save funder';btn.disabled=false;}
-}
-
-async function deleteFunder(id){
-  const f=DB.funders.find(x=>x.id===id);
-  if(!confirm(`Delete "${f?.name}"? Their contracts will remain but won't be linked to this funder profile.`))return;
-  await sbDelete('funders',id);
-  await refreshTable('funders');
-  renderFunders();
-  renderReports();
-}
-
-function populateConFunderSelect(){
-  const sel=$('con-funder-id');if(!sel)return;
-  const cur=sel.value;
-  sel.innerHTML='<option value="">— Select funder —</option>';
-  (DB.funders||[]).forEach(f=>{
-    const o=document.createElement('option');
-    o.value=f.id;o.textContent=f.name;
-    if(cur==f.id)o.selected=true;
-    sel.appendChild(o);
-  });
-}
-
-function onConFunderChange(){
-  const sel=$('con-funder-id');
-  const funderId=sel.value;
-  if(!funderId)return;
-  const f=(DB.funders||[]).find(x=>String(x.id)===String(funderId));
-  if(f){
-    $('con-funder').value=f.name;
-    if(f.type)$('con-report-type').value=f.type;
-  }
-}
-
-// ════════════════════════════════════════
-// REPORTS PAGE — contract-driven
-// ════════════════════════════════════════
-function renderReports(){
-  const contracts=DB.contracts||[];
-  $('reports-contract-list').innerHTML='';
-  if(!contracts.length){
-    $('reports-contract-list').innerHTML=`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:32px;text-align:center">
-      <div style="font-size:36px;margin-bottom:12px">💰</div>
-      <div style="font-size:15px;font-weight:700;color:var(--txt);margin-bottom:6px">No contracts yet</div>
-      <div style="font-size:13px;color:var(--txt3);margin-bottom:16px">Add funding contracts to generate targeted funder reports.</div>
-      <button class="btn btn-p btn-sm" onclick="go('funding')">+ Add a contract</button>
-    </div>`;
-    return;
-  }
-
-  // Group by status
-  const live=contracts.filter(c=>c.status!=='expired');
-  const expired=contracts.filter(c=>c.status==='expired');
-
-  const renderContractCard=(c,isExpired)=>{
-    const ft=FUNDER_TYPES[c.report_type||c.type]||FUNDER_TYPES.other;
-    const funder=(DB.funders||[]).find(f=>String(f.id)===String(c.funder_id));
-    const linked=DB.participants.filter(p=>toArr(p.contract_ids).includes(String(c.id)));
-    const outcomes=linked.filter(p=>p.outcomes.length>0).length;
-    const sp=Math.round(linked.length/(num(c.target_starts)||1)*100);
-    const op=Math.round(outcomes/(num(c.target_outcomes)||1)*100);
-    const rag=(sp+op)/2>=80?'green':(sp+op)/2>=50?'amber':'red';
-    const ragCol={green:'#10b981',amber:'#f59e0b',red:'#f87171'}[rag];
-    const daysLeft=c.end_date?Math.ceil((new Date(c.end_date)-Date.now())/86400000):null;
-    const isExpiring=daysLeft!==null&&daysLeft<=90&&daysLeft>0;
-    return`<div class="card" style="border-left:4px solid ${isExpired?'#2a3a2a':ft.color};opacity:${isExpired?'.65':'1'}">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-        <div style="display:flex;gap:10px;align-items:flex-start">
-          <div style="font-size:24px">${ft.icon}</div>
-          <div>
-            <div style="font-size:14px;font-weight:700;color:var(--txt)">${c.name}</div>
-            <div style="font-size:12px;color:var(--txt3)">${funder?.name||c.funder||'—'} · £${num(c.value).toLocaleString()}</div>
-            <div style="font-size:11px;color:var(--txt3);margin-top:2px">${fmtD(c.start_date)} – ${fmtD(c.end_date)}${daysLeft!==null?' · '+(daysLeft>0?(isExpiring?`<span style="color:var(--amber)">⚠ ${daysLeft}d left</span>`:`${daysLeft}d remaining`):'<span style="color:var(--red)">Ended</span>'):''}</div>
-          </div>
-        </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <span style="font-size:11px;font-weight:700;color:${ragCol}">${{green:'🟢 On track',amber:'🟡 At risk',red:'🔴 Under'}[rag]}</span>
-          ${!isExpired?`<button class="btn btn-ai btn-sm" onclick="generateAIReport('${c.report_type||'other'}','${c.id}')">✦ Generate report</button>`:'<span class="badge b-lapsed">Expired</span>'}
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
-        <div class="stat-card" style="padding:10px"><div class="stat-lbl">Participants</div><div class="stat-val" style="font-size:18px">${linked.length}</div><div class="stat-sub">of ${c.target_starts||0}</div></div>
-        <div class="stat-card" style="padding:10px"><div class="stat-lbl">Outcomes</div><div class="stat-val" style="font-size:18px">${outcomes}</div><div class="stat-sub">of ${c.target_outcomes||0}</div></div>
-        <div class="stat-card" style="padding:10px"><div class="stat-lbl">Starts %</div><div class="stat-val" style="font-size:18px;color:${sp>=80?'var(--em)':sp>=50?'var(--amber)':'var(--red)'}">${sp}%</div></div>
-        <div class="stat-card" style="padding:10px"><div class="stat-lbl">Outcomes %</div><div class="stat-val" style="font-size:18px;color:${op>=80?'var(--em)':op>=50?'var(--amber)':'var(--red)'}">${op}%</div></div>
-      </div>
-    </div>`;
-  };
-
-  let html='';
-  if(live.length){
-    html+=`<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--em);margin-bottom:10px">Live contracts — ${live.length}</div>`;
-    html+=live.map(c=>renderContractCard(c,false)).join('');
-  }
-  if(expired.length){
-    html+=`<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3);margin:16px 0 10px">Expired contracts — ${expired.length}</div>`;
-    html+=expired.map(c=>renderContractCard(c,true)).join('');
-  }
-  html+=`<div id="report-output" style="display:none;margin-top:16px"></div>`;
-  $('reports-contract-list').innerHTML=html;
-}
+// ── SOCIAL MEDIA AGENT ───────────────────────────────────────
 let _savedPosts=[],_savedEOIs=[];
 
 async function runSocialAgent(){
