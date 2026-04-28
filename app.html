@@ -804,12 +804,17 @@ async function runRAGExplainer(contractId,name,funder,sp,op,linked){
 }
 
 async function generateAIReport(type,contractId){
-  // Find the specific contract if provided
   const contract=contractId?DB.contracts.find(c=>String(c.id)===String(contractId)):null;
   const reportType=contract?.report_type||type||'other';
-  // Scroll to output
   const out=document.getElementById('report-output');
   if(out){out.style.display='block';out.scrollIntoView({behavior:'smooth',block:'start'});}
+
+  // ── Pull funder profile and their specific requirements ──
+  const funder=contract?.funder_id
+    ?(DB.funders||[]).find(f=>String(f.id)===String(contract.funder_id))
+    :null;
+  const funderNotes=funder?.notes||null;
+  const funderContact=funder?.contact_name||null;
   const P=DB.participants,E=DB.events,FB=DB.feedback,V=DB.volunteers,C=DB.contracts;
   const totalEvP=E.reduce((a,e)=>a+num(e.attendees),0);
   const jobs=P.filter(p=>p.outcomes.includes('Employment')).length;
@@ -893,6 +898,11 @@ Contracts: ${C.map(c=>c.name+' (£'+num(c.value).toLocaleString()+')').join(', '
   // ── Step 3: Report writer prompt ──
   const writerSys=`${cfg.tone}
 
+${funderNotes?`FUNDER-SPECIFIC REQUIREMENTS FROM THEIR PROFILE:
+"${funderNotes}"
+
+You MUST address these specific requirements in the report. Use the funder's own language and priorities where possible. This is what they have told us they care about — make sure the report speaks directly to these points.`:''}
+
 Write a complete, professional funder report with these sections: ${cfg.sections.join(', ')}.
 
 FORMATTING RULES:
@@ -903,12 +913,13 @@ FORMATTING RULES:
 - Include specific numbers throughout
 - Aim for 800-1000 words total
 - Do NOT make up statistics — only use data provided
-- End with a forward-looking conclusion`;
+- End with a forward-looking conclusion
+${funderContact?`- This report may be read by ${funderContact} — write accordingly`:''}`;
 
   const writerPrompt=`Organisation: ${orgName}
-Report: ${cfg.title} for ${cfg.funder}
+Report: ${cfg.title} for ${cfg.funder}${funder?` (${funder.name})`:''}
 Date: ${todayStr}
-
+${funderNotes?`\nFUNDER PRIORITIES TO ADDRESS:\n${funderNotes}\n`:''}
 DATA ANALYSIS:
 ${dataAnalysis}
 
@@ -924,13 +935,13 @@ FULL DATA:
 - Learned something new: ${learnedPct}%
 - Confidence before: ${avgCB}/5 → after: ${avgCA}/5
 - Primary barriers addressed: ${topBarriers.join(', ')}
-- Funding contracts: ${C.map(c=>c.name+' (£'+num(c.value).toLocaleString()+')').join(', ')||'none'}
+${contract?`- Contract: ${contract.name} · Target starts: ${contract.target_starts} · Target outcomes: ${contract.target_outcomes} · Value: £${num(contract.value).toLocaleString()}`:''}
 - Sector: ${currentOrg?.sector||'Employability charity'}
 
 PARTICIPANT QUOTES:
 ${quotes.map(f=>`"${f.quote}" — ${f.name||'Participant'}`).join('\n')||'No quotes collected yet.'}
 
-Write the complete report now.`;
+Write the complete report now. Make sure you directly address the funder's stated priorities and use their language.`;
 
   try{
     const report=await callClaude(writerSys,writerPrompt,1200);
