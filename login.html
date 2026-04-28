@@ -37,8 +37,6 @@ input:focus,select:focus{border-color:var(--em)}
 .hint a{color:var(--em);cursor:pointer}
 .divider{height:1px;background:var(--border);margin:14px 0}
 .invited-box{background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:var(--radius);padding:12px;margin-bottom:14px;font-size:13px;color:var(--txt2)}
-
-/* STEP INDICATOR */
 .steps{display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:22px}
 .step-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--txt3)}
 .step-item.active{color:var(--em);font-weight:600}
@@ -47,21 +45,15 @@ input:focus,select:focus{border-color:var(--em)}
 .step-item.active .step-num{background:var(--em);color:#fff}
 .step-item.done .step-num{background:var(--surface);color:var(--em);border:1px solid var(--em)}
 .step-line{width:28px;height:1px;background:var(--border);margin:0 4px}
-
-/* COLOUR PICKER */
 .color-presets{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .color-swatch{width:32px;height:32px;border-radius:8px;cursor:pointer;border:3px solid transparent;transition:all .2s;flex-shrink:0}
 .color-swatch:hover{transform:scale(1.1)}
 .color-swatch.selected{border-color:#fff;box-shadow:0 0 0 2px var(--em)}
 .color-preview{height:4px;border-radius:2px;margin-top:10px;transition:background .3s}
-
-/* LOGO UPLOAD */
 .logo-drop{border:2px dashed var(--border);border-radius:var(--radius);padding:20px;text-align:center;cursor:pointer;transition:all .2s;position:relative}
 .logo-drop:hover{border-color:var(--em);background:rgba(16,185,129,.04)}
 .logo-drop input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
 .logo-preview{max-height:48px;max-width:160px;object-fit:contain;margin:0 auto 8px;display:block}
-
-/* WELCOME ANIMATION */
 @keyframes fadeInUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
 .welcome-anim{animation:fadeInUp .4s ease}
 </style>
@@ -77,7 +69,6 @@ input:focus,select:focus{border-color:var(--em)}
     <button class="tab" id="tab-signup" onclick="showTab('signup')">Create account</button>
   </div>
 
-  <!-- SIGN IN -->
   <div id="pane-signin" class="pane active">
     <div class="msg msg-err" id="si-err"></div>
     <div class="form-row"><label>Email</label><input type="email" id="si-email" placeholder="you@charity.org" autocomplete="email"/></div>
@@ -87,10 +78,7 @@ input:focus,select:focus{border-color:var(--em)}
     <div class="hint" style="margin-top:6px"><a onclick="showForgot()" style="color:var(--txt3)">Forgot password?</a></div>
   </div>
 
-  <!-- SIGN UP — 3 steps -->
   <div id="pane-signup" class="pane">
-
-    <!-- Step indicator -->
     <div class="steps" id="signup-steps">
       <div class="step-item active" id="step-ind-1"><div class="step-num">1</div><span>Your org</span></div>
       <div class="step-line"></div>
@@ -103,7 +91,6 @@ input:focus,select:focus{border-color:var(--em)}
     <div class="msg msg-ok" id="su-ok"></div>
     <div id="invite-info" style="display:none" class="invited-box"></div>
 
-    <!-- STEP 1: Org details -->
     <div id="su-step-1">
       <div id="org-fields">
         <div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:14px">Tell us about your organisation</div>
@@ -122,7 +109,6 @@ input:focus,select:focus{border-color:var(--em)}
       <div class="hint">Already have an account? <a onclick="showTab('signin')">Sign in →</a></div>
     </div>
 
-    <!-- STEP 2: Personal details -->
     <div id="su-step-2" style="display:none">
       <div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:14px">Create your account</div>
       <div class="form-row"><label>Your name *</label><input id="su-name" placeholder="Jane Smith"/></div>
@@ -135,7 +121,6 @@ input:focus,select:focus{border-color:var(--em)}
       <div class="hint">Already have an account? <a onclick="showTab('signin')">Sign in →</a></div>
     </div>
 
-    <!-- STEP 3: Branding (shown after account created) -->
     <div id="su-step-3" style="display:none" class="welcome-anim">
       <div style="text-align:center;margin-bottom:18px">
         <div style="font-size:32px;margin-bottom:8px">🎉</div>
@@ -176,7 +161,6 @@ input:focus,select:focus{border-color:var(--em)}
         </div>
       </div>
 
-      <!-- Live preview -->
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:16px;display:flex;align-items:center;gap:10px" id="su-brand-preview">
         <div id="su-preview-dot" style="width:36px;height:36px;border-radius:8px;background:#10b981;flex-shrink:0"></div>
         <div>
@@ -189,10 +173,8 @@ input:focus,select:focus{border-color:var(--em)}
       <button class="btn" id="su-brand-btn" onclick="saveBrandingAndEnter()">✦ Launch my GreenCRM →</button>
       <div class="hint"><a onclick="skipBranding()">Skip for now — I'll do this later</a></div>
     </div>
-
   </div>
 
-  <!-- FORGOT -->
   <div id="pane-forgot" class="pane">
     <div class="msg msg-err" id="fg-err"></div>
     <div class="msg msg-ok" id="fg-ok"></div>
@@ -208,11 +190,10 @@ input:focus,select:focus{border-color:var(--em)}
 const SURL='https://nznfrxzgvcjhfsdaphyp.supabase.co';
 const SKEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw';
 const sb=supabase.createClient(SURL,SKEY);
-let inviteData=null,_newOrgId=null,_newUserId=null,_signupLogoFile=null;
+let inviteData=null,_newOrgId=null,_newUserId=null,_signupLogoFile=null,_newUserEmail=null,_newUserPass=null;
 const params=new URLSearchParams(window.location.search);
 const inviteToken=params.get('invite');
 
-// ── INIT ──
 async function init(){
   const{data:{session}}=await sb.auth.getSession();
   if(session){redirectAfterAuth(session.user.id);return;}
@@ -231,7 +212,6 @@ async function init(){
       document.getElementById('invite-info').innerHTML='⚠ This invite link has expired or already been used.';
     }
   }
-  // Password reset
   const hash=new URLSearchParams(window.location.hash.replace('#',''));
   if(hash.get('type')==='recovery'){
     showForgot();
@@ -239,14 +219,21 @@ async function init(){
   }
 }
 
-// ── REDIRECT ──
 async function redirectAfterAuth(userId){
-  const{data:profile}=await sb.from('profiles').select('org_id,role').eq('id',userId).single();
-  if(!profile?.org_id){showMsg('si-err','Account found but no organisation linked. Contact support.');return;}
-  window.location.href='app.html?org_id='+profile.org_id;
+  // Try memberships first (new RBAC), fall back to profiles (legacy)
+  const{data:mem}=await sb.from('memberships').select('org_id').eq('user_id',userId).eq('status','active').limit(1).maybeSingle();
+  if(mem?.org_id){window.location.href='app.html?org_id='+mem.org_id;return;}
+
+  const{data:profile}=await sb.from('profiles').select('org_id').eq('id',userId).maybeSingle();
+  if(profile?.org_id){window.location.href='app.html?org_id='+profile.org_id;return;}
+
+  // Super admin with no membership? Send to admin panel
+  const{data:sa}=await sb.from('super_admins').select('user_id').eq('user_id',userId).maybeSingle();
+  if(sa){window.location.href='super-admin.html';return;}
+
+  showMsg('si-err','Account found but no organisation linked. Contact support.');
 }
 
-// ── TABS & STEPS ──
 function showTab(t){
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
@@ -272,7 +259,6 @@ function updateOrgPreview(){
   document.getElementById('su-preview-name').textContent=name;
 }
 
-// ── SIGN IN ──
 async function doSignIn(){
   const email=document.getElementById('si-email').value.trim();
   const pass=document.getElementById('si-pass').value;
@@ -284,7 +270,7 @@ async function doSignIn(){
   await redirectAfterAuth(data.user.id);
 }
 
-// ── SIGN UP ──
+// ── SIGN UP — FIXED FLOW ──
 async function doSignUp(){
   const name=document.getElementById('su-name').value.trim();
   const email=document.getElementById('su-email').value.trim();
@@ -292,47 +278,113 @@ async function doSignUp(){
   const org=inviteData?null:document.getElementById('su-org').value.trim();
   const orgType=inviteData?null:document.getElementById('su-type').value;
   hideMsg('su-err','su-ok');
+
   if(!name||!email||!pass){showMsg('su-err','Please fill in all fields.');return;}
   if(!inviteData&&!org){showMsg('su-err','Please enter your organisation name.');return;}
   if(pass.length<8){showMsg('su-err','Password must be at least 8 characters.');return;}
+
   setLoad('su-btn',true,'Create account');
-  const{data,error}=await sb.auth.signUp({email,password:pass,options:{data:{full_name:name}}});
-  if(error){setLoad('su-btn',false,'Create account →');showMsg('su-err',error.message);return;}
-  const uid=data?.user?.id;
-  if(!uid){setLoad('su-btn',false,'Create account →');showMsg('su-err','Signup failed — please try again.');return;}
-  _newUserId=uid;
-  if(inviteData){
-    _newOrgId=inviteData.org_id;
-    await sb.from('profiles').upsert({id:uid,full_name:name,email,org_id:_newOrgId,role:inviteData.role,status:'active'});
-    await sb.from('invites').update({accepted:true}).eq('token',inviteToken);
-    // Invited users skip branding — go straight to app
-    await signInAndRedirect(email,pass,_newOrgId);
-  }else{
-    const{data:orgData,error:orgErr}=await sb.from('organisations').insert({
-      name:org,sector:orgType,owner_id:uid,plan:'free',status:'active',
-      brand_color:'#10b981',
-      modules:{participants:true,volunteers:true,events:true,employers:false,circular:false,funders:false}
-    }).select().single();
-    if(orgErr){setLoad('su-btn',false,'Create account →');showMsg('su-err','Could not create organisation: '+orgErr.message);return;}
-    _newOrgId=orgData.id;
-    await sb.from('profiles').upsert({id:uid,full_name:name,email,org_id:_newOrgId,role:'admin',status:'active'});
-    // Sign in silently then show branding step
-    await sb.auth.signInWithPassword({email,password:pass});
+
+  // ── STEP 1: Create the auth user ──
+  const{data:signUpData,error:signUpErr}=await sb.auth.signUp({
+    email,password:pass,options:{data:{full_name:name}}
+  });
+  if(signUpErr){
     setLoad('su-btn',false,'Create account →');
-    // Update preview with org name
-    document.getElementById('su-preview-name').textContent=org;
-    document.getElementById('login-logo').innerHTML=org+'<span style="color:var(--txt2);font-weight:400"> CRM</span>';
-    goStep(3);
+    showMsg('su-err',signUpErr.message);
+    return;
   }
+  const uid=signUpData?.user?.id;
+  if(!uid){
+    setLoad('su-btn',false,'Create account →');
+    showMsg('su-err','Signup failed — please try again.');
+    return;
+  }
+  _newUserId=uid;
+  _newUserEmail=email;
+  _newUserPass=pass;
+
+  // ── STEP 2: Sign in immediately to establish a session ──
+  // This is CRITICAL — without an active session, RLS blocks all subsequent inserts
+  const{error:siErr}=await sb.auth.signInWithPassword({email,password:pass});
+  if(siErr){
+    setLoad('su-btn',false,'Create account →');
+    if(siErr.message.toLowerCase().includes('confirm')||siErr.message.toLowerCase().includes('email')){
+      showMsg('su-err','Account created. Please check your email to confirm, then come back and sign in.');
+      setTimeout(()=>showTab('signin'),3000);
+    }else{
+      showMsg('su-err','Sign-in after signup failed: '+siErr.message);
+    }
+    return;
+  }
+
+  // ── STEP 3: Verify session is active ──
+  const{data:{session}}=await sb.auth.getSession();
+  if(!session){
+    setLoad('su-btn',false,'Create account →');
+    showMsg('su-err','Could not establish a session. Please sign in manually.');
+    setTimeout(()=>showTab('signin'),2500);
+    return;
+  }
+
+  // ── STEP 4: Branch — invited user vs new org owner ──
+  if(inviteData){
+    // Invited user — join existing org
+    _newOrgId=inviteData.org_id;
+    try{
+      await sb.from('memberships').insert({
+        user_id:uid,org_id:_newOrgId,role:inviteData.role||'advisor',status:'active',joined_at:new Date().toISOString()
+      });
+    }catch(e){console.warn('membership insert:',e);}
+    try{
+      await sb.from('profiles').upsert({id:uid,full_name:name,email,org_id:_newOrgId,role:inviteData.role,status:'active'});
+    }catch(e){console.warn('profile upsert:',e);}
+    try{await sb.from('invites').update({accepted:true}).eq('token',inviteToken);}catch(e){}
+    window.location.href='app.html?org_id='+_newOrgId;
+    return;
+  }
+
+  // New org owner flow
+  // ── STEP 5: Create the organisation ──
+  const{data:orgData,error:orgErr}=await sb.from('organisations').insert({
+    name:org,sector:orgType,owner_id:uid,plan:'free',status:'active',
+    brand_color:'#10b981',
+    modules:{participants:true,volunteers:true,events:true,employers:false,circular:false,funders:false}
+  }).select().single();
+
+  if(orgErr){
+    setLoad('su-btn',false,'Create account →');
+    showMsg('su-err','Could not create organisation: '+orgErr.message);
+    return;
+  }
+  _newOrgId=orgData.id;
+
+  // ── STEP 6: Create membership row (new RBAC) — user becomes Manager of their own org ──
+  const{error:memErr}=await sb.from('memberships').insert({
+    user_id:uid,org_id:_newOrgId,role:'manager',status:'active',joined_at:new Date().toISOString()
+  });
+  if(memErr){
+    console.warn('membership insert failed:',memErr);
+    // Non-fatal — proceed but log it. The user might end up locked out, in which case they need RLS support.
+  }
+
+  // ── STEP 7: Create profile row (legacy) ──
+  try{
+    await sb.from('profiles').upsert({id:uid,full_name:name,email,org_id:_newOrgId,role:'manager',status:'active'});
+  }catch(e){console.warn('profile upsert:',e);}
+
+  // ── STEP 8: All good — show branding step ──
+  setLoad('su-btn',false,'Create account →');
+  document.getElementById('su-preview-name').textContent=org;
+  document.getElementById('login-logo').innerHTML=org+'<span style="color:var(--txt2);font-weight:400"> CRM</span>';
+  goStep(3);
 }
 
-// ── BRANDING STEP ──
 function onSignupColorChange(color){
   document.getElementById('su-color-hex').value=color;
   document.getElementById('su-preview-dot').style.background=color;
   document.getElementById('su-color-preview').style.background=color;
   document.getElementById('login-logo').style.color=color;
-  // Update selected swatch
   document.querySelectorAll('.color-swatch').forEach(s=>{
     s.classList.toggle('selected',s.style.background===color||s.title===color);
   });
@@ -361,7 +413,6 @@ async function saveBrandingAndEnter(){
   btn.textContent='Setting up your workspace…';btn.disabled=true;
   const color=document.getElementById('su-color').value;
   let logoUrl=null;
-  // Upload logo if provided
   if(_signupLogoFile&&_newOrgId){
     try{
       const ext=_signupLogoFile.name.split('.').pop();
@@ -370,11 +421,9 @@ async function saveBrandingAndEnter(){
       if(!error){const{data}=sb.storage.from('org-assets').getPublicUrl(path);logoUrl=data.publicUrl;}
     }catch(e){console.log('Logo upload:',e);}
   }
-  // Save branding to org
   const update={brand_color:color};
   if(logoUrl)update.logo_url=logoUrl;
-  await sb.from('organisations').update(update).eq('id',_newOrgId);
-  // Redirect to app
+  try{await sb.from('organisations').update(update).eq('id',_newOrgId);}catch(e){console.warn('branding save:',e);}
   window.location.href='app.html?org_id='+_newOrgId+'&welcome=1';
 }
 
@@ -382,12 +431,6 @@ async function skipBranding(){
   window.location.href='app.html?org_id='+_newOrgId+'&welcome=1';
 }
 
-async function signInAndRedirect(email,pass,orgId){
-  const{error}=await sb.auth.signInWithPassword({email,password:pass});
-  if(!error)window.location.href='app.html?org_id='+orgId;
-}
-
-// ── PASSWORD RESET ──
 async function doReset(){
   const email=document.getElementById('fg-email').value.trim();
   hideMsg('fg-err','fg-ok');
@@ -405,7 +448,6 @@ async function doUpdatePassword(){
   setTimeout(()=>window.location.href='login.html',1500);
 }
 
-// ── HELPERS ──
 function showMsg(id,msg){const e=document.getElementById(id);if(!e)return;e.textContent=msg;e.style.display='block';}
 function hideMsg(...ids){ids.forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});}
 function setLoad(id,on,lbl){const b=document.getElementById(id);if(!b)return;b.disabled=on;b.textContent=on?'Please wait…':lbl;}
