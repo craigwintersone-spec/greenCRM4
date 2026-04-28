@@ -2376,6 +2376,73 @@ const canDelete = (resource, record) => can('delete', resource, record);
 async function loadUserAccess(){
   if(!sb || !currentUser) return;
 
+  console.log('[RBAC] loadUserAccess running — patched version v3');
+
+  // 1. Super-admin check
+  const sa = await sb.from('super_admins').select('user_id').eq('user_id', currentUser.id).maybeSingle();
+  isSuperAdmin = !!sa.data;
+
+  // 2. Memberships (split query — avoids RLS join issues)
+  const memRes = await sb.from('memberships')
+    .select('org_id, role, status')
+    .eq('user_id', currentUser.id)
+    .eq('status', 'active');
+  if(memRes.error) console.warn('[RBAC] memberships query error:', memRes.error.message);
+
+  // 3. Fetch org names for memberships
+  const memOrgIds = (memRes.data || []).map(m => m.org_id);
+  let memOrgs = [];
+  if(memOrgIds.length){
+    const orgRes = await sb.from('organisations').select('id, name').in('id', memOrgIds);
+    memOrgs = orgRes.data || [];
+  }
+  userMemberships = (memRes.data || []).map(m => {
+    const o = memOrgs.find(x => x.id === m.org_id);
+    return { org_id: m.org_id, role: m.role, status: m.status, org_name: o?.name || 'Unnamed org' };
+  });
+
+  // 4. Super admins also see all orgs (for the switcher)
+  if(isSuperAdmin){
+    const allRes = await sb.from('organisations').select('id, name').order('name');
+    window._allOrgsForSuperAdmin = allRes.data || [];
+    console.log('[RBAC] super admin loaded ' + window._allOrgsForSuperAdmin.length + ' orgs');
+  }
+
+  // 5. Resolve active org + role
+  const urlOrg = new URLSearchParams(window.location.search).get('org_id');
+
+  if(urlOrg){
+    orgId = urlOrg;
+    const m = userMemberships.find(x => x.org_id === orgId);
+    if(m){
+      currentRole = m.role;
+    } else if(isSuperAdmin){
+      currentRole = 'super_admin';
+    } else {
+      alert('You do not have access to this organisation.');
+      window.location.href = 'login.html';
+      return;
+    }
+  } else if(userMemberships.length > 0){
+    orgId = userMemberships[0].org_id;
+    currentRole = userMemberships[0].role;
+  } else if(isSuperAdmin && window._allOrgsForSuperAdmin?.length){
+    orgId = window._allOrgsForSuperAdmin[0].id;
+    currentRole = 'super_admin';
+  } else if(isSuperAdmin){
+    window.location.href = 'admin.html';
+    return;
+  } else {
+    alert('You are not a member of any organisation.');
+    await sb.auth.signOut();
+    window.location.href = 'login.html';
+    return;
+  }
+
+  console.log('[RBAC] resolved:', { currentRole, isSuperAdmin, orgId, memberships: userMemberships.length });
+}
+  if(!sb || !currentUser) return;
+
   // 1. Check super-admin first (gives access to any org)
   const { data: saRow } = await sb.from('super_admins')
     .select('user_id').eq('user_id', currentUser.id).maybeSingle();
