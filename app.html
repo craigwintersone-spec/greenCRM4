@@ -600,16 +600,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
 <div class="modal-overlay" id="modal-ev"><div class="modal" style="max-width:520px"><h2 id="ev-modal-title">Create event</h2><div class="form-row"><label>Event name *</label><input id="evf-name"/></div><div class="form-grid-3"><div class="form-row"><label>Type</label><select id="evf-type"><option>Green Skills</option><option>Wellbeing</option><option>Community Event</option><option>Frailty</option><option>Other</option></select></div><div class="form-row"><label>Date</label><input type="date" id="evf-date"/></div><div class="form-row"><label>Attendees</label><input type="number" id="evf-att" min="0" placeholder="0"/></div></div><div class="form-grid-2"><div class="form-row"><label>Location</label><input id="evf-loc"/></div><div class="form-row"><label>Capacity</label><input type="number" id="evf-cap" placeholder="20"/></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-ev')">Cancel</button><button class="btn btn-p" id="ev-save-btn" onclick="saveEv()">Save event</button></div></div></div>
 <div class="modal-overlay" id="modal-fb"><div class="modal"><h2 id="fb-modal-title">Add feedback</h2><div class="form-grid-2"><div class="form-row"><label>Event *</label><select id="fbf-ev"><option value="">Select event…</option></select></div><div class="form-row"><label>Participant name</label><input id="fbf-name"/></div></div><div class="form-row"><label>Enjoyment (1–5)</label><div style="display:flex;gap:5px;margin-top:4px" id="fbf-enjoyed-stars"></div></div><div class="form-grid-2"><div class="form-row"><label>Confidence before</label><div style="display:flex;gap:5px;margin-top:4px" id="fbf-cb-stars"></div></div><div class="form-row"><label>Confidence after</label><div style="display:flex;gap:5px;margin-top:4px" id="fbf-ca-stars"></div></div></div><div class="form-row"><label>Outcomes</label><div class="chk-group"><div class="chk-pill"><label><input type="checkbox" id="fbf-learned"/> Learned something new</label></div><div class="chk-pill"><label><input type="checkbox" id="fbf-connected"/> Felt more connected</label></div><div class="chk-pill"><label><input type="checkbox" id="fbf-friend"/> Made a new friend</label></div></div></div><div class="form-row"><label>Quote</label><textarea id="fbf-quote" style="min-height:55px"></textarea></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-fb')">Cancel</button><button class="btn btn-p" id="fb-save-btn" onclick="saveFb()">Save</button></div></div></div>
 <div class="modal-overlay" id="modal-item"><div class="modal"><h2 id="item-title">Log item</h2><div class="form-grid-2"><div class="form-row"><label>Item name</label><input id="it-name"/></div><div class="form-row"><label>Category</label><select id="it-cat"><option>Small electrical</option><option>Clothing</option><option>Furniture</option><option>Bike</option><option>Electronics</option></select></div></div><div class="form-grid-2"><div class="form-row"><label>Weight (kg)</label><input type="number" id="it-kg" step="0.1"/></div><div class="form-row"><label>Status</label><select id="it-st"><option>Collected</option><option>In repair</option><option>Repaired</option><option>Resold</option><option>Donated</option><option>Beyond repair</option></select></div></div><div class="form-grid-2"><div class="form-row"><label>Fixer</label><input id="it-fixer"/></div><div class="form-row"><label>Outcome</label><select id="it-outcome"><option value="">Pending</option><option>Resold</option><option>Donated</option><option>Returned to owner</option><option>Scrapped</option></select></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-item')">Cancel</button><button class="btn btn-p" id="item-save-btn" onclick="saveItem()">Save</button></div></div></div>
-<div class="modal"><h2 id="con-title">Add contract</h2>
-  <!-- FIX: linked funder indicator -->
-  <div style="display:flex;gap:6px;margin-bottom:14px;padding:8px 12px;background:rgba(16,185,129,.06);border:1px solid var(--border);border-radius:8px;align-items:center">
-    <span style="font-size:11px;color:var(--txt3)">Linked funder:</span>
-    <span id="con-linked-funder-label" style="font-size:12px;font-weight:600;color:var(--em)">None selected</span>
-  </div>
-  <!-- FIX: warning when no funders exist -->
-  <div class="alert alert-warn" id="con-no-funder-warn" style="display:none">
-    ⚠ No funders yet. <button class="btn btn-ghost btn-sm" style="margin-left:8px" onclick="closeModal('modal-con');go('funders');openAddFunder()">+ Add a funder first</button>
-  </div>
+<div class="modal-overlay" id="modal-con"><div class="modal"><h2 id="con-title">Add contract</h2>
   <div class="form-row"><label>Contract name</label><input id="con-name"/></div>
   <div class="form-grid-2">
     <div class="form-row"><label>Funder</label>
@@ -1754,54 +1745,34 @@ function openAddCon(funderId){
   _editConId=null;$('con-title').textContent='Add contract';
   ['con-name','con-funder','con-val','con-ts','con-to'].forEach(f=>$(f).value='');
   $('con-start').value='';$('con-end').value='';$('con-status').value='live';
-  $('con-report-type').value='other';
-  // FIX: populate first, THEN set value
   populateConFunderSelect();
-  // FIX: warn if no funders exist
-  const warnEl=$('con-no-funder-warn');
-  if(warnEl){warnEl.style.display=DB.funders.length?'none':'flex';}
   if(funderId){
-    $('con-funder-id').value=String(funderId);
+    $('con-funder-id').value=funderId;
     onConFunderChange();
-  }else{
-    const lbl=$('con-linked-funder-label');
-    if(lbl)lbl.textContent='None selected';
   }
   $('modal-con').classList.add('open');
 }
 function openEditCon(id){
-  const c=DB.contracts.find(x=>String(x.id)===String(id));if(!c)return;
+  const c=DB.contracts.find(x=>x.id===id);if(!c)return;
   _editConId=id;$('con-title').textContent='Edit contract';
-  $('con-name').value=c.name;
-  if($('con-funder'))$('con-funder').value=c.funder||'';
+  $('con-name').value=c.name;$('con-funder').value=c.funder||'';
   $('con-val').value=c.value;$('con-ts').value=c.target_starts;$('con-to').value=c.target_outcomes;
-  $('con-start').value=c.start_date||'';$('con-end').value=c.end_date||'';
+  $('con-start').value=c.start_date;$('con-end').value=c.end_date;
   $('con-status').value=c.status||'live';
   $('con-report-type').value=c.report_type||'other';
-  const warnEl=$('con-no-funder-warn');if(warnEl)warnEl.style.display='none';
-  // FIX: populate dropdown first, THEN set value so the option exists
   populateConFunderSelect();
-  if(c.funder_id){
-    $('con-funder-id').value=String(c.funder_id);
-    onConFunderChange();
-  }
+  if(c.funder_id)$('con-funder-id').value=c.funder_id;
   $('modal-con').classList.add('open');
 }
 async function saveCon(){
-  const name=$('con-name').value.trim();
-  if(!name){alert('Contract name is required.');return;}
-  const funderId=$('con-funder-id').value||null;
-  if(!funderId){alert('Please select a funder. Add one from the Funders page first.');return;}
   const btn=$('con-save-btn');btn.textContent='Saving…';btn.disabled=true;
   try{
-    // FIX: resolve funder name from DB.funders for consistency
-    const funderObj=DB.funders.find(f=>String(f.id)===String(funderId));
-    const funderName=funderObj?.name||$('con-funder')?.value||'';
+    const funderId=$('con-funder-id').value||null;
+    const funderName=$('con-funder').value||($('con-funder-id').options[$('con-funder-id').selectedIndex]?.textContent)||'';
     const d={
-      name,
+      name:$('con-name').value,
       funder:funderName,
-      // FIX: always store as string so comparisons work everywhere
-      funder_id:funderId?String(funderId):null,
+      funder_id:funderId||null,
       report_type:$('con-report-type').value||'other',
       value:parseInt($('con-val').value)||0,
       target_starts:parseInt($('con-ts').value)||0,
@@ -1815,11 +1786,11 @@ async function saveCon(){
     }else{
       await sbInsert('contracts',d);
     }
+    // Always re-fetch as single source of truth
     await refreshTable('contracts');
     closeModal('modal-con');
     renderFunding();
     renderReports();
-    // FIX: always refresh funders page so contracts appear under their funder card
     renderFunders();
     if($('modal-p').classList.contains('open'))renderContractSelector(getSelectedContractIds());
   }catch(e){alert('Save failed: '+e.message);}
@@ -1918,8 +1889,7 @@ function renderFunders(){
   }
   $('funders-list').innerHTML=funders.map(f=>{
     const ft=FUNDER_TYPES[f.type]||FUNDER_TYPES.other;
-    // FIX: always compare as strings; fall back to name match for legacy data
-const contracts=(DB.contracts||[]).filter(c=>String(c.funder_id)===String(f.id)||(c.funder&&c.funder===f.name));
+    const contracts=(DB.contracts||[]).filter(c=>c.funder_id===f.id||c.funder===f.name);
     const totalValue=contracts.reduce((a,c)=>a+num(c.value),0);
     const liveContracts=contracts.filter(c=>c.status!=='expired');
     return`<div class="card" style="border-left:4px solid ${ft.color}">
@@ -1982,15 +1952,13 @@ async function saveFunder(){
     }else{
       await sbInsert('funders',d);
     }
+    // Always re-fetch from Supabase as single source of truth
     await refreshTable('funders');
     closeModal('modal-funder');
     renderFunders();
     populateConFunderSelect();
-    // FIX: also refresh contracts and reports if they're open
-    renderReports();
   }catch(e){alert('Save failed: '+e.message);}
   finally{btn.textContent='Save funder';btn.disabled=false;}
-}
 }
 
 async function deleteFunder(id){
@@ -2004,14 +1972,12 @@ async function deleteFunder(id){
 
 function populateConFunderSelect(){
   const sel=$('con-funder-id');if(!sel)return;
-  const cur=String(sel.value||'');
+  const cur=sel.value;
   sel.innerHTML='<option value="">— Select funder —</option>';
   (DB.funders||[]).forEach(f=>{
     const o=document.createElement('option');
-    // FIX: use string for value so === comparisons work
-    o.value=String(f.id);
-    o.textContent=f.name;
-    if(cur&&cur===String(f.id))o.selected=true;
+    o.value=f.id;o.textContent=f.name;
+    if(cur==f.id)o.selected=true;
     sel.appendChild(o);
   });
 }
@@ -2019,17 +1985,11 @@ function populateConFunderSelect(){
 function onConFunderChange(){
   const sel=$('con-funder-id');
   const funderId=sel.value;
-  if(!funderId){
-    const lbl=$('con-linked-funder-label');if(lbl)lbl.textContent='None selected';
-    return;
-  }
-  const f=(DB.funders||[]).find(f=>String(f.id)===String(funderId));
+  if(!funderId)return;
+  const f=(DB.funders||[]).find(x=>String(x.id)===String(funderId));
   if(f){
-    if($('con-funder'))$('con-funder').value=f.name;
-    // FIX: auto-fill report type from funder's type
+    $('con-funder').value=f.name;
     if(f.type)$('con-report-type').value=f.type;
-    // FIX: update the linked funder label in the modal
-    const lbl=$('con-linked-funder-label');if(lbl)lbl.textContent=f.name;
   }
 }
 
