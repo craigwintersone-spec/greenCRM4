@@ -1726,13 +1726,12 @@ function renderOutcomes(){
   const confEl=$('out-confidence');if(confEl)confEl.innerHTML='<div style="display:flex;gap:20px;align-items:center;padding:8px 0"><div style="text-align:center"><div style="font-size:36px;font-weight:800;color:var(--amber)">'+avgCB+'</div><div style="font-size:11px;color:var(--txt3)">avg before</div></div><div style="font-size:22px;color:var(--txt3)">→</div><div style="text-align:center"><div style="font-size:36px;font-weight:800;color:var(--em)">'+avgCA+'</div><div style="font-size:11px;color:var(--txt3)">avg after</div></div></div>';
 }
 
+function getFunderName(c){
+  if(c.funder_id){const f=(DB.funders||[]).find(x=>String(x.id)===String(c.funder_id));if(f)return f.name;}
+  return c.funder||'—';
+}
+
 function renderFunding(){
-  $('fund-sub').textContent=DB.contracts.length+' contracts · £'+DB.contracts.reduce((a,c)=>a+num(c.value),0).toLocaleString()+' total';
-  // Show funder name in funding page
-  const getFunderName=c=>{
-    if(c.funder_id){const f=DB.funders.find(x=>String(x.id)===String(c.funder_id));if(f)return f.name;}
-    return c.funder||'—';
-  };
   if(!DB.contracts.length){$('fund-list').innerHTML=emptyState('💰','No contracts yet','Add your funding contracts.','+ Add contract',"openAddCon()");return;}
   $('fund-list').innerHTML=DB.contracts.map(c=>{
     const linked=DB.participants.filter(p=>toArr(p.contract_ids).includes(String(c.id)));
