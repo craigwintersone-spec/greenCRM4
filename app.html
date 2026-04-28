@@ -520,46 +520,142 @@ tr:hover td{background:rgba(16,185,129,.03)}
 <!-- HR & EQUALITY -->
 <div id="page-hr" class="page">
   <div class="page-header">
-    <div><div class="page-title">🛡️ HR &amp; Equality Agent</div><div class="page-sub">Equality Act 2010 · GDPR · Always on</div></div>
-  </div>
-  <div class="ai-panel">
-    <div class="ai-panel-title"><span class="ai-icon">🛡️</span>How it works</div>
-    <div style="font-size:13px;color:var(--txt2);line-height:1.7">The HR &amp; Equality Agent scans text across your caseload — case notes, referral backgrounds, feedback — for language that may breach the Equality Act 2010 across all 9 protected characteristics. Paste any text below to check it manually, or run a full caseload scan.</div>
+    <div><div class="page-title">🛡️ HR &amp; Equality</div><div class="page-sub">Equality Act 2010 · GDPR · Always on</div></div>
   </div>
 
-  <!-- MANUAL CHECK -->
-  <div class="card">
-    <div class="card-title">Manual text check</div>
-    <div class="form-row">
-      <label>Paste text to check (case note, referral background, email etc.)</label>
-      <textarea id="hr-text-input" style="min-height:100px" placeholder="Paste any text here to check for potential equality or GDPR concerns…"></textarea>
+  <!-- HR MODE BANNER -->
+  <div id="hr-mode-banner" class="alert alert-info" style="margin-bottom:16px"></div>
+
+  <!-- TAB BAR -->
+  <div class="vtab-bar" style="margin-bottom:20px">
+    <button class="vtab-btn active" onclick="switchHRTab('flags',this)">🚩 Flags queue</button>
+    <button class="vtab-btn" onclick="switchHRTab('equity',this)">📊 Outcome equity</button>
+    <button class="vtab-btn" onclick="switchHRTab('monitoring',this)">📋 Equality monitoring</button>
+    <button class="vtab-btn" onclick="switchHRTab('wellbeing',this)">💚 Staff wellbeing</button>
+    <button class="vtab-btn" onclick="switchHRTab('benchmark',this)">🏆 Benchmarking</button>
+    <button class="vtab-btn" onclick="switchHRTab('settings',this)">⚙️ Settings</button>
+  </div>
+
+  <!-- FLAGS QUEUE -->
+  <div id="hr-tab-flags">
+    <div class="ai-panel" style="margin-bottom:16px">
+      <div class="ai-panel-title"><span class="ai-icon">🛡️</span>Positive Language Coach · Always on</div>
+      <div style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:10px">The language coach scans case notes and referrals automatically. Flags appear here for manager review. Staff see gentle suggestions inline — never blocked, never lectured.</div>
+      <button class="btn btn-ai btn-sm" onclick="runFullLanguageScan()">🔍 Run full language scan now</button>
+      <div id="language-scan-result" style="margin-top:12px"></div>
     </div>
-    <button class="btn btn-ai" onclick="runHRCheck()">🛡️ Check for concerns</button>
-    <div id="hr-check-result" style="margin-top:14px"></div>
+    <div class="card">
+      <div class="card-title">Manager review queue</div>
+      <div id="hr-flags-list"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Protected characteristics monitored</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        ${['Age','Disability','Gender reassignment','Marriage &amp; civil partnership','Pregnancy &amp; maternity','Race','Religion or belief','Sex','Sexual orientation'].map(c=>`<div style="background:var(--surface);border:1px solid rgba(124,58,237,.2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--txt2);display:flex;align-items:center;gap:6px"><span style="color:var(--purple)">✦</span>${c}</div>`).join('')}
+      </div>
+    </div>
   </div>
 
-  <!-- CASELOAD SCAN -->
-  <div class="card">
-    <div class="card-title">Caseload scan</div>
-    <div style="font-size:13px;color:var(--txt2);margin-bottom:14px">Scan all case notes across your active participants for potential equality concerns.</div>
-    <button class="btn btn-ai" onclick="runCaseloadScan()">🔍 Scan all case notes</button>
-    <div id="hr-scan-result" style="margin-top:14px"></div>
+  <!-- OUTCOME EQUITY -->
+  <div id="hr-tab-equity" style="display:none">
+    <div class="ai-panel">
+      <div class="ai-panel-title"><span class="ai-icon">📊</span>Outcome Equity Analysis</div>
+      <div style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:10px">Cross-references outcomes against all protected characteristics. Flags any gap over 15% as a potential equity concern. Feeds directly into GLA and CBF funder reports.</div>
+      <button class="btn btn-ai btn-sm" onclick="runEquityAnalysis()">✦ Run equity analysis</button>
+    </div>
+    <div id="equity-result"></div>
   </div>
 
-  <!-- FLAGS LOG -->
-  <div class="card">
-    <div class="card-title">Flags log</div>
-    <div id="hr-flags-list"><div style="color:var(--txt3);font-size:13px">No flags raised yet. Run a scan or use the manual check above.</div></div>
+  <!-- EQUALITY MONITORING -->
+  <div id="hr-tab-monitoring" style="display:none">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title">About equality monitoring</div>
+      <div style="font-size:13px;color:var(--txt2);line-height:1.7">Completion of equality monitoring is <strong style="color:var(--txt)">voluntary</strong> for participants. Data is stored separately from case records, used only for anonymised reporting, and never shared with funders at individual level. GDPR Article 9 compliant.</div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div class="card-title" style="margin-bottom:0">Participant equality data</div>
+        <div id="eq-completion-badge" style="font-size:12px;color:var(--txt3)"></div>
+      </div>
+      <div id="eq-monitoring-list"></div>
+    </div>
   </div>
 
-  <!-- PROTECTED CHARACTERISTICS -->
-  <div class="card">
-    <div class="card-title">Protected characteristics monitored</div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-      ${['Age','Disability','Gender reassignment','Marriage &amp; civil partnership','Pregnancy &amp; maternity','Race','Religion or belief','Sex','Sexual orientation'].map(c=>`<div style="background:var(--surface);border:1px solid rgba(124,58,237,.2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--txt2);display:flex;align-items:center;gap:6px"><span style="color:var(--purple)">✦</span>${c}</div>`).join('')}
+  <!-- STAFF WELLBEING -->
+  <div id="hr-tab-wellbeing" style="display:none">
+    <div class="ai-panel">
+      <div class="ai-panel-title"><span class="ai-icon">💚</span>Staff Wellbeing Flag · Weekly scan</div>
+      <div style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:10px">Scans advisor case notes for language patterns suggesting stress, burnout, or compassion fatigue. Never shown to the advisor — manager-only. Suggests a quiet check-in when patterns emerge.</div>
+      <button class="btn btn-ai btn-sm" onclick="runWellbeingScan()">💚 Scan advisor notes now</button>
+    </div>
+    <div id="wellbeing-result"></div>
+    <div class="card">
+      <div class="card-title">How it works</div>
+      <div style="font-size:13px;color:var(--txt2);line-height:1.8">The agent looks for repeated patterns — not single phrases — across an advisor's notes over time. Signs include: language suggesting overwhelm, repeated crisis descriptions, declining note quality, reduced empathy markers. A flag suggests a check-in conversation, not a disciplinary action. <strong style="color:var(--txt)">This is never shown to the advisor themselves.</strong></div>
+    </div>
+  </div>
+
+  <!-- BENCHMARKING -->
+  <div id="hr-tab-benchmark" style="display:none">
+    <div class="ai-panel">
+      <div class="ai-panel-title"><span class="ai-icon">🏆</span>Anonymised Benchmarking</div>
+      <div style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:10px">Compares your inclusive language score and outcome equity against anonymised aggregates from similar GreenCRM organisations. No org names ever shared.</div>
+      <button class="btn btn-ai btn-sm" onclick="runBenchmarking()">✦ Generate benchmark report</button>
+    </div>
+    <div id="benchmark-result"></div>
+  </div>
+
+  <!-- HR SETTINGS -->
+  <div id="hr-tab-settings" style="display:none">
+    <div class="card">
+      <div class="card-title">HR &amp; Equality mode</div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+        <label style="display:flex;align-items:flex-start;gap:12px;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;text-transform:none;letter-spacing:0" id="hr-mode-strict-lbl">
+          <input type="radio" name="hr-mode" value="strict" id="hr-mode-strict" style="width:auto;background:none;border:none;padding:0;margin-top:2px" onchange="saveHRMode()"/>
+          <div><div style="font-size:13px;font-weight:600;color:var(--txt)">⚖️ Strict</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">Blocks save · Must acknowledge · Full audit log · Instant manager alert. Best for MoJ, probation, justice programmes.</div></div>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:12px;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;text-transform:none;letter-spacing:0" id="hr-mode-advisory-lbl">
+          <input type="radio" name="hr-mode" value="advisory" id="hr-mode-advisory" style="width:auto;background:none;border:none;padding:0;margin-top:2px" onchange="saveHRMode()" checked/>
+          <div><div style="font-size:13px;font-weight:600;color:var(--txt)">💬 Advisory</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">Soft warning · Can proceed · Flag logged · Manager sees queue. Best for most charities and community orgs.</div></div>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:12px;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;text-transform:none;letter-spacing:0" id="hr-mode-silent-lbl">
+          <input type="radio" name="hr-mode" value="silent" id="hr-mode-silent" style="width:auto;background:none;border:none;padding:0;margin-top:2px" onchange="saveHRMode()"/>
+          <div><div style="font-size:13px;font-weight:600;color:var(--txt)">🔕 Silent</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">No interruption · Flag logged quietly · Weekly digest to manager. Best for small volunteer orgs.</div></div>
+        </label>
+      </div>
+      <div class="form-row"><label>Manager alert email</label><input id="hr-manager-email" placeholder="manager@yourorg.org.uk" style="max-width:320px"/></div>
+      <button class="btn btn-p btn-sm" onclick="saveHRSettings()">Save settings</button>
+      <div class="alert alert-ok" id="hr-settings-saved" style="display:none;margin-top:10px">✓ Settings saved</div>
     </div>
   </div>
 </div>
+
+<!-- EQUALITY MONITORING MODAL -->
+<div class="modal-overlay" id="modal-eq"><div class="modal" style="max-width:560px">
+  <h2 id="eq-modal-title">Equality monitoring</h2>
+  <div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--txt2);margin-bottom:16px;line-height:1.6">This information is collected voluntarily for anonymised reporting purposes only. It will never be shared with funders at individual level and does not affect the support received.</div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Age group</label><select id="eq-age"><option value="">Prefer not to say</option><option>16–24</option><option>25–34</option><option>35–44</option><option>45–54</option><option>55–64</option><option>65+</option></select></div>
+    <div class="form-row"><label>Ethnicity</label><select id="eq-ethnicity"><option value="">Prefer not to say</option><option>White British</option><option>White Irish</option><option>White Other</option><option>Mixed White &amp; Black Caribbean</option><option>Mixed White &amp; Black African</option><option>Mixed White &amp; Asian</option><option>Mixed Other</option><option>Asian / Asian British — Indian</option><option>Asian / Asian British — Pakistani</option><option>Asian / Asian British — Bangladeshi</option><option>Asian / Asian British — Chinese</option><option>Asian / Asian British — Other</option><option>Black / Black British — African</option><option>Black / Black British — Caribbean</option><option>Black / Black British — Other</option><option>Arab</option><option>Other ethnic group</option></select></div>
+  </div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Gender</label><select id="eq-gender"><option value="">Prefer not to say</option><option>Man</option><option>Woman</option><option>Non-binary</option><option>Gender fluid</option><option>Other</option></select></div>
+    <div class="form-row"><label>Gender same as birth sex?</label><select id="eq-trans"><option value="">Prefer not to say</option><option value="yes">Yes</option><option value="no">No</option></select></div>
+  </div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Sexual orientation</label><select id="eq-orientation"><option value="">Prefer not to say</option><option>Heterosexual / straight</option><option>Gay or lesbian</option><option>Bisexual</option><option>Other</option></select></div>
+    <div class="form-row"><label>Religion or belief</label><select id="eq-religion"><option value="">Prefer not to say</option><option>No religion</option><option>Christian</option><option>Muslim</option><option>Hindu</option><option>Sikh</option><option>Jewish</option><option>Buddhist</option><option>Other</option></select></div>
+  </div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Disability</label><select id="eq-disability"><option value="">Prefer not to say</option><option value="none">No disability</option><option value="physical">Physical / mobility</option><option value="sensory">Sensory (sight/hearing)</option><option value="mental">Mental health condition</option><option value="learning">Learning disability / difficulty</option><option value="neurodiverse">Neurodiverse (autism, ADHD etc.)</option><option value="other">Other</option></select></div>
+    <div class="form-row"><label>Pregnancy / maternity</label><select id="eq-pregnancy"><option value="">Prefer not to say</option><option value="none">Not applicable</option><option value="pregnant">Currently pregnant</option><option value="maternity">On maternity leave</option><option value="recent">Recently returned</option></select></div>
+  </div>
+  <div class="form-row"><label>Marriage / civil partnership</label><select id="eq-marriage"><option value="">Prefer not to say</option><option value="single">Single</option><option value="married">Married</option><option value="civil">Civil partnership</option><option value="other">Other</option></select></div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeModal('modal-eq')">Cancel</button>
+    <button class="btn btn-p" id="eq-save-btn" onclick="saveEqualityData()">Save</button>
+  </div>
+</div></div>
 
 <!-- SETTINGS (keep existing) -->
 <div id="page-settings" class="page">
