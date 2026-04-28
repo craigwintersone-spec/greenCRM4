@@ -985,50 +985,132 @@ Do not change the structure or remove content.`;
 }
 
 function printReport(){
-  // Get the report content
   const reportDoc=document.querySelector('.report-doc');
   if(!reportDoc){window.print();return;}
-  // Create or reuse print area
-  let printArea=document.getElementById('report-print-area');
-  if(!printArea){
-    printArea=document.createElement('div');
-    printArea.id='report-print-area';
-    document.body.appendChild(printArea);
-  }
-  // Clone report into print area with white background for PDF
   const b=window._orgBranding||{primary:'#10b981'};
-  printArea.innerHTML=`
+  // Open a clean new window with just the report
+  const w=window.open('','_blank','width=900,height=700');
+  w.document.write(`<!DOCTYPE html><html><head>
+    <meta charset="UTF-8"/>
+    <title>${currentOrg?.name||'GreenCRM'} — Report</title>
     <style>
-      #report-print-area{font-family:system-ui,sans-serif;background:#fff;color:#111;max-width:100%}
-      #report-print-area h3{color:${b.primary};font-size:14px;font-weight:700;margin:20px 0 8px;padding-bottom:5px;border-bottom:1px solid #e5e7eb}
-      #report-print-area h4{font-size:13px;font-weight:700;margin:12px 0 5px}
-      #report-print-area strong{color:#111;font-weight:700}
-      #report-print-area .report-header{padding:24px;border-bottom:3px solid ${b.primary};margin-bottom:20px}
-      #report-print-area .metrics-strip{display:grid;grid-template-columns:repeat(6,1fr);border-bottom:1px solid #e5e7eb;margin-bottom:20px}
-      #report-print-area .metric-cell{padding:12px 8px;text-align:center;border-right:1px solid #e5e7eb}
-      #report-print-area .metric-val{font-size:18px;font-weight:800;color:${b.primary}}
-      #report-print-area .metric-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-top:2px}
-      #report-print-area .body{padding:0 24px 24px;font-size:13px;color:#374151;line-height:1.8}
-      #report-print-area .quote-box{border-left:3px solid ${b.primary};padding:10px 14px;margin:8px 0;background:#f9fafb}
-      #report-print-area .footer{padding:12px 24px;border-top:1px solid #e5e7eb;font-size:10px;color:#9ca3af;display:flex;justify-content:space-between}
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:system-ui,sans-serif;background:#fff;color:#111;padding:0;margin:0}
+      h3{color:${b.primary};font-size:14px;font-weight:700;margin:20px 0 8px;padding-bottom:6px;border-bottom:1px solid #e5e7eb}
+      h4{font-size:13px;font-weight:700;color:#111;margin:12px 0 5px}
+      strong{color:#111;font-weight:700}
+      p{margin-top:10px;font-size:13px;color:#374151;line-height:1.8}
+      .report-header-wrap{padding:28px 36px;border-bottom:3px solid ${b.primary};background:linear-gradient(135deg,${b.primary}18,${b.primary}05)}
+      .report-header-wrap img{max-height:48px;max-width:180px;object-fit:contain;margin-bottom:12px;display:block}
+      .report-header-wrap .funder-tag{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${b.primary};margin-bottom:5px}
+      .report-header-wrap h1{font-size:24px;font-weight:800;color:#111;margin-bottom:4px}
+      .report-header-wrap .sub{font-size:13px;color:#6b7280}
+      .report-header-wrap .meta{display:flex;gap:16px;margin-top:12px;font-size:12px;color:#6b7280;flex-wrap:wrap}
+      .metrics-strip{display:grid;grid-template-columns:repeat(6,1fr);border-bottom:1px solid #e5e7eb}
+      .metric-cell{padding:12px 8px;text-align:center;border-right:1px solid #e5e7eb}
+      .metric-cell:last-child{border-right:none}
+      .metric-val{font-size:20px;font-weight:800;color:${b.primary}}
+      .metric-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-top:2px}
+      .report-body{padding:28px 36px;font-size:13px;color:#374151;line-height:1.8}
+      .section-heading{font-size:15px;font-weight:700;color:${b.primary};margin:24px 0 10px;padding-bottom:6px;border-bottom:1px solid #e5e7eb}
+      .section-body{font-size:13px;color:#374151;line-height:1.9;margin-bottom:20px}
+      .quotes-wrap{padding:0 36px 28px}
+      .quotes-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:12px}
+      .quotes-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+      .quote-box{border-left:3px solid ${b.primary};padding:12px 14px;background:#f9fafb;border-radius:0 6px 6px 0}
+      .quote-text{font-size:13px;color:#374151;font-style:italic;line-height:1.6;margin-bottom:6px}
+      .quote-attr{font-size:11px;color:#9ca3af}
+      .report-footer{padding:14px 36px;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;font-size:11px;color:#9ca3af}
+      @media print{body{padding:0}@page{margin:12mm;size:A4}button{display:none!important}}
     </style>
-    ${reportDoc.innerHTML
-      .replace(/background:#[0-9a-f]+/gi,'background:#fff')
-      .replace(/color:#[0-9a-f]{3,6}/gi,m=>m)
-      .replace(/style="[^"]*background[^"]*"/gi,s=>s.replace(/background:[^;'"]+/gi,'background:#fff'))
-    }`;
-  // Clean up dark backgrounds for print
-  printArea.querySelectorAll('[style]').forEach(el=>{
-    el.style.background='';
-    el.style.backgroundColor='';
-  });
-  printArea.querySelectorAll('div').forEach(el=>{
-    if(el.style.color==='#9ab8a4'||el.style.color==='#6a8f76')el.style.color='#374151';
-    if(el.style.color==='#e2f5eb')el.style.color='#111';
-  });
-  window.print();
-  // Clean up after print dialog closes
-  setTimeout(()=>{printArea.innerHTML='';},1000);
+  </head><body>`);
+
+  // ── Header ──
+  const logoHtml=b.logoUrl
+    ?`<img src="${b.logoUrl}" alt="${currentOrg?.name||''}" onerror="this.style.display='none'"/>`
+    :`<div style="font-size:20px;font-weight:800;color:${b.primary};margin-bottom:12px">${currentOrg?.name||''}</div>`;
+
+  const P=DB.participants,E=DB.events,FB=DB.feedback,V=DB.volunteers;
+  const jobs=P.filter(p=>p.outcomes.includes('Employment')).length;
+  const avgCB=FB.length?(FB.reduce((a,f)=>a+num(f.cb),0)/FB.length).toFixed(1):0;
+  const avgCA=FB.length?(FB.reduce((a,f)=>a+num(f.ca),0)/FB.length).toFixed(1):0;
+  const todayStr=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
+
+  // Get report title and funder from the rendered doc
+  const reportTitle=reportDoc.querySelector('div[style*="font-size:26px"]')?.textContent||'Funder Report';
+  const reportSubtitle=reportDoc.querySelector('div[style*="font-size:14px"][style*="#6a8f76"]')?.textContent||'';
+  const funderTag=reportDoc.querySelector('div[style*="font-size:11px"][style*="uppercase"]')?.textContent||'';
+
+  w.document.write(`
+    <div class="report-header-wrap">
+      ${logoHtml}
+      <div class="funder-tag">${funderTag}</div>
+      <h1>${reportTitle}</h1>
+      <div class="sub">${reportSubtitle}</div>
+      <div class="meta">
+        <span>📅 ${todayStr}</span>
+        <span>🏢 ${currentOrg?.name||''}</span>
+        <span style="color:${b.primary}">✦ GreenCRM Org Brain</span>
+      </div>
+    </div>
+
+    <div class="metrics-strip">
+      ${[
+        {l:'Active',v:P.filter(p=>p.stage!=='Closed').length},
+        {l:'Employment',v:jobs},
+        {l:'Events',v:E.length},
+        {l:'Volunteers',v:V.filter(v=>v.status==='Active').length},
+        {l:'Conf ↑',v:avgCB+'→'+avgCA},
+        {l:'Feedback',v:FB.length}
+      ].map(m=>`<div class="metric-cell"><div class="metric-val">${m.v}</div><div class="metric-lbl">${m.l}</div></div>`).join('')}
+    </div>
+
+    <div class="report-body">`);
+
+  // ── Extract and write sections ──
+  const sections=reportDoc.querySelectorAll('div[style*="margin-bottom:28px"]');
+  if(sections.length>0){
+    sections.forEach(section=>{
+      const heading=section.querySelector('h3')?.textContent||'';
+      const bodyEl=section.querySelector('div[style*="font-size:14px"]');
+      const bodyHtml=bodyEl?.innerHTML||'';
+      if(heading){
+        w.document.write(`<div class="section-heading">${heading}</div>`);
+        w.document.write(`<div class="section-body">${bodyHtml.replace(/color:#9ab8a4/g,'color:#374151').replace(/color:#e2f5eb/g,'color:#111')}</div>`);
+      }
+    });
+  }else{
+    // Fallback — write full body content
+    const bodyContent=reportDoc.querySelector('div[style*="padding:32px 36px"]')?.innerHTML||reportDoc.innerHTML;
+    w.document.write(`<div>${bodyContent.replace(/color:#9ab8a4/g,'color:#374151').replace(/color:#e2f5eb/g,'color:#111').replace(/background:#[0-9a-f]+/gi,'').replace(/background:linear-gradient[^;"]*/gi,'')}</div>`);
+  }
+
+  w.document.write(`</div>`);
+
+  // ── Quotes ──
+  const quotes=DB.feedback.filter(f=>f.quote).slice(0,4);
+  if(quotes.length){
+    w.document.write(`<div class="quotes-wrap">
+      <div class="quotes-title">Participant voices</div>
+      <div class="quotes-grid">
+        ${quotes.map(f=>{const ev=DB.events.find(e=>e.id===f.eventId);return`<div class="quote-box"><div class="quote-text">"${f.quote}"</div><div class="quote-attr">${f.name||'Participant'}${ev?' · '+ev.name:''}</div></div>`;}).join('')}
+      </div>
+    </div>`);
+  }
+
+  // ── Footer ──
+  w.document.write(`
+    <div class="report-footer">
+      <span>${currentOrg?.name||''} · ${todayStr} · Confidential</span>
+      <span>Generated by GreenCRM · Powered by Claude AI</span>
+    </div>
+    <div style="text-align:center;padding:16px">
+      <button onclick="window.print();window.close()" style="background:${b.primary};color:#fff;border:none;border-radius:8px;padding:10px 24px;font-size:14px;font-weight:700;cursor:pointer;margin-right:8px">🖨️ Print / Save PDF</button>
+      <button onclick="window.close()" style="background:#f3f4f6;color:#374151;border:none;border-radius:8px;padding:10px 20px;font-size:14px;cursor:pointer">Close</button>
+    </div>
+  </body></html>`);
+  w.document.close();
+  w.focus();
 }
 
 function copyReportText(){
