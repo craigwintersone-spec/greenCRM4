@@ -2552,22 +2552,13 @@ async function boot(){
 //   can('view','hr_equality')    → true only for manager/super_admin
 //   can('view','case_notes')     → false for admin, true for manager
 // ════════════════════════════════════════════════════════════════
-boot();
   // ════════════════════════════════════════
-// RBAC DEBUG PANEL
-// Paste this just before the closing </script> tag at the bottom of app.html
-// (right after the line that says: boot();)
-// ════════════════════════════════════════
-//
-// USAGE:
-//   • Press Ctrl+Shift+D (or Cmd+Shift+D on Mac) to open
-//   • Click "Run Tests" to see what's working
-//   • Click "Close" when done
-//
-// Remove this whole block once everything is working.
+// RBAC DEBUG PANEL — V2 (no HTML templates, can't get mangled)
+// Paste this just before the final boot(); call at the bottom of app.html
+// Press Ctrl+Shift+D to open.
 // ════════════════════════════════════════
 
-document.addEventListener('keydown', e => {
+document.addEventListener('keydown', function(e){
   if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'd'){
     e.preventDefault();
     openDebugPanel();
@@ -2575,152 +2566,196 @@ document.addEventListener('keydown', e => {
 });
 
 function openDebugPanel(){
-  // Remove if already open
-  const existing = document.getElementById('rbac-debug-panel');
+  var existing = document.getElementById('rbac-debug-panel');
   if(existing){ existing.remove(); return; }
 
-  const panel = document.createElement('div');
+  // Outer panel
+  var panel = document.createElement('div');
   panel.id = 'rbac-debug-panel';
-  panel.style.cssText = `
-    position:fixed; top:20px; right:20px; width:480px; max-height:85vh;
-    background:#0a0f0a; border:2px solid #10b981; border-radius:12px;
-    padding:18px; z-index:99999; overflow-y:auto;
-    font-family:system-ui,sans-serif; color:#e2f5eb; font-size:13px;
-    box-shadow:0 20px 60px rgba(0,0,0,.7)`;
+  panel.style.cssText = 'position:fixed;top:20px;right:20px;width:480px;max-height:85vh;background:#0a0f0a;border:2px solid #10b981;border-radius:12px;padding:18px;z-index:99999;overflow-y:auto;font-family:system-ui,sans-serif;color:#e2f5eb;font-size:13px;box-shadow:0 20px 60px rgba(0,0,0,.7)';
 
-  panel.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid #2a3a2a;padding-bottom:10px">
-      <div style="font-size:15px;font-weight:700;color:#10b981">🛠️ RBAC Debug Panel</div>
-      <button onclick="document.getElementById('rbac-debug-panel').remove()" style="background:none;border:none;color:#9ab8a4;font-size:18px;cursor:pointer">✕</button>
-    </div>
-    <div style="display:flex;gap:8px;margin-bottom:14px">
-      <button onclick="runRBACTests()" style="background:#10b981;color:#fff;border:none;padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">▶ Run Tests</button>
-      <button onclick="document.getElementById('rbac-debug-out').textContent='Cleared.'" style="background:#182018;color:#9ab8a4;border:1px solid #2a3a2a;padding:7px 14px;border-radius:8px;font-size:12px;cursor:pointer">Clear</button>
-      <button onclick="copyDebugOutput()" style="background:#182018;color:#9ab8a4;border:1px solid #2a3a2a;padding:7px 14px;border-radius:8px;font-size:12px;cursor:pointer">📋 Copy</button>
-    </div>
-    <div style="font-size:11px;color:#6a8f76;margin-bottom:8px">Output (copy this and paste back to Claude):</div>
-    <pre id="rbac-debug-out" style="background:#111811;border:1px solid #2a3a2a;border-radius:8px;padding:12px;font-size:11px;color:#9ab8a4;white-space:pre-wrap;word-break:break-all;max-height:60vh;overflow-y:auto;font-family:ui-monospace,Menlo,monospace;line-height:1.6">Click "Run Tests" to start.</pre>
-  `;
+  // Header row
+  var header = document.createElement('div');
+  header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid #2a3a2a;padding-bottom:10px';
+
+  var title = document.createElement('div');
+  title.style.cssText = 'font-size:15px;font-weight:700;color:#10b981';
+  title.textContent = 'RBAC Debug Panel';
+
+  var closeBtn = document.createElement('button');
+  closeBtn.textContent = 'Close';
+  closeBtn.style.cssText = 'background:none;border:1px solid #2a3a2a;color:#9ab8a4;font-size:12px;cursor:pointer;padding:4px 10px;border-radius:6px';
+  closeBtn.onclick = function(){ panel.remove(); };
+
+  header.appendChild(title);
+  header.appendChild(closeBtn);
+
+  // Button row
+  var btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:8px;margin-bottom:14px';
+
+  var runBtn = document.createElement('button');
+  runBtn.textContent = 'Run Tests';
+  runBtn.style.cssText = 'background:#10b981;color:#fff;border:none;padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer';
+  runBtn.onclick = runRBACTests;
+
+  var copyBtn = document.createElement('button');
+  copyBtn.textContent = 'Copy output';
+  copyBtn.style.cssText = 'background:#182018;color:#9ab8a4;border:1px solid #2a3a2a;padding:7px 14px;border-radius:8px;font-size:12px;cursor:pointer';
+  copyBtn.onclick = copyDebugOutput;
+
+  btnRow.appendChild(runBtn);
+  btnRow.appendChild(copyBtn);
+
+  // Output box
+  var label = document.createElement('div');
+  label.style.cssText = 'font-size:11px;color:#6a8f76;margin-bottom:8px';
+  label.textContent = 'Output (click Copy then paste back to Claude):';
+
+  var out = document.createElement('pre');
+  out.id = 'rbac-debug-out';
+  out.style.cssText = 'background:#111811;border:1px solid #2a3a2a;border-radius:8px;padding:12px;font-size:11px;color:#9ab8a4;white-space:pre-wrap;word-break:break-all;max-height:60vh;overflow-y:auto;font-family:ui-monospace,Menlo,monospace;line-height:1.6;margin:0';
+  out.textContent = 'Click "Run Tests" to start.';
+
+  panel.appendChild(header);
+  panel.appendChild(btnRow);
+  panel.appendChild(label);
+  panel.appendChild(out);
   document.body.appendChild(panel);
 }
 
 function copyDebugOutput(){
-  const txt = document.getElementById('rbac-debug-out')?.textContent || '';
-  navigator.clipboard.writeText(txt).then(() => {
-    alert('Debug output copied! Paste it back to Claude.');
-  });
+  var el = document.getElementById('rbac-debug-out');
+  var txt = el ? el.textContent : '';
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(txt).then(function(){
+      alert('Copied! Paste it back to Claude.');
+    }, function(){
+      alert('Copy failed — select the text manually and copy.');
+    });
+  } else {
+    alert('Browser does not support copy. Select the text manually.');
+  }
 }
 
 async function runRBACTests(){
-  const out = document.getElementById('rbac-debug-out');
+  var out = document.getElementById('rbac-debug-out');
   if(!out) return;
-  const lines = [];
-  const log = (label, value) => {
-    let v = value;
-    if(typeof v === 'object') v = JSON.stringify(v, null, 2);
-    lines.push(`▸ ${label}\n  ${v}`);
-    out.textContent = lines.join('\n\n');
-  };
-  const err = msg => {
-    lines.push(`✗ ${msg}`);
-    out.textContent = lines.join('\n\n');
-  };
+  var lines = [];
 
-  out.textContent = '⏳ Running tests…';
+  function add(label, value){
+    var v = value;
+    if(typeof v === 'object' && v !== null){
+      try { v = JSON.stringify(v, null, 2); } catch(e){ v = String(v); }
+    }
+    lines.push('--- ' + label + ' ---\n' + v);
+    out.textContent = lines.join('\n\n');
+  }
+  function fail(msg){
+    lines.push('FAIL: ' + msg);
+    out.textContent = lines.join('\n\n');
+  }
+
+  out.textContent = 'Running tests...';
 
   // Test 1 — Globals defined?
   try {
-    log('Test 1: Globals',
-      `currentRole = ${typeof currentRole !== 'undefined' ? JSON.stringify(currentRole) : '❌ NOT DEFINED'}
-  isSuperAdmin = ${typeof isSuperAdmin !== 'undefined' ? isSuperAdmin : '❌ NOT DEFINED'}
-  userMemberships = ${typeof userMemberships !== 'undefined' ? `array of ${userMemberships.length}` : '❌ NOT DEFINED'}
-  currentUser = ${currentUser?.email || '❌ NOT DEFINED'}
-  orgId = ${orgId || '❌ NOT DEFINED'}`
-    );
-  } catch(e){ err('Test 1 failed: ' + e.message); }
+    var t1 = '';
+    t1 += 'currentRole = ' + (typeof currentRole !== 'undefined' ? JSON.stringify(currentRole) : 'NOT DEFINED') + '\n';
+    t1 += 'isSuperAdmin = ' + (typeof isSuperAdmin !== 'undefined' ? isSuperAdmin : 'NOT DEFINED') + '\n';
+    t1 += 'userMemberships = ' + (typeof userMemberships !== 'undefined' ? 'array of ' + userMemberships.length : 'NOT DEFINED') + '\n';
+    t1 += 'currentUser email = ' + (currentUser && currentUser.email ? currentUser.email : 'NOT DEFINED') + '\n';
+    t1 += 'orgId = ' + (orgId || 'NOT DEFINED');
+    add('Test 1: Globals', t1);
+  } catch(e){ fail('Test 1: ' + e.message); }
 
   // Test 2 — Memberships content
   try {
     if(typeof userMemberships !== 'undefined'){
-      log('Test 2: Memberships content', userMemberships);
+      add('Test 2: userMemberships array', userMemberships);
     } else {
-      err('Test 2: userMemberships not defined — patch not installed');
+      fail('Test 2: userMemberships not defined - patched loadUserAccess() not installed');
     }
-  } catch(e){ err('Test 2 failed: ' + e.message); }
+  } catch(e){ fail('Test 2: ' + e.message); }
 
-  // Test 3 — All orgs (super admin should see all)
+  // Test 3 — All orgs visible
   try {
-    log('Test 3: All orgs visible to me…', '(querying)');
-    const { data, error } = await sb.from('organisations').select('id, name');
-    if(error){
-      err('Test 3 ERROR: ' + error.message);
+    var r3 = await sb.from('organisations').select('id, name');
+    if(r3.error){
+      fail('Test 3: ' + r3.error.message);
     } else {
-      log('Test 3: All orgs visible to me', `count = ${data?.length || 0}\n  ` + (data || []).map(o => `${o.name} (${o.id.slice(0,8)}…)`).join('\n  '));
+      var orgList = (r3.data || []).map(function(o){ return o.name + ' (' + o.id.slice(0,8) + ')'; }).join('\n  ');
+      add('Test 3: All orgs visible to me', 'count = ' + (r3.data ? r3.data.length : 0) + '\n  ' + orgList);
     }
-  } catch(e){ err('Test 3 failed: ' + e.message); }
+  } catch(e){ fail('Test 3: ' + e.message); }
 
   // Test 4 — Memberships query
   try {
-    log('Test 4: My memberships in DB…', '(querying)');
-    const { data, error } = await sb.from('memberships').select('org_id, role, status').eq('user_id', currentUser?.id);
-    if(error){
-      err('Test 4 ERROR: ' + error.message);
+    var uid = currentUser && currentUser.id;
+    var r4 = await sb.from('memberships').select('org_id, role, status').eq('user_id', uid);
+    if(r4.error){
+      fail('Test 4: ' + r4.error.message);
     } else {
-      log('Test 4: My memberships in DB', `count = ${data?.length || 0}\n  ` + JSON.stringify(data, null, 2));
+      add('Test 4: My memberships rows in DB', 'count = ' + (r4.data ? r4.data.length : 0) + '\n' + JSON.stringify(r4.data, null, 2));
     }
-  } catch(e){ err('Test 4 failed: ' + e.message); }
+  } catch(e){ fail('Test 4: ' + e.message); }
 
   // Test 5 — Super admin record
   try {
-    const { data, error } = await sb.from('super_admins').select('user_id').eq('user_id', currentUser?.id).maybeSingle();
-    if(error){
-      err('Test 5 ERROR: ' + error.message);
+    var uid5 = currentUser && currentUser.id;
+    var r5 = await sb.from('super_admins').select('user_id').eq('user_id', uid5).maybeSingle();
+    if(r5.error){
+      fail('Test 5: ' + r5.error.message);
     } else {
-      log('Test 5: super_admins record', data ? '✓ YOU ARE A SUPER ADMIN' : '✗ No super_admins row for you');
+      add('Test 5: super_admins record', r5.data ? 'YES - you are a super admin' : 'NO - not in super_admins table');
     }
-  } catch(e){ err('Test 5 failed: ' + e.message); }
+  } catch(e){ fail('Test 5: ' + e.message); }
 
-  // Test 6 — _allOrgsForSuperAdmin (set by patch)
+  // Test 6 — _allOrgsForSuperAdmin
   try {
-    log('Test 6: window._allOrgsForSuperAdmin',
-      window._allOrgsForSuperAdmin
-        ? `count = ${window._allOrgsForSuperAdmin.length}\n  ` + window._allOrgsForSuperAdmin.map(o => o.name).join(', ')
-        : '❌ NOT SET — patched loadUserAccess() did not run'
-    );
-  } catch(e){ err('Test 6 failed: ' + e.message); }
-
-  // Test 7 — Switcher in DOM
-  try {
-    const switcher = document.getElementById('org-switcher');
-    if(!switcher){
-      err('Test 7: Org switcher element not in DOM');
+    if(window._allOrgsForSuperAdmin){
+      var names = window._allOrgsForSuperAdmin.map(function(o){ return o.name; }).join(', ');
+      add('Test 6: window._allOrgsForSuperAdmin', 'count = ' + window._allOrgsForSuperAdmin.length + '\nnames = ' + names);
     } else {
-      log('Test 7: Org switcher dropdown',
-        `Element found.
-  Number of <option> tags inside: ${switcher.options.length}
-  ${switcher.options.length === 0 ? '❌ EMPTY — this is the bug.' : '✓ Has options'}
-  Options: ${[...switcher.options].map(o => o.text).join(' | ') || '(none)'}`
+      fail('Test 6: window._allOrgsForSuperAdmin NOT SET - patched loadUserAccess() did not run');
+    }
+  } catch(e){ fail('Test 6: ' + e.message); }
+
+  // Test 7 — Switcher DOM
+  try {
+    var sw = document.getElementById('org-switcher');
+    if(!sw){
+      fail('Test 7: Org switcher element NOT FOUND in DOM');
+    } else {
+      var optTexts = [];
+      for(var i = 0; i < sw.options.length; i++){
+        optTexts.push(sw.options[i].text);
+      }
+      add('Test 7: Org switcher dropdown',
+        'option count = ' + sw.options.length + '\n' +
+        'options: ' + (optTexts.join(' | ') || '(EMPTY)')
       );
     }
-  } catch(e){ err('Test 7 failed: ' + e.message); }
+  } catch(e){ fail('Test 7: ' + e.message); }
 
-  // Test 8 — Permission tests
+  // Test 8 — can() helper
   try {
     if(typeof can === 'function'){
-      log('Test 8: can() helper sanity check',
-        `can('edit','participants') = ${can('edit','participants')}
-  can('view','hr_equality') = ${can('view','hr_equality')}
-  can('view','case_notes') = ${can('view','case_notes')}
-  can('delete','volunteers') = ${can('delete','volunteers')}`
-      );
+      var t8 = '';
+      t8 += "can('edit','participants') = " + can('edit','participants') + '\n';
+      t8 += "can('view','hr_equality') = " + can('view','hr_equality') + '\n';
+      t8 += "can('view','case_notes') = " + can('view','case_notes') + '\n';
+      t8 += "can('delete','volunteers') = " + can('delete','volunteers');
+      add('Test 8: can() helper', t8);
     } else {
-      err('Test 8: can() function not defined — patch not installed');
+      fail('Test 8: can() function NOT DEFINED');
     }
-  } catch(e){ err('Test 8 failed: ' + e.message); }
+  } catch(e){ fail('Test 8: ' + e.message); }
 
-  lines.push('\n━━━━━━━━━━━━━━━━━━━━━━━\n✓ Tests complete. Click "📋 Copy" to share with Claude.');
+  lines.push('=== Tests complete. Click Copy and paste back to Claude. ===');
   out.textContent = lines.join('\n\n');
 }
+boot();
 </script>
 </body>
 </html>
