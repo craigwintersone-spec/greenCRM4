@@ -190,7 +190,7 @@ input:focus,select:focus{border-color:var(--em)}
 const SURL='https://nznfrxzgvcjhfsdaphyp.supabase.co';
 const SKEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw';
 const sb=supabase.createClient(SURL,SKEY);
-let inviteData=null,_newOrgId=null,_newUserId=null,_signupLogoFile=null,_newUserEmail=null,_newUserPass=null;
+let inviteData=null,_newOrgId=null,_newUserId=null,_signupLogoFile=null;
 const params=new URLSearchParams(window.location.search);
 const inviteToken=params.get('invite');
 
@@ -220,17 +220,12 @@ async function init(){
 }
 
 async function redirectAfterAuth(userId){
-  // Try memberships first (new RBAC), fall back to profiles (legacy)
   const{data:mem}=await sb.from('memberships').select('org_id').eq('user_id',userId).eq('status','active').limit(1).maybeSingle();
   if(mem?.org_id){window.location.href='app.html?org_id='+mem.org_id;return;}
-
   const{data:profile}=await sb.from('profiles').select('org_id').eq('id',userId).maybeSingle();
   if(profile?.org_id){window.location.href='app.html?org_id='+profile.org_id;return;}
-
-  // Super admin with no membership? Send to admin panel
   const{data:sa}=await sb.from('super_admins').select('user_id').eq('user_id',userId).maybeSingle();
   if(sa){window.location.href='super-admin.html';return;}
-
   showMsg('si-err','Account found but no organisation linked. Contact support.');
 }
 
@@ -270,7 +265,6 @@ async function doSignIn(){
   await redirectAfterAuth(data.user.id);
 }
 
-// ── SIGN UP — FIXED FLOW ──
 async function doSignUp(){
   const name=document.getElementById('su-name').value.trim();
   const email=document.getElementById('su-email').value.trim();
@@ -285,63 +279,49 @@ async function doSignUp(){
 
   setLoad('su-btn',true,'Create account');
 
-  const log=[];
-  const D=(label,value)=>{log.push('• '+label+': '+(typeof value==='object'?JSON.stringify(value):value));console.log('[SIGNUP]',label,value);};
-
   try {
-    // STEP 1 — Sign up
-    D('1. Calling auth.signUp', email);
+    // 1. Sign up
     const{data:signUpData,error:signUpErr}=await sb.auth.signUp({email,password:pass,options:{data:{full_name:name}}});
-    if(signUpErr){throw new Error('signUp failed: '+signUpErr.message);}
-    const uid=signUpData?.user?.id;
-    D('   user.id', uid||'NULL');
-    D('   session at signUp', signUpData?.session?'PRESENT':'NULL (email confirmation likely required)');
-    if(!uid)throw new Error('No user ID returned from signUp');
-    _newUserId=uid;_newUserEmail=email;_newUserPass=pass;
-
-    // STEP 2 — Force sign-in to establish session
-    D('2. Calling signInWithPassword', email);
-    const{data:siData,error:siErr}=await sb.auth.signInWithPassword({email,password:pass});
-    if(siErr){
-      D('   sign-in error', siErr.message);
-      if(siErr.message.toLowerCase().includes('confirm')||siErr.message.toLowerCase().includes('email')){
-        throw new Error('Email confirmation is enabled in Supabase. Either turn it off (Auth → Providers → Email → toggle "Confirm email" OFF) or wait for the user to click the email link. Diagnostic log:\n\n'+log.join('\n'));
-      }
-      throw new Error('Sign-in failed: '+siErr.message);
+    if(signUpErr){
+      setLoad('su-btn',false,'Create account →');
+      showMsg('su-err',signUpErr.message);
+      return;
     }
-    D('   signed in user.id', siData?.user?.id);
-    D('   session token', siData?.session?.access_token?'PRESENT':'MISSING');
+    const uid=signUpData?.user?.id;
+    if(!uid){
+      setLoad('su-btn',false,'Create account →');
+      showMsg('su-err','Signup failed — please try again.');
+      return;
+    }
+    _newUserId=uid;
 
-    // STEP 3 — Verify session
-    D('3. Verifying session');
-    const{data:{session}}=await sb.auth.getSession();
-    D('   getSession()', session?'ACTIVE':'NULL');
-    D('   session.user.id', session?.user?.id||'NULL');
-    if(!session)throw new Error('No active session after sign-in.');
+    // 2. Sign in to establish session (handles "email confirm off" case)
+    const{error:siErr}=await sb.auth.signInWithPassword({email,password:pass});
+    if(siErr){
+      setLoad('su-btn',false,'Create account →');
+      if(siErr.message.toLowerCase().includes('confirm')){
+        showMsg('su-err','Account created. Please check your email to confirm, then sign in.');
+        setTimeout(()=>showTab('signin'),3000);
+      }else{
+        showMsg('su-err','Sign-in after signup failed: '+siErr.message);
+      }
+      return;
+    }
 
-    // STEP 4 — Sanity-check auth.uid() from the database side
-    D('4. Checking auth.uid() from DB');
-    try{
-      const{data:rpcData,error:rpcErr}=await sb.rpc('get_my_uid');
-      if(rpcErr) D('   RPC error (function may not exist — non-fatal)', rpcErr.message);
-      else D('   auth.uid() from DB', rpcData||'NULL');
-    }catch(e){D('   RPC not available', e.message);}
+    // 3. Wait briefly for session propagation
+    await new Promise(r=>setTimeout(r,300));
 
-    // STEP 5 — Try the insert
+    // 4. Branch — invited or new org
     if(inviteData){
-      D('5. Invited user — joining existing org', inviteData.org_id);
       _newOrgId=inviteData.org_id;
-      const{error:memErr}=await sb.from('memberships').insert({
-        user_id:uid,org_id:_newOrgId,role:inviteData.role||'advisor',status:'active',joined_at:new Date().toISOString()
-      });
-      if(memErr)D('   membership insert error', memErr.message);
-      try{await sb.from('profiles').upsert({id:uid,full_name:name,email,org_id:_newOrgId,role:inviteData.role,status:'active'});}catch(e){}
+      try{await sb.from('memberships').insert({user_id:uid,org_id:_newOrgId,role:inviteData.role||'advisor',status:'active',joined_at:new Date().toISOString()});}catch(e){console.warn(e);}
+      try{await sb.from('profiles').upsert({id:uid,full_name:name,email,org_id:_newOrgId,role:inviteData.role,status:'active'});}catch(e){console.warn(e);}
       try{await sb.from('invites').update({accepted:true}).eq('token',inviteToken);}catch(e){}
       window.location.href='app.html?org_id='+_newOrgId;
       return;
     }
 
-    D('5. Inserting organisation', org);
+    // 5. Create org
     const{data:orgData,error:orgErr}=await sb.from('organisations').insert({
       name:org,sector:orgType,owner_id:uid,plan:'free',status:'active',
       brand_color:'#10b981',
@@ -349,26 +329,19 @@ async function doSignUp(){
     }).select().single();
 
     if(orgErr){
-      D('   org insert error code', orgErr.code);
-      D('   org insert error message', orgErr.message);
-      D('   org insert error details', orgErr.details||'(none)');
-      D('   org insert error hint', orgErr.hint||'(none)');
-      throw new Error('Could not create organisation. Full diagnostic:\n\n'+log.join('\n'));
+      setLoad('su-btn',false,'Create account →');
+      showMsg('su-err','Could not create organisation: '+orgErr.message);
+      return;
     }
     _newOrgId=orgData.id;
-    D('   org created', orgData.id);
 
-    // STEP 6 — Membership
-    D('6. Inserting membership');
-    const{error:memErr}=await sb.from('memberships').insert({
-      user_id:uid,org_id:_newOrgId,role:'manager',status:'active',joined_at:new Date().toISOString()
-    });
-    if(memErr)D('   membership error', memErr.message);
+    // 6. Create membership row (RBAC)
+    try{await sb.from('memberships').insert({user_id:uid,org_id:_newOrgId,role:'manager',status:'active',joined_at:new Date().toISOString()});}catch(e){console.warn('membership:',e);}
 
-    // STEP 7 — Profile (legacy)
-    D('7. Upserting profile');
-    try{await sb.from('profiles').upsert({id:uid,full_name:name,email,org_id:_newOrgId,role:'manager',status:'active'});}catch(e){D('   profile error',e.message);}
+    // 7. Create profile row (legacy)
+    try{await sb.from('profiles').upsert({id:uid,full_name:name,email,org_id:_newOrgId,role:'manager',status:'active'});}catch(e){console.warn('profile:',e);}
 
+    // 8. Show branding step
     setLoad('su-btn',false,'Create account →');
     document.getElementById('su-preview-name').textContent=org;
     document.getElementById('login-logo').innerHTML=org+'<span style="color:var(--txt2);font-weight:400"> CRM</span>';
@@ -376,14 +349,95 @@ async function doSignUp(){
 
   } catch(err) {
     setLoad('su-btn',false,'Create account →');
-    // Show full diagnostic in the error message
-    const fullMsg=err.message;
-    showMsg('su-err',fullMsg);
-    console.log('[SIGNUP FULL LOG]\n'+log.join('\n'));
-    // Make the error box wider and scrollable
-    const errEl=document.getElementById('su-err');
-    if(errEl){errEl.style.whiteSpace='pre-wrap';errEl.style.maxHeight='300px';errEl.style.overflowY='auto';errEl.style.fontFamily='ui-monospace,Menlo,monospace';errEl.style.fontSize='11px';errEl.style.lineHeight='1.5';}
-    
+    showMsg('su-err','Unexpected error: '+(err.message||err));
+    console.error('Signup error:',err);
+  }
+}
+
+function onSignupColorChange(color){
+  document.getElementById('su-color-hex').value=color;
+  document.getElementById('su-preview-dot').style.background=color;
+  document.getElementById('su-color-preview').style.background=color;
+  document.getElementById('login-logo').style.color=color;
+  document.querySelectorAll('.color-swatch').forEach(s=>{
+    s.classList.toggle('selected',s.style.background===color||s.title===color);
+  });
+}
+
+function setSignupColor(color){
+  document.getElementById('su-color').value=color;
+  onSignupColorChange(color);
+}
+
+function handleSignupLogo(input){
+  const file=input.files[0];
+  if(!file)return;
+  if(file.size>2*1024*1024){alert('Logo must be under 2MB');return;}
+  _signupLogoFile=file;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    document.getElementById('su-logo-preview-wrap').innerHTML=`<img src="${e.target.result}" class="logo-preview"/><div style="font-size:11px;color:var(--em);margin-top:4px">✓ ${file.name}</div>`;
+    document.getElementById('su-preview-logo').innerHTML=`<img src="${e.target.result}" style="max-height:28px;max-width:100px;object-fit:contain"/>`;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function saveBrandingAndEnter(){
+  const btn=document.getElementById('su-brand-btn');
+  btn.textContent='Setting up your workspace…';btn.disabled=true;
+  const color=document.getElementById('su-color').value;
+  let logoUrl=null;
+  if(_signupLogoFile&&_newOrgId){
+    try{
+      const ext=_signupLogoFile.name.split('.').pop();
+      const path=`logos/${_newOrgId}.${ext}`;
+      const{error}=await sb.storage.from('org-assets').upload(path,_signupLogoFile,{upsert:true});
+      if(!error){const{data}=sb.storage.from('org-assets').getPublicUrl(path);logoUrl=data.publicUrl;}
+    }catch(e){console.log('Logo upload:',e);}
+  }
+  const update={brand_color:color};
+  if(logoUrl)update.logo_url=logoUrl;
+  try{await sb.from('organisations').update(update).eq('id',_newOrgId);}catch(e){console.warn(e);}
+  window.location.href='app.html?org_id='+_newOrgId+'&welcome=1';
+}
+
+async function skipBranding(){
+  window.location.href='app.html?org_id='+_newOrgId+'&welcome=1';
+}
+
+async function doReset(){
+  const email=document.getElementById('fg-email').value.trim();
+  hideMsg('fg-err','fg-ok');
+  if(!email){showMsg('fg-err','Please enter your email.');return;}
+  const{error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin+'/login.html'});
+  if(error){showMsg('fg-err',error.message);return;}
+  showMsg('fg-ok','Reset link sent! Check your inbox.');
+}
+async function doUpdatePassword(){
+  const pass=document.getElementById('new-pass').value;
+  if(pass.length<8){showMsg('pw-err','Password must be at least 8 characters.');return;}
+  const{error}=await sb.auth.updateUser({password:pass});
+  if(error){showMsg('pw-err',error.message);return;}
+  showMsg('pw-ok','✓ Password updated! Redirecting…');
+  setTimeout(()=>window.location.href='login.html',1500);
+}
+
+function showMsg(id,msg){const e=document.getElementById(id);if(!e)return;e.textContent=msg;e.style.display='block';}
+function hideMsg(...ids){ids.forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});}
+function setLoad(id,on,lbl){const b=document.getElementById(id);if(!b)return;b.disabled=on;b.textContent=on?'Please wait…':lbl;}
+
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Enter')return;
+  const active=document.querySelector('.pane.active')?.id;
+  if(active==='pane-signin')doSignIn();
+  else if(active==='pane-signup'){
+    if(document.getElementById('su-step-1').style.display!=='none')goStep(2);
+    else if(document.getElementById('su-step-2').style.display!=='none')doSignUp();
+  }
+  else if(active==='pane-forgot')doReset();
+});
+
+init();
 </script>
 </body>
 </html>
