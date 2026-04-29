@@ -107,12 +107,18 @@ const sb=window.supabase.createClient(SB_URL,SB_KEY);
 const $=id=>document.getElementById(id);
 
 let invitation=null,orgName='your organisation';
+// FIX #2: re-entry guard for double-click protection
+let _accepting=false;
 
 function showOnly(id){['loading','error','form','success'].forEach(x=>$(x).style.display='none');$(id).style.display='block';}
 function showError(msg){$('error-msg').textContent=msg;showOnly('error');}
 
 async function boot(){
-  const token=new URLSearchParams(window.location.search).get('token');
+  // FIX #4: handle both ?token= and #token= formats defensively
+  let token=new URLSearchParams(window.location.search).get('token');
+  if(!token && window.location.hash){
+    token=new URLSearchParams(window.location.hash.replace(/^#/,'')).get('token');
+  }
   if(!token){showError('No invitation token in the link. Please use the link your team sent you.');return;}
 
   // Look up invitation
@@ -124,9 +130,11 @@ async function boot(){
 
   invitation=data;
 
-  // Get org name
-  const{data:org}=await sb.from('organisations').select('name').eq('id',data.org_id).maybeSingle();
-  if(org)orgName=org.name;
+  // FIX (defensive): get org name and verify org still exists
+  const{data:org,error:orgErr}=await sb.from('organisations').select('name').eq('id',data.org_id).maybeSingle();
+  if(orgErr){showError('Could not load the organisation for this invitation: '+orgErr.message);return;}
+  if(!org){showError('The organisation for this invitation no longer exists. Please ask for a new invitation.');return;}
+  orgName=org.name;
 
   // Pre-fill form
   $('inv-org').textContent=orgName;
@@ -166,7 +174,9 @@ async function acceptInvitation(userId){
     status:'active',
     joined_at:new Date().toISOString()
   }]);
-  if(memErr&&!memErr.message.includes('duplicate')){
+  // FIX #1: use Postgres SQLSTATE code (23505 = unique_violation) instead of fragile string match.
+  // Membership already exists is fine — that's the whole point of accepting an invite.
+  if(memErr && memErr.code !== '23505'){
     throw new Error('Could not add you to the organisation: '+memErr.message);
   }
 
@@ -175,9 +185,15 @@ async function acceptInvitation(userId){
 }
 
 async function doSignUp(){
+  // FIX #2: re-entry guard prevents double-click race condition
+  if(_accepting)return;
   const pass=$('su-pass').value;
   if(!pass||pass.length<8){showMsg('Password must be at least 8 characters.','err');return;}
-  const btn=$('su-btn');btn.textContent='Creating account…';btn.disabled=true;
+
+  _accepting=true;
+  const btn=$('su-btn');
+  btn.textContent='Creating account…';
+  btn.disabled=true;
 
   try{
     const{data,error}=await sb.auth.signUp({email:invitation.email,password:pass});
@@ -186,27 +202,50 @@ async function doSignUp(){
         showMsg('An account already exists with this email. Please use the "I have an account" tab to sign in.','info');
         switchTab('signin');
         $('si-pass').focus();
-        btn.textContent='Create account & accept invite';btn.disabled=false;
         return;
       }
       throw error;
     }
 
-    if(!data.user){showMsg('Account created — please check your email to confirm before signing in.','info');btn.textContent='Create account & accept invite';btn.disabled=false;return;}
+    // FIX #3: handle the email-confirmation-required case properly.
+    // If the project requires email confirmation, signUp returns no session and the user is stuck.
+    // We try to sign them in immediately — if that succeeds, confirmation isn't required and we proceed.
+    // If it fails, we explain clearly and tell them to come BACK to this link after confirming.
+    if(!data.session){
+      const{data:signInData,error:signInErr}=await sb.auth.signInWithPassword({email:invitation.email,password:pass});
+      if(signInErr || !signInData.user){
+        // Email confirmation is on. Save the token so they can resume after confirming.
+        try{sessionStorage.setItem('greencrm_pending_invite_token',invitation.token);}catch(e){}
+        showMsg('Account created. Please check your email to confirm your address, then come back to <strong>this same invitation link</strong> to finish joining '+orgName+'.','info');
+        return;
+      }
+      // Sign-in worked — proceed to accept
+      await acceptInvitation(signInData.user.id);
+    } else {
+      await acceptInvitation(data.user.id);
+    }
 
-    await acceptInvitation(data.user.id);
     $('success-org').textContent=orgName;
     showOnly('success');
   }catch(e){
     showMsg('Sign-up failed: '+e.message,'err');
-    btn.textContent='Create account & accept invite';btn.disabled=false;
+  }finally{
+    _accepting=false;
+    btn.textContent='Create account & accept invite';
+    btn.disabled=false;
   }
 }
 
 async function doSignIn(){
+  // FIX #2: re-entry guard
+  if(_accepting)return;
   const pass=$('si-pass').value;
   if(!pass){showMsg('Please enter your password.','err');return;}
-  const btn=$('si-btn');btn.textContent='Signing in…';btn.disabled=true;
+
+  _accepting=true;
+  const btn=$('si-btn');
+  btn.textContent='Signing in…';
+  btn.disabled=true;
 
   try{
     const{data,error}=await sb.auth.signInWithPassword({email:invitation.email,password:pass});
@@ -216,7 +255,10 @@ async function doSignIn(){
     showOnly('success');
   }catch(e){
     showMsg('Sign-in failed: '+e.message,'err');
-    btn.textContent='Sign in & accept invite';btn.disabled=false;
+  }finally{
+    _accepting=false;
+    btn.textContent='Sign in & accept invite';
+    btn.disabled=false;
   }
 }
 
