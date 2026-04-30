@@ -347,8 +347,7 @@ async function doSignUp(){
     if(orgRes.error){
       setLoad('su-btn',false,'Create account →');
       showMsg('su-err','Could not create organisation: '+orgRes.error.message);
-      console.error('[GreenCRM signup] org insert failed:',orgRes.error);
-      return;
+console.error('[GreenCRM signup] org insert failed:',JSON.stringify(orgRes.error,null,2));      return;
     }
     _newOrgId=orgRes.data.id;
 
