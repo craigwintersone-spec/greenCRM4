@@ -3,61 +3,81 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>GreenCRM</title>
+<title>Civara</title>
+<link rel="icon" type="image/png" href="logo.png"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#0a0f0a;--surface:#111811;--card:#182018;--border:#2a3a2a;--em:#10b981;--em2:#059669;--em3:#34d399;--txt:#e2f5eb;--txt2:#9ab8a4;--txt3:#6a8f76;--amber:#f59e0b;--red:#f87171;--blue:#60a5fa;--purple:#a78bfa;--radius:10px;--radiuslg:14px}
-body{background:var(--bg);color:var(--txt);font-family:system-ui,sans-serif;font-size:14px;line-height:1.6;min-height:100vh;display:flex;flex-direction:column}
+:root{
+  --bg:#F5F1EA;
+  --surface:#FFFFFF;
+  --card:#FFFFFF;
+  --border:#E0DAD0;
+  --em:#1F6F6D;
+  --em2:#175655;
+  --em3:#2A9D8F;
+  --txt:#2B2B2B;
+  --txt2:#4A5552;
+  --txt3:#6B7672;
+  --amber:#F59E0B;
+  --red:#C84545;
+  --blue:#3B82F6;
+  --purple:#7C5BCB;
+  --sage:#A7C4BC;
+  --sand:#E6DFD5;
+  --radius:10px;
+  --radiuslg:14px;
+}
+body{background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.6;min-height:100vh;display:flex;flex-direction:column}
 button{cursor:pointer;border:none;font-family:inherit}
-input,select,textarea{font-family:inherit;font-size:13px;background:var(--card);border:1px solid var(--border);color:var(--txt);border-radius:var(--radius);padding:7px 11px;width:100%;outline:none}
+input,select,textarea{font-family:inherit;font-size:13px;background:#FFFFFF;border:1px solid var(--border);color:var(--txt);border-radius:var(--radius);padding:7px 11px;width:100%;outline:none}
 input:focus,select:focus,textarea:focus{border-color:var(--em)}
 textarea{resize:vertical;min-height:70px}
-label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;font-weight:600}
 #shell{display:flex;flex:1}
-#sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:14px 0;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto}
+#sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:14px 0;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto;box-shadow:1px 0 2px rgba(31,111,109,.04)}
 #main{flex:1;overflow-y:auto;padding:24px}
-.logo{font-size:17px;font-weight:700;color:var(--em);padding:4px 18px 16px;border-bottom:1px solid var(--border);margin-bottom:10px}
-.logo span{color:var(--txt2);font-weight:400}
-.nav-section{font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;padding:10px 18px 4px}
+.sidebar-logo{padding:4px 18px 14px;border-bottom:1px solid var(--border);margin-bottom:10px}
+.sidebar-logo img{height:34px;width:auto;display:block}
+.nav-section{font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;padding:10px 18px 4px;font-weight:700}
 .nav-btn{display:flex;align-items:center;gap:8px;background:none;color:var(--txt2);padding:8px 18px;font-size:13px;width:100%;text-align:left;border-left:2px solid transparent;transition:all .15s}
-.nav-btn:hover{color:var(--txt);background:rgba(16,185,129,.06)}
-.nav-btn.active{color:var(--em);background:rgba(16,185,129,.1);border-left-color:var(--em)}
+.nav-btn:hover{color:var(--txt);background:rgba(31,111,109,.06)}
+.nav-btn.active{color:var(--em);background:rgba(31,111,109,.08);border-left-color:var(--em);font-weight:600}
 .nav-btn .ai-dot{width:5px;height:5px;border-radius:50%;background:var(--purple);margin-left:auto;flex-shrink:0}
 .icon{font-size:14px;width:18px;text-align:center}
 .sidebar-bottom{margin-top:auto;padding:12px 18px;border-top:1px solid var(--border)}
 .page{display:none}.page.active{display:block}
 .page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
-.page-title{font-size:20px;font-weight:700}
+.page-title{font-size:20px;font-weight:700;letter-spacing:-0.3px}
 .page-sub{font-size:13px;color:var(--txt3);margin-top:2px}
 .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
-.stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
-.stat-lbl{font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;box-shadow:0 1px 2px rgba(31,111,109,.04)}
+.stat-lbl{font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;font-weight:600}
 .stat-val{font-size:24px;font-weight:700;color:var(--em)}
 .stat-sub{font-size:11px;color:var(--txt3);margin-top:2px}
-.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:18px;margin-bottom:16px}
-.card-title{font-size:12px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;font-weight:600}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:18px;margin-bottom:16px;box-shadow:0 1px 2px rgba(31,111,109,.04)}
+.card-title{font-size:12px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;font-weight:700}
 .tbl-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse}
-th{text-align:left;font-size:11px;color:var(--txt3);text-transform:uppercase;padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+th{text-align:left;font-size:11px;color:var(--txt3);text-transform:uppercase;padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap;font-weight:700;letter-spacing:.5px}
 td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;color:var(--txt2);vertical-align:middle}
-tr:hover td{background:rgba(16,185,129,.03)}
+tr:hover td{background:rgba(31,111,109,.03)}
 .cn{color:var(--txt);font-weight:500}
 .badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;white-space:nowrap}
-.b-active{background:#1a3a2a;color:#34d399}.b-prospect{background:#2a2a1a;color:#f59e0b}
-.b-lapsed{background:#2a1a1a;color:#f87171}.b-engaged{background:#1a2a3a;color:#60a5fa}
-.b-vol{background:#1a2a3a;color:#60a5fa}.b-part{background:#2a1a3a;color:#a78bfa}
-.b-teal{background:#0a2a20;color:#5eead4}.b-amber{background:#2a2a1a;color:#f59e0b}
-.b-flag{background:#2a1a1a;color:#f87171}.b-ref{background:#2a1a3a;color:#c4b5fd}
-.risk-hi{background:#3a1a1a;color:#f87171}.risk-med{background:#2a2a1a;color:#fbbf24}.risk-lo{background:#1a3a2a;color:#34d399}
+.b-active{background:#E0F2F1;color:#00695C}.b-prospect{background:#FFF3E0;color:#E65100}
+.b-lapsed{background:#FFEBEE;color:#C62828}.b-engaged{background:#E3F2FD;color:#1976D2}
+.b-vol{background:#E3F2FD;color:#1976D2}.b-part{background:#EDE7F6;color:#5E35B1}
+.b-teal{background:#E0F2F1;color:#00695C}.b-amber{background:#FFF3E0;color:#E65100}
+.b-flag{background:#FFEBEE;color:#C62828}.b-ref{background:#EDE7F6;color:#5E35B1}
+.risk-hi{background:#FFEBEE;color:#C62828}.risk-med{background:#FFF3E0;color:#E65100}.risk-lo{background:#E0F2F1;color:#00695C}
 .toolbar{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
 .toolbar input{max-width:220px}.toolbar select{max-width:160px}
 .ml-auto{margin-left:auto}
 .btn{padding:7px 14px;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s}
 .btn-p{background:var(--em);color:#fff}.btn-p:hover{background:var(--em2)}
-.btn-ghost{background:var(--card);color:var(--txt2);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--em);color:var(--em)}
-.btn-ai{background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border:none}.btn-ai:hover{opacity:.9}
+.btn-ghost{background:#FFFFFF;color:var(--txt2);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--em);color:var(--em)}
+.btn-ai{background:linear-gradient(135deg,#5E4CB8,#7C5BCB);color:#fff;border:none}.btn-ai:hover{opacity:.9}
 .btn-sm{padding:5px 10px;font-size:12px}
-.btn-danger{background:none;color:var(--red);border:1px solid var(--border)}.btn-danger:hover{border-color:var(--red)}
+.btn-danger{background:#FFFFFF;color:var(--red);border:1px solid var(--border)}.btn-danger:hover{border-color:var(--red)}
 .tl-entry{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
 .tl-dot{width:9px;height:9px;border-radius:50%;background:var(--em);flex-shrink:0;margin-top:5px}
 .tl-dot.amber{background:var(--amber)}.tl-dot.blue{background:var(--blue)}.tl-dot.red{background:var(--red)}
@@ -65,107 +85,107 @@ tr:hover td{background:rgba(16,185,129,.03)}
 .tl-meta{font-size:11px;color:var(--txt3)}
 .kanban{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;overflow-x:auto}
 .k-col{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;min-width:140px}
-.k-col-hd{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--txt3);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
-.k-cnt{background:var(--border);color:var(--txt2);font-size:10px;padding:1px 5px;border-radius:10px}
-.k-card{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:9px 10px;margin-bottom:7px;cursor:pointer}
+.k-col-hd{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--txt3);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;letter-spacing:.5px}
+.k-cnt{background:var(--sand);color:var(--txt2);font-size:10px;padding:1px 5px;border-radius:10px;font-weight:700}
+.k-card{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:9px 10px;margin-bottom:7px;cursor:pointer}
 .k-card:hover{border-color:var(--em)}
 .k-name{font-size:12px;font-weight:600;color:var(--txt)}
 .k-meta{font-size:11px;color:var(--txt3)}
 .k-flag{font-size:10px;color:var(--red);margin-top:3px}
-.impact-wall{background:var(--card);border:1px solid var(--em);border-radius:var(--radiuslg);padding:32px;text-align:center;margin-bottom:20px}
+.impact-wall{background:linear-gradient(135deg,#FFFFFF,#F5F1EA);border:1px solid var(--em);border-radius:var(--radiuslg);padding:32px;text-align:center;margin-bottom:20px;box-shadow:0 4px 16px rgba(31,111,109,.08)}
 .iw-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
 .iw-val{font-size:32px;font-weight:800;color:var(--em)}
-.iw-lbl{font-size:11px;color:var(--txt2);margin-top:2px}
+.iw-lbl{font-size:11px;color:var(--txt2);margin-top:2px;font-weight:600}
 .fund-bar-wrap{margin-bottom:12px}
 .fund-top{display:flex;justify-content:space-between;font-size:12px;color:var(--txt2);margin-bottom:4px}
-.fund-track{height:7px;background:var(--border);border-radius:4px}
+.fund-track{height:7px;background:var(--sand);border-radius:4px}
 .fund-fill{height:100%;border-radius:4px;background:var(--em)}
 .fund-fill.warn{background:var(--amber)}.fund-fill.danger{background:var(--red)}
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:500;align-items:flex-start;justify-content:center;padding:20px 16px;overflow-y:auto}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:500;align-items:flex-start;justify-content:center;padding:20px 16px;overflow-y:auto}
 .modal-overlay.open{display:flex}
-.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radiuslg);padding:24px;width:100%;max-width:520px;position:relative;margin:auto}
-.modal h2{font-size:17px;font-weight:700;margin-bottom:18px}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radiuslg);padding:24px;width:100%;max-width:520px;position:relative;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,.15)}
+.modal h2{font-size:17px;font-weight:700;margin-bottom:18px;color:var(--txt)}
 .form-row{margin-bottom:12px}
 .form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .form-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
 .modal-footer{display:flex;gap:8px;margin-top:18px;justify-content:flex-end}
 .alert{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--radius);font-size:13px;margin-bottom:12px}
-.alert-warn{background:#2a2a1a;border:1px solid #3a3a1a;color:#fbbf24}
-.alert-info{background:#1a2a3a;border:1px solid #1a3a5a;color:#60a5fa}
-.alert-ok{background:#1a3a2a;border:1px solid #2a5a3a;color:#34d399}
-.safe-flag{display:inline-flex;align-items:center;gap:5px;background:#3a1a2a;border:1px solid #5a2a3a;border-radius:6px;padding:3px 9px;font-size:11px;color:#f9a8d4}
+.alert-warn{background:#FFF8E1;border:1px solid #F5DBA0;color:#8B6500}
+.alert-info{background:#E3F2FD;border:1px solid #B0D5F0;color:#1565C0}
+.alert-ok{background:#E8F5E9;border:1px solid #B8DBBA;color:#1B5E20}
+.safe-flag{display:inline-flex;align-items:center;gap:5px;background:#FCE4EC;border:1px solid #F5C2C8;border-radius:6px;padding:3px 9px;font-size:11px;color:#AD1457}
 .chk-group{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
-.chk-pill label{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--txt2);text-transform:none;letter-spacing:0;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 10px;cursor:pointer}
+.chk-pill label{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--txt2);text-transform:none;letter-spacing:0;background:#FFFFFF;border:1px solid var(--border);border-radius:20px;padding:4px 10px;cursor:pointer;font-weight:500}
 .chk-pill input{width:auto;background:none;border:none;padding:0}
-.chk-pill label:has(input:checked){background:rgba(16,185,129,.12);border-color:var(--em);color:var(--em)}
-.vol-avatar{width:38px;height:38px;border-radius:50%;background:rgba(16,185,129,.15);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--em);flex-shrink:0}
+.chk-pill label:has(input:checked){background:rgba(31,111,109,.08);border-color:var(--em);color:var(--em)}
+.vol-avatar{width:38px;height:38px;border-radius:50%;background:rgba(31,111,109,.12);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--em);flex-shrink:0}
 .vtab-bar{display:flex;border-bottom:1px solid var(--border);margin-bottom:16px}
-.vtab-btn{padding:8px 14px;cursor:pointer;border-bottom:2px solid transparent;font-size:12px;font-weight:500;color:var(--txt3);background:none;border-top:none;border-left:none;border-right:none}
+.vtab-btn{padding:8px 14px;cursor:pointer;border-bottom:2px solid transparent;font-size:12px;font-weight:600;color:var(--txt3);background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
 .vtab-btn.active{color:var(--em);border-bottom-color:var(--em)}
-.ev-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:16px;margin-bottom:10px}
+.ev-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:16px;margin-bottom:10px;box-shadow:0 1px 2px rgba(31,111,109,.04)}
 .ev-card:hover{border-color:var(--em)}
-.fb-star{width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--txt3);font-size:12px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.fb-star{width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:#FFFFFF;color:var(--txt3);font-size:12px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
 .fb-star.sel{background:rgba(245,158,11,.15);border-color:var(--amber);color:var(--amber)}
-.quote-card{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--em);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px}
-.score-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:12px}
+.quote-card{background:var(--bg);border:1px solid var(--border);border-left:3px solid var(--em);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px}
+.score-box{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:12px}
 .score-label{font-size:10px;font-weight:700;color:var(--em);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
-.mod-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:13px 15px;display:flex;align-items:center;justify-content:space-between;transition:border-color .2s}
-.mod-item.on{border-color:var(--em)}
-.con-select{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:8px;max-height:120px;overflow-y:auto}
+.mod-item{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:13px 15px;display:flex;align-items:center;justify-content:space-between;transition:border-color .2s}
+.mod-item.on{border-color:var(--em);background:rgba(31,111,109,.04)}
+.con-select{background:#FFFFFF;border:1px solid var(--border);border-radius:var(--radius);padding:8px;max-height:120px;overflow-y:auto}
 .con-option{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;transition:background .15s}
-.con-option:hover{background:rgba(16,185,129,.08)}
+.con-option:hover{background:rgba(31,111,109,.06)}
 .con-option input{width:auto;background:none;border:none;padding:0;cursor:pointer}
-.con-option.selected{background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2)}
+.con-option.selected{background:rgba(31,111,109,.08);border:1px solid rgba(31,111,109,.2)}
 .empty-state{text-align:center;padding:40px 20px;color:var(--txt3)}
 .empty-state .es-icon{font-size:40px;margin-bottom:12px}
 .empty-state .es-title{font-size:15px;font-weight:600;color:var(--txt2);margin-bottom:6px}
 .empty-state .es-sub{font-size:13px;margin-bottom:16px}
-.ai-panel{background:linear-gradient(135deg,rgba(79,70,229,.12),rgba(124,58,237,.08));border:1px solid rgba(124,58,237,.3);border-radius:var(--radiuslg);padding:18px;margin-bottom:16px;position:relative;overflow:hidden}
-.ai-panel::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#4f46e5,#7c3aed,#10b981)}
+.ai-panel{background:linear-gradient(135deg,rgba(124,91,203,.08),rgba(31,111,109,.05));border:1px solid rgba(124,91,203,.25);border-radius:var(--radiuslg);padding:18px;margin-bottom:16px;position:relative;overflow:hidden}
+.ai-panel::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#5E4CB8,#7C5BCB,#1F6F6D)}
 .ai-panel-title{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
 .ai-panel-title .ai-icon{font-size:16px}
 .ai-response{font-size:13px;color:var(--txt2);line-height:1.8}
-.ai-response strong{color:var(--txt);font-weight:600}
+.ai-response strong{color:var(--txt);font-weight:700}
 .ai-response p{margin-bottom:10px}
 .ai-response p:last-child{margin-bottom:0}
 .ai-response ul{margin:8px 0 12px 18px}
 .ai-response li{margin-bottom:4px}
-.ai-tag{display:inline-flex;align-items:center;gap:4px;background:rgba(124,58,237,.15);border:1px solid rgba(124,58,237,.3);border-radius:20px;padding:2px 8px;font-size:10px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.5px}
+.ai-tag{display:inline-flex;align-items:center;gap:4px;background:rgba(124,91,203,.12);border:1px solid rgba(124,91,203,.3);border-radius:20px;padding:2px 8px;font-size:10px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.5px}
 .ai-action-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
-.morning-briefing{background:linear-gradient(135deg,rgba(79,70,229,.15),rgba(16,185,129,.08));border:1px solid rgba(124,58,237,.25);border-radius:var(--radiuslg);padding:20px;margin-bottom:20px}
+.morning-briefing{background:linear-gradient(135deg,rgba(124,91,203,.1),rgba(31,111,109,.05));border:1px solid rgba(124,91,203,.2);border-radius:var(--radiuslg);padding:20px;margin-bottom:20px}
 .mb-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .mb-greeting{font-size:18px;font-weight:700;color:var(--txt)}
 .mb-time{font-size:12px;color:var(--txt3)}
-.ai-note-box{background:var(--surface);border:1px solid rgba(124,58,237,.3);border-radius:var(--radius);padding:12px;margin-top:10px;font-size:13px;color:var(--txt2);line-height:1.7;white-space:pre-wrap}
+.ai-note-box{background:#FFFFFF;border:1px solid rgba(124,91,203,.3);border-radius:var(--radius);padding:12px;margin-top:10px;font-size:13px;color:var(--txt2);line-height:1.7;white-space:pre-wrap}
 #org-banner{background:linear-gradient(90deg,var(--em2),var(--em));color:#fff;padding:7px 20px;font-size:12px;font-weight:600;display:none;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .role-badge-sb{font-size:10px;text-align:center;margin-bottom:8px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
 
 /* ── ORG BRAIN AGENT PROGRESS ─────────────────────────── */
-.brain-panel{background:linear-gradient(135deg,rgba(79,70,229,.12),rgba(124,58,237,.06));border:1px solid rgba(124,58,237,.3);border-radius:var(--radiuslg);padding:18px;margin-bottom:14px;position:relative;overflow:hidden}
-.brain-panel::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#4f46e5,#7c3aed,#10b981)}
+.brain-panel{background:linear-gradient(135deg,rgba(124,91,203,.08),rgba(124,91,203,.04));border:1px solid rgba(124,91,203,.25);border-radius:var(--radiuslg);padding:18px;margin-bottom:14px;position:relative;overflow:hidden}
+.brain-panel::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#5E4CB8,#7C5BCB,#1F6F6D)}
 .brain-header{display:flex;align-items:center;gap:12px;margin-bottom:14px}
-.brain-icon{width:38px;height:38px;border-radius:50%;background:rgba(124,58,237,.18);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;animation:brainpulse 2s ease-in-out infinite}
-@keyframes brainpulse{0%,100%{box-shadow:0 0 0 0 rgba(124,58,237,.3)}50%{box-shadow:0 0 0 8px rgba(124,58,237,0)}}
+.brain-icon{width:38px;height:38px;border-radius:50%;background:rgba(124,91,203,.15);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;animation:brainpulse 2s ease-in-out infinite}
+@keyframes brainpulse{0%,100%{box-shadow:0 0 0 0 rgba(124,91,203,.3)}50%{box-shadow:0 0 0 8px rgba(124,91,203,0)}}
 .brain-title{font-size:13px;font-weight:700;color:var(--txt);margin-bottom:2px}
 .brain-sub{font-size:11px;color:var(--txt3)}
 .brain-steps{display:flex;flex-direction:column;gap:8px}
-.brain-step{display:flex;align-items:center;gap:11px;padding:9px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);transition:all .3s}
-.brain-step.active{border-color:var(--purple);background:rgba(124,58,237,.05)}
-.brain-step.done{border-color:rgba(16,185,129,.4);background:rgba(16,185,129,.04)}
+.brain-step{display:flex;align-items:center;gap:11px;padding:9px 12px;background:#FFFFFF;border:1px solid var(--border);border-radius:var(--radius);transition:all .3s}
+.brain-step.active{border-color:var(--purple);background:rgba(124,91,203,.04)}
+.brain-step.done{border-color:rgba(31,111,109,.4);background:rgba(31,111,109,.04)}
 .bs-icon-wrap{width:24px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.bs-num{width:22px;height:22px;border-radius:50%;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--txt3)}
-.brain-step.active .bs-num{background:rgba(124,58,237,.18);border-color:var(--purple);color:var(--purple)}
+.bs-num{width:22px;height:22px;border-radius:50%;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--txt3);font-weight:700}
+.brain-step.active .bs-num{background:rgba(124,91,203,.15);border-color:var(--purple);color:var(--purple)}
 .bs-text{flex:1;min-width:0}
 .bs-label{font-size:13px;font-weight:600;color:var(--txt2)}
 .bs-meta{font-size:11px;color:var(--txt3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .brain-step.active .bs-label{color:var(--purple)}
-.brain-step.done .bs-label{color:var(--em3)}
+.brain-step.done .bs-label{color:var(--em)}
 .bs-spinner{width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--purple);border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .bs-check{color:var(--em);font-size:14px;font-weight:700}
 
 /* ── REPORT DOC ─────────────────────────────────────────── */
-.report-doc{background:#fff;color:#1a1a1a;border-radius:var(--radiuslg);padding:48px 56px;max-width:820px;font-family:Georgia,'Times New Roman',serif;line-height:1.7;box-shadow:0 8px 40px rgba(0,0,0,.4);margin-bottom:14px}
+.report-doc{background:#fff;color:#1a1a1a;border-radius:var(--radiuslg);padding:48px 56px;max-width:820px;font-family:Georgia,'Times New Roman',serif;line-height:1.7;box-shadow:0 8px 40px rgba(0,0,0,.15);margin-bottom:14px}
 .report-header{border-bottom:2px solid #1a1a1a;padding-bottom:18px;margin-bottom:28px}
 .report-meta{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#666;margin-bottom:8px}
 .report-title{font-size:26px;font-weight:700;color:#1a1a1a;margin-bottom:6px;font-family:Georgia,serif;line-height:1.3}
@@ -195,23 +215,24 @@ tr:hover td{background:rgba(16,185,129,.03)}
   #sidebar,#org-banner,.page-header,nav{display:none !important}
 }
 
-.org-logo-sidebar{max-width:170px;max-height:60px;width:auto;height:auto;display:block;margin:0 auto 6px;mix-blend-mode:screen;filter:brightness(1.05) contrast(1.05)}
-.org-logo-banner{height:28px;width:auto;mix-blend-mode:screen;filter:brightness(1.1);display:block}
-.org-logo-report{max-width:240px;max-height:90px;width:auto;height:auto;display:block;mix-blend-mode:multiply}
+.org-logo-sidebar{max-width:170px;max-height:60px;width:auto;height:auto;display:block;margin:0 auto 6px}
+.org-logo-banner{height:28px;width:auto;display:block}
+.org-logo-report{max-width:240px;max-height:90px;width:auto;height:auto;display:block}
 .report-header-flex{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;border-bottom:2px solid #1a1a1a;padding-bottom:18px;margin-bottom:28px}
 .report-header-flex .report-header-text{flex:1;min-width:0}
 .report-header-flex .report-header-text .report-meta{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#666;margin-bottom:8px}
 .report-header-flex .report-header-text .report-title{font-size:26px;font-weight:700;color:#1a1a1a;margin-bottom:6px;font-family:Georgia,serif;line-height:1.3}
 .report-header-flex .report-header-text .report-subtitle{font-size:14px;color:#555}
 .report-header-flex .report-header-logo{flex-shrink:0}
-@media print{.org-logo-report{mix-blend-mode:multiply !important;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}.org-logo-banner,.org-logo-sidebar{display:none !important}}
-@media(max-width:900px){#sidebar{width:52px}.nav-btn span:not(.icon),.nav-section,.logo span,.nav-btn .ai-dot{display:none}.stats-grid{grid-template-columns:repeat(2,1fr)}.kanban{grid-template-columns:repeat(3,1fr)}.report-doc{padding:28px 22px}.org-logo-sidebar{display:none}}</style>
+@media print{.org-logo-report{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}.org-logo-banner,.org-logo-sidebar{display:none !important}}
+@media(max-width:900px){#sidebar{width:52px}.nav-btn span:not(.icon),.nav-section,.nav-btn .ai-dot,.sidebar-logo img{display:none}.stats-grid{grid-template-columns:repeat(2,1fr)}.kanban{grid-template-columns:repeat(3,1fr)}.report-doc{padding:28px 22px}.org-logo-sidebar{display:none}}
+</style>
 </head>
 <body>
 <div id="org-banner"><span id="ob-txt"></span><span id="ob-plan"></span></div>
 <div id="shell">
 <div id="sidebar">
-  <div class="logo">Green<span>CRM</span></div>
+  <div class="sidebar-logo"><img src="logo.png" alt="Civara"/></div>
   <div class="nav-section">Overview</div>
   <button class="nav-btn" onclick="go('dashboard')"><span class="icon">📊</span><span>Dashboard</span><span class="ai-dot"></span></button>
   <button class="nav-btn" onclick="go('rag')"><span class="icon">🚦</span><span>RAG Dashboard</span><span class="ai-dot"></span></button>
@@ -243,7 +264,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <button class="nav-btn" onclick="go('settings')"><span class="icon">⚙️</span><span>Settings</span></button>
   <div class="sidebar-bottom">
     <div id="role-badge-slot"></div>
-    <div style="font-size:10px;color:var(--purple);text-align:center;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:4px"><span>●</span> AI agents active</div>
+    <div style="font-size:10px;color:var(--purple);text-align:center;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:4px;font-weight:700"><span>●</span> AI agents active</div>
     <div id="upgrade-btn-wrap"></div>
     <button class="btn btn-ghost btn-sm" style="width:100%" onclick="signOut()">Sign out</button>
   </div>
@@ -284,8 +305,8 @@ tr:hover td{background:rgba(16,185,129,.03)}
 <div id="page-impact" class="page">
   <div class="page-header"><div><div class="page-title">Impact Wall</div><div class="page-sub">Board-ready · Funder presentations</div></div></div>
   <div class="impact-wall">
-    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--em);margin-bottom:6px" id="impact-hd">Project Abundance · 2024–25</div>
-    <div style="font-size:22px;font-weight:700;margin-bottom:24px">Numbers that move funders</div>
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--em);margin-bottom:6px;font-weight:700" id="impact-hd">Project Abundance · 2024–25</div>
+    <div style="font-size:22px;font-weight:700;margin-bottom:24px;color:var(--txt)">Numbers that move funders</div>
     <div class="iw-grid">
       <div><div class="iw-val" id="iw-p">—</div><div class="iw-lbl">Participants supported</div></div>
       <div><div class="iw-val" id="iw-ev">—</div><div class="iw-lbl">Events &amp; workshops</div></div>
@@ -300,9 +321,9 @@ tr:hover td{background:rgba(16,185,129,.03)}
   </div>
   <div class="card"><div class="card-title">Confidence · before → after</div>
     <div style="display:flex;gap:24px;align-items:center;padding:8px 0">
-      <div style="text-align:center"><div style="font-size:40px;font-weight:800;color:var(--amber)" id="imp-cb">—</div><div style="font-size:11px;color:var(--txt3)">avg before</div></div>
+      <div style="text-align:center"><div style="font-size:40px;font-weight:800;color:var(--amber)" id="imp-cb">—</div><div style="font-size:11px;color:var(--txt3);font-weight:600">avg before</div></div>
       <div style="font-size:28px;color:var(--txt3)">→</div>
-      <div style="text-align:center"><div style="font-size:40px;font-weight:800;color:var(--em)" id="imp-ca">—</div><div style="font-size:11px;color:var(--txt3)">avg after</div></div>
+      <div style="text-align:center"><div style="font-size:40px;font-weight:800;color:var(--em)" id="imp-ca">—</div><div style="font-size:11px;color:var(--txt3);font-weight:600">avg after</div></div>
     </div>
   </div>
   <div class="card"><div class="card-title">Participant voices</div><div id="imp-quotes"></div></div>
@@ -364,7 +385,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
     <div style="display:grid;grid-template-columns:1fr auto;gap:20px;align-items:start">
       <div>
         <div style="font-size:13px;color:var(--txt2);margin-bottom:14px;line-height:1.7">Share this link or QR code with your referral partners — probation, Jobcentre Plus, housing providers. When they register via this link they are automatically linked to your organisation and all their referrals come straight to you.</div>
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;display:flex;align-items:center;gap:10px;margin-bottom:12px">
           <div id="partner-link-display" style="font-size:12px;color:var(--em);font-family:monospace;flex:1;word-break:break-all">Loading…</div>
           <button class="btn btn-ghost btn-sm" onclick="copyPartnerLink()" id="copy-link-btn">📋 Copy</button>
         </div>
@@ -379,13 +400,13 @@ tr:hover td{background:rgba(16,185,129,.03)}
         <div id="qr-container" style="background:#fff;padding:12px;border-radius:10px;display:inline-block;border:1px solid var(--border)">
           <canvas id="qr-canvas" width="140" height="140"></canvas>
         </div>
-        <div style="font-size:10px;color:var(--txt3);margin-top:6px">Scan to open portal</div>
+        <div style="font-size:10px;color:var(--txt3);margin-top:6px;font-weight:600">Scan to open portal</div>
       </div>
     </div>
     <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
       <button class="btn btn-ghost btn-sm" onclick="toggleEmailTemplate()" id="email-tpl-btn">✉️ Show email template to send to partners</button>
-      <div id="email-template" style="display:none;margin-top:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px">
-        <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Ready-to-send email template</div>
+      <div id="email-template" style="display:none;margin-top:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px">
+        <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;font-weight:700">Ready-to-send email template</div>
         <div id="email-tpl-body" style="font-size:13px;color:var(--txt2);line-height:1.8;white-space:pre-wrap"></div>
         <button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="copyEmailTemplate()">📋 Copy email</button>
       </div>
@@ -574,7 +595,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
         <div class="card-title" style="margin-bottom:0">Participant equality data</div>
-        <div id="eq-completion-badge" style="font-size:12px;color:var(--txt3)"></div>
+        <div id="eq-completion-badge" style="font-size:12px;color:var(--txt3);font-weight:600"></div>
       </div>
       <div id="eq-monitoring-list"></div>
     </div>
@@ -590,7 +611,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
   <div id="hr-tab-benchmark" style="display:none">
     <div class="ai-panel">
       <div class="ai-panel-title"><span class="ai-icon">🏆</span>Anonymised Benchmarking</div>
-      <div style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:10px">Compares your inclusive language and outcome equity against anonymised aggregates from similar GreenCRM organisations.</div>
+      <div style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:10px">Compares your inclusive language and outcome equity against anonymised aggregates from similar Civara organisations.</div>
       <button class="btn btn-ai btn-sm" onclick="runBenchmarking()">✦ Generate benchmark report</button>
     </div>
     <div id="benchmark-result"></div>
@@ -599,15 +620,15 @@ tr:hover td{background:rgba(16,185,129,.03)}
     <div class="card">
       <div class="card-title">HR &amp; Equality mode</div>
       <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
-        <label style="display:flex;align-items:flex-start;gap:12px;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;text-transform:none;letter-spacing:0">
+        <label style="display:flex;align-items:flex-start;gap:12px;padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;text-transform:none;letter-spacing:0">
           <input type="radio" name="hr-mode" value="strict" id="hr-mode-strict" style="width:auto;background:none;border:none;padding:0;margin-top:2px" onchange="saveHRMode()"/>
           <div><div style="font-size:13px;font-weight:600;color:var(--txt)">⚖️ Strict</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">Blocks save · Must acknowledge · Full audit log · Instant manager alert.</div></div>
         </label>
-        <label style="display:flex;align-items:flex-start;gap:12px;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;text-transform:none;letter-spacing:0">
+        <label style="display:flex;align-items:flex-start;gap:12px;padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;text-transform:none;letter-spacing:0">
           <input type="radio" name="hr-mode" value="advisory" id="hr-mode-advisory" style="width:auto;background:none;border:none;padding:0;margin-top:2px" onchange="saveHRMode()" checked/>
           <div><div style="font-size:13px;font-weight:600;color:var(--txt)">💬 Advisory</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">Soft warning · Can proceed · Flag logged · Manager sees queue.</div></div>
         </label>
-        <label style="display:flex;align-items:flex-start;gap:12px;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;text-transform:none;letter-spacing:0">
+        <label style="display:flex;align-items:flex-start;gap:12px;padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;text-transform:none;letter-spacing:0">
           <input type="radio" name="hr-mode" value="silent" id="hr-mode-silent" style="width:auto;background:none;border:none;padding:0;margin-top:2px" onchange="saveHRMode()"/>
           <div><div style="font-size:13px;font-weight:600;color:var(--txt)">🔕 Silent</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">No interruption · Flag logged quietly · Weekly digest to manager.</div></div>
         </label>
@@ -621,7 +642,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
 
 <div class="modal-overlay" id="modal-eq"><div class="modal" style="max-width:560px">
   <h2 id="eq-modal-title">Equality monitoring</h2>
-  <div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--txt2);margin-bottom:16px;line-height:1.6">This information is collected voluntarily for anonymised reporting purposes only.</div>
+  <div style="background:rgba(31,111,109,.05);border:1px solid rgba(31,111,109,.2);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--txt2);margin-bottom:16px;line-height:1.6">This information is collected voluntarily for anonymised reporting purposes only.</div>
   <div class="form-grid-2">
     <div class="form-row"><label>Age group</label><select id="eq-age"><option value="">Prefer not to say</option><option>16–24</option><option>25–34</option><option>35–44</option><option>45–54</option><option>55–64</option><option>65+</option></select></div>
     <div class="form-row"><label>Ethnicity</label><select id="eq-ethnicity"><option value="">Prefer not to say</option><option>White British</option><option>White Irish</option><option>White Other</option><option>Mixed/Multiple</option><option>Asian/Asian British</option><option>Black/Black British</option><option>Arab</option><option>Other</option></select></div>
@@ -692,7 +713,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
   </div>
   <div class="form-row"><label>Case note</label><textarea id="mp-note"></textarea></div>
   <div id="mp-note-preview" style="display:none">
-    <div style="font-size:11px;color:var(--purple);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">✦ Case Note Agent — structured preview</div>
+    <div style="font-size:11px;color:var(--purple);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;font-weight:700">✦ Case Note Agent — structured preview</div>
     <div class="ai-note-box" id="mp-note-preview-text"></div>
     <div style="display:flex;gap:8px;margin-top:6px"><button class="btn btn-p btn-sm" onclick="acceptAINote()">Use this</button><button class="btn btn-ghost btn-sm" onclick="rejectAINote()">Use original</button></div>
   </div>
@@ -716,8 +737,8 @@ tr:hover td{background:rgba(16,185,129,.03)}
 
 <div class="modal-overlay" id="modal-con"><div class="modal">
   <h2 id="con-title">Add contract</h2>
-  <div style="display:flex;gap:6px;margin-bottom:12px;padding:8px 12px;background:rgba(16,185,129,.06);border:1px solid var(--border);border-radius:8px;align-items:center">
-    <span style="font-size:11px;color:var(--txt3)">Linked funder:</span>
+  <div style="display:flex;gap:6px;margin-bottom:12px;padding:8px 12px;background:rgba(31,111,109,.05);border:1px solid var(--border);border-radius:8px;align-items:center">
+    <span style="font-size:11px;color:var(--txt3);font-weight:600">Linked funder:</span>
     <span id="con-linked-funder-label" style="font-size:12px;font-weight:600;color:var(--em)">None selected</span>
   </div>
   <div class="alert alert-warn" id="con-no-funder-warn" style="display:none">
@@ -744,7 +765,6 @@ tr:hover td{background:rgba(16,185,129,.03)}
 </div></div>
 
 <div class="modal-overlay" id="modal-evid"><div class="modal"><h2>Upload evidence</h2><div class="form-row"><label>Participant name</label><input id="evid-p"/></div><div class="form-grid-2"><div class="form-row"><label>Type</label><select id="evid-type"><option>Payslip</option><option>Contract</option><option>Certificate</option><option>ID document</option><option>Consent form</option></select></div><div class="form-row"><label>Linked outcome</label><select id="evid-out"><option>Employment</option><option>Training</option><option>Qualification</option><option>Volunteering</option></select></div></div><div class="form-grid-2"><div class="form-row"><label>Staff member</label><input id="evid-staff"/></div><div class="form-row"><label>Date</label><input type="date" id="evid-date"/></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-evid')">Cancel</button><button class="btn btn-p" id="evid-save-btn" onclick="saveEvid()">Save</button></div></div></div>
-
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script>
 'use strict';
@@ -755,8 +775,15 @@ const BARRIERS=['Housing','Confidence','Skills gap','Transport','Childcare','Men
 const OUT_TYPES=['Employment','Training','Qualification','Volunteering','Wellbeing','Housing secured'];
 const P_STAGES=['Referred','Engaged','In Support','Job Ready','Outcome Achieved','Sustained','Closed'];
 const VOL_SKILLS=['Gardening','Composting','Cooking','Teaching/Facilitation','Photography','Social Media','Admin/Office','Driving','Event Setup','Fundraising','Bike repair','Electrical','Sewing/Textiles','Other'];
+
+// ─────────────────────────────────────────────────────────────
+// GDPR FIX — no tables bypass org_id filtering anymore.
+// Previous bug: partner_referrals and feedback were excluded
+// from org_id filtering, which leaked them across organisations.
+// ─────────────────────────────────────────────────────────────
 const NO_ORG_ID=[];
-  const SET_MODULES=[
+
+const SET_MODULES=[
   {k:'participants',n:'Participants & Caseload',d:'Pipeline, referrals, outcomes, safeguarding'},
   {k:'volunteers',n:'Volunteers & Staff',d:'Registration, onboarding, hours tracking'},
   {k:'events',n:'Events & Feedback',d:'Workshops, feedback surveys, impact wall'},
@@ -793,7 +820,7 @@ function checkAIAccess(){
   const plan=currentOrg?.plan||'free';
   if(!AI_PLANS.includes(plan)){
     const msg=document.createElement('div');
-    msg.style.cssText='position:fixed;top:24px;right:24px;background:var(--surface);border:1px solid var(--amber);border-radius:var(--radiuslg);padding:16px 20px;z-index:999;max-width:320px';
+    msg.style.cssText='position:fixed;top:24px;right:24px;background:var(--surface);border:1px solid var(--amber);border-radius:var(--radiuslg);padding:16px 20px;z-index:999;max-width:320px;box-shadow:0 8px 24px rgba(0,0,0,.12)';
     msg.innerHTML='<div style="font-size:13px;font-weight:700;color:var(--amber);margin-bottom:4px">✦ AI features — Pro plan only</div><div style="font-size:12px;color:var(--txt2)">Org Brain agents are available on the Pro and Network plans.</div><button onclick="this.parentElement.remove()" style="position:absolute;top:8px;right:10px;background:none;border:none;color:var(--txt3);cursor:pointer;font-size:16px">✕</button>';
     document.body.appendChild(msg);
     setTimeout(()=>msg.remove(),5000);
@@ -874,12 +901,8 @@ function cleanReportText(raw){
   let t=raw;
   t=t.replace(/```[a-z]*\n?/gi,'').replace(/```/g,'');
   t=t.replace(/^[\s]*[-=_*]{3,}[\s]*$/gm,'');
-  // Convert **bold** at start of line into a heading-ish marker (for plain renders)
-  // Strip leading hashtags from headings
   t=t.replace(/^#{1,6}\s+/gm,'');
-  // Strip stray hashtags inside text (e.g. "#impact" -> "impact"), but keep ## headings handled above
   t=t.replace(/(^|\s)#([A-Za-z])/g,'$1$2');
-  // Strip emoji at start of headings
   t=t.replace(/\n{3,}/g,'\n\n');
   return t.trim();
 }
@@ -906,7 +929,6 @@ function reportTextToHTML(cleaned,originalRaw){
     return '<p>'+boldify(escapeHTML(trimmed)).replace(/\n/g,'<br/>')+'</p>';
   }).join('\n');
 }
-// Lightweight cleaner for inline AI panels (not full reports)
 function aiPanelHTML(raw){
   const cleaned=cleanReportText(raw);
   return reportTextToHTML(cleaned,raw);
@@ -924,7 +946,7 @@ async function runAgent({container,headerLabel,headerSub,steps,sys,prompt,maxTok
   catch(e){
     if(e.message==='AI_PLAN_GATE'){container.innerHTML='';return null;}
     if(e.code==='RATE_LIMITED'||/rate.?limit/i.test(e.message||'')||/tokens per minute/i.test(e.message||'')){
-      container.innerHTML='<div class="brain-panel" style="border-color:rgba(245,158,11,.4)"><div class="brain-header"><div class="brain-icon" style="background:rgba(245,158,11,.18);animation:none">⏳</div><div><div class="brain-title" style="color:var(--amber)">Org Brain is busy</div><div class="brain-sub">The AI service is rate-limited. Wait about 60 seconds, then click the agent button again.</div></div></div><div style="font-size:12px;color:var(--txt3);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px">Each Claude account has a per-minute token cap. Running several agents close together can hit it. Try one at a time.</div></div>';
+      container.innerHTML='<div class="brain-panel" style="border-color:rgba(245,158,11,.4)"><div class="brain-header"><div class="brain-icon" style="background:rgba(245,158,11,.18);animation:none">⏳</div><div><div class="brain-title" style="color:var(--amber)">Org Brain is busy</div><div class="brain-sub">The AI service is rate-limited. Wait about 60 seconds, then click the agent button again.</div></div></div><div style="font-size:12px;color:var(--txt3);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px">Each Claude account has a per-minute token cap. Running several agents close together can hit it. Try one at a time.</div></div>';
       return null;
     }
     container.innerHTML='<div class="alert alert-warn" style="margin:0"><strong>Agent could not finish.</strong> '+escapeHTML(e.message||'Unknown error')+'</div>';
@@ -1072,7 +1094,7 @@ async function runEmployerMatcher(){
 function renderHRFlags(){
   const el=$('hr-flags-list');if(!el)return;
   if(!_hrFlags.length){el.innerHTML='<div style="color:var(--txt3);font-size:13px;padding:10px 0">No flags in the review queue.</div>';return;}
-  el.innerHTML=_hrFlags.map((f,i)=>'<div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:8px;padding:12px 14px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div style="flex:1"><div style="font-size:12px;font-weight:600;color:var(--txt);margin-bottom:4px">'+escapeHTML(f.who||'Unknown')+' · <span style="color:var(--txt3);font-weight:400">'+escapeHTML(f.context||'Case note')+'</span></div><div style="font-size:13px;color:var(--txt2);font-style:italic;margin-bottom:6px">"'+escapeHTML(f.snippet||'')+'"</div><div style="font-size:12px;color:var(--purple)">✦ '+escapeHTML(f.suggestion||'Consider person-first language')+'</div></div><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm" onclick="dismissHRFlag('+i+')">Dismiss</button><button class="btn btn-p btn-sm" onclick="resolveHRFlag('+i+')">✓ Resolved</button></div></div></div>').join('');
+  el.innerHTML=_hrFlags.map((f,i)=>'<div style="background:var(--bg);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:8px;padding:12px 14px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div style="flex:1"><div style="font-size:12px;font-weight:600;color:var(--txt);margin-bottom:4px">'+escapeHTML(f.who||'Unknown')+' · <span style="color:var(--txt3);font-weight:400">'+escapeHTML(f.context||'Case note')+'</span></div><div style="font-size:13px;color:var(--txt2);font-style:italic;margin-bottom:6px">"'+escapeHTML(f.snippet||'')+'"</div><div style="font-size:12px;color:var(--purple)">✦ '+escapeHTML(f.suggestion||'Consider person-first language')+'</div></div><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm" onclick="dismissHRFlag('+i+')">Dismiss</button><button class="btn btn-p btn-sm" onclick="resolveHRFlag('+i+')">✓ Resolved</button></div></div></div>').join('');
 }
 function dismissHRFlag(i){_hrFlags.splice(i,1);renderHRFlags();}
 function resolveHRFlag(i){_hrFlags.splice(i,1);renderHRFlags();}
@@ -1122,7 +1144,7 @@ function renderEqMonitoringList(){
   if(!P.length){el.innerHTML=emptyState('📋','No participants yet','Equality monitoring will appear once participants are added.','','');if(badge)badge.textContent='';return;}
   const completed=P.filter(p=>p.equality_data&&Object.keys(p.equality_data).length>0).length;
   if(badge)badge.textContent=completed+' of '+P.length+' completed ('+pct(completed,P.length)+'%)';
-  el.innerHTML=P.map(p=>{const has=p.equality_data&&Object.keys(p.equality_data).length>0;return'<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13px;font-weight:600;color:var(--txt)">'+escapeHTML(p.first_name+' '+p.last_name)+'</div><div style="font-size:11px;color:var(--txt3)">'+(has?'✓ Completed':'Not yet recorded')+'</div></div><button class="btn btn-ghost btn-sm" onclick="openEqualityModal('+p.id+')">'+(has?'Edit':'+ Add data')+'</button></div>';}).join('');
+  el.innerHTML=P.map(p=>{const has=p.equality_data&&Object.keys(p.equality_data).length>0;return'<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13px;font-weight:600;color:var(--txt)">'+escapeHTML(p.first_name+' '+p.last_name)+'</div><div style="font-size:11px;color:var(--txt3)">'+(has?'✓ Completed':'Not yet recorded')+'</div></div><button class="btn btn-ghost btn-sm" onclick="openEqualityModal('+p.id+')">'+(has?'Edit':'+ Add data')+'</button></div>';}).join('');
 }
 function openEqualityModal(pid){
   const p=DB.participants.find(x=>x.id===pid);if(!p)return;
@@ -1174,7 +1196,7 @@ async function runBenchmarking(){
   const sys='You are a UK sector benchmarking analyst. Anonymised comparison vs typical similar-size charities. **bold** the org position. 200 words max. Note benchmarks are illustrative. No hashtags, no markdown headings.';
   const prompt='Sector: '+(currentOrg?.sector||'employability charity')+'\nParticipants: '+P.length+'\nOutcome rate: '+rate+'%\nFlags in queue: '+_hrFlags.length;
   const raw=await runAgent({container:el,headerLabel:'Benchmarking Agent',headerSub:'Comparing against anonymised sector data',steps,sys,prompt,maxTok:400});
-  if(raw)el.innerHTML='<div class="ai-panel"><div class="ai-panel-title"><span class="ai-icon">🏆</span>Benchmark report</div><div class="ai-response">'+aiPanelHTML(raw)+'</div><div style="margin-top:12px;font-size:11px;color:var(--txt3);padding:8px 12px;background:var(--surface);border-radius:6px">🔒 No organisation names ever shared.</div></div>';
+  if(raw)el.innerHTML='<div class="ai-panel"><div class="ai-panel-title"><span class="ai-icon">🏆</span>Benchmark report</div><div class="ai-response">'+aiPanelHTML(raw)+'</div><div style="margin-top:12px;font-size:11px;color:var(--txt3);padding:8px 12px;background:var(--bg);border-radius:6px">🔒 No organisation names ever shared.</div></div>';
 }
 function saveHRMode(){const mode=(document.querySelector('input[name="hr-mode"]:checked')||{}).value||'advisory';localStorage.setItem('hr_mode',mode);updateHRModeBanner();}
 function saveHRSettings(){const mode=(document.querySelector('input[name="hr-mode"]:checked')||{}).value||'advisory';const email=$('hr-manager-email').value.trim();localStorage.setItem('hr_mode',mode);localStorage.setItem('hr_manager_email',email);updateHRModeBanner();const msg=$('hr-settings-saved');if(msg){msg.style.display='flex';setTimeout(()=>msg.style.display='none',2500);}}
@@ -1258,13 +1280,13 @@ async function generateAIReport(type,contractId){
     '<div class="report-doc">'+
       _headerHTML+
       '<div class="report-body">'+bodyHTML+'</div>'+
-      '<div class="report-footer">Generated by GreenCRM · Org Brain · '+escapeHTML(todayStr)+'</div>'+
+      '<div class="report-footer">Generated by Civara · Org Brain · '+escapeHTML(todayStr)+'</div>'+
     '</div>';
   reportEl.scrollIntoView({behavior:'smooth',block:'start'});
 }
 function downloadReportPDF(){
   const orig=document.title;
-  document.title=(_lastReportTitle||'GreenCRM Report').replace(/[^a-z0-9 \-]/gi,'').slice(0,80);
+  document.title=(_lastReportTitle||'Civara Report').replace(/[^a-z0-9 \-]/gi,'').slice(0,80);
   setTimeout(()=>{window.print();setTimeout(()=>{document.title=orig;},1000);},100);
 }
 function copyReportText(){
@@ -1278,12 +1300,11 @@ function downloadEOIPDF(){
   const orig=document.title;
   const title='EOI — '+($('eoi-funder').value||'Untitled');
   document.title=title.replace(/[^a-z0-9 \-]/gi,'').slice(0,80);
-  // Re-style EOI temporarily as a report-doc for clean print
   const eoiOut=$('eoi-output');
   const inner=$('eoi-result').innerHTML;
   const printWrap=document.createElement('div');
   printWrap.id='report-output';
-const _eoiLogoUrl=getOrgLogoUrl(currentOrg);
+  const _eoiLogoUrl=getOrgLogoUrl(currentOrg);
   const _eoiOrgName=currentOrg?.name||'Organisation';
   const _eoiDateStr=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
   const _eoiHeader=_eoiLogoUrl
@@ -1314,7 +1335,7 @@ async function runSocialAgent(){
   const raw=await runAgent({container:res,headerLabel:'Social Media Agent',headerSub:'Drafting a post in your voice',steps,sys,prompt,maxTok:500});
   if(raw){
     const clean=cleanReportText(raw);
-    res.innerHTML='<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;font-size:14px;color:var(--txt2);line-height:1.8;white-space:pre-wrap">'+escapeHTML(clean)+'</div>';
+    res.innerHTML='<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px;font-size:14px;color:var(--txt2);line-height:1.8;white-space:pre-wrap">'+escapeHTML(clean)+'</div>';
   }
 }
 
@@ -1352,21 +1373,37 @@ async function runEOIGenerator(){
     const cleaned=cleanReportText(raw);
     _lastEOIText=cleaned;
     res.innerHTML=reportTextToHTML(cleaned,raw);
-    // Apply report-style on screen
     res.style.cssText='background:#fff;color:#1a1a1a;border-radius:var(--radiuslg);padding:30px 36px;font-family:Georgia,serif;line-height:1.7';
   }
 }
 
-// ── SUPABASE ──
+// ─────────────────────────────────────────────────────────────
+// SUPABASE — GDPR-FIXED
+// ─────────────────────────────────────────────────────────────
 function initSB(){if(window.supabase)sb=window.supabase.createClient(SB_URL,SB_KEY);}
+
+// FAIL SAFE: refuse to query without an orgId. Returns []
+// instead of falling back to an unfiltered query (the original bug).
 async function sbQ(table){
   if(!sb)return null;
-  if(!orgId){console.warn('[sbQ] Refusing to query '+table+' without orgId');return [];}
+  if(!orgId){
+    console.warn('[sbQ] Refusing to query '+table+' without orgId');
+    return [];
+  }
   try{
     const{data,error}=await sb.from(table).select('*').eq('org_id',orgId);
-    if(error){console.error('[sbQ] '+table+' failed:',error.message);return [];}
+    if(error){
+      console.error('[sbQ] '+table+' failed:',error.message);
+      return [];
+    }
     return data;
-  }catch(e){console.error('[sbQ] '+table+' threw:',e);return [];}
+  }catch(e){
+    console.error('[sbQ] '+table+' threw:',e);
+    return [];
+  }
+}
+
+// DEFENSIVE: refuse to insert without an orgId.
 async function sbInsert(table,payload){
   if(!sb)return null;
   if(!orgId)throw new Error('Cannot insert into '+table+' without orgId');
@@ -1374,7 +1411,8 @@ async function sbInsert(table,payload){
   const{data,error}=await sb.from(table).insert([payload]).select();
   if(error)throw error;
   return data?.[0];
-}async function sbUpdate(table,payload,id){if(!sb)return;const{error}=await sb.from(table).update(payload).eq('id',id);if(error)throw error;}
+}
+async function sbUpdate(table,payload,id){if(!sb)return;const{error}=await sb.from(table).update(payload).eq('id',id);if(error)throw error;}
 async function sbDelete(table,id){if(!sb)return;await sb.from(table).delete().eq('id',id);}
 
 async function syncAll(){
@@ -1453,7 +1491,7 @@ function renderDashboard(){
   const recent=P.flatMap(p=>toArr(p.notes).map(nt=>({...nt,who:p.first_name+' '+p.last_name}))).sort((a,b)=>new Date(b.d)-new Date(a.d)).slice(0,5);
   $('dash-activity').innerHTML=recent.length?recent.map(nt=>'<div class="tl-entry"><div class="tl-dot blue"></div><div><div class="tl-lbl">'+escapeHTML(nt.who)+'</div><div class="tl-meta">'+escapeHTML((nt.t||'').slice(0,65))+' · '+fmtD(nt.d)+'</div></div></div>').join(''):'<div style="color:var(--txt3);font-size:13px">No recent activity.</div>';
   $('dash-fb-hi').innerHTML=[{l:'Enjoyed sessions',v:pct(FB.filter(f=>f.enjoyed>=4).length,FB.length||1)+'%'},{l:'Learned something',v:pct(FB.filter(f=>f.learned).length,FB.length||1)+'%'},{l:'Felt more connected',v:pct(FB.filter(f=>f.connected).length,FB.length||1)+'%'}].map(r=>'<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)"><span style="font-size:13px;color:var(--txt2)">'+r.l+'</span><span style="font-weight:700;color:var(--em)">'+r.v+'</span></div>').join('');
-  $('dash-conf-j').innerHTML='<div style="display:flex;gap:20px;align-items:center;padding:8px 0"><div style="text-align:center"><div style="font-size:36px;font-weight:800;color:var(--amber)">'+avgCB+'</div><div style="font-size:11px;color:var(--txt3)">avg before</div></div><div style="font-size:22px;color:var(--txt3)">→</div><div style="text-align:center"><div style="font-size:36px;font-weight:800;color:var(--em)">'+avgCA+'</div><div style="font-size:11px;color:var(--txt3)">avg after</div></div></div>';
+  $('dash-conf-j').innerHTML='<div style="display:flex;gap:20px;align-items:center;padding:8px 0"><div style="text-align:center"><div style="font-size:36px;font-weight:800;color:var(--amber)">'+avgCB+'</div><div style="font-size:11px;color:var(--txt3);font-weight:600">avg before</div></div><div style="font-size:22px;color:var(--txt3)">→</div><div style="text-align:center"><div style="font-size:36px;font-weight:800;color:var(--em)">'+avgCA+'</div><div style="font-size:11px;color:var(--txt3);font-weight:600">avg after</div></div></div>';
   if(P.length||E.length)runMorningBriefing();
   else $('mb-body').innerHTML='<div style="color:var(--txt3);font-size:13px">Add participants or events to see your morning briefing.</div>';
 }
@@ -1494,11 +1532,11 @@ function renderParticipants(){
   $('p-table').innerHTML=flt.map(p=>{
     const d=days(p.last_contact),ov=d>21;
     const cons=toArr(p.contract_ids).map(cid=>DB.contracts.find(c=>String(c.id)===String(cid))).filter(Boolean);
-    return'<tr><td><div style="display:flex;align-items:center;gap:8px"><div style="width:28px;height:28px;border-radius:50%;background:rgba(16,185,129,.15);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--em)">'+ini(p.first_name+' '+p.last_name)+'</div><div><div class="cn">'+escapeHTML(p.first_name+' '+p.last_name)+'</div>'+(p.safeguarding?'<span class="safe-flag">🔐 '+escapeHTML(p.safeguarding)+'</span>':'')+'</div></div></td><td style="font-size:11px;color:var(--txt3)">GC-'+String(p.id).padStart(4,'0')+'</td><td><span class="badge" style="background:rgba(16,185,129,.12);color:var(--em3)">'+escapeHTML(p.stage)+'</span></td><td style="font-size:12px">'+escapeHTML(p.advisor)+'</td><td>'+(cons.map(c=>'<span class="badge b-part">'+escapeHTML(c.name.slice(0,16))+'</span>').join(' ')||'<span style="font-size:11px;color:var(--txt3)">None</span>')+'</td><td>'+(p.outcomes.map(o=>'<span class="badge b-active" style="margin:1px">'+escapeHTML(o)+'</span>').join('')||'<span style="font-size:11px;color:var(--txt3)">None yet</span>')+'</td><td><span class="badge '+rCls(p.risk)+'">'+p.risk+'</span></td><td style="font-size:11px;color:'+(ov?'var(--amber)':'var(--txt3)')+'">'+fmtD(p.last_contact)+(ov?' ⚠':'')+'</td><td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm" onclick="openEditP('+p.id+')">Edit</button><button class="btn btn-ghost btn-sm" onclick="openNotes('+p.id+')">Notes</button><button class="btn btn-danger btn-sm" onclick="deleteP('+p.id+')">Del</button></div></td></tr>';
+    return'<tr><td><div style="display:flex;align-items:center;gap:8px"><div style="width:28px;height:28px;border-radius:50%;background:rgba(31,111,109,.12);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--em)">'+ini(p.first_name+' '+p.last_name)+'</div><div><div class="cn">'+escapeHTML(p.first_name+' '+p.last_name)+'</div>'+(p.safeguarding?'<span class="safe-flag">🔐 '+escapeHTML(p.safeguarding)+'</span>':'')+'</div></div></td><td style="font-size:11px;color:var(--txt3)">CV-'+String(p.id).padStart(4,'0')+'</td><td><span class="badge" style="background:rgba(31,111,109,.1);color:var(--em)">'+escapeHTML(p.stage)+'</span></td><td style="font-size:12px">'+escapeHTML(p.advisor)+'</td><td>'+(cons.map(c=>'<span class="badge b-part">'+escapeHTML(c.name.slice(0,16))+'</span>').join(' ')||'<span style="font-size:11px;color:var(--txt3)">None</span>')+'</td><td>'+(p.outcomes.map(o=>'<span class="badge b-active" style="margin:1px">'+escapeHTML(o)+'</span>').join('')||'<span style="font-size:11px;color:var(--txt3)">None yet</span>')+'</td><td><span class="badge '+rCls(p.risk)+'">'+p.risk+'</span></td><td style="font-size:11px;color:'+(ov?'var(--amber)':'var(--txt3)')+'">'+fmtD(p.last_contact)+(ov?' ⚠':'')+'</td><td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm" onclick="openEditP('+p.id+')">Edit</button><button class="btn btn-ghost btn-sm" onclick="openNotes('+p.id+')">Notes</button><button class="btn btn-danger btn-sm" onclick="deleteP('+p.id+')">Del</button></div></td></tr>';
   }).join('');
 }
 
-function mkChkArr(cid,items,sel=[]){const el=$(cid);if(!el)return;el.innerHTML=items.map(b=>'<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--txt2);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 7px;cursor:pointer;text-transform:none;letter-spacing:0"><input type="checkbox" value="'+b+'" '+(sel.includes(b)?'checked':'')+' style="width:auto;background:none;border:none;padding:0"/> '+b+'</label>').join('');}
+function mkChkArr(cid,items,sel=[]){const el=$(cid);if(!el)return;el.innerHTML=items.map(b=>'<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--txt2);background:#FFFFFF;border:1px solid var(--border);border-radius:6px;padding:3px 7px;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500"><input type="checkbox" value="'+b+'" '+(sel.includes(b)?'checked':'')+' style="width:auto;background:none;border:none;padding:0"/> '+b+'</label>').join('');}
 function getChkArr(cid){return[...document.querySelectorAll('#'+cid+' input[type=checkbox]:checked')].map(x=>x.value);}
 function mkChkGroup(cid,items,sel=[]){const el=$(cid);if(!el)return;el.innerHTML=items.map(it=>'<div class="chk-pill"><label><input type="checkbox" value="'+it+'" '+(sel.includes(it)?'checked':'')+'/> '+it+'</label></div>').join('');}
 
@@ -1549,7 +1587,6 @@ async function saveP(){
     } else {
       const notes=note?[{t:note,d:today(),s:'Staff'}]:[];
       const r=await sbInsert('participants',{...d,notes});
-      // If converted from a partner referral, mark source as Converted
       if(_editPartnerRefId){
         try{await sbUpdate('partner_referrals',{status:'Converted'},_editPartnerRefId);}catch(e){}
         _editPartnerRefId=null;
@@ -1585,7 +1622,7 @@ function renderVolunteers(){
   const q=($('vol-search')||{}).value?.toLowerCase()||'';const sf=($('vol-filter-status')||{}).value||'';
   const vols=DB.volunteers.filter(v=>(!q||v.name.toLowerCase().includes(q)||v.email.toLowerCase().includes(q))&&(!sf||v.status===sf));
   $('vol-sub').textContent=DB.volunteers.length+' volunteers · '+DB.volunteers.reduce((a,v)=>a+num(v.hours),0)+' hrs total';
-  $('vol-list').innerHTML=vols.length?vols.map(v=>'<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:14px;margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div style="display:flex;gap:12px;align-items:center"><div class="vol-avatar">'+ini(v.name)+'</div><div><div style="font-weight:600;font-size:14px;color:var(--txt)">'+escapeHTML(v.name)+'</div><div style="font-size:12px;color:var(--txt3)">'+escapeHTML(v.email)+(v.phone?' · '+escapeHTML(v.phone):'')+'</div></div></div><div style="display:flex;gap:6px"><button class="btn btn-ghost btn-sm" onclick="openEditVol('+v.id+')">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteVol('+v.id+')">Delete</button></div></div><div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap"><span class="badge b-vol">'+escapeHTML(v.role)+'</span>'+toArr(v.skills).slice(0,4).map(s=>'<span class="badge b-teal">'+escapeHTML(s)+'</span>').join('')+'<span style="font-size:11px;color:var(--txt3);margin-left:4px">'+v.hours+' hrs · '+v.status+'</span></div></div>').join(''):emptyState('🤝','No volunteers yet','Register your team members.','+ Add volunteer','openAddVol()');
+  $('vol-list').innerHTML=vols.length?vols.map(v=>'<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:14px;margin-bottom:10px;box-shadow:0 1px 2px rgba(31,111,109,.04)"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div style="display:flex;gap:12px;align-items:center"><div class="vol-avatar">'+ini(v.name)+'</div><div><div style="font-weight:600;font-size:14px;color:var(--txt)">'+escapeHTML(v.name)+'</div><div style="font-size:12px;color:var(--txt3)">'+escapeHTML(v.email)+(v.phone?' · '+escapeHTML(v.phone):'')+'</div></div></div><div style="display:flex;gap:6px"><button class="btn btn-ghost btn-sm" onclick="openEditVol('+v.id+')">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteVol('+v.id+')">Delete</button></div></div><div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap"><span class="badge b-vol">'+escapeHTML(v.role)+'</span>'+toArr(v.skills).slice(0,4).map(s=>'<span class="badge b-teal">'+escapeHTML(s)+'</span>').join('')+'<span style="font-size:11px;color:var(--txt3);margin-left:4px">'+v.hours+' hrs · '+v.status+'</span></div></div>').join(''):emptyState('🤝','No volunteers yet','Register your team members.','+ Add volunteer','openAddVol()');
 }
 function openAddVol(){_editVolId=null;$('vol-modal-title').textContent='Add volunteer';['vf-name','vf-email','vf-phone','vf-notes'].forEach(id=>{if($(id))$(id).value='';});$('vf-hours').value='0';$('vf-role').value='Volunteer';$('vf-status').value='Active';mkChkGroup('vf-skills',VOL_SKILLS);$('modal-vol').classList.add('open');}
 function openEditVol(id){const v=DB.volunteers.find(x=>x.id===id);if(!v)return;_editVolId=id;$('vol-modal-title').textContent='Edit volunteer';$('vf-name').value=v.name;$('vf-email').value=v.email;$('vf-phone').value=v.phone||'';$('vf-hours').value=v.hours;$('vf-role').value=v.role||'Volunteer';$('vf-status').value=v.status;mkChkGroup('vf-skills',VOL_SKILLS,toArr(v.skills));$('modal-vol').classList.add('open');}
@@ -1597,7 +1634,7 @@ async function saveVol(){
   catch(e){alert('Save failed: '+e.message);}finally{btn.textContent='Save volunteer';btn.disabled=false;}
 }
 async function deleteVol(id){if(!confirm('Delete?'))return;await sbDelete('volunteers',id);await refreshTable('volunteers');renderVolunteers();}
-function exportCSV(type){let rows;if(type==='volunteers')rows=[['Name','Email','Role','Hours','Status'],...DB.volunteers.map(v=>[v.name,v.email,v.role,v.hours,v.status])];else rows=[['ID','Name','Stage','Advisor','Outcomes','Barriers','Risk','Last Contact'],...DB.participants.map(p=>['GC-'+String(p.id).padStart(4,'0'),p.first_name+' '+p.last_name,p.stage,p.advisor,p.outcomes.join(';'),p.barriers.join(';'),p.risk,p.last_contact])];const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(rows.map(r=>r.join(',')).join('\n'));a.download=type+'.csv';a.click();}
+function exportCSV(type){let rows;if(type==='volunteers')rows=[['Name','Email','Role','Hours','Status'],...DB.volunteers.map(v=>[v.name,v.email,v.role,v.hours,v.status])];else rows=[['ID','Name','Stage','Advisor','Outcomes','Barriers','Risk','Last Contact'],...DB.participants.map(p=>['CV-'+String(p.id).padStart(4,'0'),p.first_name+' '+p.last_name,p.stage,p.advisor,p.outcomes.join(';'),p.barriers.join(';'),p.risk,p.last_contact])];const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(rows.map(r=>r.join(',')).join('\n'));a.download=type+'.csv';a.click();}
 
 function renderEmployers(){
   const rc={'Active partner':'b-active','Engaged':'b-engaged','Prospecting':'b-prospect','Dormant':'b-lapsed'};
@@ -1627,12 +1664,12 @@ async function saveR(){const btn=$('r-save-btn');btn.textContent='Saving…';btn
 async function deleteRef(id){if(!confirm('Delete?'))return;await sbDelete('referrals',id);await refreshTable('referrals');renderReferrals();}
 
 function getPartnerLink(){const base=window.location.origin+window.location.pathname.replace('app.html','')+'partner.html';return orgId?base+'?org='+orgId:base+'?org=YOUR_ORG_ID';}
-function generateQR(url){const canvas=$('qr-canvas');if(!canvas)return;const ctx=canvas.getContext('2d');const size=140;const img=new Image();img.crossOrigin='anonymous';img.onload=()=>{ctx.drawImage(img,0,0,size,size);};img.onerror=()=>{ctx.fillStyle='#fff';ctx.fillRect(0,0,size,size);ctx.fillStyle='#10b981';ctx.font='bold 11px system-ui';ctx.textAlign='center';ctx.fillText('QR Code',size/2,size/2);};img.src='https://api.qrserver.com/v1/create-qr-code/?size='+size+'x'+size+'&data='+encodeURIComponent(url)+'&color=10b981&bgcolor=ffffff';}
-function initPartnerPortal(){const link=getPartnerLink();const el=$('partner-link-display');if(el)el.textContent=link;generateQR(link);const orgName=currentOrg?.name||'our organisation';const tpl='Subject: Referral portal access — '+orgName+'\n\nDear colleague,\n\nWe use GreenCRM to manage referrals. Please use the link below to register and submit referrals.\n\n'+link+'\n\nKind regards,\n'+orgName;const tplEl=$('email-tpl-body');if(tplEl)tplEl.textContent=tpl;}
+function generateQR(url){const canvas=$('qr-canvas');if(!canvas)return;const ctx=canvas.getContext('2d');const size=140;const img=new Image();img.crossOrigin='anonymous';img.onload=()=>{ctx.drawImage(img,0,0,size,size);};img.onerror=()=>{ctx.fillStyle='#fff';ctx.fillRect(0,0,size,size);ctx.fillStyle='#1F6F6D';ctx.font='bold 11px system-ui';ctx.textAlign='center';ctx.fillText('QR Code',size/2,size/2);};img.src='https://api.qrserver.com/v1/create-qr-code/?size='+size+'x'+size+'&data='+encodeURIComponent(url)+'&color=1F6F6D&bgcolor=ffffff';}
+function initPartnerPortal(){const link=getPartnerLink();const el=$('partner-link-display');if(el)el.textContent=link;generateQR(link);const orgName=currentOrg?.name||'our organisation';const tpl='Subject: Referral portal access — '+orgName+'\n\nDear colleague,\n\nWe use Civara to manage referrals. Please use the link below to register and submit referrals.\n\n'+link+'\n\nKind regards,\n'+orgName;const tplEl=$('email-tpl-body');if(tplEl)tplEl.textContent=tpl;}
 function copyPartnerLink(){const link=getPartnerLink();navigator.clipboard.writeText(link);const btn=$('copy-link-btn');if(btn){btn.textContent='✓ Copied!';setTimeout(()=>btn.textContent='📋 Copy',2000);}}
 function toggleEmailTemplate(){const el=$('email-template');const btn=$('email-tpl-btn');if(!el)return;const open=el.style.display==='none';el.style.display=open?'block':'none';if(btn)btn.textContent=open?'✉️ Hide email template':'✉️ Show email template to send to partners';}
 function copyEmailTemplate(){const text=$('email-tpl-body')?.textContent||'';navigator.clipboard.writeText(text);}
-function downloadQR(){const canvas=$('qr-canvas');if(!canvas)return;const link=document.createElement('a');link.download=(currentOrg?.name||'GreenCRM')+'-partner-portal-QR.png';link.href=canvas.toDataURL('image/png');link.click();}
+function downloadQR(){const canvas=$('qr-canvas');if(!canvas)return;const link=document.createElement('a');link.download=(currentOrg?.name||'Civara')+'-partner-portal-QR.png';link.href=canvas.toDataURL('image/png');link.click();}
 function sharePartnerLink(){const link=getPartnerLink();if(navigator.share){navigator.share({title:'Partner Portal',url:link});}else{copyPartnerLink();alert('Link copied — paste it into email or WhatsApp.');}}
 function printPartnerCard(){window.print();}
 
@@ -1669,7 +1706,7 @@ function renderEvents(){
   $('ev-sub').textContent=DB.events.length+' events · '+totalP.toLocaleString()+' participants';
   $('ev-stats').innerHTML=[{l:'Total participants',v:totalP.toLocaleString()},{l:'Green Skills',v:DB.events.filter(e=>e.type==='Green Skills').length},{l:'Wellbeing',v:DB.events.filter(e=>e.type==='Wellbeing').length},{l:'Feedback',v:DB.feedback.length}].map(s=>'<div class="stat-card"><div class="stat-lbl">'+s.l+'</div><div class="stat-val">'+s.v+'</div></div>').join('');
   const tCls={'Green Skills':'b-active','Wellbeing':'b-teal','Community Event':'b-vol','Frailty':'b-part','Other':'b-engaged'};
-  $('ev-list').innerHTML=evs.length?evs.map(ev=>{const fb=DB.feedback.filter(f=>f.eventId==ev.id);const fill=Math.round(num(ev.attendees)/(num(ev.capacity)||1)*100);return'<div class="ev-card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px"><div><div style="font-size:15px;font-weight:600;color:var(--txt)">'+escapeHTML(ev.name)+'</div><div style="font-size:12px;color:var(--txt3)">'+fmtD(ev.date)+' · '+escapeHTML(ev.location||'—')+'</div></div><div style="text-align:right"><div style="font-size:26px;font-weight:800;color:var(--em)">'+num(ev.attendees).toLocaleString()+'</div><div style="font-size:11px;color:var(--txt3)">participants</div></div></div><div class="fund-bar-wrap"><div class="fund-top"><span style="font-size:11px;color:var(--txt3)">Capacity '+ev.attendees+'/'+ev.capacity+'</span><span style="font-size:11px;color:var(--txt3)">'+fill+'%</span></div><div class="fund-track"><div class="fund-fill '+(fill>90?'warn':'')+'" style="width:'+Math.min(fill,100)+'%"></div></div></div><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="badge '+(tCls[ev.type]||'b-engaged')+'">'+escapeHTML(ev.type)+'</span>'+(fb.length?'<span class="badge b-part">'+fb.length+' feedback</span>':'')+'<div style="margin-left:auto;display:flex;gap:4px"><button class="btn btn-ghost btn-sm" onclick="openEditEv('+ev.id+')">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteEv('+ev.id+')">Delete</button></div></div></div>';}).join(''):emptyState('📅','No events yet','Create your first workshop.','+ Create event','openAddEv()');
+  $('ev-list').innerHTML=evs.length?evs.map(ev=>{const fb=DB.feedback.filter(f=>f.eventId==ev.id);const fill=Math.round(num(ev.attendees)/(num(ev.capacity)||1)*100);return'<div class="ev-card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px"><div><div style="font-size:15px;font-weight:600;color:var(--txt)">'+escapeHTML(ev.name)+'</div><div style="font-size:12px;color:var(--txt3)">'+fmtD(ev.date)+' · '+escapeHTML(ev.location||'—')+'</div></div><div style="text-align:right"><div style="font-size:26px;font-weight:800;color:var(--em)">'+num(ev.attendees).toLocaleString()+'</div><div style="font-size:11px;color:var(--txt3);font-weight:600">participants</div></div></div><div class="fund-bar-wrap"><div class="fund-top"><span style="font-size:11px;color:var(--txt3)">Capacity '+ev.attendees+'/'+ev.capacity+'</span><span style="font-size:11px;color:var(--txt3)">'+fill+'%</span></div><div class="fund-track"><div class="fund-fill '+(fill>90?'warn':'')+'" style="width:'+Math.min(fill,100)+'%"></div></div></div><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="badge '+(tCls[ev.type]||'b-engaged')+'">'+escapeHTML(ev.type)+'</span>'+(fb.length?'<span class="badge b-part">'+fb.length+' feedback</span>':'')+'<div style="margin-left:auto;display:flex;gap:4px"><button class="btn btn-ghost btn-sm" onclick="openEditEv('+ev.id+')">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteEv('+ev.id+')">Delete</button></div></div></div>';}).join(''):emptyState('📅','No events yet','Create your first workshop.','+ Create event','openAddEv()');
   populateFbEvSelect();
 }
 function openAddEv(){_editEvId=null;$('ev-modal-title').textContent='Create event';['evf-name','evf-loc'].forEach(id=>$(id).value='');$('evf-type').value='Green Skills';$('evf-date').value=today();$('evf-att').value='';$('evf-cap').value='20';$('modal-ev').classList.add('open');}
@@ -1689,14 +1726,15 @@ function renderFeedback(){
   const avgCA=items.length?(items.reduce((a,f)=>a+num(f.ca),0)/items.length).toFixed(1):'-';
   $('fb-sub').textContent=DB.feedback.length+' responses';
   $('fb-stats').innerHTML=[{l:'Responses',v:items.length},{l:'Enjoyed (4–5★)',v:enjoyed+'%'},{l:'Avg conf before',v:avgCB+'/5'},{l:'Avg conf after',v:avgCA+'/5'}].map(s=>'<div class="stat-card"><div class="stat-lbl">'+s.l+'</div><div class="stat-val">'+s.v+'</div></div>').join('');
-  $('fb-list').innerHTML=items.length?items.map(f=>{const ev=DB.events.find(e=>e.id==f.eventId);return'<div class="ev-card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px"><div><div style="font-size:14px;font-weight:600;color:var(--txt)">'+escapeHTML(f.name||'Anonymous')+'</div><div style="font-size:12px;color:var(--txt3)">'+escapeHTML(ev?.name||'Unknown event')+'</div></div><div style="display:flex;gap:12px;align-items:center"><div style="text-align:center"><div style="font-size:18px;font-weight:700;color:var(--amber)">'+f.cb+'</div><div style="font-size:10px;color:var(--txt3)">before</div></div><div style="color:var(--txt3)">→</div><div style="text-align:center"><div style="font-size:18px;font-weight:700;color:var(--em)">'+f.ca+'</div><div style="font-size:10px;color:var(--txt3)">after</div></div><button class="btn btn-danger btn-sm" onclick="deleteFb('+f.id+')">Del</button></div></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"><span class="badge '+(f.enjoyed>=4?'b-active':'b-amber')+'">★ '+f.enjoyed+'/5</span>'+(f.learned?'<span class="badge b-teal">Learned</span>':'')+(f.connected?'<span class="badge b-vol">Connected</span>':'')+(f.friend?'<span class="badge b-engaged">New friend</span>':'')+'</div>'+(f.quote?'<div style="font-size:13px;font-style:italic;color:var(--txt2)">"'+escapeHTML(f.quote)+'"</div>':'')+'</div>';}).join(''):emptyState('💬','No feedback yet','Collect feedback after events.','+ Add response','openAddFb()');
+  $('fb-list').innerHTML=items.length?items.map(f=>{const ev=DB.events.find(e=>e.id==f.eventId);return'<div class="ev-card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px"><div><div style="font-size:14px;font-weight:600;color:var(--txt)">'+escapeHTML(f.name||'Anonymous')+'</div><div style="font-size:12px;color:var(--txt3)">'+escapeHTML(ev?.name||'Unknown event')+'</div></div><div style="display:flex;gap:12px;align-items:center"><div style="text-align:center"><div style="font-size:18px;font-weight:700;color:var(--amber)">'+f.cb+'</div><div style="font-size:10px;color:var(--txt3);font-weight:600">before</div></div><div style="color:var(--txt3)">→</div><div style="text-align:center"><div style="font-size:18px;font-weight:700;color:var(--em)">'+f.ca+'</div><div style="font-size:10px;color:var(--txt3);font-weight:600">after</div></div><button class="btn btn-danger btn-sm" onclick="deleteFb('+f.id+')">Del</button></div></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"><span class="badge '+(f.enjoyed>=4?'b-active':'b-amber')+'">★ '+f.enjoyed+'/5</span>'+(f.learned?'<span class="badge b-teal">Learned</span>':'')+(f.connected?'<span class="badge b-vol">Connected</span>':'')+(f.friend?'<span class="badge b-engaged">New friend</span>':'')+'</div>'+(f.quote?'<div style="font-size:13px;font-style:italic;color:var(--txt2)">"'+escapeHTML(f.quote)+'"</div>':'')+'</div>';}).join(''):emptyState('💬','No feedback yet','Collect feedback after events.','+ Add response','openAddFb()');
 }
 function openAddFb(){_editFbId=null;_fbScores={enjoyed:5,cb:3,ca:5};$('fb-modal-title').textContent='Add feedback';$('fbf-name').value='';$('fbf-quote').value='';['fbf-learned','fbf-connected','fbf-friend'].forEach(id=>$(id).checked=false);populateFbEvSelect();makeStars('fbf-enjoyed-stars','enjoyed',5);makeStars('fbf-cb-stars','cb',3);makeStars('fbf-ca-stars','ca',5);$('modal-fb').classList.add('open');}
 async function saveFb(){
   const evId=parseInt($('fbf-ev').value);if(!evId){alert('Please select an event');return;}
   const btn=$('fb-save-btn');btn.textContent='Saving…';btn.disabled=true;
   try{const d={event_id:evId,name:$('fbf-name').value,enjoyed:_fbScores.enjoyed,cb:_fbScores.cb,ca:_fbScores.ca,learned:$('fbf-learned').checked,connected:$('fbf-connected').checked,friend:$('fbf-friend').checked,quote:$('fbf-quote').value};
-    if(sb){const payload={...d};if(orgId)payload.org_id=orgId;const{error}=await sb.from('feedback').insert([payload]);if(error)throw error;}
+    // GDPR fix: feedback now goes through the standard sbInsert which adds org_id automatically.
+    if(sb)await sbInsert('feedback',d);
     else DB.feedback.push({id:Date.now(),...d,eventId:d.event_id});
     await refreshTable('feedback');closeModal('modal-fb');renderFeedback();}
   catch(e){alert('Save failed: '+e.message);}finally{btn.textContent='Save';btn.disabled=false;}
@@ -1706,9 +1744,9 @@ async function deleteFb(id){if(!confirm('Delete?'))return;await sbDelete('feedba
 function renderCircular(){
   const items=DB.circular;const diverted=items.filter(i=>i.status!=='Beyond repair').reduce((a,i)=>a+num(i.weight_kg),0);const co2=(diverted*2.5).toFixed(1);
   $('eco-stats').innerHTML=[{l:'Items logged',v:items.length},{l:'Repaired/resold',v:items.filter(i=>['Repaired','Resold'].includes(i.status)).length},{l:'Kg diverted',v:diverted.toFixed(1)+'kg'},{l:'CO₂ saved',v:co2+'kg'}].map(s=>'<div class="stat-card"><div class="stat-lbl">'+s.l+'</div><div class="stat-val">'+s.v+'</div></div>').join('');
-  $('eco-impact').innerHTML=['♻️ '+items.filter(i=>i.status==='Resold').length+' resold','🎁 '+items.filter(i=>i.status==='Donated').length+' donated','🌍 '+co2+'kg CO₂ saved'].map(t=>'<span style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);border-radius:8px;padding:6px 12px;font-size:13px;color:var(--em);margin:3px;display:inline-flex">'+t+'</span>').join('');
+  $('eco-impact').innerHTML=['♻️ '+items.filter(i=>i.status==='Resold').length+' resold','🎁 '+items.filter(i=>i.status==='Donated').length+' donated','🌍 '+co2+'kg CO₂ saved'].map(t=>'<span style="background:rgba(31,111,109,.08);border:1px solid rgba(31,111,109,.2);border-radius:8px;padding:6px 12px;font-size:13px;color:var(--em);margin:3px;display:inline-flex;font-weight:600">'+t+'</span>').join('');
   const sc={Collected:'b-prospect','In repair':'b-engaged',Repaired:'b-active',Resold:'b-active',Donated:'b-vol','Beyond repair':'b-lapsed'};
-  $('eco-table').innerHTML=items.length?items.map(i=>'<tr><td class="cn">'+escapeHTML(i.name)+'</td><td><span class="badge b-part">'+escapeHTML(i.category)+'</span></td><td style="color:var(--em)">'+i.weight_kg+'kg</td><td><span class="badge '+(sc[i.status]||'')+'">'+escapeHTML(i.status)+'</span></td><td style="font-size:12px">'+escapeHTML(i.fixer||'—')+'</td><td><span class="badge '+(i.outcome?'b-active':'b-prospect')+'">'+escapeHTML(i.outcome||'Pending')+'</span></td><td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm" onclick="openEditItem('+i.id+')">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteItem('+i.id+')">Del</button></div></td></tr>').join(''):'<tr><td colspan="7">'+emptyState('♻️','No items logged yet','Start logging repair café items.','+ Log item','openAddItem()')+'</td></tr>';
+  $('eco-table').innerHTML=items.length?items.map(i=>'<tr><td class="cn">'+escapeHTML(i.name)+'</td><td><span class="badge b-part">'+escapeHTML(i.category)+'</span></td><td style="color:var(--em);font-weight:600">'+i.weight_kg+'kg</td><td><span class="badge '+(sc[i.status]||'')+'">'+escapeHTML(i.status)+'</span></td><td style="font-size:12px">'+escapeHTML(i.fixer||'—')+'</td><td><span class="badge '+(i.outcome?'b-active':'b-prospect')+'">'+escapeHTML(i.outcome||'Pending')+'</span></td><td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm" onclick="openEditItem('+i.id+')">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteItem('+i.id+')">Del</button></div></td></tr>').join(''):'<tr><td colspan="7">'+emptyState('♻️','No items logged yet','Start logging repair café items.','+ Log item','openAddItem()')+'</td></tr>';
 }
 function openAddItem(){_editItemId=null;$('item-title').textContent='Log item';['it-name','it-kg','it-fixer'].forEach(f=>$(f).value='');$('it-st').value='Collected';$('modal-item').classList.add('open');}
 function openEditItem(id){const i=DB.circular.find(x=>x.id===id);if(!i)return;_editItemId=id;$('item-title').textContent='Edit item';$('it-name').value=i.name;$('it-cat').value=i.category;$('it-kg').value=i.weight_kg;$('it-st').value=i.status;$('it-fixer').value=i.fixer;$('it-outcome').value=i.outcome;$('modal-item').classList.add('open');}
@@ -1723,10 +1761,10 @@ function renderRAG(){
     const ts=num(c.target_starts)||1,to=num(c.target_outcomes)||1;
     const sp=Math.round(actualStarts/ts*100),op=Math.round(actualOutcomes/to*100);
     const avg=(sp+op)/2,rag=avg>=80?'green':avg>=50?'amber':'red';
-    const col={green:'#10b981',amber:'#f59e0b',red:'#f87171'}[rag];
+    const col={green:'#1F6F6D',amber:'#F59E0B',red:'#C84545'}[rag];
     const lbl={green:'🟢 On track',amber:'🟡 At risk',red:'🔴 Underperforming'}[rag];
     const funder=DB.funders.find(f=>String(f.id)===String(c.funder_id));
-    return'<div class="card" style="border-left:4px solid '+col+';margin-bottom:14px"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-size:15px;font-weight:700">'+escapeHTML(c.name)+'</div><div style="font-size:12px;color:var(--txt3)">'+escapeHTML(funder?.name||c.funder||'—')+' · £'+num(c.value).toLocaleString()+'</div></div><div style="display:flex;gap:8px;align-items:center"><span style="font-size:12px;font-weight:700;color:'+col+'">'+lbl+'</span><button class="btn btn-ai btn-sm" onclick="runRAGExplainer('+c.id+',\''+c.name.replace(/'/g,'')+'\',\''+(funder?.name||c.funder||'').replace(/'/g,'')+'\','+sp+','+op+','+linked.length+')">✦ Explain</button></div></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px"><div class="stat-card"><div class="stat-lbl">Starts</div><div class="stat-val">'+actualStarts+'</div><div class="stat-sub">of '+(c.target_starts||0)+'</div></div><div class="stat-card"><div class="stat-lbl">Outcomes</div><div class="stat-val">'+actualOutcomes+'</div><div class="stat-sub">of '+(c.target_outcomes||0)+'</div></div><div class="stat-card"><div class="stat-lbl">Starts %</div><div class="stat-val">'+sp+'%</div></div><div class="stat-card"><div class="stat-lbl">Outcomes %</div><div class="stat-val">'+op+'%</div></div></div></div>';
+    return'<div class="card" style="border-left:4px solid '+col+';margin-bottom:14px"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-size:15px;font-weight:700;color:var(--txt)">'+escapeHTML(c.name)+'</div><div style="font-size:12px;color:var(--txt3)">'+escapeHTML(funder?.name||c.funder||'—')+' · £'+num(c.value).toLocaleString()+'</div></div><div style="display:flex;gap:8px;align-items:center"><span style="font-size:12px;font-weight:700;color:'+col+'">'+lbl+'</span><button class="btn btn-ai btn-sm" onclick="runRAGExplainer('+c.id+',\''+c.name.replace(/'/g,'')+'\',\''+(funder?.name||c.funder||'').replace(/'/g,'')+'\','+sp+','+op+','+linked.length+')">✦ Explain</button></div></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px"><div class="stat-card"><div class="stat-lbl">Starts</div><div class="stat-val">'+actualStarts+'</div><div class="stat-sub">of '+(c.target_starts||0)+'</div></div><div class="stat-card"><div class="stat-lbl">Outcomes</div><div class="stat-val">'+actualOutcomes+'</div><div class="stat-sub">of '+(c.target_outcomes||0)+'</div></div><div class="stat-card"><div class="stat-lbl">Starts %</div><div class="stat-val">'+sp+'%</div></div><div class="stat-card"><div class="stat-lbl">Outcomes %</div><div class="stat-val">'+op+'%</div></div></div></div>';
   }).join('');
 }
 
@@ -1735,10 +1773,10 @@ function renderOutcomes(){
   const withOutcomes=P.filter(p=>p.outcomes.length>0).length,jobs=P.filter(p=>p.outcomes.includes('Employment')).length,sustained=P.filter(p=>p.stage==='Sustained').length;
   $('out-stats').innerHTML=[{l:'Total starts',v:tot},{l:'Positive outcomes',v:withOutcomes,s:pct(withOutcomes,tot||1)+'% rate'},{l:'Employment',v:jobs,s:pct(jobs,tot||1)+'% of starts'},{l:'Sustained',v:sustained}].map(s=>'<div class="stat-card"><div class="stat-lbl">'+s.l+'</div><div class="stat-val">'+s.v+'</div>'+(s.s?'<div class="stat-sub">'+s.s+'</div>':'')+'</div>').join('');
   $('out-by-type').innerHTML=OUT_TYPES.map(t=>{const c=P.filter(p=>p.outcomes.includes(t)).length,p2=tot?Math.round(c/tot*100):0;return'<div class="fund-bar-wrap"><div class="fund-top"><span style="font-size:13px;color:var(--txt2)">'+t+'</span><span style="font-weight:600;color:var(--em)">'+c+' ('+p2+'%)</span></div><div class="fund-track"><div class="fund-fill" style="width:'+p2+'%"></div></div></div>';}).join('');
-  $('out-barriers').innerHTML=BARRIERS.map(b=>{const c=P.filter(p=>p.barriers.includes(b)).length,p2=tot?Math.round(c/tot*100):0;return'<div class="fund-bar-wrap"><div class="fund-top"><span style="font-size:13px;color:var(--txt2)">'+b+'</span><span style="font-weight:600">'+c+'</span></div><div class="fund-track"><div class="fund-fill" style="width:'+p2+'%"></div></div></div>';}).join('');
+  $('out-barriers').innerHTML=BARRIERS.map(b=>{const c=P.filter(p=>p.barriers.includes(b)).length,p2=tot?Math.round(c/tot*100):0;return'<div class="fund-bar-wrap"><div class="fund-top"><span style="font-size:13px;color:var(--txt2)">'+b+'</span><span style="font-weight:600;color:var(--txt)">'+c+'</span></div><div class="fund-track"><div class="fund-fill" style="width:'+p2+'%"></div></div></div>';}).join('');
   const stageEl=$('out-stage-breakdown');if(stageEl)stageEl.innerHTML=P_STAGES.map(s=>{const c=P.filter(p=>p.stage===s).length,p2=tot?Math.round(c/tot*100):0;return'<div class="fund-bar-wrap"><div class="fund-top"><span style="font-size:13px;color:var(--txt2)">'+s+'</span><span style="font-weight:600;color:var(--em)">'+c+'</span></div><div class="fund-track"><div class="fund-fill" style="width:'+p2+'%"></div></div></div>';}).join('');
   const FB=DB.feedback,avgCB=FB.length?(FB.reduce((a,f)=>a+num(f.cb),0)/FB.length).toFixed(1):'-',avgCA=FB.length?(FB.reduce((a,f)=>a+num(f.ca),0)/FB.length).toFixed(1):'-';
-  const confEl=$('out-confidence');if(confEl)confEl.innerHTML='<div style="display:flex;gap:20px;align-items:center;padding:8px 0"><div style="text-align:center"><div style="font-size:36px;font-weight:800;color:var(--amber)">'+avgCB+'</div><div style="font-size:11px;color:var(--txt3)">avg before</div></div><div style="font-size:22px;color:var(--txt3)">→</div><div style="text-align:center"><div style="font-size:36px;font-weight:800;color:var(--em)">'+avgCA+'</div><div style="font-size:11px;color:var(--txt3)">avg after</div></div></div>';
+  const confEl=$('out-confidence');if(confEl)confEl.innerHTML='<div style="display:flex;gap:20px;align-items:center;padding:8px 0"><div style="text-align:center"><div style="font-size:36px;font-weight:800;color:var(--amber)">'+avgCB+'</div><div style="font-size:11px;color:var(--txt3);font-weight:600">avg before</div></div><div style="font-size:22px;color:var(--txt3)">→</div><div style="text-align:center"><div style="font-size:36px;font-weight:800;color:var(--em)">'+avgCA+'</div><div style="font-size:11px;color:var(--txt3);font-weight:600">avg after</div></div></div>';
 }
 
 const FUNDER_TYPES={moj:{label:'Ministry of Justice',icon:'⚖️'},gla:{label:'Greater London Authority',icon:'🏙️'},cbf:{label:'City Bridge Foundation',icon:'🌉'},ukspf:{label:'UKSPF',icon:'🏛️'},lottery:{label:'National Lottery',icon:'🍀'},trust:{label:'Grant trust',icon:'🎗️'},dwp:{label:'DWP',icon:'💼'},nhs:{label:'NHS',icon:'🏥'},impact:{label:'Annual report',icon:'🌿'},other:{label:'Other',icon:'📋'}};
@@ -1815,7 +1853,7 @@ function renderFunding(){
     const linked=DB.participants.filter(p=>toArr(p.contract_ids).includes(String(c.id)));
     const starts=linked.length,outcomes=linked.filter(p=>p.outcomes.length>0).length;
     const sp=Math.round(starts/(c.target_starts||1)*100),op=Math.round(outcomes/(c.target_outcomes||1)*100);
-    return'<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-size:14px;font-weight:600">'+escapeHTML(c.name)+'</div><div style="font-size:12px;color:var(--txt3)">'+escapeHTML(c.funder||'—')+' · £'+num(c.value).toLocaleString()+'</div></div><div style="display:flex;gap:6px"><button class="btn btn-ghost btn-sm" onclick="openEditCon(\''+c.id+'\')">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteCon(\''+c.id+'\')">Del</button></div></div><div class="fund-bar-wrap"><div class="fund-top"><span>Starts: '+starts+'/'+(c.target_starts||0)+'</span><span>'+sp+'%</span></div><div class="fund-track"><div class="fund-fill" style="width:'+Math.min(sp,100)+'%"></div></div></div><div class="fund-bar-wrap"><div class="fund-top"><span>Outcomes: '+outcomes+'/'+(c.target_outcomes||0)+'</span><span>'+op+'%</span></div><div class="fund-track"><div class="fund-fill" style="width:'+Math.min(op,100)+'%"></div></div></div></div>';
+    return'<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-size:14px;font-weight:600;color:var(--txt)">'+escapeHTML(c.name)+'</div><div style="font-size:12px;color:var(--txt3)">'+escapeHTML(c.funder||'—')+' · £'+num(c.value).toLocaleString()+'</div></div><div style="display:flex;gap:6px"><button class="btn btn-ghost btn-sm" onclick="openEditCon(\''+c.id+'\')">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteCon(\''+c.id+'\')">Del</button></div></div><div class="fund-bar-wrap"><div class="fund-top"><span>Starts: '+starts+'/'+(c.target_starts||0)+'</span><span>'+sp+'%</span></div><div class="fund-track"><div class="fund-fill" style="width:'+Math.min(sp,100)+'%"></div></div></div><div class="fund-bar-wrap"><div class="fund-top"><span>Outcomes: '+outcomes+'/'+(c.target_outcomes||0)+'</span><span>'+op+'%</span></div><div class="fund-track"><div class="fund-fill" style="width:'+Math.min(op,100)+'%"></div></div></div></div>';
   }).join('');
 }
 
@@ -1826,7 +1864,7 @@ function renderReports(){
   el.innerHTML=contracts.map(c=>{
     const funder=(DB.funders||[]).find(f=>String(f.id)===String(c.funder_id));
     const linked=DB.participants.filter(p=>toArr(p.contract_ids).includes(String(c.id)));
-    return'<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px"><div><div style="font-size:14px;font-weight:700">'+escapeHTML(c.name)+'</div><div style="font-size:12px;color:var(--txt3)">'+escapeHTML(funder?.name||'—')+' · £'+num(c.value).toLocaleString()+' · '+linked.length+' participants</div></div><button class="btn btn-ai btn-sm" onclick="generateAIReport(\''+(c.report_type||'other')+'\',\''+c.id+'\')">✦ Generate report</button></div></div>';
+    return'<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px"><div><div style="font-size:14px;font-weight:700;color:var(--txt)">'+escapeHTML(c.name)+'</div><div style="font-size:12px;color:var(--txt3)">'+escapeHTML(funder?.name||'—')+' · £'+num(c.value).toLocaleString()+' · '+linked.length+' participants</div></div><button class="btn btn-ai btn-sm" onclick="generateAIReport(\''+(c.report_type||'other')+'\',\''+c.id+'\')">✦ Generate report</button></div></div>';
   }).join('');
 }
 
@@ -1851,19 +1889,18 @@ function renderSettings(){
   SET_MODULES.forEach(mod=>{_modState[mod.k]=m[mod.k]??true;});
   $('set-modules-grid').innerHTML=SET_MODULES.map(mod=>{
     const on=_modState[mod.k];
-    return'<div class="mod-item '+(on?'on':'')+'" id="set-mod-item-'+mod.k+'"><div><div style="font-size:13px;font-weight:600;color:var(--txt)">'+mod.n+'</div><div style="font-size:11px;color:var(--txt3);margin-top:2px">'+mod.d+'</div></div><div style="position:relative;width:44px;height:24px;flex-shrink:0;cursor:pointer" onclick="toggleMod(\''+mod.k+'\')"><div id="set-mod-track-'+mod.k+'" style="position:absolute;inset:0;border-radius:12px;background:'+(on?'#10b981':'#2a3a2a')+';transition:background .2s"></div><div id="set-mod-thumb-'+mod.k+'" style="position:absolute;top:3px;left:'+(on?'23':'3')+'px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;pointer-events:none"></div></div></div>';
+    return'<div class="mod-item '+(on?'on':'')+'" id="set-mod-item-'+mod.k+'"><div><div style="font-size:13px;font-weight:600;color:var(--txt)">'+mod.n+'</div><div style="font-size:11px;color:var(--txt3);margin-top:2px">'+mod.d+'</div></div><div style="position:relative;width:44px;height:24px;flex-shrink:0;cursor:pointer" onclick="toggleMod(\''+mod.k+'\')"><div id="set-mod-track-'+mod.k+'" style="position:absolute;inset:0;border-radius:12px;background:'+(on?'#1F6F6D':'#E0DAD0')+';transition:background .2s"></div><div id="set-mod-thumb-'+mod.k+'" style="position:absolute;top:3px;left:'+(on?'23':'3')+'px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;pointer-events:none;box-shadow:0 1px 2px rgba(0,0,0,.1)"></div></div></div>';
   }).join('');
-  // Demo Mode card
   let demoCard=$('demo-mode-card');
   if(!demoCard){
     demoCard=document.createElement('div');demoCard.id='demo-mode-card';demoCard.className='card';
     const settingsPage=$('page-settings');const saveBtn=$('set-save-btn');
     if(settingsPage&&saveBtn)settingsPage.insertBefore(demoCard,saveBtn);
   }
-  demoCard.innerHTML='<div class="card-title">🎭 Demo mode</div><div style="display:flex;justify-content:space-between;align-items:center;gap:14px"><div style="font-size:13px;color:var(--txt2);line-height:1.6;flex:1">Show sample participants, events, feedback and a demo MoJ contract so you can explore every feature without real data. <strong style="color:var(--txt)">Nothing is saved to your database while demo mode is on.</strong></div><div style="position:relative;width:44px;height:24px;flex-shrink:0;cursor:pointer" id="demo-toggle" onclick="toggleDemoMode('+(!_demoMode)+')"><div id="demo-toggle-track" style="position:absolute;inset:0;border-radius:12px;background:'+(_demoMode?'#f59e0b':'#2a3a2a')+';transition:background .2s"></div><div id="demo-toggle-thumb" style="position:absolute;top:3px;left:'+(_demoMode?'23':'3')+'px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;pointer-events:none"></div></div></div>';
+  demoCard.innerHTML='<div class="card-title">🎭 Demo mode</div><div style="display:flex;justify-content:space-between;align-items:center;gap:14px"><div style="font-size:13px;color:var(--txt2);line-height:1.6;flex:1">Show sample participants, events, feedback and a demo MoJ contract so you can explore every feature without real data. <strong style="color:var(--txt)">Nothing is saved to your database while demo mode is on.</strong></div><div style="position:relative;width:44px;height:24px;flex-shrink:0;cursor:pointer" id="demo-toggle" onclick="toggleDemoMode('+(!_demoMode)+')"><div id="demo-toggle-track" style="position:absolute;inset:0;border-radius:12px;background:'+(_demoMode?'#F59E0B':'#E0DAD0')+';transition:background .2s"></div><div id="demo-toggle-thumb" style="position:absolute;top:3px;left:'+(_demoMode?'23':'3')+'px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;pointer-events:none;box-shadow:0 1px 2px rgba(0,0,0,.1)"></div></div></div>';
 }
 const _modState={};
-function toggleMod(key){_modState[key]=!_modState[key];const track=$('set-mod-track-'+key),thumb=$('set-mod-thumb-'+key),item=$('set-mod-item-'+key);if(track)track.style.background=_modState[key]?'#10b981':'#2a3a2a';if(thumb)thumb.style.left=_modState[key]?'23px':'3px';if(item)item.classList.toggle('on',_modState[key]);}
+function toggleMod(key){_modState[key]=!_modState[key];const track=$('set-mod-track-'+key),thumb=$('set-mod-thumb-'+key),item=$('set-mod-item-'+key);if(track)track.style.background=_modState[key]?'#1F6F6D':'#E0DAD0';if(thumb)thumb.style.left=_modState[key]?'23px':'3px';if(item)item.classList.toggle('on',_modState[key]);}
 async function saveSettings(){
   const btn=$('set-save-btn');btn.textContent='Saving…';btn.disabled=true;
   try{const mods={};SET_MODULES.forEach(mod=>mods[mod.k]=_modState[mod.k]??true);const d={name:$('set-name').value,sector:$('set-sector').value,modules:mods};await sbUpdate('organisations',d,orgId);currentOrg={...currentOrg,...d};applyModules(mods);if($('ob-txt'))$('ob-txt').textContent=currentOrg.name;$('set-save-msg').style.display='flex';setTimeout(()=>$('set-save-msg').style.display='none',3000);}
@@ -1876,19 +1913,18 @@ function getOrgLogoUrl(org){
 }
 function applyBranding(org){
   if(!org)return;
-  const primary=org.brand_color||'#10b981';
-  const orgName=org.name||'GreenCRM';
+  const primary=org.brand_color||'#1F6F6D';
+  const orgName=org.name||'Civara';
   document.documentElement.style.setProperty('--em',primary);
-  document.title=orgName+' · GreenCRM';
+  document.title=orgName+' · Civara';
   const logoUrl=getOrgLogoUrl(org);
-  const logoEl=document.querySelector('#sidebar .logo');
+  const logoEl=document.querySelector('#sidebar .sidebar-logo');
   if(logoEl){
     if(logoUrl){
       const safeName=escapeHTML(orgName).replace(/'/g,"\\'");
-      logoEl.innerHTML='<img src="'+escapeHTML(logoUrl)+'" alt="'+escapeHTML(orgName)+'" class="org-logo-sidebar" onerror="this.parentElement.innerHTML=\''+safeName+'\'"/>';
-      logoEl.style.padding='12px 14px 14px';
+      logoEl.innerHTML='<img src="'+escapeHTML(logoUrl)+'" alt="'+escapeHTML(orgName)+'" class="org-logo-sidebar" onerror="this.parentElement.innerHTML=\'<img src=&quot;logo.png&quot; alt=&quot;Civara&quot; style=&quot;height:34px&quot;/>\'"/>';
     }else{
-      logoEl.innerHTML='Green<span>CRM</span>';
+      logoEl.innerHTML='<img src="logo.png" alt="Civara" style="height:34px;width:auto;display:block"/>';
     }
   }
   const obTxt=document.getElementById('ob-txt');
@@ -1906,7 +1942,7 @@ function applyBranding(org){
   }
 }
 
-function showUpgradeModal(){alert('Contact hello@greencrm.co.uk to upgrade.');}
+function showUpgradeModal(){alert('Contact hello@civara.co.uk to upgrade.');}
 
 // ── RBAC LOAD ──
 async function loadUserAccess(){
@@ -1946,7 +1982,7 @@ function renderOrgSwitcher(){
   const switcher=document.createElement('span');
   switcher.id='org-switcher-wrap';
   switcher.style.cssText='display:inline-flex;align-items:center;gap:6px;margin-left:14px';
-  switcher.innerHTML='<label style="font-size:10px;color:rgba(255,255,255,.85);text-transform:uppercase;letter-spacing:.5px;margin:0">Switch:</label><select id="org-switcher" onchange="switchOrg(this.value)" style="background:rgba(0,0,0,.3);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;font-family:inherit;width:auto;max-width:240px">'+opts+'</select>';
+  switcher.innerHTML='<label style="font-size:10px;color:rgba(255,255,255,.85);text-transform:uppercase;letter-spacing:.5px;margin:0;font-weight:700">Switch:</label><select id="org-switcher" onchange="switchOrg(this.value)" style="background:rgba(0,0,0,.2);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;font-family:inherit;width:auto;max-width:240px">'+opts+'</select>';
   obTxt.parentNode.insertBefore(switcher,obTxt.nextSibling);
 }
 
@@ -1954,14 +1990,12 @@ function switchOrg(newOrgId){if(newOrgId===orgId)return;window.location.href='ap
 
 function showRoleBadge(){
   const slot=$('role-badge-slot');if(!slot||!currentRole)return;
-  const labels={manager:{txt:'👑 Manager',col:'#10b981'},advisor:{txt:'👤 Advisor',col:'#60a5fa'},admin:{txt:'⚙️ Admin',col:'#a78bfa'},super_admin:{txt:'🛡️ Super Admin',col:'#f59e0b'}};
+  const labels={manager:{txt:'👑 Manager',col:'#1F6F6D'},advisor:{txt:'👤 Advisor',col:'#3B82F6'},admin:{txt:'⚙️ Admin',col:'#7C5BCB'},super_admin:{txt:'🛡️ Super Admin',col:'#F59E0B'}};
   const cfg=labels[currentRole]||{txt:currentRole,col:'var(--txt3)'};
   slot.innerHTML='<div class="role-badge-sb" style="color:'+cfg.col+'">'+cfg.txt+'</div>';
 }
 
 // ── DEMO MODE ──
-// Demo rows are tagged with _demo:true. Loading adds them, unloading filters them out.
-// This means real Supabase data is never touched and never lost.
 const DEMO_DATA={
   funders:[
     {id:'demo-f-1',_demo:true,name:'Ministry of Justice (DEMO)',type:'moj',contact_name:'Sarah Thompson',contact_email:'s.thompson@example.gov.uk',notes:'Focus on sustained employment outcomes.'},
@@ -1993,16 +2027,13 @@ const DEMO_DATA={
 const DEMO_KEYS=['participants','events','feedback','volunteers','contracts','funders','employers','partner_referrals'];
 
 function loadDemoData(){
-  // Strip any existing demo rows first (defensive — prevents duplicates on repeat toggle)
   DEMO_KEYS.forEach(k=>{DB[k]=(DB[k]||[]).filter(r=>!r._demo);});
-  // Add fresh demo rows on top of whatever real data exists
   DEMO_KEYS.forEach(k=>{if(DEMO_DATA[k])DB[k]=[...DB[k],...DEMO_DATA[k]];});
   _demoMode=true;localStorage.setItem('demo_mode','on');
   applyDemoBanner();
 }
 
 function unloadDemoData(){
-  // Remove every demo row — leaves real data untouched
   DEMO_KEYS.forEach(k=>{DB[k]=(DB[k]||[]).filter(r=>!r._demo);});
   _demoMode=false;localStorage.setItem('demo_mode','off');
   applyDemoBanner();
@@ -2013,8 +2044,8 @@ function applyDemoBanner(){
   if(_demoMode){
     if(!banner){
       banner=document.createElement('div');banner.id='demo-mode-banner';
-      banner.style.cssText='background:linear-gradient(90deg,#f59e0b,#fbbf24);color:#1a1a1a;padding:8px 20px;font-size:12px;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap';
-      banner.innerHTML='<span>🎭 DEMO MODE — sample data shown alongside your real data. Demo rows are tagged (DEMO) and never saved.</span><button class="btn btn-sm" style="background:#1a1a1a;color:#fbbf24;border:none" onclick="toggleDemoMode(false)">Turn off demo</button>';
+      banner.style.cssText='background:linear-gradient(90deg,#F59E0B,#FBBF24);color:#1a1a1a;padding:8px 20px;font-size:12px;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap';
+      banner.innerHTML='<span>🎭 DEMO MODE — sample data shown alongside your real data. Demo rows are tagged (DEMO) and never saved.</span><button class="btn btn-sm" style="background:#1a1a1a;color:#FBBF24;border:none" onclick="toggleDemoMode(false)">Turn off demo</button>';
       document.body.insertBefore(banner,document.body.firstChild);
     }
   }else if(banner){banner.remove();}
@@ -2023,12 +2054,10 @@ function applyDemoBanner(){
 async function toggleDemoMode(on){
   if(on)loadDemoData();
   else unloadDemoData();
-  // Refresh the visible page so the table re-renders without demo rows
   const active=document.querySelector('.page.active');
   if(active)go(active.id.replace('page-',''));
-  // Update toggle visuals if Settings is the active page
   const track=$('demo-toggle-track'),thumb=$('demo-toggle-thumb');
-  if(track)track.style.background=_demoMode?'#f59e0b':'#2a3a2a';
+  if(track)track.style.background=_demoMode?'#F59E0B':'#E0DAD0';
   if(thumb)thumb.style.left=_demoMode?'23px':'3px';
   const tog=$('demo-toggle');
   if(tog)tog.setAttribute('onclick','toggleDemoMode('+(!_demoMode)+')');
@@ -2061,7 +2090,7 @@ async function boot(){
   showRoleBadge();
   const plan=currentOrg?.plan||'free';
   const wrap=$('upgrade-btn-wrap');
-  if(wrap&&!['pro','network'].includes(plan)){wrap.innerHTML='<button class="btn btn-sm" style="width:100%;margin-bottom:8px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border:none" onclick="showUpgradeModal()">✦ Upgrade to Pro</button>';}
+  if(wrap&&!['pro','network'].includes(plan)){wrap.innerHTML='<button class="btn btn-sm" style="width:100%;margin-bottom:8px;background:linear-gradient(135deg,#5E4CB8,#7C5BCB);color:#fff;border:none" onclick="showUpgradeModal()">✦ Upgrade to Pro</button>';}
   go('dashboard');
 }
 
