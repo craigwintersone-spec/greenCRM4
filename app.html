@@ -762,6 +762,8 @@ let _fbScores={enjoyed:5,cb:3,ca:5};
 let _aiNoteAccepted='',_originalNote='';
 let _hrFlags=[];
 let _lastEOIText='',_lastReportText='',_lastReportTitle='';
+let _demoMode=localStorage.getItem('demo_mode')==='on';
+const DEMO_BACKUP={participants:[],events:[],feedback:[],volunteers:[],contracts:[],funders:[],employers:[],partner_referrals:[]};
 const DB={participants:[],volunteers:[],events:[],feedback:[],contacts:[],employers:[],referrals:[],partner_referrals:[],circular:[],contracts:[],evidence:[],funders:[]};
 const $=id=>document.getElementById(id);
 const closeModal=id=>$(id).classList.remove('open');
@@ -789,12 +791,43 @@ function checkAIAccess(){
     throw new Error('AI_PLAN_GATE');
   }
 }
-async function callClaude(sys,user,maxTok=1000,webSearch=false){
+async function callClaude(sys,user,maxTok=600,webSearch=false){
   checkAIAccess();
+  if(sys&&sys.length>1500)sys=sys.slice(0,1500);
+  if(user&&user.length>4000)user=user.slice(0,4000);
+  if(maxTok>1200)maxTok=1200;
+  return new Promise((resolve,reject)=>{_aiQueue.queue.push({sys,user,maxTok,webSearch,resolve,reject});_processAIQueue();});
+}
+const _aiQueue={running:false,queue:[],lastCallAt:0};
+const AI_MIN_GAP_MS=1500;
+async function _processAIQueue(){
+  if(_aiQueue.running)return;
+  _aiQueue.running=true;
+  while(_aiQueue.queue.length){
+    const job=_aiQueue.queue.shift();
+    const since=Date.now()-_aiQueue.lastCallAt;
+    if(since<AI_MIN_GAP_MS)await new Promise(r=>setTimeout(r,AI_MIN_GAP_MS-since));
+    try{const text=await _callClaudeOnce(job.sys,job.user,job.maxTok,job.webSearch);_aiQueue.lastCallAt=Date.now();job.resolve(text);}
+    catch(e){_aiQueue.lastCallAt=Date.now();job.reject(e);}
+  }
+  _aiQueue.running=false;
+}
+async function _callClaudeOnce(sys,user,maxTok,webSearch,attempt=0){
   const res=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:CLAUDE_MODEL,max_tokens:maxTok,system:sys,messages:[{role:'user',content:user}],useWebSearch:webSearch})});
   if(res.status===404)throw new Error('API route /api/claude not found.');
-  const data=await res.json();
-  if(data.type==='error')throw new Error(data.error?.message||JSON.stringify(data.error));
+  if(res.status===429){
+    if(attempt>=3){const e=new Error('RATE_LIMITED');e.code='RATE_LIMITED';throw e;}
+    const retryAfter=parseInt(res.headers.get('retry-after')||'0',10);
+    const waitMs=retryAfter?retryAfter*1000:Math.min(30000,4000*Math.pow(2,attempt));
+    await new Promise(r=>setTimeout(r,waitMs));
+    return _callClaudeOnce(sys,user,maxTok,webSearch,attempt+1);
+  }
+  let data;try{data=await res.json();}catch(e){throw new Error('Bad response from API');}
+  if(data.type==='error'){
+    const msg=data.error?.message||JSON.stringify(data.error);
+    if(/rate.?limit/i.test(msg)||/tokens per minute/i.test(msg)){const e=new Error('RATE_LIMITED');e.code='RATE_LIMITED';throw e;}
+    throw new Error(msg);
+  }
   const text=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('\n')||'';
   if(!text)throw new Error('Empty response');
   return text;
@@ -881,7 +914,11 @@ async function runAgent({container,headerLabel,headerSub,steps,sys,prompt,maxTok
   try{raw=await callClaude(sys,prompt,maxTok,webSearch);}
   catch(e){
     if(e.message==='AI_PLAN_GATE'){container.innerHTML='';return null;}
-    container.innerHTML='<div class="alert alert-warn">Agent failed: '+escapeHTML(e.message)+'</div>';
+    if(e.code==='RATE_LIMITED'||/rate.?limit/i.test(e.message||'')||/tokens per minute/i.test(e.message||'')){
+      container.innerHTML='<div class="brain-panel" style="border-color:rgba(245,158,11,.4)"><div class="brain-header"><div class="brain-icon" style="background:rgba(245,158,11,.18);animation:none">⏳</div><div><div class="brain-title" style="color:var(--amber)">Org Brain is busy</div><div class="brain-sub">The AI service is rate-limited. Wait about 60 seconds, then click the agent button again.</div></div></div><div style="font-size:12px;color:var(--txt3);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px">Each Claude account has a per-minute token cap. Running several agents close together can hit it. Try one at a time.</div></div>';
+      return null;
+    }
+    container.innerHTML='<div class="alert alert-warn" style="margin:0"><strong>Agent could not finish.</strong> '+escapeHTML(e.message||'Unknown error')+'</div>';
     return null;
   }
   await tickBrain(container,steps,steps.length-1,headerLabel,headerSub);
@@ -1789,6 +1826,14 @@ function renderSettings(){
     const on=_modState[mod.k];
     return'<div class="mod-item '+(on?'on':'')+'" id="set-mod-item-'+mod.k+'"><div><div style="font-size:13px;font-weight:600;color:var(--txt)">'+mod.n+'</div><div style="font-size:11px;color:var(--txt3);margin-top:2px">'+mod.d+'</div></div><div style="position:relative;width:44px;height:24px;flex-shrink:0;cursor:pointer" onclick="toggleMod(\''+mod.k+'\')"><div id="set-mod-track-'+mod.k+'" style="position:absolute;inset:0;border-radius:12px;background:'+(on?'#10b981':'#2a3a2a')+';transition:background .2s"></div><div id="set-mod-thumb-'+mod.k+'" style="position:absolute;top:3px;left:'+(on?'23':'3')+'px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;pointer-events:none"></div></div></div>';
   }).join('');
+  // Demo Mode card
+  let demoCard=$('demo-mode-card');
+  if(!demoCard){
+    demoCard=document.createElement('div');demoCard.id='demo-mode-card';demoCard.className='card';
+    const settingsPage=$('page-settings');const saveBtn=$('set-save-btn');
+    if(settingsPage&&saveBtn)settingsPage.insertBefore(demoCard,saveBtn);
+  }
+  demoCard.innerHTML='<div class="card-title">🎭 Demo mode</div><div style="display:flex;justify-content:space-between;align-items:center;gap:14px"><div style="font-size:13px;color:var(--txt2);line-height:1.6;flex:1">Show sample participants, events, feedback and a demo MoJ contract so you can explore every feature without real data. <strong style="color:var(--txt)">Nothing is saved to your database while demo mode is on.</strong></div><div style="position:relative;width:44px;height:24px;flex-shrink:0;cursor:pointer" id="demo-toggle" onclick="toggleDemoMode('+(!_demoMode)+')"><div id="demo-toggle-track" style="position:absolute;inset:0;border-radius:12px;background:'+(_demoMode?'#f59e0b':'#2a3a2a')+';transition:background .2s"></div><div id="demo-toggle-thumb" style="position:absolute;top:3px;left:'+(_demoMode?'23':'3')+'px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;pointer-events:none"></div></div></div>';
 }
 const _modState={};
 function toggleMod(key){_modState[key]=!_modState[key];const track=$('set-mod-track-'+key),thumb=$('set-mod-thumb-'+key),item=$('set-mod-item-'+key);if(track)track.style.background=_modState[key]?'#10b981':'#2a3a2a';if(thumb)thumb.style.left=_modState[key]?'23px':'3px';if(item)item.classList.toggle('on',_modState[key]);}
@@ -1859,6 +1904,52 @@ function showRoleBadge(){
   slot.innerHTML='<div class="role-badge-sb" style="color:'+cfg.col+'">'+cfg.txt+'</div>';
 }
 
+// ── DEMO MODE ──
+const DEMO_DATA={
+  funders:[{id:'demo-f-1',name:'Ministry of Justice (DEMO)',type:'moj',contact_name:'Sarah Thompson',contact_email:'s.thompson@example.gov.uk',notes:'Focus on sustained employment outcomes.'},{id:'demo-f-2',name:'City Bridge Foundation (DEMO)',type:'cbf',contact_name:'James Wright',contact_email:'j.wright@example.org',notes:'Wellbeing and community resilience.'}],
+  contracts:[{id:'demo-c-1',name:'MoJ Employment Support 2024-25 (DEMO)',funder:'Ministry of Justice (DEMO)',funder_id:'demo-f-1',report_type:'moj',value:45000,target_starts:25,target_outcomes:15,actual_starts:0,actual_outcomes:0,start_date:'2024-04-01',end_date:'2025-03-31',status:'live'}],
+  participants:[
+    {id:'demo-p-1',first_name:'Aisha',last_name:'Okonkwo',ref_source:'Probation',stage:'In Support',advisor:'Sarah T.',barriers:['Confidence','Housing'],outcomes:[],risk:'Medium',last_contact:today(),notes:[{t:'Initial assessment completed.',d:today(),s:'Sarah T.'}],scores:{confidence:6,work_readiness:5,wellbeing:7,skills:5},safeguarding:null,contract_ids:['demo-c-1'],phone:'07700 900001',email:'aisha@example.com',equality_data:{}},
+    {id:'demo-p-2',first_name:'Marcus',last_name:'Webb',ref_source:'Jobcentre Plus',stage:'Job Ready',advisor:'Marcus O.',barriers:['Skills gap'],outcomes:['Training'],risk:'Low',last_contact:today(),notes:[],scores:{confidence:8,work_readiness:8,wellbeing:7,skills:7},safeguarding:null,contract_ids:['demo-c-1'],phone:'',email:'',equality_data:{}},
+    {id:'demo-p-3',first_name:'Priya',last_name:'Sharma',ref_source:'Community org',stage:'Engaged',advisor:'Priya S.',barriers:['Childcare','Mental health'],outcomes:[],risk:'High',last_contact:new Date(Date.now()-25*86400000).toISOString().split('T')[0],notes:[],scores:{confidence:3,work_readiness:2,wellbeing:4,skills:4},safeguarding:'Mental health',contract_ids:['demo-c-1'],phone:'',email:'',equality_data:{}},
+    {id:'demo-p-4',first_name:'James',last_name:'Okafor',ref_source:'Self-referral',stage:'Outcome Achieved',advisor:'Sarah T.',barriers:['Criminal record'],outcomes:['Employment','Volunteering'],risk:'Low',last_contact:today(),notes:[{t:'Started full-time role.',d:today(),s:'Sarah T.'}],scores:{confidence:9,work_readiness:9,wellbeing:8,skills:8},safeguarding:null,contract_ids:['demo-c-1'],phone:'',email:'',equality_data:{}}
+  ],
+  events:[{id:'demo-e-1',name:'Green Skills Workshop (DEMO)',type:'Green Skills',date:today(),attendees:18,capacity:20,location:'East London'},{id:'demo-e-2',name:'Wellbeing Drop-in (DEMO)',type:'Wellbeing',date:today(),attendees:12,capacity:15,location:'East London'}],
+  feedback:[{id:'demo-fb-1',eventId:'demo-e-1',name:'Aisha O.',enjoyed:5,cb:3,ca:5,learned:true,connected:true,friend:false,quote:'I learned so much about retrofitting.'},{id:'demo-fb-2',eventId:'demo-e-2',name:'Anonymous',enjoyed:4,cb:2,ca:4,learned:true,connected:true,friend:true,quote:'A safe space to talk.'}],
+  volunteers:[{id:'demo-v-1',name:'Hannah Green',email:'hannah@example.com',phone:'07700 900100',role:'Volunteer',skills:['Gardening','Teaching/Facilitation'],hours:24,status:'Active'}],
+  employers:[],
+  partner_referrals:[]
+};
+function loadDemoData(){
+  ['participants','events','feedback','volunteers','contracts','funders','employers','partner_referrals'].forEach(k=>{DEMO_BACKUP[k]=DB[k]?[...DB[k]]:[];});
+  Object.keys(DEMO_DATA).forEach(k=>{DB[k]=[...DEMO_DATA[k]];});
+  _demoMode=true;localStorage.setItem('demo_mode','on');applyDemoBanner();
+}
+function unloadDemoData(){
+  Object.keys(DEMO_BACKUP).forEach(k=>{DB[k]=[...DEMO_BACKUP[k]];});
+  _demoMode=false;localStorage.setItem('demo_mode','off');applyDemoBanner();
+}
+function applyDemoBanner(){
+  let banner=$('demo-mode-banner');
+  if(_demoMode){
+    if(!banner){
+      banner=document.createElement('div');banner.id='demo-mode-banner';
+      banner.style.cssText='background:linear-gradient(90deg,#f59e0b,#fbbf24);color:#1a1a1a;padding:8px 20px;font-size:12px;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap';
+      banner.innerHTML='<span>🎭 DEMO MODE — sample data shown. Nothing is being saved to your real database.</span><button class="btn btn-sm" style="background:#1a1a1a;color:#fbbf24" onclick="toggleDemoMode(false)">Turn off demo</button>';
+      document.body.insertBefore(banner,document.body.firstChild);
+    }
+  }else if(banner){banner.remove();}
+}
+async function toggleDemoMode(on){
+  if(on)loadDemoData();
+  else{unloadDemoData();if(sb)await syncAll();}
+  const active=document.querySelector('.page.active');
+  if(active)go(active.id.replace('page-',''));
+  const track=$('demo-toggle-track'),thumb=$('demo-toggle-thumb');
+  if(track)track.style.background=_demoMode?'#f59e0b':'#2a3a2a';
+  if(thumb)thumb.style.left=_demoMode?'23px':'3px';
+}
+
 async function boot(){
   initSB();
   if(sb){
@@ -1880,6 +1971,7 @@ async function boot(){
     }
   }
   await syncAll();
+  if(_demoMode)loadDemoData();else applyDemoBanner();
   renderSettings();
   renderOrgSwitcher();
   showRoleBadge();
