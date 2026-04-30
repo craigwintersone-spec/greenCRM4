@@ -1941,9 +1941,7 @@ function showRoleBadge(){
   slot.innerHTML='<div class="role-badge-sb" style="color:'+cfg.col+'">'+cfg.txt+'</div>';
 }
 
-// ── DEMO MODE ──
-// Demo rows are tagged with _demo:true. Loading adds them, unloading filters them out.
-// This means real Supabase data is never touched and never lost.
+// ── DEMO MODE (verified _demo:true tags on every row) ──
 const DEMO_DATA={
   funders:[
     {id:'demo-f-1',_demo:true,name:'Ministry of Justice (DEMO)',type:'moj',contact_name:'Sarah Thompson',contact_email:'s.thompson@example.gov.uk',notes:'Focus on sustained employment outcomes.'},
