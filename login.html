@@ -330,13 +330,6 @@ async function doSignUp(){
       window.location.href='app.html?org_id='+_newOrgId;
       return;
     }
-// DEBUG: check auth state right before the insert
-    const debugSession=await sb.auth.getSession();
-    console.log('DEBUG: session at insert time =', debugSession);
-    console.log('DEBUG: access_token =', debugSession.data?.session?.access_token?.slice(0,20));
-    console.log('DEBUG: user.role =', debugSession.data?.session?.user?.role);
-    console.log('DEBUG: user.aud =', debugSession.data?.session?.user?.aud);
-
     // 5. Create org
     const{data:orgData,error:orgErr}=await sb.from('organisations').insert({
     // 5. Create org
