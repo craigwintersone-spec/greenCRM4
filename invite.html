@@ -3,47 +3,78 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Accept Invitation · GreenCRM</title>
+<title>Accept Invitation · Civara</title>
+<link rel="icon" type="image/png" href="logo.png"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#0a0f0a;--surface:#111811;--card:#182018;--border:#2a3a2a;--em:#10b981;--em2:#059669;--txt:#e2f5eb;--txt2:#9ab8a4;--txt3:#6a8f76;--red:#f87171;--amber:#f59e0b;--radius:10px;--radiuslg:14px}
-body{background:var(--bg);color:var(--txt);font-family:system-ui,sans-serif;font-size:14px;line-height:1.6;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+:root{
+  --bg:#F5F1EA;
+  --surface:#FFFFFF;
+  --card:#FAF7F1;
+  --border:#E5DFD3;
+  --border-strong:#CFC6B3;
+  --em:#1F6F6D;
+  --em2:#175553;
+  --em3:#2A9D8F;
+  --txt:#1F2A28;
+  --txt2:#4F5B58;
+  --txt3:#7A857F;
+  --red:#B91C1C;
+  --red-bg:#FEF2F2;
+  --amber:#F59E0B;
+  --amber-bg:#FEF3C7;
+  --blue:#1D4ED8;
+  --blue-bg:#EFF6FF;
+  --green:#15803D;
+  --green-bg:#F0FDF4;
+  --purple:#6D28D9;
+  --purple-bg:#F5F3FF;
+  --radius:10px;
+  --radiuslg:14px;
+  --shadow:0 1px 2px rgba(31,42,40,.04),0 4px 12px rgba(31,42,40,.06);
+  --shadow-lg:0 4px 16px rgba(31,42,40,.08),0 12px 32px rgba(31,42,40,.10);
+}
+body{background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.5;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
 button{cursor:pointer;border:none;font-family:inherit}
-input{font-family:inherit;font-size:13px;background:var(--card);border:1px solid var(--border);color:var(--txt);border-radius:var(--radius);padding:9px 12px;width:100%;outline:none}
-input:focus{border-color:var(--em)}
-label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
-.btn{padding:10px 16px;border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;border:none;width:100%;display:flex;align-items:center;justify-content:center;gap:6px}
+input{font-family:inherit;font-size:14px;background:var(--surface);border:1px solid var(--border-strong);color:var(--txt);border-radius:var(--radius);padding:10px 13px;width:100%;outline:none;transition:border-color .15s,box-shadow .15s}
+input:focus{border-color:var(--em);box-shadow:0 0 0 3px rgba(31,111,109,.12)}
+label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;font-weight:600}
+.btn{padding:11px 16px;border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;border:none;width:100%;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;font-family:inherit}
 .btn-p{background:var(--em);color:#fff}.btn-p:hover{background:var(--em2)}
-.btn-ghost{background:var(--card);color:var(--txt2);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--em);color:var(--em)}
+.btn-ghost{background:var(--surface);color:var(--txt2);border:1px solid var(--border-strong)}.btn-ghost:hover{border-color:var(--em);color:var(--em)}
 .wrap{max-width:440px;width:100%}
-.logo{font-size:24px;font-weight:800;color:var(--em);text-align:center;margin-bottom:6px;letter-spacing:-.5px}
-.logo span{color:var(--txt2);font-weight:400}
-.tag{font-size:12px;color:var(--txt3);text-align:center;margin-bottom:32px}
-.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:28px}
-.headline{font-size:18px;font-weight:700;color:var(--txt);margin-bottom:6px}
+.brand{display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:6px}
+.brand img{height:42px;width:auto;display:block}
+.tag{font-size:13px;color:var(--txt3);text-align:center;margin-bottom:24px;font-weight:500}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radiuslg);padding:30px;box-shadow:var(--shadow-lg)}
+.headline{font-size:20px;font-weight:800;color:var(--txt);margin-bottom:6px;letter-spacing:-.3px}
 .sub{font-size:13px;color:var(--txt3);margin-bottom:20px}
-.invite-info{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:20px}
-.role-pill{display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:.5px}
-.role-manager{background:#1a3a2a;color:#34d399}
-.role-advisor{background:#1a2a3a;color:#60a5fa}
-.role-admin{background:#2a1a3a;color:#a78bfa}
+.invite-info{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:20px}
+.role-pill{display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:.4px}
+.role-manager{background:var(--green-bg);color:var(--green)}
+.role-advisor{background:var(--blue-bg);color:var(--blue)}
+.role-admin{background:var(--purple-bg);color:var(--purple)}
 .form-row{margin-bottom:14px}
 .alert{padding:12px;border-radius:var(--radius);font-size:13px;margin-bottom:14px;line-height:1.6}
-.alert-err{background:#2a1a1a;border:1px solid #5a2a2a;color:var(--red)}
-.alert-ok{background:#1a3a2a;border:1px solid #2a5a3a;color:#34d399}
-.alert-info{background:#1a2a3a;border:1px solid #1a3a5a;color:#60a5fa}
+.alert-err{background:var(--red-bg);border:1px solid #FECACA;color:var(--red)}
+.alert-ok{background:var(--green-bg);border:1px solid #BBF7D0;color:var(--green)}
+.alert-info{background:var(--blue-bg);border:1px solid #BFDBFE;color:var(--blue)}
 .tab-bar{display:flex;border-bottom:1px solid var(--border);margin-bottom:18px}
-.tab-btn{padding:10px 0;flex:1;cursor:pointer;border:none;background:none;color:var(--txt3);font-family:inherit;font-size:13px;font-weight:600;border-bottom:2px solid transparent}
+.tab-btn{padding:11px 0;flex:1;cursor:pointer;border:none;background:none;color:var(--txt3);font-family:inherit;font-size:13px;font-weight:600;border-bottom:2px solid transparent;transition:all .15s}
+.tab-btn:hover{color:var(--txt2)}
 .tab-btn.active{color:var(--em);border-bottom-color:var(--em)}
 .spinner{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--em);border-radius:50%;animation:spin .6s linear infinite;display:inline-block;vertical-align:middle;margin-right:6px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .center{text-align:center;padding:30px 20px}
+.success-icon{font-size:44px;margin-bottom:12px;color:var(--em)}
+a{color:var(--em);text-decoration:none}
+a:hover{text-decoration:underline}
 </style>
 </head>
 <body>
 
 <div class="wrap">
-  <div class="logo">Green<span>CRM</span></div>
+  <div class="brand"><img src="logo.png" alt="Civara"/></div>
   <div class="tag">Accept your invitation</div>
 
   <div id="loading" class="card">
@@ -60,10 +91,10 @@ label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;le
     <div class="sub" id="form-sub"></div>
 
     <div class="invite-info">
-      <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Invitation details</div>
-      <div style="font-size:14px;color:var(--txt);font-weight:600" id="inv-org">—</div>
+      <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;font-weight:600">Invitation details</div>
+      <div style="font-size:14px;color:var(--txt);font-weight:700" id="inv-org">—</div>
       <div style="display:flex;align-items:center;gap:8px;margin-top:6px"><span style="font-size:12px;color:var(--txt3)">Role:</span><span id="inv-role-badge"></span></div>
-      <div style="font-size:11px;color:var(--txt3);margin-top:6px">For: <span id="inv-email" style="color:var(--txt2)"></span></div>
+      <div style="font-size:11px;color:var(--txt3);margin-top:6px">For: <span id="inv-email" style="color:var(--txt2);font-weight:500"></span></div>
     </div>
 
     <div class="tab-bar">
@@ -75,14 +106,14 @@ label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;le
 
     <!-- SIGN UP -->
     <div id="signup-form">
-      <div class="form-row"><label>Email</label><input type="email" id="su-email" readonly style="opacity:.7"/></div>
+      <div class="form-row"><label>Email</label><input type="email" id="su-email" readonly style="opacity:.7;background:var(--card)"/></div>
       <div class="form-row"><label>Choose a password</label><input type="password" id="su-pass" placeholder="Min 8 characters" autocomplete="new-password"/></div>
       <button class="btn btn-p" id="su-btn" onclick="doSignUp()">Create account & accept invite</button>
     </div>
 
     <!-- SIGN IN -->
     <div id="signin-form" style="display:none">
-      <div class="form-row"><label>Email</label><input type="email" id="si-email" readonly style="opacity:.7"/></div>
+      <div class="form-row"><label>Email</label><input type="email" id="si-email" readonly style="opacity:.7;background:var(--card)"/></div>
       <div class="form-row"><label>Your password</label><input type="password" id="si-pass" placeholder="••••••••" autocomplete="current-password"/></div>
       <button class="btn btn-p" id="si-btn" onclick="doSignIn()">Sign in & accept invite</button>
     </div>
@@ -90,10 +121,10 @@ label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;le
 
   <div id="success" class="card" style="display:none">
     <div class="center">
-      <div style="font-size:40px;margin-bottom:10px">✓</div>
+      <div class="success-icon">✓</div>
       <div class="headline" style="text-align:center">You're in!</div>
       <div class="sub" style="text-align:center">Welcome to <span id="success-org">your team</span>.</div>
-      <a href="app.html" class="btn btn-p" style="text-decoration:none">Open the CRM →</a>
+      <a href="app.html" class="btn btn-p" style="text-decoration:none;margin-top:8px">Open the CRM →</a>
     </div>
   </div>
 </div>
@@ -103,7 +134,16 @@ label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;le
 'use strict';
 const SB_URL='https://nznfrxzgvcjhfsdaphyp.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw';
-const sb=window.supabase.createClient(SB_URL,SB_KEY);
+
+let sb=null;
+function initSupabase(){
+  if(sb)return sb;
+  if(!window.supabase){console.error('Supabase library not loaded');return null}
+  try{sb=window.supabase.createClient(SB_URL,SB_KEY);return sb;}
+  catch(e){console.error('Supabase init failed:',e);return null;}
+}
+initSupabase();
+
 const $=id=>document.getElementById(id);
 
 let invitation=null,orgName='your organisation';
@@ -114,6 +154,8 @@ function showOnly(id){['loading','error','form','success'].forEach(x=>$(x).style
 function showError(msg){$('error-msg').textContent=msg;showOnly('error');}
 
 async function boot(){
+  if(!sb){showError('Authentication service is unavailable. Please try again later.');return;}
+
   // FIX #4: handle both ?token= and #token= formats defensively
   let token=new URLSearchParams(window.location.search).get('token');
   if(!token && window.location.hash){
@@ -130,7 +172,7 @@ async function boot(){
 
   invitation=data;
 
-  // FIX (defensive): get org name and verify org still exists
+  // get org name and verify org still exists
   const{data:org,error:orgErr}=await sb.from('organisations').select('name').eq('id',data.org_id).maybeSingle();
   if(orgErr){showError('Could not load the organisation for this invitation: '+orgErr.message);return;}
   if(!org){showError('The organisation for this invitation no longer exists. Please ask for a new invitation.');return;}
@@ -215,7 +257,7 @@ async function doSignUp(){
       const{data:signInData,error:signInErr}=await sb.auth.signInWithPassword({email:invitation.email,password:pass});
       if(signInErr || !signInData.user){
         // Email confirmation is on. Save the token so they can resume after confirming.
-        try{sessionStorage.setItem('greencrm_pending_invite_token',invitation.token);}catch(e){}
+        try{sessionStorage.setItem('civara_pending_invite_token',invitation.token);}catch(e){}
         showMsg('Account created. Please check your email to confirm your address, then come back to <strong>this same invitation link</strong> to finish joining '+orgName+'.','info');
         return;
       }
