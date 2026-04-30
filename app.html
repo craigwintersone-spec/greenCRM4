@@ -1367,8 +1367,14 @@ async function sbQ(table){
     if(error){console.error('[sbQ] '+table+' failed:',error.message);return [];}
     return data;
   }catch(e){console.error('[sbQ] '+table+' threw:',e);return [];}
-}async function sbInsert(table,payload){if(!sb)return null;if(orgId&&!NO_ORG_ID.includes(table))payload.org_id=orgId;const{data,error}=await sb.from(table).insert([payload]).select();if(error)throw error;return data?.[0];}
-async function sbUpdate(table,payload,id){if(!sb)return;const{error}=await sb.from(table).update(payload).eq('id',id);if(error)throw error;}
+async function sbInsert(table,payload){
+  if(!sb)return null;
+  if(!orgId)throw new Error('Cannot insert into '+table+' without orgId');
+  payload.org_id=orgId;
+  const{data,error}=await sb.from(table).insert([payload]).select();
+  if(error)throw error;
+  return data?.[0];
+}async function sbUpdate(table,payload,id){if(!sb)return;const{error}=await sb.from(table).update(payload).eq('id',id);if(error)throw error;}
 async function sbDelete(table,id){if(!sb)return;await sb.from(table).delete().eq('id',id);}
 
 async function syncAll(){
