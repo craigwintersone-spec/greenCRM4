@@ -888,7 +888,9 @@ async function _processAIQueue(){
   _aiQueue.running=false;
 }
 async function _callClaudeOnce(sys,user,maxTok,webSearch,attempt=0){
-  const res=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:CLAUDE_MODEL,max_tokens:maxTok,system:sys,messages:[{role:'user',content:user}],useWebSearch:webSearch})});
+  const{data:{session}}=await sb.auth.getSession();
+  const token=session?.access_token;
+  const res=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json','Authorization':token?'Bearer '+token:''},body:JSON.stringify(...
   if(res.status===404)throw new Error('API route /api/claude not found.');
   if(res.status===429){
     if(attempt>=3){const e=new Error('RATE_LIMITED');e.code='RATE_LIMITED';throw e;}
