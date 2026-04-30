@@ -127,7 +127,7 @@ tr:hover td{background:rgba(16,185,129,.02)}
   <div class="stats-grid">
     <div class="stat"><div class="stat-lbl">Total Organisations</div><div class="stat-val" id="st-total">—</div></div>
     <div class="stat"><div class="stat-lbl">Paid Orgs</div><div class="stat-val" id="st-paid">—</div></div>
-    <div class="stat"><div class="stat-lbl">Free Orgs</div><div class="stat-val" id="st-free">—</div></div>
+    <div class="stat"><div class="stat-lbl">On trial</div><div class="stat-val" id="st-free">—</div></div>
     <div class="stat"><div class="stat-lbl">Monthly Revenue</div><div class="stat-val" id="st-rev">—</div></div>
   </div>
   <div class="revenue-highlight">
@@ -160,7 +160,7 @@ tr:hover td{background:rgba(16,185,129,.02)}
   <div class="page-sub">View, edit and open each organisation's CRM</div>
   <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
     <input id="org-search" placeholder="Search by name…" oninput="filterOrgs()" style="max-width:220px"/>
-    <select id="org-filter-plan" onchange="filterOrgs()" style="max-width:140px"><option value="">All plans</option><option value="free">Free</option><option value="starter">Starter</option><option value="pro">Pro</option><option value="network">Network</option></select>
+    <select id="org-filter-plan" onchange="filterOrgs()" style="max-width:140px"><option value="">All plans</option><option value="free">Free trial</option><option value="starter">Starter</option><option value="pro">Pro</option><option value="network">Network</option></select>
     <select id="org-filter-status" onchange="filterOrgs()" style="max-width:140px"><option value="">All statuses</option><option value="active">Active</option><option value="suspended">Suspended</option><option value="trial">Trial</option></select>
   </div>
   <div class="card" style="padding:0;overflow:hidden">
@@ -175,10 +175,10 @@ tr:hover td{background:rgba(16,185,129,.02)}
   <div class="page-title">Subscriptions & Pricing</div>
   <div class="page-sub">Plan tiers and revenue breakdown</div>
   <div class="plan-cards">
-    <div class="plan-card"><div class="plan-card-name">Free</div><div class="plan-card-price">£0</div><div class="plan-card-desc">Basic CRM · 1 user</div><div style="margin-top:10px;font-size:18px;font-weight:700;color:var(--txt3)" id="plan-count-free">—</div><div style="font-size:11px;color:var(--txt3)">organisations</div></div>
-    <div class="plan-card"><div class="plan-card-name">Starter</div><div class="plan-card-price">£9</div><div class="plan-card-desc">Small orgs · core features</div><div style="margin-top:10px;font-size:18px;font-weight:700;color:var(--blue)" id="plan-count-starter">—</div><div style="font-size:11px;color:var(--txt3)">organisations</div></div>
-    <div class="plan-card"><div class="plan-card-name">Pro</div><div class="plan-card-price">£29</div><div class="plan-card-desc">Reporting · employers · funders</div><div style="margin-top:10px;font-size:18px;font-weight:700;color:var(--em)" id="plan-count-pro">—</div><div style="font-size:11px;color:var(--txt3)">organisations</div></div>
-    <div class="plan-card"><div class="plan-card-name">Network</div><div class="plan-card-price">£79</div><div class="plan-card-desc">Multi-site networks</div><div style="margin-top:10px;font-size:18px;font-weight:700;color:#a78bfa" id="plan-count-network">—</div><div style="font-size:11px;color:var(--txt3)">organisations</div></div>
+    <div class="plan-card"><div class="plan-card-name">Free trial</div><div class="plan-card-price">£0</div><div class="plan-card-desc">14-day Pro access · 1 user</div><div style="margin-top:10px;font-size:18px;font-weight:700;color:var(--txt3)" id="plan-count-free">—</div><div style="font-size:11px;color:var(--txt3)">organisations</div></div>
+    <div class="plan-card"><div class="plan-card-name">Starter</div><div class="plan-card-price">£29</div><div class="plan-card-desc">Core CRM · no AI</div><div style="margin-top:10px;font-size:18px;font-weight:700;color:var(--blue)" id="plan-count-starter">—</div><div style="font-size:11px;color:var(--txt3)">organisations</div></div>
+    <div class="plan-card"><div class="plan-card-name">Pro</div><div class="plan-card-price">£79</div><div class="plan-card-desc">Full AI agents + funder reports</div><div style="margin-top:10px;font-size:18px;font-weight:700;color:var(--em)" id="plan-count-pro">—</div><div style="font-size:11px;color:var(--txt3)">organisations</div></div>
+    <div class="plan-card"><div class="plan-card-name">Network</div><div class="plan-card-price">£249</div><div class="plan-card-desc">Multi-site · white-label</div><div style="margin-top:10px;font-size:18px;font-weight:700;color:#a78bfa" id="plan-count-network">—</div><div style="font-size:11px;color:var(--txt3)">organisations</div></div>
   </div>
   <div class="card"><div class="card-title">Revenue by plan</div><div id="revenue-breakdown"></div></div>
 </div>
@@ -215,8 +215,8 @@ tr:hover td{background:rgba(16,185,129,.02)}
   </div>
   <div class="form-grid-2">
     <div style="margin-bottom:12px"><label>Plan</label><select id="co-plan">
-      <option value="free">Free — £0/mo</option><option value="starter">Starter — £9/mo</option>
-      <option value="pro">Pro — £29/mo</option><option value="network">Network — £79/mo</option>
+      <option value="free">Free trial — 14 days</option><option value="starter">Starter — £29/mo</option>
+      <option value="pro">Pro — £79/mo</option><option value="network">Network — £249/mo</option>
     </select></div>
     <div style="margin-bottom:12px"><label>Status</label><select id="co-status">
       <option value="active">Active</option><option value="trial">Trial</option><option value="suspended">Suspended</option>
@@ -254,8 +254,8 @@ tr:hover td{background:rgba(16,185,129,.02)}
   </div>
   <div class="form-grid-2">
     <div style="margin-bottom:12px"><label>Plan</label><select id="eo-plan">
-      <option value="free">Free — £0/mo</option><option value="starter">Starter — £9/mo</option>
-      <option value="pro">Pro — £29/mo</option><option value="network">Network — £79/mo</option>
+      <option value="free">Free trial — 14 days</option><option value="starter">Starter — £29/mo</option>
+      <option value="pro">Pro — £79/mo</option><option value="network">Network — £249/mo</option>
     </select></div>
     <div style="margin-bottom:12px"><label>Status</label><select id="eo-status">
       <option value="active">Active</option><option value="trial">Trial</option><option value="suspended">Suspended</option>
@@ -273,7 +273,7 @@ tr:hover td{background:rgba(16,185,129,.02)}
 const SB_URL='https://nznfrxzgvcjhfsdaphyp.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw';
 const sb=window.supabase.createClient(SB_URL,SB_KEY);
-const PRICES={free:0,starter:9,pro:29,network:79};
+const PRICES={free:0,starter:29,pro:79,network:249};
 const $=id=>document.getElementById(id);
 let allOrgs=[],editOrgId=null,currentUser=null;
 
@@ -371,7 +371,7 @@ function renderStats(){
   $('st-active-orgs').textContent=allOrgs.filter(o=>o.status==='active'||!o.status).length;
 }
 
-function planBadge(p){const c={free:'b-free',starter:'b-starter',pro:'b-pro',network:'b-network'};return'<span class="badge '+(c[p]||'b-free')+'">'+(p||'free')+'</span>';}
+function planBadge(p){const c={free:'b-free',starter:'b-starter',pro:'b-pro',network:'b-network'};const labels={free:'trial',starter:'starter',pro:'pro',network:'network'};return'<span class="badge '+(c[p]||'b-free')+'">'+(labels[p]||'trial')+'</span>';}
 function statusBadge(s){const c={active:'b-active',suspended:'b-suspended',trial:'b-trial'};return'<span class="badge '+(c[s]||'b-active')+'">'+(s||'active')+'</span>';}
 
 function renderOrgTable(orgs){
@@ -439,7 +439,7 @@ function renderSubscriptions(){
   const counts={free:0,starter:0,pro:0,network:0};
   allOrgs.forEach(o=>counts[o.plan||'free']=(counts[o.plan||'free']||0)+1);
   ['free','starter','pro','network'].forEach(p=>{const el=$('plan-count-'+p);if(el)el.textContent=counts[p]||0;});
-  const breakdown=[{plan:'Network',count:counts.network,price:79,color:'#a78bfa'},{plan:'Pro',count:counts.pro,price:29,color:'#10b981'},{plan:'Starter',count:counts.starter,price:9,color:'#60a5fa'},{plan:'Free',count:counts.free,price:0,color:'#6a8f76'}];
+  const breakdown=[{plan:'Network',count:counts.network,price:249,color:'#a78bfa'},{plan:'Pro',count:counts.pro,price:79,color:'#10b981'},{plan:'Starter',count:counts.starter,price:29,color:'#60a5fa'},{plan:'Free trial',count:counts.free,price:0,color:'#6a8f76'}];
   $('revenue-breakdown').innerHTML=breakdown.map(b=>{
     const rev=b.count*b.price,max=Math.max(...breakdown.map(x=>x.count*x.price))||1,pct=Math.round(rev/max*100);
     return'<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:13px;color:var(--txt2);margin-bottom:4px"><span>'+b.plan+' ('+b.count+' orgs × £'+b.price+')</span><span style="font-weight:600;color:var(--txt)">£'+rev+'/mo</span></div><div style="height:8px;background:var(--border);border-radius:4px"><div style="height:100%;border-radius:4px;background:'+b.color+';width:'+pct+'%"></div></div></div>';
