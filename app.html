@@ -28,8 +28,12 @@ label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;le
 #shell{display:flex;flex:1}
 #sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:14px 0;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto}
 #main{flex:1;overflow-y:auto;padding:24px}
-.logo{font-size:17px;font-weight:700;color:var(--em);padding:4px 18px 16px;border-bottom:1px solid var(--border);margin-bottom:10px}
+.logo{font-size:17px;font-weight:700;color:var(--em);padding:4px 18px 16px;border-bottom:1px solid var(--border);margin-bottom:10px;display:flex;align-items:center;gap:10px;min-height:54px}
 .logo span{color:var(--txt2);font-weight:400}
+.logo-img{max-height:40px;max-width:140px;object-fit:contain;display:block}
+.logo-text-fallback{font-size:17px;font-weight:700;color:var(--em);line-height:1.2}
+.logo-text-fallback span{color:var(--txt2);font-weight:400}
+.report-logo{max-height:60px;max-width:200px;object-fit:contain;margin-bottom:14px;display:block}
 .nav-section{font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;padding:10px 18px 4px}
 .nav-btn{display:flex;align-items:center;gap:8px;background:none;color:var(--txt2);padding:8px 18px;font-size:13px;width:100%;text-align:left;border-left:2px solid transparent;transition:all .15s}
 .nav-btn:hover{color:var(--txt);background:rgba(16,185,129,.06)}
@@ -1256,6 +1260,7 @@ async function generateAIReport(type,contractId){
     '</div>'+
     '<div class="report-doc">'+
       '<div class="report-header">'+
+        (currentOrg?.logo_url?'<img src="'+escapeHTML(currentOrg.logo_url)+'" class="report-logo" alt="'+escapeHTML(orgName)+'"/>':'')+
         '<div class="report-meta">'+escapeHTML(funder?.name||'Funder Report')+'</div>'+
         '<div class="report-title">'+escapeHTML(contract?.name||'Programme Report')+'</div>'+
         '<div class="report-subtitle">'+escapeHTML(orgName)+' · '+escapeHTML(todayStr)+'</div>'+
@@ -1286,7 +1291,7 @@ function downloadEOIPDF(){
   const inner=$('eoi-result').innerHTML;
   const printWrap=document.createElement('div');
   printWrap.id='report-output';
-  printWrap.innerHTML='<div class="report-doc"><div class="report-header"><div class="report-meta">Expression of Interest</div><div class="report-title">'+escapeHTML($('eoi-funder').value||'Funding application')+'</div><div class="report-subtitle">'+escapeHTML(currentOrg?.name||'Organisation')+' · '+escapeHTML(new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'}))+'</div></div><div class="report-body">'+inner+'</div></div>';
+  printWrap.innerHTML='<div class="report-doc"><div class="report-header">'+(currentOrg?.logo_url?'<img src="'+escapeHTML(currentOrg.logo_url)+'" class="report-logo" alt="'+escapeHTML(currentOrg?.name||'Organisation')+'"/>':'')+'<div class="report-meta">Expression of Interest</div><div class="report-title">'+escapeHTML($('eoi-funder').value||'Funding application')+'</div><div class="report-subtitle">'+escapeHTML(currentOrg?.name||'Organisation')+' · '+escapeHTML(new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'}))+'</div></div><div class="report-body">'+inner+'</div></div>';
   document.body.appendChild(printWrap);
   setTimeout(()=>{
     window.print();
@@ -1859,8 +1864,28 @@ function applyBranding(org){
   if(!org)return;
   const primary=org.brand_color||'#10b981';
   const orgName=org.name||'GreenCRM';
+  // Apply primary brand colour to CSS var (drives buttons, accents, chart fills)
   document.documentElement.style.setProperty('--em',primary);
+  // Derive a slightly darker shade for hover states
+  document.documentElement.style.setProperty('--em2',shadeColor(primary,-15));
   document.title=orgName+' · GreenCRM';
+  // Apply logo to sidebar
+  const logoEl=document.querySelector('#sidebar .logo');
+  if(logoEl){
+    if(org.logo_url){
+      logoEl.innerHTML='<img src="'+escapeHTML(org.logo_url)+'" class="logo-img" alt="'+escapeHTML(orgName)+'" onerror="this.outerHTML=\'<span class=&quot;logo-text-fallback&quot;>\'+'+JSON.stringify(escapeHTML(orgName))+'+\'</span>\'"/>';
+    }else{
+      logoEl.innerHTML='<span class="logo-text-fallback">'+escapeHTML(orgName)+'</span><span style="font-size:11px;color:var(--txt3);margin-left:auto">on GreenCRM</span>';
+    }
+  }
+}
+// Shade a hex colour by percent (negative = darker, positive = lighter)
+function shadeColor(hex,percent){
+  const h=hex.replace('#','');
+  if(h.length!==6)return hex;
+  const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);
+  const adj=v=>Math.max(0,Math.min(255,Math.round(v+(percent/100)*255)));
+  return'#'+[adj(r),adj(g),adj(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
 }
 
 function showUpgradeModal(){alert('Contact hello@greencrm.co.uk to upgrade.');}
