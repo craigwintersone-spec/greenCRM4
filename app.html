@@ -887,23 +887,75 @@ async function _processAIQueue(){
   }
   _aiQueue.running=false;
 }
-async function _callClaudeOnce(sys,user,maxTok,webSearch,attempt=0){
-  const{data:{session}}=await sb.auth.getSession();
-  const token=session?.access_token;
-  const res=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json','Authorization':token?'Bearer '+token:''},body:JSON.stringify({model:CLAUDE_MODEL,max_tokens:maxTok,system:sys,messages:[{role:'user',content:user}],web_search:webSearch})});
-  const{data:{session}}=await sb.auth.getSession();
-    const waitMs=retryAfter?retryAfter*1000:Math.min(30000,4000*Math.pow(2,attempt));
-    await new Promise(r=>setTimeout(r,waitMs));
-    return _callClaudeOnce(sys,user,maxTok,webSearch,attempt+1);
+async function _callClaudeOnce(sys, user, maxTok, webSearch, attempt = 0) {
+  const { data: { session } } = await sb.auth.getSession();
+  const token = session?.access_token;
+
+  const res = await fetch('/api/claude', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': token ? 'Bearer ' + token : ''
+    },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      max_tokens: maxTok,
+      system: sys,
+      messages: [{ role: 'user', content: user }],
+      web_search: webSearch
+    })
+  });
+
+  // ── Handle 429 rate limits with retry + exponential backoff ──
+  if (res.status === 429) {
+    if (attempt >= 3) {
+      const e = new Error('RATE_LIMITED');
+      e.code = 'RATE_LIMITED';
+      throw e;
+    }
+    const retryAfterHeader = res.headers.get('Retry-After');
+    const retryAfter = retryAfterHeader ? parseInt(retryAfterHeader, 10) : null;
+    const waitMs = retryAfter
+      ? retryAfter * 1000
+      : Math.min(30000, 4000 * Math.pow(2, attempt));
+    await new Promise(r => setTimeout(r, waitMs));
+    return _callClaudeOnce(sys, user, maxTok, webSearch, attempt + 1);
   }
-  let data;try{data=await res.json();}catch(e){throw new Error('Bad response from API');}
-  if(data.type==='error'){
-    const msg=data.error?.message||JSON.stringify(data.error);
-    if(/rate.?limit/i.test(msg)||/tokens per minute/i.test(msg)){const e=new Error('RATE_LIMITED');e.code='RATE_LIMITED';throw e;}
+
+  // ── Handle other non-OK statuses cleanly ──
+  if (!res.ok) {
+    let errMsg = 'API error ' + res.status;
+    try {
+      const errBody = await res.json();
+      if (errBody?.error?.message) errMsg = errBody.error.message;
+    } catch (e) { /* ignore parse errors */ }
+    throw new Error(errMsg);
+  }
+
+  // ── Parse successful response ──
+  let data;
+  try {
+    data = await res.json();
+  } catch (e) {
+    throw new Error('Bad response from API');
+  }
+
+  if (data.type === 'error') {
+    const msg = data.error?.message || JSON.stringify(data.error);
+    if (/rate.?limit/i.test(msg) || /tokens per minute/i.test(msg)) {
+      const e = new Error('RATE_LIMITED');
+      e.code = 'RATE_LIMITED';
+      throw e;
+    }
     throw new Error(msg);
   }
-  const text=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('\n')||'';
-  if(!text)throw new Error('Empty response');
+
+  const text = data.content
+    ?.filter(b => b.type === 'text')
+    .map(b => b.text)
+    .join('\n') || '';
+
+  if (!text) throw new Error('Empty response');
   return text;
 }
 
