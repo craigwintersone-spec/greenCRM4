@@ -36,14 +36,18 @@ table{width:100%;border-collapse:collapse}
 th{text-align:left;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;padding:9px 12px;border-bottom:1px solid var(--border)}
 td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;color:var(--txt2);vertical-align:middle}
 tr:hover td{background:rgba(16,185,129,.03)}
-#auth-screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+#auth-screen,#blocked-screen{min-height:100vh;display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+#auth-screen.visible,#blocked-screen.visible{display:flex}
 #app-screen{display:none}
+#app-screen.visible{display:block}
 .auth-logo{font-size:26px;font-weight:800;color:var(--em);letter-spacing:-.5px;margin-bottom:4px}
 .auth-logo span{color:var(--txt2);font-weight:400}
 .auth-sub{font-size:13px;color:var(--txt3);margin-bottom:4px;text-align:center}
 .auth-back{font-size:12px;color:var(--txt3);margin-bottom:24px;display:flex;align-items:center;gap:5px;transition:color .2s;text-decoration:none}
 .auth-back:hover{color:var(--em)}
-.auth-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:28px;width:100%;max-width:420px}
+.auth-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:28px;width:100%;max-width:440px}
+.org-banner{background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:var(--radius);padding:12px 14px;margin-bottom:18px;font-size:13px;color:var(--txt2);line-height:1.6}
+.org-banner strong{color:var(--em);font-weight:700}
 .tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:20px}
 .tab{flex:1;background:none;color:var(--txt2);padding:9px;font-size:13px;font-weight:600;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all .2s;font-family:inherit}
 .tab.active{color:var(--em);border-bottom-color:var(--em)}
@@ -75,21 +79,46 @@ tr:hover td{background:rgba(16,185,129,.03)}
 .step-sub{font-size:11px;color:var(--txt3)}
 .how-step{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--border)}
 .how-num{width:28px;height:28px;border-radius:50%;background:rgba(16,185,129,.15);color:var(--em);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.blocked-card{background:var(--card);border:1px solid var(--red);border-radius:var(--radiuslg);padding:32px;width:100%;max-width:480px;text-align:center}
+.blocked-icon{font-size:42px;margin-bottom:12px}
 @media(max-width:600px){.stats-row{grid-template-columns:repeat(2,1fr)}.form-grid-2{grid-template-columns:1fr}.app-header{padding:12px 16px}.app-main{padding:16px}}
 </style>
 </head>
 <body>
 
+<!-- BLOCKED SCREEN — shown when ?org= is missing or invalid -->
+<div id="blocked-screen">
+  <div class="auth-logo">Green<span>CRM</span></div>
+  <div class="auth-sub">Partner Portal</div>
+  <a href="index.html" class="auth-back" style="margin-top:14px">← Back to home</a>
+  <div class="blocked-card">
+    <div class="blocked-icon">🔒</div>
+    <div style="font-size:18px;font-weight:700;color:var(--txt);margin-bottom:10px">Invitation link required</div>
+    <div style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:18px" id="blocked-msg">
+      The partner portal can only be opened via your referral partner's unique invitation link. 
+      Please contact the organisation that asked you to register and ask for the correct link.
+    </div>
+    <div style="font-size:12px;color:var(--txt3);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;line-height:1.6">
+      💡 The link will look like:<br/>
+      <code style="font-family:monospace;font-size:11px;color:var(--em3)">partner.html?org=...</code>
+    </div>
+  </div>
+</div>
+
 <!-- AUTH SCREEN -->
 <div id="auth-screen">
   <div class="auth-logo">Green<span>CRM</span></div>
-  <div class="auth-sub">Partner Portal — Referral & tracking access</div>
+  <div class="auth-sub">Partner Portal — Referral &amp; tracking access</div>
   <a href="index.html" class="auth-back">← Back to home</a>
 
   <div class="auth-card">
+    <div class="org-banner" id="auth-org-banner" style="display:none">
+      You're signing in as a referral partner for <strong id="auth-org-name">—</strong>.
+    </div>
+
     <div class="tabs">
-      <button class="tab active" onclick="showTab('signin')">Sign in</button>
-      <button class="tab" onclick="showTab('signup')">Register</button>
+      <button class="tab active" id="auth-tab-signin" onclick="showTab('signin')">Sign in</button>
+      <button class="tab" id="auth-tab-signup" onclick="showTab('signup')">Register</button>
     </div>
 
     <div id="pane-signin" class="pane active">
@@ -103,8 +132,12 @@ tr:hover td{background:rgba(16,185,129,.03)}
     <div id="pane-signup" class="pane">
       <div class="msg msg-err" id="su-err"></div>
       <div class="msg msg-ok" id="su-ok"></div>
+      <div class="org-banner" id="signup-org-banner" style="display:none">
+        Registering as a referral partner for <strong id="signup-org-name">—</strong>.
+        Your referrals will be sent directly to their team.
+      </div>
       <div class="section-title">Your organisation</div>
-      <div class="form-row"><label>Organisation name</label><input id="su-org" placeholder="e.g. London Probation Service"/></div>
+      <div class="form-row"><label>Your organisation name</label><input id="su-org" placeholder="e.g. London Probation Service"/></div>
       <div class="form-row"><label>Organisation type</label>
         <select id="su-type">
           <option>Probation</option><option>Jobcentre Plus</option><option>Local authority</option>
@@ -117,8 +150,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
       <div class="form-row"><label>Your full name</label><input id="su-name" placeholder="Jane Smith"/></div>
       <div class="form-row"><label>Work email</label><input type="email" id="su-email" placeholder="jane.smith@probation.gov.uk"/></div>
       <div class="form-row"><label>Password (min 8 characters)</label><input type="password" id="su-pass"/></div>
-      <div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:var(--radius);padding:10px 12px;font-size:12px;color:var(--amber);margin-bottom:13px">⚠ Your account will be reviewed before you can submit referrals.</div>
-      <button class="btn btn-p" style="width:100%;justify-content:center" id="su-btn" onclick="doSignUp()">Request access</button>
+      <button class="btn btn-p" style="width:100%;justify-content:center" id="su-btn" onclick="doSignUp()">Register as partner</button>
       <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--txt3)">Already registered? <a onclick="showTab('signin')" style="color:var(--em);cursor:pointer">Sign in →</a></div>
     </div>
   </div>
@@ -171,7 +203,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
     <div id="nav-new-referral" class="nav-pane">
       <div class="card">
         <div style="font-size:16px;font-weight:700;color:var(--txt);margin-bottom:4px">Submit a new referral</div>
-        <div style="font-size:13px;color:var(--txt3);margin-bottom:20px">Complete all required fields. The team will respond within 2 working days.</div>
+        <div style="font-size:13px;color:var(--txt3);margin-bottom:14px">Referrals are sent securely to <strong id="referral-org-name" style="color:var(--em)">your partner organisation</strong>. Complete all required fields. The team will respond within 2 working days.</div>
         <div class="msg msg-err" id="ref-err"></div>
         <div class="msg msg-ok" id="ref-ok"></div>
         <div class="section-title">Personal details</div>
@@ -202,7 +234,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
             </select>
           </div>
         </div>
-        <div class="form-row"><label>Background & reason for referral *</label>
+        <div class="form-row"><label>Background &amp; reason for referral *</label>
           <textarea id="r-notes" placeholder="Brief background, reason for referral, any relevant history…"></textarea>
         </div>
         <div class="form-grid-2">
@@ -224,7 +256,7 @@ tr:hover td{background:rgba(16,185,129,.03)}
           </div>
         </div>
         <div class="divider"></div>
-        <div class="section-title">Consent & compliance</div>
+        <div class="section-title">Consent &amp; compliance</div>
         <div class="form-row"><label>Consent confirmed *</label>
           <select id="r-consent">
             <option value="yes">✓ Yes — person has given informed consent</option>
@@ -259,13 +291,9 @@ tr:hover td{background:rgba(16,185,129,.03)}
         <div style="font-size:16px;font-weight:700;color:var(--txt);margin-bottom:16px">How the referral process works</div>
         <div class="how-step"><div class="how-num">1</div><div><div style="font-size:13px;font-weight:600;color:var(--txt)">Submit a referral</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">Complete the New referral form with the person's details, primary need, and confirm consent. Urgent referrals are flagged for same-day or 48-hour response.</div></div></div>
         <div class="how-step"><div class="how-num">2</div><div><div style="font-size:13px;font-weight:600;color:var(--txt)">Allocation</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">The programme team reviews and allocates an advisor within the agreed timeframe. Status updates to Engaged once contact is made.</div></div></div>
-        <div class="how-step"><div class="how-num">3</div><div><div style="font-size:13px;font-weight:600;color:var(--txt)">Delivery & support</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">The participant receives tailored support. Track their progress under My referrals. Status updates in real time.</div></div></div>
+        <div class="how-step"><div class="how-num">3</div><div><div style="font-size:13px;font-weight:600;color:var(--txt)">Delivery &amp; support</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">The participant receives tailored support. Track their progress under My referrals. Status updates in real time.</div></div></div>
         <div class="how-step"><div class="how-num">4</div><div><div style="font-size:13px;font-weight:600;color:var(--txt)">Outcome achieved</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">When an outcome is achieved the status updates. You'll see this reflected in your referral dashboard.</div></div></div>
-        <div class="how-step" style="border:none"><div class="how-num">5</div><div><div style="font-size:13px;font-weight:600;color:var(--txt)">Sustainment & closure</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">The team supports sustainment for 12+ weeks where possible. Cases are closed when support ends.</div></div></div>
-      </div>
-      <div class="card">
-        <div style="font-size:14px;font-weight:700;color:var(--txt);margin-bottom:12px">Status guide</div>
-        ${[{s:'Referred',c:'b-referred',d:'Received — awaiting allocation'},{s:'Engaged',c:'b-engaged',d:'Advisor has made contact'},{s:'In delivery',c:'b-indelivery',d:'Actively receiving support'},{s:'Outcome achieved',c:'b-outcome',d:'Positive outcome recorded'},{s:'Closed',c:'b-closed',d:'Support ended — case closed'}].map(x=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)"><span class="badge ${x.c}">${x.s}</span><span style="font-size:12px;color:var(--txt2)">${x.d}</span></div>`).join('')}
+        <div class="how-step" style="border:none"><div class="how-num">5</div><div><div style="font-size:13px;font-weight:600;color:var(--txt)">Sustainment &amp; closure</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">The team supports sustainment for 12+ weeks where possible. Cases are closed when support ends.</div></div></div>
       </div>
       <div class="card">
         <div style="font-size:14px;font-weight:700;color:var(--txt);margin-bottom:10px">Need help?</div>
@@ -288,32 +316,115 @@ tr:hover td{background:rgba(16,185,129,.03)}
 const SURL='https://nznfrxzgvcjhfsdaphyp.supabase.co';
 const SKEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw';
 const sb=supabase.createClient(SURL,SKEY);
+
 let USER=null,PARTNER=null,allRefs=[];
+let URL_ORG_ID=null;   // org_id from URL ?org= param
+let URL_ORG_NAME=null; // resolved org name for display
 const $=id=>document.getElementById(id);
 const fmtD=d=>d?new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}):'—';
 const fmtDT=d=>d?new Date(d).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'—';
 
+// Show one of the three top-level screens
+function showScreen(name){
+  ['blocked-screen','auth-screen','app-screen'].forEach(id=>{
+    const el=$(id);
+    if(!el)return;
+    if(id===name){el.classList.add('visible');}
+    else{el.classList.remove('visible');}
+  });
+}
+
 async function init(){
+  // 1. Read ?org= from URL
+  const params=new URLSearchParams(window.location.search);
+  URL_ORG_ID=params.get('org');
+
+  // 2. If no org in URL → show blocked screen, regardless of session
+  if(!URL_ORG_ID||URL_ORG_ID==='YOUR_ORG_ID'){
+    showScreen('blocked-screen');
+    return;
+  }
+
+  // 3. Validate the org exists by trying to fetch its name
+  //    NOTE: organisations.rls is OFF so this read works for the anon key.
+  //    Once we re-enable RLS on organisations we'll need a public read policy.
+  try{
+    const{data:org,error}=await sb.from('organisations').select('id,name').eq('id',URL_ORG_ID).maybeSingle();
+    if(error||!org){
+      showScreen('blocked-screen');
+      $('blocked-msg').innerHTML='The organisation in this link could not be found. Please contact the organisation that asked you to register and ask for the correct link.';
+      return;
+    }
+    URL_ORG_NAME=org.name;
+  }catch(e){
+    showScreen('blocked-screen');
+    $('blocked-msg').textContent='Could not verify the organisation. Please try again, or contact the organisation that sent you the link.';
+    return;
+  }
+
+  // 4. Show org banner on auth/signup
+  $('auth-org-name').textContent=URL_ORG_NAME;
+  $('auth-org-banner').style.display='block';
+  $('signup-org-name').textContent=URL_ORG_NAME;
+  $('signup-org-banner').style.display='block';
+
+  // 5. Check if already signed in
   const{data:{session}}=await sb.auth.getSession();
-  if(session){USER=session.user;await loadPartner();}
+  if(session){
+    USER=session.user;
+    await loadPartner();
+    return;
+  }
+
+  // 6. Otherwise show auth screen
+  showScreen('auth-screen');
 }
 
 async function loadPartner(){
-  const{data:p}=await sb.from('partner_profiles').select('*').eq('id',USER.id).single();
+  const{data:p}=await sb.from('partner_profiles').select('*').eq('id',USER.id).maybeSingle();
   PARTNER=p;
-  $('auth-screen').style.display='none';
-  $('app-screen').style.display='block';
-  $('user-info').textContent=`${PARTNER?.full_name||USER.email} · ${PARTNER?.org_name||'Partner'}`;
+
+  // If they exist as a partner but for a DIFFERENT org, sign them out and warn
+  if(PARTNER&&PARTNER.org_id&&URL_ORG_ID&&PARTNER.org_id!==URL_ORG_ID){
+    await sb.auth.signOut();
+    USER=null;PARTNER=null;
+    showScreen('auth-screen');
+    $('si-err').textContent='This account is registered with a different organisation. Please use the original invitation link.';
+    $('si-err').style.display='block';
+    return;
+  }
+
+  // If they're signed in but never had a profile created, create one bound to URL_ORG_ID
+  if(!PARTNER){
+    const{error}=await sb.from('partner_profiles').insert({
+      id:USER.id,full_name:USER.email,email:USER.email,
+      org_name:'Unknown',org_type:'Other',status:'active',org_id:URL_ORG_ID
+    });
+    if(error){
+      console.error('Could not create partner profile:',error);
+      await sb.auth.signOut();
+      showScreen('auth-screen');
+      return;
+    }
+    const{data:p2}=await sb.from('partner_profiles').select('*').eq('id',USER.id).maybeSingle();
+    PARTNER=p2;
+  }
+
+  showScreen('app-screen');
+  $('user-info').textContent=(PARTNER&&PARTNER.full_name?PARTNER.full_name:USER.email)+' · '+(PARTNER&&PARTNER.org_name?PARTNER.org_name:'Partner')+' → '+URL_ORG_NAME;
+  $('referral-org-name').textContent=URL_ORG_NAME;
   loadOverview();
 }
 
 function showTab(t){
-  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',['signin','signup'][i]===t));
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
+  const tab=$('auth-tab-'+t);
+  if(tab)tab.classList.add('active');
   $('pane-'+t).classList.add('active');
 }
 function showMsg(id,msg){const e=$(id);e.textContent=msg;e.style.display='block';}
-function hideMsg(...ids){ids.forEach(id=>$(id).style.display='none');}
+function hideMsg(){for(let i=0;i<arguments.length;i++){const e=$(arguments[i]);if(e)e.style.display='none';}}
 function setLoad(id,on,lbl){const b=$(id);b.disabled=on;b.textContent=on?'Please wait…':lbl;}
 
 async function doSignIn(){
@@ -329,27 +440,68 @@ async function doSignIn(){
 }
 
 async function doSignUp(){
-  const org=$('su-org').value.trim(),type=$('su-type').value,name=$('su-name').value.trim(),email=$('su-email').value.trim(),pass=$('su-pass').value;
+  if(!URL_ORG_ID){showMsg('su-err','Cannot register without a valid invitation link.');return;}
+  const org=$('su-org').value.trim(),type=$('su-type').value;
+  const name=$('su-name').value.trim(),email=$('su-email').value.trim(),pass=$('su-pass').value;
   hideMsg('su-err','su-ok');
   if(!org||!name||!email||!pass){showMsg('su-err','Please fill in all fields.');return;}
   if(pass.length<8){showMsg('su-err','Password must be at least 8 characters.');return;}
-  setLoad('su-btn',true,'Request access');
-  const{data,error}=await sb.auth.signUp({email,password:pass,options:{data:{full_name:name,org_name:org}}});
-  if(error){setLoad('su-btn',false,'Request access');showMsg('su-err',error.message);return;}
-  const uid=data?.user?.id;
-  if(uid){await sb.from('partner_profiles').insert({id:uid,full_name:name,email,org_name:org,org_type:type,status:'active'});}
-  setLoad('su-btn',false,'Request access');
-  showMsg('su-ok','✓ Account created! Signing you in…');
-  setTimeout(async()=>{
-    const{error:e}=await sb.auth.signInWithPassword({email,password:pass});
-    if(!e){const{data:{session}}=await sb.auth.getSession();if(session){USER=session.user;await loadPartner();}}
-  },1200);
+  setLoad('su-btn',true,'Register as partner');
+
+  // 1. Sign up
+  const signUpRes=await sb.auth.signUp({email,password:pass,options:{data:{full_name:name,org_name:org}}});
+  if(signUpRes.error){
+    setLoad('su-btn',false,'Register as partner');
+    showMsg('su-err',signUpRes.error.message);return;
+  }
+
+  // 2. Sign in to establish session
+  const siRes=await sb.auth.signInWithPassword({email,password:pass});
+  if(siRes.error){
+    setLoad('su-btn',false,'Register as partner');
+    if(siRes.error.message.toLowerCase().indexOf('confirm')>=0){
+      showMsg('su-err','Account created. Please check your email to confirm, then sign in via the same invitation link.');
+    }else{
+      showMsg('su-err','Sign-in after registration failed: '+siRes.error.message);
+    }
+    return;
+  }
+
+  // 3. Wait for session to settle
+  let sessionReady=false;
+  for(let i=0;i<15;i++){
+    const sRes=await sb.auth.getSession();
+    if(sRes.data&&sRes.data.session&&sRes.data.session.user){sessionReady=true;break;}
+    await new Promise(r=>setTimeout(r,250));
+  }
+  if(!sessionReady){
+    setLoad('su-btn',false,'Register as partner');
+    showMsg('su-err','Could not establish session. Please try signing in.');return;
+  }
+  const{data:{session}}=await sb.auth.getSession();
+  USER=session.user;
+
+  // 4. Create partner_profile bound to URL_ORG_ID
+  const{error:profErr}=await sb.from('partner_profiles').insert({
+    id:USER.id,full_name:name,email,org_name:org,org_type:type,
+    status:'active',org_id:URL_ORG_ID
+  });
+  if(profErr){
+    setLoad('su-btn',false,'Register as partner');
+    showMsg('su-err','Could not complete registration: '+profErr.message);
+    console.error('partner_profile insert failed:',profErr);
+    return;
+  }
+
+  setLoad('su-btn',false,'Register as partner');
+  showMsg('su-ok','✓ Registered! Loading your dashboard…');
+  setTimeout(loadPartner,800);
 }
 
-// SIGN OUT → back to landing page
 async function doSignOut(){
   await sb.auth.signOut();
-  window.location.href='index.html';
+  // Stay on the same URL so partner can sign back in via the same link
+  window.location.reload();
 }
 
 function showNav(n){
@@ -368,12 +520,8 @@ async function loadOverview(){
   $('st-active').textContent=allRefs.filter(r=>r.status==='In delivery'||r.status==='Engaged').length;
   $('st-outcomes').textContent=allRefs.filter(r=>r.status==='Outcome achieved').length;
   $('st-pending').textContent=allRefs.filter(r=>r.status==='Referred').length;
-  const statusBadge=s=>{const m={'Referred':'b-referred','Engaged':'b-engaged','In delivery':'b-indelivery','Outcome achieved':'b-outcome','Closed':'b-closed'};return`<span class="badge ${m[s]||'b-referred'}">${s}</span>`;};
-  $('recent-list').innerHTML=allRefs.slice(0,5).map(r=>`
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="viewRef(${r.id})">
-      <div><div style="font-size:13px;font-weight:500;color:var(--txt)">${r.first_name||''} ${r.last_name||''}</div><div style="font-size:11px;color:var(--txt3)">${fmtD(r.created_at)} · ${r.primary_need||''}</div></div>
-      ${statusBadge(r.status||'Referred')}
-    </div>`).join('')||'<div style="color:var(--txt3);font-size:13px;padding:12px 0">No referrals yet. Submit your first referral above.</div>';
+  const statusBadge=s=>{const m={'Referred':'b-referred','Engaged':'b-engaged','In delivery':'b-indelivery','Outcome achieved':'b-outcome','Closed':'b-closed'};return'<span class="badge '+(m[s]||'b-referred')+'">'+s+'</span>';};
+  $('recent-list').innerHTML=allRefs.slice(0,5).map(r=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="viewRef('+r.id+')"><div><div style="font-size:13px;font-weight:500;color:var(--txt)">'+(r.first_name||'')+' '+(r.last_name||'')+'</div><div style="font-size:11px;color:var(--txt3)">'+fmtD(r.created_at)+' · '+(r.primary_need||'')+'</div></div>'+statusBadge(r.status||'Referred')+'</div>').join('')||'<div style="color:var(--txt3);font-size:13px;padding:12px 0">No referrals yet. Submit your first referral above.</div>';
 }
 
 async function loadReferrals(){
@@ -388,44 +536,17 @@ function filterReferrals(){
 }
 
 function renderReferrals(refs){
-  const statusBadge=s=>{const m={'Referred':'b-referred','Engaged':'b-engaged','In delivery':'b-indelivery','Outcome achieved':'b-outcome','Closed':'b-closed'};return`<span class="badge ${m[s]||'b-referred'}">${s||'Referred'}</span>`;};
-  const urgBadge=u=>`<span class="badge ${u==='Crisis'?'b-urgent':u==='Urgent'?'b-referred':'b-standard'}">${u||'Standard'}</span>`;
-  $('referrals-list').innerHTML=refs.length?`
-    <div class="card" style="padding:0;overflow:hidden"><table>
-      <thead><tr><th>Name</th><th>Submitted</th><th>Need</th><th>Urgency</th><th>Status</th><th></th></tr></thead>
-      <tbody>${refs.map(r=>`<tr>
-        <td style="color:var(--txt);font-weight:500">${r.first_name||''} ${r.last_name||''}</td>
-        <td style="font-size:12px">${fmtD(r.created_at)}</td>
-        <td style="font-size:12px;color:var(--txt2)">${r.primary_need||''}</td>
-        <td>${urgBadge(r.urgency)}</td>
-        <td>${statusBadge(r.status)}</td>
-        <td><button class="btn btn-ghost btn-sm" onclick="viewRef(${r.id})">View →</button></td>
-      </tr>`).join('')}</tbody>
-    </table></div>`
-    :'<div style="text-align:center;padding:40px 20px;color:var(--txt3)"><div style="font-size:32px;margin-bottom:8px">📋</div><div>No referrals yet.</div><div style="margin-top:8px"><button class="btn btn-p btn-sm" onclick="showNav(\'new-referral\')">Submit your first referral →</button></div></div>';
+  const statusBadge=s=>{const m={'Referred':'b-referred','Engaged':'b-engaged','In delivery':'b-indelivery','Outcome achieved':'b-outcome','Closed':'b-closed'};return'<span class="badge '+(m[s]||'b-referred')+'">'+(s||'Referred')+'</span>';};
+  const urgBadge=u=>'<span class="badge '+(u==='Crisis'?'b-urgent':u==='Urgent'?'b-referred':'b-standard')+'">'+(u||'Standard')+'</span>';
+  $('referrals-list').innerHTML=refs.length?'<div class="card" style="padding:0;overflow:hidden"><table><thead><tr><th>Name</th><th>Submitted</th><th>Need</th><th>Urgency</th><th>Status</th><th></th></tr></thead><tbody>'+refs.map(r=>'<tr><td style="color:var(--txt);font-weight:500">'+(r.first_name||'')+' '+(r.last_name||'')+'</td><td style="font-size:12px">'+fmtD(r.created_at)+'</td><td style="font-size:12px;color:var(--txt2)">'+(r.primary_need||'')+'</td><td>'+urgBadge(r.urgency)+'</td><td>'+statusBadge(r.status)+'</td><td><button class="btn btn-ghost btn-sm" onclick="viewRef('+r.id+')">View →</button></td></tr>').join('')+'</tbody></table></div>':'<div style="text-align:center;padding:40px 20px;color:var(--txt3)"><div style="font-size:32px;margin-bottom:8px">📋</div><div>No referrals yet.</div><div style="margin-top:8px"><button class="btn btn-p btn-sm" onclick="showNav(\'new-referral\')">Submit your first referral →</button></div></div>';
 }
 
 function viewRef(id){
   const r=allRefs.find(x=>x.id===id);if(!r)return;
   const stages=['Referred','Engaged','In delivery','Outcome achieved','Closed'];
   const currentIdx=stages.indexOf(r.status||'Referred');
-  $('modal-ref-title').textContent=`${r.first_name||''} ${r.last_name||''}`;
-  $('modal-ref-body').innerHTML=`
-    <div style="margin-bottom:16px">
-      <div style="font-size:11px;color:var(--txt3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Journey progress</div>
-      ${stages.map((s,i)=>`<div class="timeline-step ${i<currentIdx?'done':i===currentIdx?'current':''}">
-        <div class="step-dot ${i<currentIdx?'step-done':i===currentIdx?'step-current':'step-pending'}"></div>
-        <div><div class="step-label">${s}</div>${i===currentIdx?'<div class="step-sub">Current status</div>':i<currentIdx?'<div class="step-sub" style="color:var(--em3)">Completed</div>':''}</div>
-      </div>`).join('')}
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-      <div style="background:var(--card);padding:10px;border-radius:var(--radius)"><div style="font-size:11px;color:var(--txt3)">SUBMITTED</div><div style="font-size:13px;color:var(--txt);margin-top:2px">${fmtDT(r.created_at)}</div></div>
-      <div style="background:var(--card);padding:10px;border-radius:var(--radius)"><div style="font-size:11px;color:var(--txt3)">PRIMARY NEED</div><div style="font-size:13px;color:var(--txt);margin-top:2px">${r.primary_need||'—'}</div></div>
-      <div style="background:var(--card);padding:10px;border-radius:var(--radius)"><div style="font-size:11px;color:var(--txt3)">URGENCY</div><div style="font-size:13px;color:var(--txt);margin-top:2px">${r.urgency||'Standard'}</div></div>
-      <div style="background:var(--card);padding:10px;border-radius:var(--radius)"><div style="font-size:11px;color:var(--txt3)">YOUR REF</div><div style="font-size:13px;color:var(--txt);margin-top:2px">${r.partner_ref||'—'}</div></div>
-    </div>
-    ${r.notes?`<div style="background:var(--card);padding:12px;border-radius:var(--radius);margin-bottom:10px"><div style="font-size:11px;color:var(--txt3);margin-bottom:4px">BACKGROUND</div><div style="font-size:13px;color:var(--txt2)">${r.notes}</div></div>`:''}
-    ${r.safeguarding?`<div style="background:#2a1a2a;border:1px solid #5a2a3a;padding:10px;border-radius:var(--radius);font-size:13px;color:#f9a8d4">🔐 Safeguarding: ${r.safeguarding}</div>`:''}`;
+  $('modal-ref-title').textContent=(r.first_name||'')+' '+(r.last_name||'');
+  $('modal-ref-body').innerHTML='<div style="margin-bottom:16px"><div style="font-size:11px;color:var(--txt3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Journey progress</div>'+stages.map((s,i)=>'<div class="timeline-step '+(i<currentIdx?'done':i===currentIdx?'current':'')+'"><div class="step-dot '+(i<currentIdx?'step-done':i===currentIdx?'step-current':'step-pending')+'"></div><div><div class="step-label">'+s+'</div>'+(i===currentIdx?'<div class="step-sub">Current status</div>':i<currentIdx?'<div class="step-sub" style="color:var(--em3)">Completed</div>':'')+'</div></div>').join('')+'</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px"><div style="background:var(--card);padding:10px;border-radius:var(--radius)"><div style="font-size:11px;color:var(--txt3)">SUBMITTED</div><div style="font-size:13px;color:var(--txt);margin-top:2px">'+fmtDT(r.created_at)+'</div></div><div style="background:var(--card);padding:10px;border-radius:var(--radius)"><div style="font-size:11px;color:var(--txt3)">PRIMARY NEED</div><div style="font-size:13px;color:var(--txt);margin-top:2px">'+(r.primary_need||'—')+'</div></div><div style="background:var(--card);padding:10px;border-radius:var(--radius)"><div style="font-size:11px;color:var(--txt3)">URGENCY</div><div style="font-size:13px;color:var(--txt);margin-top:2px">'+(r.urgency||'Standard')+'</div></div><div style="background:var(--card);padding:10px;border-radius:var(--radius)"><div style="font-size:11px;color:var(--txt3)">YOUR REF</div><div style="font-size:13px;color:var(--txt);margin-top:2px">'+(r.partner_ref||'—')+'</div></div></div>'+(r.notes?'<div style="background:var(--card);padding:12px;border-radius:var(--radius);margin-bottom:10px"><div style="font-size:11px;color:var(--txt3);margin-bottom:4px">BACKGROUND</div><div style="font-size:13px;color:var(--txt2)">'+r.notes+'</div></div>':'')+(r.safeguarding?'<div style="background:#2a1a2a;border:1px solid #5a2a3a;padding:10px;border-radius:var(--radius);font-size:13px;color:#f9a8d4">🔐 Safeguarding: '+r.safeguarding+'</div>':'');
   $('modal-ref').style.display='flex';
 }
 
@@ -436,10 +557,16 @@ async function submitReferral(){
   if(!fn||!ln){showMsg('ref-err','First name and last name are required.');return;}
   if(!notes){showMsg('ref-err','Please provide background and reason for referral.');return;}
   if(consent==='no'){showMsg('ref-err','Consent must be confirmed before submitting.');return;}
+  if(!URL_ORG_ID||!PARTNER||!PARTNER.org_id){
+    showMsg('ref-err','Could not identify the receiving organisation. Please reload via the original invitation link.');return;
+  }
+
   const barriers=[...$('r-barriers').selectedOptions].map(o=>o.value);
   setLoad('ref-btn',true,'Submitting…');
   const{error}=await sb.from('partner_referrals').insert({
-    partner_id:USER.id,partner_name:PARTNER?.org_name||'Partner',
+    partner_id:USER.id,
+    org_id:PARTNER.org_id,           // <-- the binding that was missing
+    partner_name:PARTNER.org_name||'Partner',
     first_name:fn,last_name:ln,dob:$('r-dob').value||null,
     phone:$('r-phone').value,email:$('r-email').value,
     primary_need:$('r-need').value,urgency:$('r-urgency').value,
@@ -448,8 +575,12 @@ async function submitReferral(){
     created_at:new Date().toISOString()
   });
   setLoad('ref-btn',false,'Submit referral');
-  if(error){showMsg('ref-err','Error: '+error.message);return;}
-  showMsg('ref-ok',`✓ Referral for ${fn} ${ln} submitted. The team will be in touch within ${$('r-urgency').value==='Crisis'?'a few hours':$('r-urgency').value==='Urgent'?'48 hours':'2 working days'}.`);
+  if(error){
+    showMsg('ref-err','Error: '+error.message);
+    console.error('referral insert failed:',error);
+    return;
+  }
+  showMsg('ref-ok','✓ Referral for '+fn+' '+ln+' sent to '+URL_ORG_NAME+'. Their team will be in touch within '+($('r-urgency').value==='Crisis'?'a few hours':$('r-urgency').value==='Urgent'?'48 hours':'2 working days')+'.');
   clearReferralForm();loadOverview();
 }
 
