@@ -3,459 +3,556 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>GreenCRM — Sign in</title>
+<title>Civara — Sign in</title>
 <meta name="robots" content="index, follow"/>
-<link rel="canonical" href="https://greencrm.co.uk/login.html"/>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%2310b981'/><text y='22' x='5' font-size='20'>🌿</text></svg>"/>
+<link rel="canonical" href="https://civara.co.uk/login.html"/>
+<link rel="icon" type="image/png" href="logo.png"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#0a0f0a;--surface:#111811;--card:#182018;--border:#2a3a2a;--em:#10b981;--em2:#059669;--txt:#e2f5eb;--txt2:#9ab8a4;--txt3:#6a8f76;--red:#f87171;--purple:#a78bfa;--radius:10px}
-body{background:var(--bg);color:var(--txt);font-family:system-ui,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
-.logo{font-size:28px;font-weight:800;color:var(--em);letter-spacing:-.5px;margin-bottom:4px;transition:color .3s}
-.logo span{color:var(--txt2);font-weight:400}
-.sub{font-size:13px;color:var(--txt3);margin-bottom:8px}
-.back-home{font-size:12px;color:var(--txt3);margin-bottom:20px;display:flex;align-items:center;gap:5px;transition:color .2s;cursor:pointer;text-decoration:none}
-.back-home:hover{color:var(--em)}
-.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:28px;width:100%;max-width:420px}
-.tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:20px}
-.tab{flex:1;background:none;color:var(--txt2);padding:9px;font-size:13px;font-weight:600;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all .2s}
-.tab.active{color:var(--em);border-bottom-color:var(--em)}
-.pane{display:none}.pane.active{display:block}
-.form-row{margin-bottom:13px}
-label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
-input,select{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--txt);border-radius:var(--radius);padding:10px 12px;font-size:14px;font-family:inherit;outline:none;transition:border-color .2s}
-input:focus,select:focus{border-color:var(--em)}
-.btn{width:100%;background:var(--em);color:#fff;padding:12px;border-radius:var(--radius);font-size:15px;font-weight:700;cursor:pointer;border:none;margin-top:4px;transition:all .2s}
-.btn:hover{background:var(--em2)}
-.btn:disabled{opacity:.6;cursor:not-allowed}
-.btn-ghost{background:var(--surface);color:var(--txt2);border:1px solid var(--border)}
-.btn-ghost:hover{border-color:var(--em);color:var(--em);background:var(--surface)}
-.msg{padding:10px 13px;border-radius:var(--radius);font-size:13px;margin-bottom:13px;display:none}
-.msg-err{background:#2a1a1a;border:1px solid #5a2a2a;color:var(--red)}
-.msg-ok{background:#1a3a2a;border:1px solid #2a5a3a;color:#34d399}
-.hint{font-size:12px;color:var(--txt3);text-align:center;margin-top:13px}
-.hint a{color:var(--em);cursor:pointer}
-.divider{height:1px;background:var(--border);margin:14px 0}
-.invited-box{background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:var(--radius);padding:12px;margin-bottom:14px;font-size:13px;color:var(--txt2)}
-.steps{display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:22px}
-.step-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--txt3)}
-.step-item.active{color:var(--em);font-weight:600}
-.step-item.done{color:var(--txt3)}
-.step-num{width:24px;height:24px;border-radius:50%;background:var(--border);color:var(--txt3);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:all .3s}
-.step-item.active .step-num{background:var(--em);color:#fff}
-.step-item.done .step-num{background:var(--surface);color:var(--em);border:1px solid var(--em)}
-.step-line{width:28px;height:1px;background:var(--border);margin:0 4px}
-.color-presets{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-.color-swatch{width:32px;height:32px;border-radius:8px;cursor:pointer;border:3px solid transparent;transition:all .2s;flex-shrink:0}
-.color-swatch:hover{transform:scale(1.1)}
-.color-swatch.selected{border-color:#fff;box-shadow:0 0 0 2px var(--em)}
-.color-preview{height:4px;border-radius:2px;margin-top:10px;transition:background .3s}
-.logo-drop{border:2px dashed var(--border);border-radius:var(--radius);padding:20px;text-align:center;cursor:pointer;transition:all .2s;position:relative}
-.logo-drop:hover{border-color:var(--em);background:rgba(16,185,129,.04)}
-.logo-drop input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
-.logo-preview{max-height:48px;max-width:160px;object-fit:contain;margin:0 auto 8px;display:block}
-@keyframes fadeInUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
-.welcome-anim{animation:fadeInUp .4s ease}
+:root{
+  --bg:#F5F1EA;
+  --surface:#FFFFFF;
+  --card:#FAF7F1;
+  --border:#E5DFD3;
+  --border-strong:#CFC6B3;
+  --em:#1F6F6D;
+  --em2:#2A9D8F;
+  --em-dark:#175553;
+  --accent:#F59E0B;
+  --accent-soft:#FCD9A0;
+  --sage:#9DB5A8;
+  --sand:#E5DFD3;
+  --text:#1F2A28;
+  --text-soft:#4F5B58;
+  --text-muted:#7A857F;
+  --danger:#B91C1C;
+  --danger-bg:#FEF2F2;
+  --success:#15803D;
+  --success-bg:#F0FDF4;
+  --shadow:0 1px 2px rgba(31,42,40,.04),0 4px 12px rgba(31,42,40,.06);
+  --shadow-lg:0 4px 16px rgba(31,42,40,.08),0 12px 32px rgba(31,42,40,.10);
+  --radius:14px;
+  --radius-sm:10px;
+}
+html,body{height:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  -webkit-font-smoothing:antialiased;
+  line-height:1.5;
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+}
+a{color:var(--em);text-decoration:none}
+a:hover{color:var(--em-dark);text-decoration:underline}
+
+/* ───── Header ───── */
+header{
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  padding:14px 24px;
+}
+.header-inner{
+  max-width:1200px;
+  margin:0 auto;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+.brand{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  text-decoration:none;
+  color:var(--text);
+}
+.brand:hover{text-decoration:none}
+.brand img{
+  height:32px;
+  width:auto;
+  display:block;
+}
+.brand-name{
+  font-size:18px;
+  font-weight:700;
+  letter-spacing:-.01em;
+  color:var(--text);
+}
+.header-link{
+  font-size:14px;
+  color:var(--text-soft);
+  font-weight:500;
+}
+
+/* ───── Main layout ───── */
+main{
+  flex:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:48px 20px;
+}
+.auth-card{
+  width:100%;
+  max-width:440px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:36px 32px;
+  box-shadow:var(--shadow-lg);
+}
+.auth-logo{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:12px;
+  margin-bottom:24px;
+}
+.auth-logo img{
+  height:48px;
+  width:auto;
+}
+.auth-logo .tagline{
+  font-size:13px;
+  color:var(--text-muted);
+  font-weight:500;
+}
+.auth-card h1{
+  font-size:24px;
+  font-weight:700;
+  letter-spacing:-.01em;
+  text-align:center;
+  margin-bottom:8px;
+}
+.auth-card .sub{
+  font-size:14px;
+  color:var(--text-soft);
+  text-align:center;
+  margin-bottom:28px;
+}
+
+/* ───── Tabs ───── */
+.tabs{
+  display:flex;
+  gap:4px;
+  background:var(--card);
+  padding:4px;
+  border-radius:var(--radius-sm);
+  margin-bottom:24px;
+}
+.tab{
+  flex:1;
+  padding:9px 12px;
+  border:none;
+  background:transparent;
+  font-size:14px;
+  font-weight:600;
+  color:var(--text-soft);
+  border-radius:8px;
+  cursor:pointer;
+  transition:all .15s;
+}
+.tab:hover{color:var(--text)}
+.tab.active{
+  background:var(--surface);
+  color:var(--em);
+  box-shadow:var(--shadow);
+}
+
+/* ───── Forms ───── */
+.field{margin-bottom:16px}
+label{
+  display:block;
+  font-size:13px;
+  font-weight:600;
+  color:var(--text);
+  margin-bottom:6px;
+}
+input[type=text],input[type=email],input[type=password]{
+  width:100%;
+  padding:11px 14px;
+  border:1px solid var(--border-strong);
+  border-radius:var(--radius-sm);
+  font-size:15px;
+  font-family:inherit;
+  background:var(--surface);
+  color:var(--text);
+  transition:border-color .15s,box-shadow .15s;
+}
+input:focus{
+  outline:none;
+  border-color:var(--em);
+  box-shadow:0 0 0 3px rgba(31,111,109,.15);
+}
+.hint{
+  font-size:12px;
+  color:var(--text-muted);
+  margin-top:5px;
+}
+.btn{
+  width:100%;
+  padding:12px 16px;
+  background:var(--em);
+  color:#fff;
+  border:none;
+  border-radius:var(--radius-sm);
+  font-size:15px;
+  font-weight:600;
+  cursor:pointer;
+  transition:background .15s;
+  font-family:inherit;
+}
+.btn:hover:not(:disabled){background:var(--em-dark)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-secondary{
+  background:transparent;
+  color:var(--em);
+  border:1px solid var(--border-strong);
+}
+.btn-secondary:hover:not(:disabled){
+  background:var(--card);
+  border-color:var(--em);
+}
+
+/* ───── Divider ───── */
+.divider{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin:20px 0;
+  color:var(--text-muted);
+  font-size:12px;
+  font-weight:500;
+}
+.divider::before,.divider::after{
+  content:'';
+  flex:1;
+  height:1px;
+  background:var(--border);
+}
+
+/* ───── Status messages ───── */
+.msg{
+  padding:11px 14px;
+  border-radius:var(--radius-sm);
+  font-size:14px;
+  margin-bottom:16px;
+  display:none;
+}
+.msg.show{display:block}
+.msg.error{
+  background:var(--danger-bg);
+  color:var(--danger);
+  border:1px solid #FECACA;
+}
+.msg.success{
+  background:var(--success-bg);
+  color:var(--success);
+  border:1px solid #BBF7D0;
+}
+.msg.info{
+  background:#EFF6FF;
+  color:#1D4ED8;
+  border:1px solid #BFDBFE;
+}
+
+/* ───── Footer ───── */
+.foot-link{
+  text-align:center;
+  margin-top:20px;
+  font-size:13px;
+  color:var(--text-soft);
+}
+footer{
+  padding:24px;
+  text-align:center;
+  font-size:13px;
+  color:var(--text-muted);
+  border-top:1px solid var(--border);
+  background:var(--surface);
+}
+footer a{color:var(--text-soft);margin:0 8px}
+
+/* ───── Loading ───── */
+.spinner{
+  display:inline-block;
+  width:14px;
+  height:14px;
+  border:2px solid rgba(255,255,255,.3);
+  border-top-color:#fff;
+  border-radius:50%;
+  animation:spin .8s linear infinite;
+  vertical-align:-2px;
+  margin-right:8px;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+@media(max-width:520px){
+  .auth-card{padding:28px 20px}
+  .auth-card h1{font-size:21px}
+}
 </style>
 </head>
 <body>
-<div class="logo" id="login-logo">Green<span>CRM</span></div>
-<div class="sub" id="login-sub">Built for outcomes. Not admin.</div>
-<a href="index.html" class="back-home">← Back to home</a>
 
-<div class="card">
-  <div class="tabs">
-    <button class="tab active" id="tab-signin" onclick="showTab('signin')">Sign in</button>
-    <button class="tab" id="tab-signup" onclick="showTab('signup')">Create account</button>
+<header>
+  <div class="header-inner">
+    <a href="index.html" class="brand">
+      <img src="logo.png" alt="Civara"/>
+    </a>
+    <a href="index.html" class="header-link">← Back to home</a>
   </div>
+</header>
 
-  <div id="pane-signin" class="pane active">
-    <div class="msg msg-err" id="si-err"></div>
-    <div class="form-row"><label>Email</label><input type="email" id="si-email" placeholder="you@charity.org" autocomplete="email"/></div>
-    <div class="form-row"><label>Password</label><input type="password" id="si-pass" placeholder="••••••••"/></div>
-    <button class="btn" id="si-btn" onclick="doSignIn()">Sign in</button>
-    <div class="hint">No account? <a onclick="showTab('signup')">Create one free →</a></div>
-    <div class="hint" style="margin-top:6px"><a onclick="showForgot()" style="color:var(--txt3)">Forgot password?</a></div>
-  </div>
-
-  <div id="pane-signup" class="pane">
-    <div class="steps" id="signup-steps">
-      <div class="step-item active" id="step-ind-1"><div class="step-num">1</div><span>Your org</span></div>
-      <div class="step-line"></div>
-      <div class="step-item" id="step-ind-2"><div class="step-num">2</div><span>Your details</span></div>
-      <div class="step-line"></div>
-      <div class="step-item" id="step-ind-3"><div class="step-num">3</div><span>Branding</span></div>
+<main>
+  <div class="auth-card">
+    <div class="auth-logo">
+      <img src="logo.png" alt="Civara"/>
+      <span class="tagline">Built for outcomes. Not admin.</span>
     </div>
 
-    <div class="msg msg-err" id="su-err"></div>
-    <div class="msg msg-ok" id="su-ok"></div>
-    <div id="invite-info" style="display:none" class="invited-box"></div>
-
-    <div id="su-step-1">
-      <div id="org-fields">
-        <div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:14px">Tell us about your organisation</div>
-        <div class="form-row"><label>Organisation name *</label><input id="su-org" placeholder="e.g. Waltham Forest CVS" oninput="updateOrgPreview()"/></div>
-        <div class="form-row"><label>Organisation type</label>
-          <select id="su-type">
-            <option>Employability charity</option>
-            <option>Circular economy / repair</option>
-            <option>Community organisation</option>
-            <option>Housing support</option>
-            <option>Other charity / VCSE</option>
-          </select>
-        </div>
-      </div>
-      <button class="btn" onclick="goStep(2)">Next → Your details</button>
-      <div class="hint">Already have an account? <a onclick="showTab('signin')">Sign in →</a></div>
+    <div class="tabs" role="tablist">
+      <button class="tab active" id="tab-signin" type="button" onclick="switchTab('signin')">Sign in</button>
+      <button class="tab" id="tab-signup" type="button" onclick="switchTab('signup')">Create account</button>
     </div>
 
-    <div id="su-step-2" style="display:none">
-      <div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:14px">Create your account</div>
-      <div class="form-row"><label>Your name *</label><input id="su-name" placeholder="Jane Smith"/></div>
-      <div class="form-row"><label>Email *</label><input type="email" id="su-email" placeholder="you@charity.org"/></div>
-      <div class="form-row"><label>Password (min 8 characters) *</label><input type="password" id="su-pass"/></div>
-      <div style="display:flex;gap:8px;margin-top:4px">
-        <button class="btn btn-ghost" style="flex:0 0 auto;width:auto;padding:12px 16px" onclick="goStep(1)">←</button>
-        <button class="btn" id="su-btn" onclick="doSignUp()">Create account →</button>
+    <div id="msg" class="msg"></div>
+
+    <!-- ───── Sign in form ───── -->
+    <div id="form-signin">
+      <h1>Welcome back</h1>
+      <p class="sub">Sign in to your Civara account</p>
+
+      <div class="field">
+        <label for="signin-email">Email</label>
+        <input type="email" id="signin-email" autocomplete="email" placeholder="you@organisation.org"/>
       </div>
-      <div class="hint">Already have an account? <a onclick="showTab('signin')">Sign in →</a></div>
+
+      <div class="field">
+        <label for="signin-password">Password</label>
+        <input type="password" id="signin-password" autocomplete="current-password" placeholder="••••••••"/>
+      </div>
+
+      <button class="btn" id="btn-signin" type="button" onclick="doSignIn()">Sign in</button>
+
+      <div class="divider">or</div>
+
+      <button class="btn btn-secondary" type="button" onclick="doMagicLink()">Email me a magic link</button>
+
+      <div class="foot-link">
+        <a href="#" onclick="doReset();return false;">Forgot your password?</a>
+      </div>
     </div>
 
-    <div id="su-step-3" style="display:none" class="welcome-anim">
-      <div style="text-align:center;margin-bottom:18px">
-        <div style="font-size:32px;margin-bottom:8px">🎉</div>
-        <div style="font-size:16px;font-weight:700;color:var(--txt);margin-bottom:4px">Account created!</div>
-        <div style="font-size:13px;color:var(--txt2)">Make GreenCRM yours — takes 30 seconds</div>
+    <!-- ───── Sign up form ───── -->
+    <div id="form-signup" style="display:none">
+      <h1>Create your account</h1>
+      <p class="sub">Get started with Civara in under a minute</p>
+
+      <div class="field">
+        <label for="signup-name">Your name</label>
+        <input type="text" id="signup-name" autocomplete="name" placeholder="Jane Smith"/>
       </div>
 
-      <div class="form-row">
-        <label>Your brand colour</label>
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-          <input type="color" id="su-color" value="#10b981" style="width:44px;height:38px;padding:2px;cursor:pointer;border-radius:8px;background:var(--surface);border:1px solid var(--border)" oninput="onSignupColorChange(this.value)"/>
-          <input type="text" id="su-color-hex" value="#10b981" style="flex:1;font-family:monospace;font-size:13px" oninput="if(this.value.match(/^#[0-9a-f]{6}$/i)){document.getElementById('su-color').value=this.value;onSignupColorChange(this.value)}"/>
-        </div>
-        <div class="color-presets" id="su-presets">
-          <div class="color-swatch selected" style="background:#10b981" onclick="setSignupColor('#10b981')" title="#10b981"></div>
-          <div class="color-swatch" style="background:#3b82f6" onclick="setSignupColor('#3b82f6')" title="#3b82f6"></div>
-          <div class="color-swatch" style="background:#8b5cf6" onclick="setSignupColor('#8b5cf6')" title="#8b5cf6"></div>
-          <div class="color-swatch" style="background:#f59e0b" onclick="setSignupColor('#f59e0b')" title="#f59e0b"></div>
-          <div class="color-swatch" style="background:#ef4444" onclick="setSignupColor('#ef4444')" title="#ef4444"></div>
-          <div class="color-swatch" style="background:#ec4899" onclick="setSignupColor('#ec4899')" title="#ec4899"></div>
-          <div class="color-swatch" style="background:#14b8a6" onclick="setSignupColor('#14b8a6')" title="#14b8a6"></div>
-          <div class="color-swatch" style="background:#f97316" onclick="setSignupColor('#f97316')" title="#f97316"></div>
-          <div class="color-swatch" style="background:#6366f1" onclick="setSignupColor('#6366f1')" title="#6366f1"></div>
-          <div class="color-swatch" style="background:#0ea5e9" onclick="setSignupColor('#0ea5e9')" title="#0ea5e9"></div>
-        </div>
-        <div class="color-preview" id="su-color-preview" style="background:#10b981;margin-top:10px"></div>
+      <div class="field">
+        <label for="signup-email">Work email</label>
+        <input type="email" id="signup-email" autocomplete="email" placeholder="you@organisation.org"/>
       </div>
 
-      <div class="form-row" id="su-logo-row">
-        <label>Your logo (optional)</label>
-        <div class="logo-drop" id="su-logo-drop">
-          <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" onchange="handleSignupLogo(this)"/>
-          <div id="su-logo-preview-wrap">
-            <div style="font-size:24px;margin-bottom:6px">🖼️</div>
-            <div style="font-size:12px;color:var(--txt3)">Drop your logo here or click to upload</div>
-            <div style="font-size:11px;color:var(--txt3);margin-top:3px">PNG, JPG, SVG · Max 2MB</div>
-          </div>
-        </div>
+      <div class="field">
+        <label for="signup-password">Password</label>
+        <input type="password" id="signup-password" autocomplete="new-password" placeholder="At least 8 characters"/>
+        <div class="hint">Use 8+ characters with a mix of letters and numbers</div>
       </div>
 
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:16px;display:flex;align-items:center;gap:10px" id="su-brand-preview">
-        <div id="su-preview-dot" style="width:36px;height:36px;border-radius:8px;background:#10b981;flex-shrink:0"></div>
-        <div>
-          <div id="su-preview-name" style="font-size:14px;font-weight:700;color:var(--txt)">Your Organisation</div>
-          <div style="font-size:11px;color:var(--txt3)">How your brand will look in GreenCRM</div>
-        </div>
-        <div id="su-preview-logo" style="margin-left:auto"></div>
+      <div class="field">
+        <label for="signup-org">Organisation name</label>
+        <input type="text" id="signup-org" autocomplete="organization" placeholder="Acme Charity"/>
+        <div class="hint">We'll create a workspace for your team</div>
       </div>
 
-      <button class="btn" id="su-brand-btn" onclick="saveBrandingAndEnter()">✦ Launch my GreenCRM →</button>
-      <div class="hint"><a onclick="skipBranding()">Skip for now — I'll do this later</a></div>
+      <button class="btn" id="btn-signup" type="button" onclick="doSignUp()">Create account</button>
+
+      <div class="foot-link" style="margin-top:16px">
+        By creating an account you agree to our <a href="#">Terms</a> and <a href="#">Privacy Policy</a>.
+      </div>
     </div>
   </div>
+</main>
 
-  <div id="pane-forgot" class="pane">
-    <div class="msg msg-err" id="fg-err"></div>
-    <div class="msg msg-ok" id="fg-ok"></div>
-    <p style="font-size:13px;color:var(--txt2);margin-bottom:14px">Enter your email and we'll send a reset link.</p>
-    <div class="form-row"><label>Email</label><input type="email" id="fg-email"/></div>
-    <button class="btn" onclick="doReset()">Send reset link</button>
-    <div class="hint"><a onclick="showTab('signin')">← Back to sign in</a></div>
-  </div>
-</div>
+<footer>
+  <div>© <span id="year"></span> Civara · <a href="#">Privacy</a> · <a href="#">Terms</a> · <a href="mailto:hello@civara.co.uk">hello@civara.co.uk</a></div>
+</footer>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script>
-const SURL='https://nznfrxzgvcjhfsdaphyp.supabase.co';
-const SKEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw';
-const sb=supabase.createClient(SURL,SKEY);
-let inviteData=null,_newOrgId=null,_newUserId=null,_signupLogoFile=null;
+'use strict';
+
+const SB_URL='https://nznfrxzgvcjhfsdaphyp.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzAxMDc3MDQsImV4cCI6MjA0NTY4MzcwNH0.XXX';
+
+const sb=window.supabase?window.supabase.createClient(SB_URL,SB_KEY):null;
+
+document.getElementById('year').textContent=new Date().getFullYear();
+
+// ───── Tab switching ─────
+function switchTab(which){
+  document.getElementById('tab-signin').classList.toggle('active',which==='signin');
+  document.getElementById('tab-signup').classList.toggle('active',which==='signup');
+  document.getElementById('form-signin').style.display=which==='signin'?'block':'none';
+  document.getElementById('form-signup').style.display=which==='signup'?'block':'none';
+  hideMsg();
+}
+
+// ───── Pre-fill from URL params ─────
 const params=new URLSearchParams(window.location.search);
-const inviteToken=params.get('invite');
+if(params.get('signup')==='1'){switchTab('signup')}
+if(params.get('email')){
+  document.getElementById('signin-email').value=params.get('email');
+  document.getElementById('signup-email').value=params.get('email');
+}
 
-async function init(){
-  const{data:{session}}=await sb.auth.getSession();
-  if(session){redirectAfterAuth(session.user.id);return;}
-  if(inviteToken){
-    const{data:inv}=await sb.from('invites').select('*,organisations(name)').eq('token',inviteToken).eq('accepted',false).single();
-    if(inv){
-      inviteData=inv;showTab('signup');goStep(2);
-      document.getElementById('org-fields').style.display='none';
-      document.getElementById('su-email').value=inv.email;
-      document.getElementById('su-email').readOnly=true;
-      const roleColors={admin:'#10b981',manager:'#60a5fa',advisor:'#a78bfa','read-only':'#f59e0b'};
-      document.getElementById('invite-info').style.display='block';
-      document.getElementById('invite-info').innerHTML='You\'ve been invited to join <strong>'+(inv.organisations?.name||'an organisation')+'</strong> as <strong style="color:'+(roleColors[inv.role]||'var(--em)')+'">'+inv.role+'</strong>.';
-    }else{
-      document.getElementById('invite-info').style.display='block';
-      document.getElementById('invite-info').innerHTML='⚠ This invite link has expired or already been used.';
+// ───── Message helpers ─────
+function showMsg(text,kind){
+  const m=document.getElementById('msg');
+  m.textContent=text;
+  m.className='msg show '+(kind||'info');
+}
+function hideMsg(){
+  const m=document.getElementById('msg');
+  m.className='msg';
+  m.textContent='';
+}
+
+// ───── Already signed in? bounce to app ─────
+(async()=>{
+  if(!sb)return;
+  try{
+    const{data}=await sb.auth.getSession();
+    if(data?.session){
+      window.location.href='app.html';
     }
-  }
-  const hash=new URLSearchParams(window.location.hash.replace('#',''));
-  if(hash.get('type')==='recovery'){
-    showForgot();
-    document.getElementById('pane-forgot').innerHTML='<div class="msg msg-ok" id="pw-ok"></div><div class="msg msg-err" id="pw-err"></div><p style="font-size:13px;color:var(--txt2);margin-bottom:14px">Enter your new password.</p><div class="form-row"><label>New password</label><input type="password" id="new-pass" placeholder="Min 8 characters"/></div><button class="btn" onclick="doUpdatePassword()">Set new password</button>';
-  }
-}
+  }catch(e){console.error('session check failed',e)}
+})();
 
-async function redirectAfterAuth(userId){
-  const{data:mem}=await sb.from('memberships').select('org_id').eq('user_id',userId).eq('status','active').limit(1).maybeSingle();
-  if(mem&&mem.org_id){window.location.href='app.html?org_id='+mem.org_id;return;}
-  const{data:profile}=await sb.from('profiles').select('org_id').eq('id',userId).maybeSingle();
-  if(profile&&profile.org_id){window.location.href='app.html?org_id='+profile.org_id;return;}
-  const{data:sa}=await sb.from('super_admins').select('user_id').eq('user_id',userId).maybeSingle();
-  if(sa){window.location.href='super-admin.html';return;}
-  showMsg('si-err','Account found but no organisation linked. Contact support.');
-}
-
-function showTab(t){
-  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
-  const tabBtn=document.getElementById('tab-'+t);
-  if(tabBtn)tabBtn.classList.add('active');
-  document.getElementById('pane-'+t).classList.add('active');
-}
-function showForgot(){
-  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
-  document.getElementById('pane-forgot').classList.add('active');
-}
-
-function goStep(n){
-  [1,2,3].forEach(i=>{
-    document.getElementById('su-step-'+i).style.display=i===n?'block':'none';
-    const ind=document.getElementById('step-ind-'+i);
-    ind.className='step-item'+(i===n?' active':i<n?' done':'');
-  });
-}
-
-function updateOrgPreview(){
-  const name=document.getElementById('su-org').value||'Your Organisation';
-  document.getElementById('su-preview-name').textContent=name;
-}
-
+// ───── Sign in ─────
 async function doSignIn(){
-  const email=document.getElementById('si-email').value.trim();
-  const pass=document.getElementById('si-pass').value;
-  hideMsg('si-err');
-  if(!email||!pass){showMsg('si-err','Please enter your email and password.');return;}
-  setLoad('si-btn',true,'Sign in');
-  const{data,error}=await sb.auth.signInWithPassword({email,password:pass});
-  if(error){setLoad('si-btn',false,'Sign in');showMsg('si-err',error.message);return;}
-  await redirectAfterAuth(data.user.id);
-}
+  const email=document.getElementById('signin-email').value.trim();
+  const password=document.getElementById('signin-password').value;
+  if(!email||!password){showMsg('Please enter your email and password','error');return}
+  if(!sb){showMsg('Authentication service unavailable','error');return}
 
-async function doSignUp(){
-  const name=document.getElementById('su-name').value.trim();
-  const email=document.getElementById('su-email').value.trim();
-  const pass=document.getElementById('su-pass').value;
-  const org=inviteData?null:document.getElementById('su-org').value.trim();
-  const orgType=inviteData?null:document.getElementById('su-type').value;
-  hideMsg('su-err','su-ok');
+  const btn=document.getElementById('btn-signin');
+  btn.disabled=true;
+  btn.innerHTML='<span class="spinner"></span>Signing in…';
+  hideMsg();
 
-  if(!name||!email||!pass){showMsg('su-err','Please fill in all fields.');return;}
-  if(!inviteData&&!org){showMsg('su-err','Please enter your organisation name.');return;}
-  if(pass.length<8){showMsg('su-err','Password must be at least 8 characters.');return;}
-
-  setLoad('su-btn',true,'Create account');
-
-  try {
-    // 1. Sign up
-    const signUpRes=await sb.auth.signUp({email,password:pass,options:{data:{full_name:name}}});
-    if(signUpRes.error){
-      setLoad('su-btn',false,'Create account →');
-      showMsg('su-err',signUpRes.error.message);
-      return;
-    }
-    const uid=signUpRes.data&&signUpRes.data.user?signUpRes.data.user.id:null;
-    if(!uid){
-      setLoad('su-btn',false,'Create account →');
-      showMsg('su-err','Signup failed — please try again.');
-      return;
-    }
-    _newUserId=uid;
-
-    // 2. Sign in to establish session
-    const siRes=await sb.auth.signInWithPassword({email,password:pass});
-    if(siRes.error){
-      setLoad('su-btn',false,'Create account →');
-      if(siRes.error.message.toLowerCase().indexOf('confirm')>=0){
-        showMsg('su-err','Account created. Please check your email to confirm, then sign in.');
-        setTimeout(function(){showTab('signin');},3000);
-      }else{
-        showMsg('su-err','Sign-in after signup failed: '+siRes.error.message);
-      }
-      return;
-    }
-
-    // 3. Wait for session to be properly established
-    let sessionReady=false;
-    for(let i=0;i<15;i++){
-      const sRes=await sb.auth.getSession();
-      if(sRes.data&&sRes.data.session&&sRes.data.session.user){sessionReady=true;break;}
-      await new Promise(function(r){setTimeout(r,250);});
-    }
-    if(!sessionReady){
-      setLoad('su-btn',false,'Create account →');
-      showMsg('su-err','Could not establish session. Please try signing in.');
-      return;
-    }
-
-    // Debug — log session state to console (safe to leave in)
-    const dbg=await sb.auth.getSession();
-    console.log('[GreenCRM signup] session ready, user id:',dbg.data&&dbg.data.session?dbg.data.session.user.id:'NONE');
-    console.log('[GreenCRM signup] access token present:',!!(dbg.data&&dbg.data.session&&dbg.data.session.access_token));
-
-    // 4. Branch — invited or new org
-    if(inviteData){
-      _newOrgId=inviteData.org_id;
-      try{await sb.from('memberships').insert({user_id:uid,org_id:_newOrgId,role:inviteData.role||'advisor',status:'active',joined_at:new Date().toISOString()});}catch(e){console.warn(e);}
-      try{await sb.from('profiles').upsert({id:uid,full_name:name,email,org_id:_newOrgId,role:inviteData.role,status:'active'});}catch(e){console.warn(e);}
-      try{await sb.from('invites').update({accepted:true}).eq('token',inviteToken);}catch(e){}
-      window.location.href='app.html?org_id='+_newOrgId;
-      return;
-    }
-
-    // 5. Create org
-    const orgRes=await sb.from('organisations').insert({
-      name:org,sector:orgType,owner_id:uid,plan:'free',status:'active',
-      brand_color:'#10b981',
-      modules:{participants:true,volunteers:true,events:true,employers:false,circular:false,funders:false}
-    }).select().single();
-
-    if(orgRes.error){
-      setLoad('su-btn',false,'Create account →');
-      showMsg('su-err','Could not create organisation: '+orgRes.error.message);
-console.error('[GreenCRM signup] org insert failed:',JSON.stringify(orgRes.error,null,2));      return;
-    }
-    _newOrgId=orgRes.data.id;
-
-    // 6. Create membership row (RBAC)
-    try{await sb.from('memberships').insert({user_id:uid,org_id:_newOrgId,role:'manager',status:'active',joined_at:new Date().toISOString()});}catch(e){console.warn('membership:',e);}
-
-    // 7. Create profile row (legacy)
-    try{await sb.from('profiles').upsert({id:uid,full_name:name,email,org_id:_newOrgId,role:'manager',status:'active'});}catch(e){console.warn('profile:',e);}
-
-    // 8. Show branding step
-    setLoad('su-btn',false,'Create account →');
-    document.getElementById('su-preview-name').textContent=org;
-    document.getElementById('login-logo').innerHTML=org+'<span style="color:var(--txt2);font-weight:400"> CRM</span>';
-    goStep(3);
-
-  } catch(err) {
-    setLoad('su-btn',false,'Create account →');
-    showMsg('su-err','Unexpected error: '+(err.message||err));
-    console.error('[GreenCRM signup] error:',err);
+  try{
+    const{data,error}=await sb.auth.signInWithPassword({email,password});
+    if(error)throw error;
+    showMsg('Signed in — redirecting…','success');
+    setTimeout(()=>{window.location.href='app.html'},600);
+  }catch(e){
+    showMsg(e.message||'Sign-in failed. Please check your credentials.','error');
+    btn.disabled=false;
+    btn.textContent='Sign in';
   }
 }
 
-function onSignupColorChange(color){
-  document.getElementById('su-color-hex').value=color;
-  document.getElementById('su-preview-dot').style.background=color;
-  document.getElementById('su-color-preview').style.background=color;
-  document.getElementById('login-logo').style.color=color;
-  document.querySelectorAll('.color-swatch').forEach(function(s){
-    s.classList.toggle('selected',s.style.background===color||s.title===color);
-  });
-}
+// ───── Magic link ─────
+async function doMagicLink(){
+  const email=document.getElementById('signin-email').value.trim();
+  if(!email){showMsg('Enter your email above first, then click magic link','error');return}
+  if(!sb){showMsg('Authentication service unavailable','error');return}
 
-function setSignupColor(color){
-  document.getElementById('su-color').value=color;
-  onSignupColorChange(color);
-}
-
-function handleSignupLogo(input){
-  const file=input.files[0];
-  if(!file)return;
-  if(file.size>2*1024*1024){alert('Logo must be under 2MB');return;}
-  _signupLogoFile=file;
-  const reader=new FileReader();
-  reader.onload=function(e){
-    document.getElementById('su-logo-preview-wrap').innerHTML='<img src="'+e.target.result+'" class="logo-preview"/><div style="font-size:11px;color:var(--em);margin-top:4px">✓ '+file.name+'</div>';
-    document.getElementById('su-preview-logo').innerHTML='<img src="'+e.target.result+'" style="max-height:28px;max-width:100px;object-fit:contain"/>';
-  };
-  reader.readAsDataURL(file);
-}
-
-async function saveBrandingAndEnter(){
-  const btn=document.getElementById('su-brand-btn');
-  btn.textContent='Setting up your workspace…';btn.disabled=true;
-  const color=document.getElementById('su-color').value;
-  let logoUrl=null;
-  if(_signupLogoFile&&_newOrgId){
-    try{
-      const ext=_signupLogoFile.name.split('.').pop();
-      const path='logos/'+_newOrgId+'.'+ext;
-      const upRes=await sb.storage.from('org-assets').upload(path,_signupLogoFile,{upsert:true});
-      if(!upRes.error){const urlRes=sb.storage.from('org-assets').getPublicUrl(path);logoUrl=urlRes.data.publicUrl;}
-    }catch(e){console.log('Logo upload:',e);}
+  hideMsg();
+  try{
+    const{error}=await sb.auth.signInWithOtp({
+      email,
+      options:{emailRedirectTo:window.location.origin+'/app.html'}
+    });
+    if(error)throw error;
+    showMsg('Check your inbox — we just sent you a sign-in link.','success');
+  }catch(e){
+    showMsg(e.message||'Could not send magic link. Try again?','error');
   }
-  const update={brand_color:color};
-  if(logoUrl)update.logo_url=logoUrl;
-  try{await sb.from('organisations').update(update).eq('id',_newOrgId);}catch(e){console.warn(e);}
-  window.location.href='app.html?org_id='+_newOrgId+'&welcome=1';
 }
 
-async function skipBranding(){
-  window.location.href='app.html?org_id='+_newOrgId+'&welcome=1';
-}
-
+// ───── Password reset ─────
 async function doReset(){
-  const email=document.getElementById('fg-email').value.trim();
-  hideMsg('fg-err','fg-ok');
-  if(!email){showMsg('fg-err','Please enter your email.');return;}
-  const{error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin+'/login.html'});
-  if(error){showMsg('fg-err',error.message);return;}
-  showMsg('fg-ok','Reset link sent! Check your inbox.');
-}
-async function doUpdatePassword(){
-  const pass=document.getElementById('new-pass').value;
-  if(pass.length<8){showMsg('pw-err','Password must be at least 8 characters.');return;}
-  const{error}=await sb.auth.updateUser({password:pass});
-  if(error){showMsg('pw-err',error.message);return;}
-  showMsg('pw-ok','✓ Password updated! Redirecting…');
-  setTimeout(function(){window.location.href='login.html';},1500);
-}
+  const email=document.getElementById('signin-email').value.trim();
+  if(!email){showMsg('Enter your email above first','error');return}
+  if(!sb){showMsg('Authentication service unavailable','error');return}
 
-function showMsg(id,msg){const e=document.getElementById(id);if(!e)return;e.textContent=msg;e.style.display='block';}
-function hideMsg(){for(let i=0;i<arguments.length;i++){const e=document.getElementById(arguments[i]);if(e)e.style.display='none';}}
-function setLoad(id,on,lbl){const b=document.getElementById(id);if(!b)return;b.disabled=on;b.textContent=on?'Please wait…':lbl;}
-
-document.addEventListener('keydown',function(e){
-  if(e.key!=='Enter')return;
-  const activePane=document.querySelector('.pane.active');
-  if(!activePane)return;
-  const active=activePane.id;
-  if(active==='pane-signin')doSignIn();
-  else if(active==='pane-signup'){
-    if(document.getElementById('su-step-1').style.display!=='none')goStep(2);
-    else if(document.getElementById('su-step-2').style.display!=='none')doSignUp();
+  hideMsg();
+  try{
+    const{error}=await sb.auth.resetPasswordForEmail(email,{
+      redirectTo:window.location.origin+'/login.html'
+    });
+    if(error)throw error;
+    showMsg('Password reset link sent. Check your inbox.','success');
+  }catch(e){
+    showMsg(e.message||'Could not send reset link','error');
   }
-  else if(active==='pane-forgot')doReset();
-});
+}
 
-init();
+// ───── Sign up ─────
+async function doSignUp(){
+  const name=document.getElementById('signup-name').value.trim();
+  const email=document.getElementById('signup-email').value.trim();
+  const password=document.getElementById('signup-password').value;
+  const org=document.getElementById('signup-org').value.trim();
+
+  if(!name||!email||!password||!org){
+    showMsg('Please fill in all fields','error');return;
+  }
+  if(password.length<8){
+    showMsg('Password must be at least 8 characters','error');return;
+  }
+  if(!sb){showMsg('Authentication service unavailable','error');return}
+
+  const btn=document.getElementById('btn-signup');
+  btn.disabled=true;
+  btn.innerHTML='<span class="spinner"></span>Creating account…';
+  hideMsg();
+
+  try{
+    const{data,error}=await sb.auth.signUp({
+      email,
+      password,
+      options:{
+        data:{full_name:name,org_name:org},
+        emailRedirectTo:window.location.origin+'/app.html?welcome=1'
+      }
+    });
+    if(error)throw error;
+
+    if(data?.session){
+      // Auto-confirmed — go straight in
+      showMsg('Account created — redirecting…','success');
+      setTimeout(()=>{window.location.href='app.html?welcome=1'},600);
+    }else{
+      // Email confirmation required
+      showMsg('Account created! Check your email to confirm and finish setup.','success');
+      btn.textContent='Check your email';
+    }
+  }catch(e){
+    showMsg(e.message||'Could not create account. Try a different email?','error');
+    btn.disabled=false;
+    btn.textContent='Create account';
+  }
+}
+
+// ───── Enter key submits ─────
+document.getElementById('signin-password').addEventListener('keydown',e=>{
+  if(e.key==='Enter')doSignIn();
+});
+document.getElementById('signup-org').addEventListener('keydown',e=>{
+  if(e.key==='Enter')doSignUp();
+});
 </script>
+
 </body>
 </html>
