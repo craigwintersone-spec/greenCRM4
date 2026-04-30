@@ -337,10 +337,6 @@ footer a{color:var(--text-soft);margin:0 8px}
 
       <button class="btn" id="btn-signin" type="button" onclick="doSignIn()">Sign in</button>
 
-      <div class="divider">or</div>
-
-      <button class="btn btn-secondary" type="button" onclick="doMagicLink()">Email me a magic link</button>
-
       <div class="foot-link">
         <a href="#" onclick="doReset();return false;">Forgot your password?</a>
       </div>
@@ -458,25 +454,6 @@ async function doSignIn(){
     showMsg(e.message||'Sign-in failed. Please check your credentials.','error');
     btn.disabled=false;
     btn.textContent='Sign in';
-  }
-}
-
-// ───── Magic link ─────
-async function doMagicLink(){
-  const email=document.getElementById('signin-email').value.trim();
-  if(!email){showMsg('Enter your email above first, then click magic link','error');return}
-  if(!sb){showMsg('Authentication service unavailable','error');return}
-
-  hideMsg();
-  try{
-    const{error}=await sb.auth.signInWithOtp({
-      email,
-      options:{emailRedirectTo:window.location.origin+'/app.html'}
-    });
-    if(error)throw error;
-    showMsg('Check your inbox — we just sent you a sign-in link.','success');
-  }catch(e){
-    showMsg(e.message||'Could not send magic link. Try again?','error');
   }
 }
 
