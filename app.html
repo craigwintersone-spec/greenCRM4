@@ -226,6 +226,9 @@ tr:hover td{background:rgba(31,111,109,.03)}
 .report-header-flex .report-header-logo{flex-shrink:0}
 @media print{.org-logo-report{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}.org-logo-banner,.org-logo-sidebar{display:none !important}}
 @media(max-width:900px){#sidebar{width:52px}.nav-btn span:not(.icon),.nav-section,.nav-btn .ai-dot,.sidebar-logo img{display:none}.stats-grid{grid-template-columns:repeat(2,1fr)}.kanban{grid-template-columns:repeat(3,1fr)}.report-doc{padding:28px 22px}.org-logo-sidebar{display:none}}
+  .brand-swatch{width:32px;height:32px;border-radius:8px;cursor:pointer;border:2px solid transparent;transition:all .15s;flex-shrink:0}
+.brand-swatch:hover{transform:scale(1.08)}
+.brand-swatch.selected{border-color:var(--txt);transform:scale(1.08)}
 </style>
 </head>
 <body>
@@ -679,6 +682,42 @@ tr:hover td{background:rgba(31,111,109,.03)}
 </div></div>
 
 <!-- ── MODALS ─────────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="modal-branding"><div class="modal" style="max-width:520px">
+  <h2 id="branding-modal-title">Welcome to Civara — make it yours</h2>
+  <p style="font-size:13px;color:var(--txt3);margin-bottom:18px;line-height:1.6">
+    Set your organisation's logo and brand colour. They'll appear on the sidebar, funder reports, and partner portal. You can change these any time from Settings.
+  </p>
+
+  <div class="form-row">
+    <label>Organisation logo</label>
+    <div id="logo-preview-wrap" style="display:flex;align-items:center;gap:14px;margin-bottom:8px">
+      <div id="logo-preview" style="width:90px;height:90px;border-radius:10px;background:var(--bg);border:1px dashed var(--border);display:flex;align-items:center;justify-content:center;color:var(--txt3);font-size:11px;text-align:center;flex-shrink:0;overflow:hidden">No logo<br/>yet</div>
+      <div style="flex:1">
+        <input type="file" id="logo-file-input" accept="image/png,image/jpeg,image/svg+xml" style="display:none" onchange="handleLogoSelect(event)"/>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('logo-file-input').click()">📁 Choose file</button>
+        <div style="font-size:11px;color:var(--txt3);margin-top:6px">PNG, JPG or SVG · Max 2MB · Square or wide both work</div>
+      </div>
+    </div>
+    <div id="logo-upload-status" style="font-size:12px;color:var(--txt3);margin-top:4px"></div>
+  </div>
+
+  <div class="form-row">
+    <label>Accent colour</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px" id="brand-color-swatches"></div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:12px;color:var(--txt3)">Or paste a hex:</span>
+      <input id="brand-color-hex" type="text" placeholder="#1F6F6D" style="max-width:130px;font-family:ui-monospace,monospace" oninput="onHexInput(this.value)"/>
+      <div id="brand-color-preview" style="width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:#1F6F6D;flex-shrink:0"></div>
+    </div>
+  </div>
+
+  <div id="branding-error" class="alert alert-warn" style="display:none;margin-top:12px"></div>
+
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="skipBranding()">Skip for now</button>
+    <button class="btn btn-p" id="branding-save-btn" onclick="saveBranding()">Save and continue</button>
+  </div>
+</div></div>
 <div class="modal-overlay" id="modal-funder"><div class="modal" style="max-width:560px">
   <h2 id="funder-modal-title">Add funder</h2>
   <div class="form-grid-2">
@@ -2062,7 +2101,103 @@ async function toggleDemoMode(on){
   const tog=$('demo-toggle');
   if(tog)tog.setAttribute('onclick','toggleDemoMode('+(!_demoMode)+')');
 }
+// ── BRANDING / FIRST-LOGIN MODAL ─────────────────────────────────
+const BRAND_COLOURS=[
+  {hex:'#1F6F6D',name:'Civara teal'},
+  {hex:'#175655',name:'Deep teal'},
+  {hex:'#2A9D8F',name:'Sea green'},
+  {hex:'#0EA5E9',name:'Sky'},
+  {hex:'#6366F1',name:'Indigo'},
+  {hex:'#7C3AED',name:'Violet'},
+  {hex:'#EC4899',name:'Pink'},
+  {hex:'#F59E0B',name:'Amber'},
+  {hex:'#EF4444',name:'Red'},
+  {hex:'#10B981',name:'Emerald'},
+  {hex:'#0F766E',name:'Forest'},
+  {hex:'#1E293B',name:'Slate'},
+];
+let _selectedLogoFile=null;
+let _selectedColour='#1F6F6D';
 
+function renderColourSwatches(){
+  const wrap=$('brand-color-swatches');if(!wrap)return;
+  wrap.innerHTML=BRAND_COLOURS.map(c=>'<div class="brand-swatch'+(c.hex===_selectedColour?' selected':'')+'" style="background:'+c.hex+'" title="'+c.name+'" onclick="pickColour(\''+c.hex+'\')"></div>').join('');
+}
+function pickColour(hex){
+  _selectedColour=hex;
+  $('brand-color-hex').value=hex;
+  $('brand-color-preview').style.background=hex;
+  renderColourSwatches();
+}
+function onHexInput(v){
+  v=v.trim();
+  if(/^#[0-9A-Fa-f]{6}$/.test(v)){
+    _selectedColour=v;
+    $('brand-color-preview').style.background=v;
+    renderColourSwatches();
+  }
+}
+function handleLogoSelect(ev){
+  const file=ev.target.files?.[0];if(!file)return;
+  if(file.size>2*1024*1024){$('logo-upload-status').textContent='⚠ File too large — max 2MB';$('logo-upload-status').style.color='var(--red)';_selectedLogoFile=null;return;}
+  _selectedLogoFile=file;
+  const reader=new FileReader();
+  reader.onload=e=>{$('logo-preview').innerHTML='<img src="'+e.target.result+'" style="max-width:100%;max-height:100%;object-fit:contain"/>';};
+  reader.readAsDataURL(file);
+  $('logo-upload-status').textContent='✓ '+file.name+' ready';
+  $('logo-upload-status').style.color='var(--em)';
+}
+function showBrandingError(msg){const el=$('branding-error');el.textContent=msg;el.style.display='flex';}
+function hideBrandingError(){$('branding-error').style.display='none';}
+
+async function saveBranding(){
+  hideBrandingError();
+  const btn=$('branding-save-btn');btn.textContent='Saving…';btn.disabled=true;
+  try{
+    let logoUrl=currentOrg?.logo_url||null;
+    if(_selectedLogoFile){
+      const ext=_selectedLogoFile.name.split('.').pop().toLowerCase();
+      const path=orgId+'/logo-'+Date.now()+'.'+ext;
+      const{error:upErr}=await sb.storage.from('org-logos').upload(path,_selectedLogoFile,{cacheControl:'3600',upsert:false});
+      if(upErr)throw new Error('Upload failed: '+upErr.message);
+      const{data:urlData}=sb.storage.from('org-logos').getPublicUrl(path);
+      logoUrl=urlData.publicUrl;
+    }
+    const newSettings={...(currentOrg?.settings||{}),branding_completed:true};
+    const{error:updErr}=await sb.from('organisations').update({logo_url:logoUrl,brand_color:_selectedColour,settings:newSettings}).eq('id',orgId);
+    if(updErr)throw new Error('Save failed: '+updErr.message);
+    currentOrg={...currentOrg,logo_url:logoUrl,brand_color:_selectedColour,settings:newSettings};
+    applyBranding(currentOrg);
+    closeModal('modal-branding');
+  }catch(e){showBrandingError(e.message);}
+  finally{btn.textContent='Save and continue';btn.disabled=false;}
+}
+
+async function skipBranding(){
+  try{
+    const newSettings={...(currentOrg?.settings||{}),branding_completed:true};
+    await sb.from('organisations').update({settings:newSettings}).eq('id',orgId);
+    currentOrg={...currentOrg,settings:newSettings};
+  }catch(e){console.warn('Could not mark branding skipped:',e);}
+  closeModal('modal-branding');
+}
+
+function maybeShowBrandingModal(){
+  if(!currentOrg)return;
+  if(currentRole!=='manager'&&currentRole!=='admin'&&!isSuperAdmin)return;
+  if(currentOrg.settings?.branding_completed)return;
+  _selectedLogoFile=null;
+  _selectedColour=currentOrg.brand_color||'#1F6F6D';
+  $('brand-color-hex').value=_selectedColour;
+  $('brand-color-preview').style.background=_selectedColour;
+  if(currentOrg.logo_url){
+    $('logo-preview').innerHTML='<img src="'+escapeHTML(currentOrg.logo_url)+'" style="max-width:100%;max-height:100%;object-fit:contain"/>';
+  }
+  renderColourSwatches();
+  hideBrandingError();
+  $('logo-upload-status').textContent='';
+  $('modal-branding').classList.add('open');
+}
 async function boot(){
   initSB();
   if(sb){
@@ -2092,6 +2227,7 @@ async function boot(){
   const wrap=$('upgrade-btn-wrap');
   if(wrap&&!['pro','network'].includes(plan)){wrap.innerHTML='<button class="btn btn-sm" style="width:100%;margin-bottom:8px;background:linear-gradient(135deg,#5E4CB8,#7C5BCB);color:#fff;border:none" onclick="showUpgradeModal()">✦ Upgrade to Pro</button>';}
   go('dashboard');
+  maybeShowBrandingModal();
 }
 
 boot();
