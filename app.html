@@ -890,8 +890,6 @@ async function _processAIQueue(){
 async function _callClaudeOnce(sys,user,maxTok,webSearch,attempt=0){
   const{data:{session}}=await sb.auth.getSession();
   const token=session?.access_token;
-  const res=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json','Authorization':token?'Bearer '+token:''},body:JSON.stringify(...
-  const res=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json','Authorization':token?'Bearer '+token:''},body:JSON.stringify({model:CLAUDE_MODEL,max_tokens:maxTok,system:sys,messages:[{role:'user',content:user}],web_search:webSearch})});
   if(res.status===429){
     if(attempt>=3){const e=new Error('RATE_LIMITED');e.code='RATE_LIMITED';throw e;}
     const retryAfter=parseInt(res.headers.get('retry-after')||'0',10);
