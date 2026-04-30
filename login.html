@@ -387,7 +387,8 @@ footer a{color:var(--text-soft);margin:0 8px}
 'use strict';
 
 const SB_URL='https://nznfrxzgvcjhfsdaphyp.supabase.co';
-const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOi...[long string]...XYZ123';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw';
+
 const sb=window.supabase?window.supabase.createClient(SB_URL,SB_KEY):null;
 
 document.getElementById('year').textContent=new Date().getFullYear();
