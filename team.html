@@ -3,63 +3,116 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Team Management · GreenCRM</title>
+<title>Team Management · Civara</title>
+<link rel="icon" type="image/png" href="logo.png"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#0a0f0a;--surface:#111811;--card:#182018;--border:#2a3a2a;--em:#10b981;--em2:#059669;--txt:#e2f5eb;--txt2:#9ab8a4;--txt3:#6a8f76;--red:#f87171;--amber:#f59e0b;--blue:#60a5fa;--purple:#a78bfa;--radius:10px;--radiuslg:14px}
-body{background:var(--bg);color:var(--txt);font-family:system-ui,sans-serif;font-size:14px;line-height:1.6;min-height:100vh}
+:root{
+  --bg:#F5F1EA;
+  --surface:#FFFFFF;
+  --card:#FAF7F1;
+  --border:#E5DFD3;
+  --border-strong:#CFC6B3;
+  --em:#1F6F6D;
+  --em2:#175553;
+  --em3:#2A9D8F;
+  --txt:#1F2A28;
+  --txt2:#4F5B58;
+  --txt3:#7A857F;
+  --red:#B91C1C;
+  --red-bg:#FEF2F2;
+  --amber:#F59E0B;
+  --amber-bg:#FEF3C7;
+  --amber-text:#92400E;
+  --blue:#1D4ED8;
+  --blue-bg:#EFF6FF;
+  --green:#15803D;
+  --green-bg:#F0FDF4;
+  --purple:#6D28D9;
+  --purple-bg:#F5F3FF;
+  --radius:10px;
+  --radiuslg:14px;
+  --shadow:0 1px 2px rgba(31,42,40,.04),0 4px 12px rgba(31,42,40,.06);
+  --shadow-lg:0 4px 16px rgba(31,42,40,.08),0 12px 32px rgba(31,42,40,.10);
+}
+body{background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.5;min-height:100vh}
 button{cursor:pointer;border:none;font-family:inherit}
-input,select{font-family:inherit;font-size:13px;background:var(--card);border:1px solid var(--border);color:var(--txt);border-radius:var(--radius);padding:8px 12px;width:100%;outline:none}
-input:focus,select:focus{border-color:var(--em)}
-label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
-header{padding:16px 32px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--surface);position:sticky;top:0;z-index:10}
-.logo{font-size:18px;font-weight:800;color:var(--em);letter-spacing:-.5px}
-.logo span{color:var(--txt2);font-weight:400}
+input,select{font-family:inherit;font-size:13px;background:var(--surface);border:1px solid var(--border-strong);color:var(--txt);border-radius:var(--radius);padding:9px 12px;width:100%;outline:none;transition:border-color .15s,box-shadow .15s}
+input:focus,select:focus{border-color:var(--em);box-shadow:0 0 0 3px rgba(31,111,109,.12)}
+label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;font-weight:600}
+
+header{padding:14px 32px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--surface);position:sticky;top:0;z-index:10}
+.brand{display:flex;align-items:center;gap:10px}
+.brand img{height:30px;width:auto;display:block}
+.brand-tag{font-size:11px;color:var(--txt3);font-weight:600;background:var(--card);border:1px solid var(--border);padding:2px 8px;border-radius:20px;letter-spacing:.3px}
+
 .main{max-width:920px;margin:0 auto;padding:32px}
-.btn{padding:8px 16px;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
+
+.btn{padding:8px 14px;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s;display:inline-flex;align-items:center;gap:6px;font-family:inherit}
 .btn-p{background:var(--em);color:#fff}.btn-p:hover{background:var(--em2)}
-.btn-ghost{background:var(--card);color:var(--txt2);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--em);color:var(--em)}
-.btn-danger{background:none;color:var(--red);border:1px solid var(--border)}.btn-danger:hover{border-color:var(--red)}
+.btn-ghost{background:var(--surface);color:var(--txt2);border:1px solid var(--border-strong)}.btn-ghost:hover{border-color:var(--em);color:var(--em)}
+.btn-danger{background:var(--surface);color:var(--red);border:1px solid var(--border-strong)}.btn-danger:hover{border-color:var(--red);background:var(--red-bg)}
 .btn-sm{padding:5px 10px;font-size:12px}
-.page-title{font-size:24px;font-weight:800;margin-bottom:4px}
+
+.page-title{font-size:24px;font-weight:800;margin-bottom:4px;color:var(--txt);letter-spacing:-.3px}
 .page-sub{font-size:13px;color:var(--txt3);margin-bottom:24px}
-.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:20px;margin-bottom:16px}
-.card-title{font-size:12px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:16px;font-weight:600;display:flex;justify-content:space-between;align-items:center}
-.member-row{display:grid;grid-template-columns:40px 1fr auto auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radiuslg);padding:22px;margin-bottom:16px;box-shadow:var(--shadow)}
+.card-title{font-size:12px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:16px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+
+.member-row{display:grid;grid-template-columns:40px 1fr auto auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)}
 .member-row:last-child{border-bottom:none}
-.avatar{width:36px;height:36px;border-radius:50%;background:rgba(16,185,129,.15);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--em)}
-.email{font-size:13px;color:var(--txt);font-weight:500}
-.meta{font-size:11px;color:var(--txt3)}
-.role-pill{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:.5px}
-.role-manager{background:#1a3a2a;color:#34d399}
-.role-advisor{background:#1a2a3a;color:#60a5fa}
-.role-admin{background:#2a1a3a;color:#a78bfa}
-.role-pending{background:#2a2a1a;color:#f59e0b}
-.role-select{font-size:11px;background:var(--surface);border:1px solid var(--border);color:var(--txt2);border-radius:6px;padding:3px 6px;cursor:pointer;max-width:120px}
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:500;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+.avatar{width:36px;height:36px;border-radius:50%;background:rgba(31,111,109,.1);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--em)}
+.email{font-size:13px;color:var(--txt);font-weight:600}
+.meta{font-size:11px;color:var(--txt3);margin-top:2px}
+
+.role-pill{font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:.4px;display:inline-block}
+.role-manager{background:var(--green-bg);color:var(--green)}
+.role-advisor{background:var(--blue-bg);color:var(--blue)}
+.role-admin{background:var(--purple-bg);color:var(--purple)}
+.role-pending{background:var(--amber-bg);color:var(--amber-text)}
+
+.role-select{font-size:11px;background:var(--surface);border:1px solid var(--border-strong);color:var(--txt2);border-radius:6px;padding:4px 8px;cursor:pointer;max-width:120px;font-family:inherit}
+.role-select:focus{border-color:var(--em);outline:none}
+
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(31,42,40,.5);z-index:500;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
 .modal-overlay.open{display:flex}
-.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radiuslg);padding:24px;width:100%;max-width:480px;margin:auto}
-.modal h2{font-size:17px;font-weight:700;margin-bottom:18px}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radiuslg);padding:24px;width:100%;max-width:480px;margin:auto;box-shadow:var(--shadow-lg)}
+.modal h2{font-size:18px;font-weight:700;margin-bottom:18px;color:var(--txt);letter-spacing:-.2px}
 .form-row{margin-bottom:14px}
 .modal-footer{display:flex;gap:8px;margin-top:18px;justify-content:flex-end}
-.alert{padding:10px 14px;border-radius:var(--radius);font-size:13px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
-.alert-warn{background:#2a2a1a;border:1px solid #3a3a1a;color:#fbbf24}
-.alert-info{background:#1a2a3a;border:1px solid #1a3a5a;color:#60a5fa}
-.alert-ok{background:#1a3a2a;border:1px solid #2a5a3a;color:#34d399}
-.alert-err{background:#2a1a1a;border:1px solid #5a2a2a;color:var(--red)}
+
+.alert{padding:11px 14px;border-radius:var(--radius);font-size:13px;margin-bottom:12px;display:flex;align-items:flex-start;gap:8px;line-height:1.5}
+.alert-warn{background:var(--amber-bg);border:1px solid #FDE68A;color:var(--amber-text)}
+.alert-info{background:var(--blue-bg);border:1px solid #BFDBFE;color:var(--blue)}
+.alert-ok{background:var(--green-bg);border:1px solid #BBF7D0;color:var(--green)}
+.alert-err{background:var(--red-bg);border:1px solid #FECACA;color:var(--red)}
+
 .empty{text-align:center;padding:30px 20px;color:var(--txt3);font-size:13px}
-.invite-link-box{background:var(--bg);border:1px dashed var(--border);border-radius:var(--radius);padding:12px;margin-top:14px;font-family:ui-monospace,monospace;font-size:11px;color:var(--em);word-break:break-all;line-height:1.5}
+
+.invite-link-box{background:var(--card);border:1px dashed var(--border-strong);border-radius:var(--radius);padding:12px;margin-top:14px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:11px;color:var(--em);word-break:break-all;line-height:1.5}
 .share-row{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+
 .spinner{width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--em);border-radius:50%;animation:spin .6s linear infinite;display:inline-block;vertical-align:middle}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+@media(max-width:600px){
+  header{padding:12px 16px}
+  .main{padding:20px 16px}
+  .member-row{grid-template-columns:36px 1fr;gap:10px}
+  .member-row > div:nth-child(3),.member-row > div:nth-child(4){grid-column:span 2;justify-self:start}
+}
 </style>
 </head>
 <body>
 
 <header>
-  <div class="logo">Green<span>CRM</span> · Team</div>
-  <div style="display:flex;gap:8px;align-items:center">
-    <span id="org-name" style="font-size:12px;color:var(--txt3)"></span>
+  <div class="brand">
+    <img src="logo.png" alt="Civara"/>
+    <span class="brand-tag">Team</span>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center">
+    <span id="org-name" style="font-size:12px;color:var(--txt3);font-weight:500"></span>
     <a href="app.html" class="btn btn-ghost btn-sm" style="text-decoration:none">← Back to CRM</a>
   </div>
 </header>
@@ -69,7 +122,7 @@ header{padding:16px 32px;border-bottom:1px solid var(--border);display:flex;just
   <div class="page-sub" id="page-sub">Loading…</div>
 
   <div id="permission-warn" class="alert alert-warn" style="display:none">
-    ⚠ Only Managers and Admins can manage the team. Sign in with a Manager or Admin account.
+    <span>⚠️</span><span>Only Managers and Admins can manage the team. Sign in with a Manager or Admin account.</span>
   </div>
 
   <div id="content" style="display:none">
@@ -90,7 +143,7 @@ header{padding:16px 32px;border-bottom:1px solid var(--border);display:flex;just
     </div>
 
     <div class="alert alert-info">
-      💡 <strong>How it works:</strong> Send the invite link via your own email or WhatsApp. When the recipient clicks it, they'll create their account and join your team automatically.
+      <span>💡</span><span><strong>How it works:</strong> Send the invite link via your own email or WhatsApp. When the recipient clicks it, they'll create their account and join your team automatically.</span>
     </div>
 
   </div>
@@ -116,11 +169,12 @@ header{padding:16px 32px;border-bottom:1px solid var(--border);display:flex;just
         </select>
       </div>
       <div class="alert alert-info" style="font-size:12px;margin-top:8px">
-        <strong>Role guide:</strong>
-        <span style="display:block;margin-top:6px">
-        <strong style="color:#34d399">Manager</strong> — full access to everything<br/>
-        <strong style="color:#60a5fa">Advisor</strong> — only their own participants<br/>
-        <strong style="color:#a78bfa">Admin</strong> — events, volunteers, reporting (no case notes)
+        <span>ℹ️</span>
+        <span>
+        <strong>Role guide:</strong><br/>
+        <strong style="color:var(--green)">Manager</strong> — full access to everything<br/>
+        <strong style="color:var(--blue)">Advisor</strong> — only their own participants<br/>
+        <strong style="color:var(--purple)">Admin</strong> — events, volunteers, reporting (no case notes)
         </span>
       </div>
       <div class="modal-footer">
@@ -131,7 +185,7 @@ header{padding:16px 32px;border-bottom:1px solid var(--border);display:flex;just
 
     <!-- Shows after invite created -->
     <div id="invite-success" style="display:none">
-      <div class="alert alert-ok">✓ Invitation created — share this link:</div>
+      <div class="alert alert-ok"><span>✓</span><span>Invitation created — share this link:</span></div>
       <div class="invite-link-box" id="invite-link-text"></div>
       <div class="share-row">
         <button class="btn btn-p btn-sm" onclick="copyInviteLink()" id="copy-btn">📋 Copy link</button>
@@ -151,12 +205,22 @@ header{padding:16px 32px;border-bottom:1px solid var(--border);display:flex;just
 'use strict';
 const SB_URL='https://nznfrxzgvcjhfsdaphyp.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw';
-const sb=window.supabase.createClient(SB_URL,SB_KEY);
+
+let sb=null;
+function initSupabase(){
+  if(sb)return sb;
+  if(!window.supabase){console.error('Supabase library not loaded');return null}
+  try{sb=window.supabase.createClient(SB_URL,SB_KEY);return sb;}
+  catch(e){console.error('Supabase init failed:',e);return null;}
+}
+initSupabase();
+
 const $=id=>document.getElementById(id);
 
 let currentUser=null,orgId=null,currentRole=null,isSuper=false,currentInviteToken='';
 
 async function boot(){
+  if(!sb){window.location.href='login.html';return;}
   const{data:{session}}=await sb.auth.getSession();
   if(!session){window.location.href='login.html';return;}
   currentUser=session.user;
@@ -197,7 +261,7 @@ async function loadTeam(){
   el.innerHTML='<div class="empty"><span class="spinner"></span> Loading…</div>';
 
   const{data:mems,error}=await sb.from('memberships').select('id,user_id,role,joined_at,status').eq('org_id',orgId).eq('status','active').order('joined_at',{ascending:true});
-  if(error){el.innerHTML='<div class="alert alert-err">Failed to load: '+error.message+'</div>';return;}
+  if(error){el.innerHTML='<div class="alert alert-err"><span>✕</span><span>Failed to load: '+error.message+'</span></div>';return;}
   if(!mems||!mems.length){el.innerHTML='<div class="empty">No active members yet.</div>';return;}
 
   // We can't query auth.users directly with anon key, so we'll show user_id/info we have
@@ -221,13 +285,13 @@ async function loadTeam(){
 async function loadInvites(){
   const el=$('invites-list');
   const{data:invs,error}=await sb.from('invitations').select('id,email,role,token,created_at,expires_at,accepted_at').eq('org_id',orgId).is('accepted_at',null).order('created_at',{ascending:false});
-  if(error){el.innerHTML='<div class="alert alert-err">Failed to load: '+error.message+'</div>';return;}
+  if(error){el.innerHTML='<div class="alert alert-err"><span>✕</span><span>Failed to load: '+error.message+'</span></div>';return;}
   if(!invs||!invs.length){el.innerHTML='<div class="empty">None pending.</div>';return;}
 
   el.innerHTML=invs.map(i=>{
     const expired=new Date(i.expires_at)<new Date();
     return '<div class="member-row">'+
-      '<div class="avatar" style="background:rgba(245,158,11,.15);color:#f59e0b">@</div>'+
+      '<div class="avatar" style="background:var(--amber-bg);color:var(--amber-text)">@</div>'+
       '<div><div class="email">'+i.email+'</div><div class="meta">'+(expired?'Expired':'Expires '+new Date(i.expires_at).toLocaleDateString('en-GB'))+'</div></div>'+
       '<div><span class="role-pill role-pending">'+i.role+'</span></div>'+
       '<div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm" onclick="copyExistingInvite(\''+i.token+'\')">📋 Copy</button><button class="btn btn-danger btn-sm" onclick="cancelInvite(\''+i.id+'\')">Cancel</button></div>'+
@@ -249,8 +313,8 @@ function resetInviteForm(){$('invite-form').style.display='block';$('invite-succ
 async function createInvite(){
   const email=$('inv-email').value.trim();
   const role=$('inv-role').value;
-  if(!email){$('invite-msg').innerHTML='<div class="alert alert-err">Email is required.</div>';return;}
-  if(!email.includes('@')){$('invite-msg').innerHTML='<div class="alert alert-err">Please enter a valid email.</div>';return;}
+  if(!email){$('invite-msg').innerHTML='<div class="alert alert-err"><span>✕</span><span>Email is required.</span></div>';return;}
+  if(!email.includes('@')){$('invite-msg').innerHTML='<div class="alert alert-err"><span>✕</span><span>Please enter a valid email.</span></div>';return;}
 
   const btn=$('invite-btn');btn.textContent='Creating…';btn.disabled=true;
   $('invite-msg').innerHTML='';
@@ -258,7 +322,7 @@ async function createInvite(){
   // Check for existing pending invite for this email
   const existing=await sb.from('invitations').select('id').eq('org_id',orgId).eq('email',email.toLowerCase()).is('accepted_at',null).maybeSingle();
   if(existing.data){
-    $('invite-msg').innerHTML='<div class="alert alert-warn">An invitation for this email is already pending. Cancel it first to send a new one.</div>';
+    $('invite-msg').innerHTML='<div class="alert alert-warn"><span>⚠️</span><span>An invitation for this email is already pending. Cancel it first to send a new one.</span></div>';
     btn.textContent='Generate invite link';btn.disabled=false;
     return;
   }
@@ -269,7 +333,7 @@ async function createInvite(){
 
   btn.textContent='Generate invite link';btn.disabled=false;
 
-  if(error){$('invite-msg').innerHTML='<div class="alert alert-err">Error: '+error.message+'</div>';return;}
+  if(error){$('invite-msg').innerHTML='<div class="alert alert-err"><span>✕</span><span>Error: '+error.message+'</span></div>';return;}
 
   currentInviteToken=data.token;
   const link=window.location.origin+window.location.pathname.replace('team.html','')+'invite.html?token='+data.token;
@@ -295,14 +359,14 @@ function copyExistingInvite(token){
 function shareWhatsApp(){
   const orgName=$('org-name').textContent||'our organisation';
   const link=getCurrentInviteLink();
-  const text='You\'ve been invited to join '+orgName+' on GreenCRM. Click here to accept: '+link;
+  const text='You\'ve been invited to join '+orgName+' on Civara. Click here to accept: '+link;
   window.open('https://wa.me/?text='+encodeURIComponent(text),'_blank');
 }
 function shareEmail(){
   const orgName=$('org-name').textContent||'our organisation';
   const link=getCurrentInviteLink();
-  const subject='Invitation to join '+orgName+' on GreenCRM';
-  const body='Hi,\n\nYou\'ve been invited to join '+orgName+' on GreenCRM.\n\nClick the link below to accept and create your account:\n'+link+'\n\nThis link expires in 7 days.\n\nThanks!';
+  const subject='Invitation to join '+orgName+' on Civara';
+  const body='Hi,\n\nYou\'ve been invited to join '+orgName+' on Civara.\n\nClick the link below to accept and create your account:\n'+link+'\n\nThis link expires in 7 days.\n\nThanks!';
   window.location.href='mailto:?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
 }
 
