@@ -308,8 +308,18 @@ async function doSignUp(){
       return;
     }
 
-    // 3. Wait briefly for session propagation
-    await new Promise(r=>setTimeout(r,300));
+    // 3. Wait for session to be properly established (not just a fixed delay)
+    let sessionReady=false;
+    for(let i=0;i<10;i++){
+      const{data:{session:s}}=await sb.auth.getSession();
+      if(s&&s.user){sessionReady=true;break;}
+      await new Promise(r=>setTimeout(r,200));
+    }
+    if(!sessionReady){
+      setLoad('su-btn',false,'Create account →');
+      showMsg('su-err','Could not establish session. Please try signing in.');
+      return;
+    }
 
     // 4. Branch — invited or new org
     if(inviteData){
