@@ -940,6 +940,130 @@ async function runBDResearchUpgraded(){
     {label:'Structuring opportunities',meta:''},
     {label:'Ready',meta:''}
   ];
+  const sys=`You are a UK funding researcher. After your web search, you MUST return ONLY a JSON object — no prose, no markdown, no commentary, no headings, no greetings. Your entire response must start with { and end with }.
+
+Find 3-6 currently open funding opportunities relevant to the criteria. For each, hunt for a DIRECT downloadable tender pack URL (PDF, DOCX, or ZIP) — check gov.uk, find-tender.service.gov.uk, Contracts Finder, GLA portals, City Bridge Foundation, National Lottery, and the funder's own site. If you cannot find a direct file URL, set tender_doc_url to "" — DO NOT make one up.
+
+Schema (return EXACTLY this shape):
+{
+  "opportunities": [
+    {
+      "funder": "string",
+      "programme": "string",
+      "summary": "1-2 sentences",
+      "value_band": "e.g. £10k-£100k or 'Up to £500k'",
+      "deadline": "YYYY-MM-DD or 'Rolling' or 'Verify on funder site'",
+      "eligibility": "1 sentence",
+      "fit_reason": "1-2 sentences",
+      "url": "https://...",
+      "tender_doc_url": "https://... or empty string"
+    }
+  ]
+}
+
+Use ONLY real, verifiable, currently open programmes. RETURN ONLY THE JSON OBJECT.`;
+  const prompt='Area: '+area+'\nOrg size: '+size+'\nFunders or programmes of interest: '+(specific||'open to all suitable opportunities')+'\n\nReturn the JSON object now.';
+  if(typeof window.runAgent!=='function'){res.innerHTML='<div class="alert alert-warn">Research agent not available.</div>';return;}
+  const raw=await window.runAgent({container:res,headerLabel:'BD Manager Agent',headerSub:'Live web search · Quality Supervisor verifying results',steps,sys,prompt,maxTok:1800,webSearch:true});
+  if(!raw)return;
+
+  // ─── Robust JSON extraction ────────────────────────────────
+  let opps=tryParseJSON(raw);
+  // Fallback 1: if parse failed, ask the model to convert its own prose to JSON
+  if(!opps){
+    try{
+      const fix=await window.callClaude(
+        'You convert text into JSON. Return ONLY a JSON object with shape {"opportunities":[{funder, programme, summary, value_band, deadline, eligibility, fit_reason, url, tender_doc_url}]}. No prose.',
+        'Convert this text into the JSON schema above. If a field is missing in the source, use an empty string. Source text:\n\n'+raw,
+        1200
+      );
+      opps=tryParseJSON(fix);
+    }catch(e){/* swallow */}
+  }
+  if(!opps){
+    res.innerHTML='<div class="alert alert-warn"><strong>Could not parse opportunities.</strong> The agent returned text instead of JSON. <button class="btn btn-ghost btn-sm" style="margin-left:8px" onclick="window.runBDResearch()">↻ Try again</button></div><details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--txt3)">Show raw response (for debugging)</summary><pre style="font-size:11px;background:var(--bg);padding:10px;border-radius:8px;margin-top:8px;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow:auto">'+escapeHTML(raw)+'</pre></details>';
+    return;
+  }
+  if(!opps.length){res.innerHTML='<div class="alert alert-info">No open opportunities matched. Try adjusting the area or naming a specific funder.</div>';return;}
+  res.innerHTML='';
+  window._civaraOpps=opps;
+  opps.forEach((o,i)=>{
+    const card=document.createElement('div');
+    card.className='tender-card';
+    const hasTender=o.tender_doc_url&&/^https?:\/\//.test(o.tender_doc_url);
+    const hasUrl=o.url&&/^https?:\/\//.test(o.url);
+    card.innerHTML=`
+      <div class="tender-card-hd">
+        <div>
+          <div class="tender-card-funder">${escapeHTML(o.funder||'')}</div>
+          <div class="tender-card-title">${escapeHTML(o.programme||'Untitled programme')}</div>
+        </div>
+      </div>
+      <div style="font-size:13px;color:var(--txt2);margin-bottom:8px">${escapeHTML(o.summary||'')}</div>
+      <div class="tender-card-meta">
+        ${o.value_band?'<span><strong>Value:</strong> '+escapeHTML(o.value_band)+'</span>':''}
+        ${o.deadline?'<span><strong>Deadline:</strong> '+escapeHTML(o.deadline)+'</span>':''}
+        ${o.eligibility?'<span><strong>Eligibility:</strong> '+escapeHTML(o.eligibility)+'</span>':''}
+      </div>
+      ${o.fit_reason?'<div style="font-size:12px;color:var(--em);background:rgba(31,111,109,.06);border-radius:6px;padding:8px 10px;margin-bottom:10px"><strong>Why it fits:</strong> '+escapeHTML(o.fit_reason)+'</div>':''}
+      <div class="tender-card-actions" data-actions></div>
+      <div class="civara-tender-status" data-status style="font-size:12px;color:var(--txt3);margin-top:8px"></div>
+    `;
+    const actions=card.querySelector('[data-actions]');
+    if(hasUrl){
+      const a=document.createElement('a');
+      a.className='btn btn-p btn-sm';a.href=o.url;a.target='_blank';a.rel='noopener noreferrer';
+      a.textContent='↗ Open funder page';
+      actions.appendChild(a);
+    }
+    if(hasTender){
+      const dl=document.createElement('button');
+      dl.className='btn btn-ghost btn-sm';
+      dl.textContent='⬇ Download tender pack';
+      dl.addEventListener('click',()=>fetchTenderInto(card,o.tender_doc_url,o.programme||'tender'));
+      actions.appendChild(dl);
+    }else{
+      const note=document.createElement('span');
+      note.style.cssText='font-size:11px;color:var(--txt3);align-self:center';
+      note.textContent='Pack only available via funder portal — open the page to register.';
+      actions.appendChild(note);
+    }
+    if(hasUrl){
+      const draft=document.createElement('button');
+      draft.className='btn btn-ghost btn-sm';
+      draft.textContent='✦ Draft EOI for this';
+      draft.addEventListener('click',()=>draftEoiFor(i));
+      actions.appendChild(draft);
+    }
+    res.appendChild(card);
+  });
+}
+
+// Helper used by runBDResearchUpgraded
+function tryParseJSON(text){
+  if(!text)return null;
+  // Strip markdown code fences
+  let cleaned=text.replace(/```json|```/gi,'').trim();
+  // Find the first { ... last }
+  const first=cleaned.indexOf('{');
+  const last=cleaned.lastIndexOf('}');
+  if(first<0||last<0||last<=first)return null;
+  cleaned=cleaned.slice(first,last+1);
+  try{
+    const parsed=JSON.parse(cleaned);
+    return parsed.opportunities||[];
+  }catch(e){
+    return null;
+  }
+}
+  const area=$('bd-area').value,size=$('bd-size').value,specific=$('bd-specific').value;
+  const steps=[
+    {label:'Searching live funding sources',meta:area+' · '+size},
+    {label:'Hunting direct tender pack URLs',meta:'gov.uk · Find a Tender · funder portals'},
+    {label:'Quality Supervisor check',meta:'Verifying deadlines and links'},
+    {label:'Structuring opportunities',meta:''},
+    {label:'Ready',meta:''}
+  ];
   const sys=`You are a UK funding researcher. Find 3-6 currently open funding opportunities relevant to the criteria. For each, hunt for a DIRECT downloadable tender pack URL (PDF, DOCX, or ZIP) — check gov.uk, Find a Tender (find-tender.service.gov.uk), Contracts Finder, GLA's funding portal, City Bridge Foundation grants pages, National Lottery, and the funder's own site. If you cannot find a direct file URL, set tender_doc_url to "" — DO NOT make one up.
 
 Return a SINGLE JSON object with no commentary, no markdown fences, no explanation. Schema:
