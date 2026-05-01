@@ -908,23 +908,44 @@ async function runBDResearchUpgraded(){
     {label:'Structuring opportunities',meta:''},
     {label:'Ready',meta:''}
   ];
-  const sys='You are a UK funding researcher. After your web search, you MUST return ONLY a JSON object — no prose, no markdown, no commentary. Your entire response must start with { and end with }.\n\nFind 3-6 currently open funding opportunities. Always include a real https:// URL for the funder programme page.\n\nSchema:\n{"opportunities":[{"funder":"string","programme":"string","summary":"1-2 sentences","value_band":"e.g. £10k-£100k","deadline":"YYYY-MM-DD or Rolling or Verify on funder site","eligibility":"1 sentence","fit_reason":"1-2 sentences","url":"https://..."}]}\n\nUse ONLY real, verifiable, currently open programmes. RETURN ONLY THE JSON OBJECT.';
-  const prompt='Area: '+area+'\nOrg size: '+size+'\nFunders or programmes of interest: '+(specific||'open to all suitable opportunities')+'\n\nReturn the JSON object now.';
+  // Tighter prompt — explicit forbidden behaviours
+  const sys='You are a UK funding researcher. Use web search, then return ONLY a JSON object.\n\nFORBIDDEN: Do not say "Let me search...", "Based on my research...", "Here is my response...". Do not write any text before or after the JSON. Do not use markdown code fences. Do not number the opportunities outside the JSON.\n\nYour ENTIRE response must start with { and end with }.\n\nFind 3-5 currently open funding opportunities (keep to 5 max so the JSON fits). Always include a real https:// URL.\n\nKeep summary, eligibility, fit_reason to ONE short sentence each (max 20 words).\n\nSchema:\n{"opportunities":[{"funder":"string","programme":"string","summary":"one sentence","value_band":"e.g. £10k-£100k","deadline":"YYYY-MM-DD or Rolling","eligibility":"one sentence","fit_reason":"one sentence","url":"https://..."}]}\n\nReturn ONLY the JSON object.';
+  const prompt='Area: '+area+'\nOrg size: '+size+'\nFunders or programmes of interest: '+(specific||'open to all suitable opportunities')+'\n\nReturn the JSON object now. Maximum 5 opportunities. Short sentences only.';
   if(typeof window.runAgent!=='function'){res.innerHTML='<div class="alert alert-warn">Research agent not available.</div>';return;}
-  const raw=await window.runAgent({container:res,headerLabel:'BD Manager Agent',headerSub:'Live web search · Quality Supervisor verifying results',steps,sys,prompt,maxTok:1800,webSearch:true});
+  const raw=await window.runAgent({container:res,headerLabel:'BD Manager Agent',headerSub:'Live web search · Quality Supervisor verifying results',steps,sys,prompt,maxTok:2500,webSearch:true});
   if(!raw)return;
 
   let opps=tryParseJSON(raw);
+
+  // Fallback 1 — extract from a code-fenced block specifically
+  if(!opps){
+    const fence=raw.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+    if(fence){
+      try{
+        const parsed=JSON.parse(fence[1]);
+        opps=parsed.opportunities||null;
+      }catch(e){/* fallthrough */}
+    }
+  }
+
+  // Fallback 2 — JSON looks truncated. Try to repair by closing brackets.
+  if(!opps){
+    const repaired=tryRepairTruncatedJSON(raw);
+    if(repaired)opps=repaired;
+  }
+
+  // Fallback 3 — ask Claude to convert the prose to JSON
   if(!opps&&typeof window.callClaude==='function'){
     try{
       const fix=await window.callClaude(
-        'You convert text into JSON. Return ONLY a JSON object with shape {"opportunities":[{funder, programme, summary, value_band, deadline, eligibility, fit_reason, url}]}. No prose.',
-        'Convert this text into the JSON schema above. If a field is missing, use empty string. Source:\n\n'+raw,
-        1200
+        'You convert text into JSON. Return ONLY a JSON object with shape {"opportunities":[{funder, programme, summary, value_band, deadline, eligibility, fit_reason, url}]}. Maximum 5 opportunities. One sentence per text field. No prose, no fences.',
+        'Convert this text into the JSON schema above. If a field is missing, use empty string. Keep it under 1500 characters. Source:\n\n'+raw.slice(0,6000),
+        2000
       );
       opps=tryParseJSON(fix);
     }catch(e){/* swallow */}
   }
+
   if(!opps){
     res.innerHTML='<div class="alert alert-warn"><strong>Could not parse opportunities.</strong> The agent returned text instead of JSON. <button class="btn btn-ghost btn-sm" style="margin-left:8px" id="civara-bd-retry">↻ Try again</button></div><details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--txt3)">Show raw response (for debugging)</summary><pre style="font-size:11px;background:var(--bg);padding:10px;border-radius:8px;margin-top:8px;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow:auto">'+escapeHTML(raw)+'</pre></details>';
     const retry=$('civara-bd-retry');
@@ -974,6 +995,35 @@ async function runBDResearchUpgraded(){
     res.appendChild(card);
   });
 }
+
+// Attempt to repair JSON that was truncated mid-stream.
+// Strategy: find the last complete opportunity object, then close the array and root.
+function tryRepairTruncatedJSON(text){
+  if(!text)return null;
+  const start=text.indexOf('"opportunities"');
+  if(start<0)return null;
+  // Walk through the text counting braces — find the last complete `}` inside the array
+  const arrStart=text.indexOf('[',start);
+  if(arrStart<0)return null;
+  let depth=0,lastGoodEnd=-1;
+  for(let i=arrStart;i<text.length;i++){
+    const c=text[i];
+    if(c==='{')depth++;
+    else if(c==='}'){
+      depth--;
+      if(depth===0)lastGoodEnd=i;
+    }
+  }
+  if(lastGoodEnd<0)return null;
+  // Build a repaired JSON: from { up to lastGoodEnd, then close the array and root.
+  const head=text.slice(text.indexOf('{'),lastGoodEnd+1);
+  const repaired=head+']}';
+  try{
+    const parsed=JSON.parse(repaired);
+    return parsed.opportunities||null;
+  }catch(e){
+    return null;
+  }
 
 function draftEoiFor(idx){
   const o=(window._civaraOpps||[])[idx];if(!o)return;
