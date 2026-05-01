@@ -1013,20 +1013,8 @@ Use ONLY real, verifiable, currently open programmes. RETURN ONLY THE JSON OBJEC
     if(hasUrl){
       const a=document.createElement('a');
       a.className='btn btn-p btn-sm';a.href=o.url;a.target='_blank';a.rel='noopener noreferrer';
-      a.textContent='↗ Open funder page';
+     a.textContent='⬇ View on funder site';
       actions.appendChild(a);
-    }
-    if(hasTender){
-      const dl=document.createElement('button');
-      dl.className='btn btn-ghost btn-sm';
-      dl.textContent='⬇ Download tender pack';
-      dl.addEventListener('click',()=>fetchTenderInto(card,o.tender_doc_url,o.programme||'tender'));
-      actions.appendChild(dl);
-    }else{
-      const note=document.createElement('span');
-      note.style.cssText='font-size:11px;color:var(--txt3);align-self:center';
-      note.textContent='Pack only available via funder portal — open the page to register.';
-      actions.appendChild(note);
     }
     if(hasUrl){
       const draft=document.createElement('button');
