@@ -1,132 +1,921 @@
-// /api/fetch-tender.js
-// Server-side proxy for downloading tender documents found by the
-// Opportunities Finder. We proxy through Vercel because:
-//   1. Many UK gov / funder sites block CORS so the browser can't
-//      download them directly.
-//   2. We can verify the user is authenticated before letting them
-//      hit arbitrary URLs.
-//   3. We can sanity-check the URL and limit response size.
+/* ============================================================
+ * CIVARA ADDITIONS - v1
+ * Drop-in companion to app.html. Adds:
+ *   1. CSV / Excel participant import
+ *   2. Expanded demographics (orientation, religion, marital
+ *      status, postcode) plus a Demographics dashboard page
+ *   3. Quarterly / monthly period-based contract reporting
+ *   4. Opportunities Finder upgrade: structured tender cards
+ *      with direct links and "fetch tender" download support
+ *
+ * All functions read/write the existing DB, sb, sbInsert,
+ * callClaude, escapeHTML, num, toArr, today, fmtD helpers
+ * from app.html. Nothing here re-declares globals.
+ * ============================================================ */
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+(function(){
+'use strict';
 
-const ALLOWED_ORIGIN_REGEX = /^https?:\/\/(localhost(:\d+)?|.*\.vercel\.app|civara\.co\.uk|www\.civara\.co\.uk)$/i;
-const MAX_BYTES = 25 * 1024 * 1024; // 25 MB cap
-const ALLOWED_CONTENT_TYPES = [
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/octet-stream', // some servers send PDFs as this
-  'text/html', // some links go to a download landing page
+// Wait for app.html boot to finish before wiring up.
+// We poll for `DB` and `sbInsert` because boot is async.
+function whenReady(fn){
+  if(typeof window.DB!=='undefined'&&typeof window.sbInsert==='function'){return fn();}
+  setTimeout(()=>whenReady(fn),120);
+}
+
+whenReady(init);
+
+function init(){
+  injectModalsAndPages();
+  patchGoRouter();
+  patchEqualityModal();
+  patchOpportunitiesFinder();
+  patchReportGenerator();
+  console.log('[civara-additions] ready');
+}
+
+// ─────────────────────────────────────────────────────────────
+// SHARED HELPERS
+// ─────────────────────────────────────────────────────────────
+const $=id=>document.getElementById(id);
+const closeModal=id=>{const el=$(id);if(el)el.classList.remove('open');};
+function escapeHTML(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function pct(n,d){return d?Math.round(n/d*100):0;}
+function num(v){return isNaN(+v)?0:+v;}
+function toArr(v){return Array.isArray(v)?v:(typeof v==='string'&&v.startsWith('[')?(()=>{try{return JSON.parse(v)}catch(e){return[]}})():[]);}
+
+// ─────────────────────────────────────────────────────────────
+// INJECT MODALS + DEMOGRAPHICS PAGE
+// ─────────────────────────────────────────────────────────────
+function injectModalsAndPages(){
+  // CSV import modal
+  if(!$('modal-csv')){
+    const m=document.createElement('div');
+    m.className='modal-overlay';m.id='modal-csv';
+    m.innerHTML=csvModalHTML();
+    document.body.appendChild(m);
+  }
+  // Demographics dashboard page
+  if(!$('page-demographics')){
+    const main=document.getElementById('main');
+    if(main){
+      const p=document.createElement('div');
+      p.className='page';p.id='page-demographics';
+      p.innerHTML=demographicsPageHTML();
+      main.appendChild(p);
+    }
+  }
+  // Inject "Import" button into participants page header
+  injectImportButton();
+  // Add expanded demographic fields to the existing equality modal
+  expandEqualityModal();
+}
+
+function injectImportButton(){
+  const tries=()=>{
+    const hdr=document.querySelector('#page-participants .page-header');
+    if(!hdr)return setTimeout(tries,300);
+    if(hdr.querySelector('[data-civara-import]'))return;
+    const right=hdr.querySelector('button.btn-p');
+    if(!right)return;
+    const btn=document.createElement('button');
+    btn.className='btn btn-ghost btn-sm';
+    btn.style.marginRight='8px';
+    btn.dataset.civaraImport='1';
+    btn.textContent='⬆ Import CSV';
+    btn.onclick=openCsvImport;
+    right.parentNode.insertBefore(btn,right);
+  };
+  tries();
+}
+
+function expandEqualityModal(){
+  const tries=()=>{
+    const modal=$('modal-eq');
+    if(!modal)return setTimeout(tries,300);
+    if(modal.querySelector('[data-civara-extra]'))return;
+    const footer=modal.querySelector('.modal-footer');
+    if(!footer)return;
+    const wrap=document.createElement('div');
+    wrap.dataset.civaraExtra='1';
+    wrap.innerHTML=`
+      <div class="form-grid-2">
+        <div class="form-row"><label>Sexual orientation</label><select id="eq-orientation"><option value="">Prefer not to say</option><option>Heterosexual</option><option>Gay / Lesbian</option><option>Bisexual</option><option>Other</option></select></div>
+        <div class="form-row"><label>Religion or belief</label><select id="eq-religion"><option value="">Prefer not to say</option><option>No religion</option><option>Christian</option><option>Muslim</option><option>Hindu</option><option>Sikh</option><option>Jewish</option><option>Buddhist</option><option>Other</option></select></div>
+      </div>
+      <div class="form-grid-2">
+        <div class="form-row"><label>Marital status</label><select id="eq-marital"><option value="">Prefer not to say</option><option>Single</option><option>Married / civil partnership</option><option>Cohabiting</option><option>Separated</option><option>Divorced</option><option>Widowed</option></select></div>
+        <div class="form-row"><label>Postcode (first half only, e.g. SE1)</label><input id="eq-postcode" maxlength="5" placeholder="SE1" oninput="this.value=this.value.toUpperCase()"/></div>
+      </div>
+    `;
+    footer.parentNode.insertBefore(wrap,footer);
+  };
+  tries();
+}
+
+// ─────────────────────────────────────────────────────────────
+// 1. CSV IMPORT
+// ─────────────────────────────────────────────────────────────
+const CSV_FIELDS=[
+  {key:'first_name',label:'First name',required:true,aliases:['firstname','first','given name','forename','name first']},
+  {key:'last_name',label:'Last name',required:true,aliases:['lastname','last','surname','family name','name last']},
+  {key:'email',label:'Email',aliases:['e-mail','email address','mail']},
+  {key:'phone',label:'Phone',aliases:['mobile','telephone','tel','contact number','phone number']},
+  {key:'ref_source',label:'Referral source',aliases:['referral','source','referred by']},
+  {key:'stage',label:'Stage',aliases:['status','case stage']},
+  {key:'advisor',label:'Advisor',aliases:['caseworker','keyworker','assigned to','advisor name']},
+  {key:'risk',label:'Risk level',aliases:['risk','priority']},
+  {key:'safeguarding',label:'Safeguarding flag',aliases:['safeguarding flag','safeguard']},
+  {key:'barriers',label:'Barriers (semicolon-separated)',aliases:['barrier','support needs']},
+  {key:'last_contact',label:'Last contact date',aliases:['last contact date','last contacted','last seen']},
+  {key:'notes',label:'Notes',aliases:['note','case note','comments']},
 ];
 
-function setCors(req, res) {
-  const origin = req.headers.origin || '';
-  if (ALLOWED_ORIGIN_REGEX.test(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Vary', 'Origin');
-  }
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+const STAGE_VALUES=['Referred','Engaged','In Support','Job Ready','Outcome Achieved','Sustained','Closed'];
+const RISK_VALUES=['Low','Medium','High'];
+const REF_VALUES=['Self-referral','Probation','Jobcentre Plus','Community org','School / college'];
+
+let _csv={file:null,rows:[],headers:[],mapping:{},validated:[],errors:[]};
+
+function csvModalHTML(){
+  return `<div class="modal" style="max-width:760px">
+    <h2>Import participants from spreadsheet</h2>
+    <div class="csv-stepper">
+      <div class="pip active" id="csv-pip-1"></div>
+      <div class="pip" id="csv-pip-2"></div>
+      <div class="pip" id="csv-pip-3"></div>
+      <div class="pip" id="csv-pip-4"></div>
+    </div>
+
+    <div class="csv-step active" id="csv-step-1">
+      <p style="font-size:13px;color:var(--txt2);margin-bottom:14px;line-height:1.6">Upload a <strong>CSV</strong> file. We'll match your columns to participant fields in the next step. <a href="#" onclick="window.civaraDownloadCsvTemplate();return false" style="color:var(--em);text-decoration:underline">Download a blank template</a>.</p>
+      <div class="csv-drop" id="csv-drop" onclick="document.getElementById('csv-file-input').click()">
+        <div style="font-size:30px;margin-bottom:8px">📄</div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">Drop a CSV file here, or click to choose</div>
+        <div style="font-size:11px;color:var(--txt3)">.csv files · UTF-8 · up to 5,000 rows</div>
+      </div>
+      <input type="file" id="csv-file-input" accept=".csv,text/csv" style="display:none" onchange="window.civaraOnCsvSelect(event)"/>
+      <div id="csv-file-status" style="margin-top:10px;font-size:12px;color:var(--txt3)"></div>
+    </div>
+
+    <div class="csv-step" id="csv-step-2">
+      <p style="font-size:13px;color:var(--txt2);margin-bottom:14px;line-height:1.6">We've matched your columns where we could. Confirm or adjust each one. Required fields: <strong>First name, Last name</strong>.</p>
+      <div id="csv-mapping-list" style="background:#FFFFFF;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden"></div>
+    </div>
+
+    <div class="csv-step" id="csv-step-3">
+      <p style="font-size:13px;color:var(--txt2);margin-bottom:14px;line-height:1.6">Preview of the first 8 rows. Rows with issues are highlighted — they'll still import, but we'll skip the bad fields.</p>
+      <div style="max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius)"><table class="csv-preview-table" id="csv-preview-table"></table></div>
+      <div id="csv-validation-summary" class="csv-summary"></div>
+    </div>
+
+    <div class="csv-step" id="csv-step-4">
+      <div id="csv-import-progress"></div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="window.civaraCloseCsv()">Cancel</button>
+      <button class="btn btn-ghost" id="csv-back-btn" onclick="window.civaraCsvBack()" style="display:none">Back</button>
+      <button class="btn btn-p" id="csv-next-btn" onclick="window.civaraCsvNext()" disabled>Next →</button>
+    </div>
+  </div>`;
 }
 
-async function getAuthUser(req) {
-  const auth = req.headers.authorization || '';
-  const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
-  if (!token) return null;
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-    headers: {
-      apikey: SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${token}`,
-    },
+function openCsvImport(){
+  _csv={file:null,rows:[],headers:[],mapping:{},validated:[],errors:[]};
+  csvShowStep(1);
+  $('csv-file-status').textContent='';
+  $('csv-next-btn').disabled=true;
+  $('modal-csv').classList.add('open');
+  // Drag-and-drop
+  const drop=$('csv-drop');
+  if(drop&&!drop.dataset.bound){
+    drop.dataset.bound='1';
+    drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('dragover');});
+    drop.addEventListener('dragleave',()=>drop.classList.remove('dragover'));
+    drop.addEventListener('drop',e=>{
+      e.preventDefault();drop.classList.remove('dragover');
+      const f=e.dataTransfer.files?.[0];
+      if(f)handleCsvFile(f);
+    });
+  }
+}
+window.civaraCloseCsv=()=>closeModal('modal-csv');
+window.civaraOnCsvSelect=ev=>{const f=ev.target.files?.[0];if(f)handleCsvFile(f);};
+
+function csvShowStep(n){
+  for(let i=1;i<=4;i++){
+    $('csv-step-'+i)?.classList.toggle('active',i===n);
+    const pip=$('csv-pip-'+i);
+    if(pip){pip.classList.toggle('active',i===n);pip.classList.toggle('done',i<n);}
+  }
+  $('csv-back-btn').style.display=n>1&&n<4?'inline-flex':'none';
+  $('csv-next-btn').textContent=n===3?'Import →':n===4?'Done':'Next →';
+}
+
+window.civaraDownloadCsvTemplate=function(){
+  const headers=CSV_FIELDS.map(f=>f.label);
+  const sample=['Aisha','Okonkwo','aisha@example.com','07700900001','Probation','Engaged','Sarah T.','Medium','','Confidence;Housing','2025-01-15','Initial assessment'];
+  const csv=[headers.join(','),sample.join(',')].join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='civara-participant-import-template.csv';
+  a.click();
+};
+
+function handleCsvFile(file){
+  if(!file.name.toLowerCase().endsWith('.csv')){
+    $('csv-file-status').innerHTML='<span style="color:var(--red)">⚠ Please choose a .csv file. Excel files: open in Excel and use File → Save As → CSV (UTF-8).</span>';
+    return;
+  }
+  if(file.size>5*1024*1024){
+    $('csv-file-status').innerHTML='<span style="color:var(--red)">⚠ File too large (max 5MB).</span>';
+    return;
+  }
+  _csv.file=file;
+  $('csv-file-status').textContent='Reading '+file.name+'…';
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      const text=e.target.result;
+      const{headers,rows}=parseCsv(text);
+      if(!rows.length)throw new Error('No data rows found in CSV.');
+      _csv.headers=headers;_csv.rows=rows;
+      _csv.mapping=autoMapColumns(headers);
+      $('csv-file-status').innerHTML='✓ Read '+rows.length+' row'+(rows.length===1?'':'s')+' with '+headers.length+' columns.';
+      $('csv-next-btn').disabled=false;
+    }catch(err){
+      $('csv-file-status').innerHTML='<span style="color:var(--red)">⚠ '+escapeHTML(err.message)+'</span>';
+    }
+  };
+  r.onerror=()=>$('csv-file-status').innerHTML='<span style="color:var(--red)">⚠ Could not read file.</span>';
+  r.readAsText(file,'utf-8');
+}
+
+// Minimal robust CSV parser - handles quoted fields, escaped quotes, commas inside quotes, CRLF
+function parseCsv(text){
+  text=text.replace(/^\uFEFF/,''); // BOM
+  const rows=[];let cur=[];let field='';let inQuotes=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i],n=text[i+1];
+    if(inQuotes){
+      if(c==='"'&&n==='"'){field+='"';i++;}
+      else if(c==='"'){inQuotes=false;}
+      else field+=c;
+    }else{
+      if(c==='"'){inQuotes=true;}
+      else if(c===','){cur.push(field);field='';}
+      else if(c==='\n'){cur.push(field);rows.push(cur);cur=[];field='';}
+      else if(c==='\r'){/* skip */}
+      else field+=c;
+    }
+  }
+  if(field.length||cur.length){cur.push(field);rows.push(cur);}
+  if(!rows.length)throw new Error('CSV is empty.');
+  const headers=rows.shift().map(h=>h.trim());
+  // Strip trailing all-blank rows
+  while(rows.length&&rows[rows.length-1].every(c=>!String(c).trim()))rows.pop();
+  return{headers,rows};
+}
+
+function autoMapColumns(headers){
+  const map={};
+  headers.forEach((h,i)=>{
+    const norm=h.toLowerCase().replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim();
+    for(const f of CSV_FIELDS){
+      if(norm===f.key.replace(/_/g,' ')||norm===f.label.toLowerCase()||(f.aliases||[]).some(a=>a===norm)){
+        map[f.key]=i;break;
+      }
+    }
   });
-  if (!r.ok) return null;
-  const user = await r.json();
-  return user && user.id ? user : null;
+  return map;
 }
 
-module.exports = async function handler(req, res) {
-  setCors(req, res);
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+window.civaraCsvBack=function(){
+  const cur=[1,2,3,4].find(n=>$('csv-step-'+n).classList.contains('active'));
+  if(cur>1)csvShowStep(cur-1);
+};
 
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return res.status(500).json({ error: 'Server misconfigured.' });
-  }
-
-  // 1. Auth
-  const user = await getAuthUser(req);
-  if (!user) return res.status(401).json({ error: 'Not signed in.' });
-
-  // 2. Validate URL
-  const target = req.query.url;
-  if (!target || typeof target !== 'string') {
-    return res.status(400).json({ error: 'Missing url parameter.' });
-  }
-  let parsed;
-  try { parsed = new URL(target); } catch { return res.status(400).json({ error: 'Invalid URL.' }); }
-  if (!['http:', 'https:'].includes(parsed.protocol)) {
-    return res.status(400).json({ error: 'Only http(s) URLs are allowed.' });
-  }
-  // Block private/loopback/internal hosts to prevent SSRF
-  const host = parsed.hostname.toLowerCase();
-  if (
-    host === 'localhost' ||
-    host.startsWith('127.') ||
-    host.startsWith('10.') ||
-    host.startsWith('192.168.') ||
-    host.startsWith('169.254.') ||
-    host.endsWith('.local') ||
-    host.endsWith('.internal')
-  ) {
-    return res.status(400).json({ error: 'URL host not allowed.' });
-  }
-
-  // 3. Fetch with timeout
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20000);
-
-  try {
-    const upstream = await fetch(target, {
-      redirect: 'follow',
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; CivaraTenderBot/1.0)',
-        'Accept': 'application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,*/*;q=0.8',
-      },
-    });
-    clearTimeout(timeout);
-
-    if (!upstream.ok) {
-      return res.status(502).json({ error: 'Upstream returned ' + upstream.status });
+window.civaraCsvNext=async function(){
+  const cur=[1,2,3,4].find(n=>$('csv-step-'+n).classList.contains('active'));
+  if(cur===1){renderMappingStep();csvShowStep(2);}
+  else if(cur===2){
+    if(_csv.mapping.first_name===undefined||_csv.mapping.last_name===undefined){
+      alert('First name and last name must both be mapped.');return;
     }
+    runValidation();renderPreviewStep();csvShowStep(3);
+  }
+  else if(cur===3){csvShowStep(4);await runImport();}
+  else if(cur===4){closeModal('modal-csv');if(typeof window.go==='function')window.go('participants');}
+};
 
-    const ct = (upstream.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
-    const len = parseInt(upstream.headers.get('content-length') || '0', 10);
-    if (len && len > MAX_BYTES) {
-      return res.status(413).json({ error: 'File too large (>25MB).' });
-    }
-    const okType = ALLOWED_CONTENT_TYPES.some(t => ct === t || ct.startsWith(t));
-    if (!okType) {
-      return res.status(415).json({ error: 'Unsupported content type: ' + (ct || 'unknown') });
-    }
+function renderMappingStep(){
+  const wrap=$('csv-mapping-list');
+  wrap.innerHTML=CSV_FIELDS.map(f=>{
+    const sel=_csv.mapping[f.key];
+    const opts='<option value="">— skip —</option>'+_csv.headers.map((h,i)=>'<option value="'+i+'" '+(sel===i?'selected':'')+'>'+escapeHTML(h)+'</option>').join('');
+    return `<div class="csv-map-row">
+      <div><div style="font-size:13px;font-weight:600;color:var(--txt)">${escapeHTML(f.label)}${f.required?' <span style="color:var(--red)">*</span>':''}</div></div>
+      <div class="csv-map-arrow">←</div>
+      <div><select onchange="window.civaraSetMap('${f.key}',this.value)">${opts}</select></div>
+    </div>`;
+  }).join('');
+}
+window.civaraSetMap=function(key,val){
+  if(val===''||val===null)delete _csv.mapping[key];
+  else _csv.mapping[key]=parseInt(val,10);
+};
 
-    const buf = Buffer.from(await upstream.arrayBuffer());
-    if (buf.byteLength > MAX_BYTES) {
-      return res.status(413).json({ error: 'File too large (>25MB).' });
+function runValidation(){
+  _csv.validated=[];_csv.errors=[];
+  _csv.rows.forEach((row,idx)=>{
+    const issues=[];
+    const get=k=>_csv.mapping[k]!==undefined?String(row[_csv.mapping[k]]||'').trim():'';
+    const fn=get('first_name'),ln=get('last_name');
+    if(!fn)issues.push('missing first name');
+    if(!ln)issues.push('missing last name');
+    let stage=get('stage');
+    if(stage&&!STAGE_VALUES.includes(stage)){
+      const guess=STAGE_VALUES.find(s=>s.toLowerCase()===stage.toLowerCase());
+      if(guess)stage=guess;else{issues.push('stage "'+stage+'" not recognised — defaulted to Referred');stage='Referred';}
     }
+    let risk=get('risk');
+    if(risk&&!RISK_VALUES.includes(risk)){
+      const guess=RISK_VALUES.find(s=>s.toLowerCase()===risk.toLowerCase());
+      if(guess)risk=guess;else{issues.push('risk "'+risk+'" not recognised — defaulted to Low');risk='Low';}
+    }
+    let ref=get('ref_source');
+    if(ref&&!REF_VALUES.includes(ref)){
+      const guess=REF_VALUES.find(s=>s.toLowerCase()===ref.toLowerCase());
+      if(guess)ref=guess;else ref='Self-referral';
+    }
+    let lc=get('last_contact');
+    if(lc){
+      const d=new Date(lc);
+      if(isNaN(d))lc='';
+      else lc=d.toISOString().split('T')[0];
+    }
+    const barriersRaw=get('barriers');
+    const barriers=barriersRaw?barriersRaw.split(/[;|]/).map(s=>s.trim()).filter(Boolean):[];
+    const noteText=get('notes');
+    const record={
+      first_name:fn||'(blank)',
+      last_name:ln||'(blank)',
+      email:get('email'),
+      phone:get('phone'),
+      ref_source:ref||'Self-referral',
+      stage:stage||'Referred',
+      advisor:get('advisor')||'Unassigned',
+      risk:risk||'Low',
+      safeguarding:get('safeguarding')||null,
+      barriers,
+      outcomes:[],
+      last_contact:lc||null,
+      notes:noteText?[{t:noteText,d:(new Date()).toISOString().split('T')[0],s:'Imported'}]:[],
+      contract_ids:[],
+      equality_data:{},
+      scores:{},
+      _rowIndex:idx+2, // 1 for header, 1 because humans count from 1
+      _issues:issues
+    };
+    _csv.validated.push(record);
+    if(issues.length)_csv.errors.push({row:record._rowIndex,issues});
+  });
+}
 
-    res.setHeader('Content-Type', ct || 'application/octet-stream');
-    res.setHeader('Content-Length', String(buf.byteLength));
-    res.setHeader('Cache-Control', 'private, max-age=300');
-    res.status(200).send(buf);
-  } catch (err) {
-    clearTimeout(timeout);
-    const isAbort = err.name === 'AbortError';
-    return res.status(isAbort ? 504 : 502).json({
-      error: isAbort ? 'Upstream timed out after 20s.' : (err.message || 'Fetch failed'),
-    });
+function renderPreviewStep(){
+  const t=$('csv-preview-table');
+  const cols=['first_name','last_name','email','stage','advisor','risk','barriers','last_contact'];
+  const head='<thead><tr><th style="width:30px">#</th>'+cols.map(c=>'<th>'+c.replace(/_/g,' ')+'</th>').join('')+'</tr></thead>';
+  const body='<tbody>'+_csv.validated.slice(0,8).map(r=>{
+    const issueClass=r._issues.length?' class="csv-issue"':'';
+    return '<tr'+issueClass+'><td>'+r._rowIndex+'</td>'+cols.map(c=>{
+      let v=r[c];if(Array.isArray(v))v=v.join('; ');
+      return '<td title="'+escapeHTML(v||'')+'">'+escapeHTML(v||'')+'</td>';
+    }).join('')+'</tr>';
+  }).join('')+'</tbody>';
+  t.innerHTML=head+body;
+  const total=_csv.validated.length,withIssues=_csv.errors.length,clean=total-withIssues;
+  $('csv-validation-summary').innerHTML=`
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:8px">
+      <div><div style="font-size:11px;color:var(--txt3);font-weight:600">Total rows</div><div style="font-size:18px;font-weight:700;color:var(--txt)">${total}</div></div>
+      <div><div style="font-size:11px;color:var(--txt3);font-weight:600">Clean</div><div style="font-size:18px;font-weight:700;color:var(--em)">${clean}</div></div>
+      <div><div style="font-size:11px;color:var(--txt3);font-weight:600">With issues</div><div style="font-size:18px;font-weight:700;color:${withIssues?'var(--amber)':'var(--em)'}">${withIssues}</div></div>
+    </div>
+    ${withIssues?'<div style="font-size:12px;color:var(--txt2)">Issues are non-blocking — bad fields will be skipped, the row will still import.</div>':'<div style="font-size:12px;color:var(--em)">✓ All rows look good.</div>'}
+  `;
+}
+
+async function runImport(){
+  const wrap=$('csv-import-progress');
+  if(!window.sb||!window.orgId){
+    wrap.innerHTML='<div class="alert alert-warn">Cannot import — not connected to your organisation. Refresh and try again.</div>';
+    return;
+  }
+  const total=_csv.validated.length;
+  let done=0,failed=0;const failures=[];
+  wrap.innerHTML=`<div class="brain-panel"><div class="brain-header"><div class="brain-icon">📥</div><div><div class="brain-title">Importing ${total} participant${total===1?'':'s'}…</div><div class="brain-sub" id="csv-prog-sub">Starting…</div></div></div><div style="background:var(--bg);border-radius:8px;height:8px;overflow:hidden"><div id="csv-prog-bar" style="height:100%;width:0%;background:var(--em);transition:width .2s"></div></div></div>`;
+  $('csv-next-btn').disabled=true;$('csv-back-btn').style.display='none';
+  for(const rec of _csv.validated){
+    try{
+      const{_rowIndex,_issues,...payload}=rec;
+      await window.sbInsert('participants',payload);
+      done++;
+    }catch(e){
+      failed++;failures.push({row:rec._rowIndex,name:rec.first_name+' '+rec.last_name,error:e.message});
+    }
+    const prog=Math.round((done+failed)/total*100);
+    const bar=$('csv-prog-bar'),sub=$('csv-prog-sub');
+    if(bar)bar.style.width=prog+'%';
+    if(sub)sub.textContent=(done+failed)+' of '+total+' processed · '+done+' imported';
+  }
+  // Refresh local cache
+  if(typeof window.refreshTable==='function'){try{await window.refreshTable('participants');}catch(e){}}
+  wrap.innerHTML=`
+    <div class="alert ${failed?'alert-warn':'alert-ok'}" style="margin-bottom:14px">${failed?'⚠':'✓'} Import finished — <strong>${done}</strong> imported${failed?', <strong>'+failed+'</strong> failed':''}.</div>
+    ${failed?'<div style="font-size:12px;color:var(--txt2);margin-bottom:8px">Failed rows:</div><div style="max-height:140px;overflow-y:auto;background:var(--bg);border-radius:8px;padding:10px;font-size:12px">'+failures.map(f=>'Row '+f.row+' ('+escapeHTML(f.name)+') — '+escapeHTML(f.error)).join('<br/>')+'</div>':''}
+  `;
+  $('csv-next-btn').disabled=false;$('csv-next-btn').textContent='Done';
+}
+
+// ─────────────────────────────────────────────────────────────
+// 2. DEMOGRAPHICS DASHBOARD
+// ─────────────────────────────────────────────────────────────
+function demographicsPageHTML(){
+  return `
+    <div class="page-header">
+      <div><div class="page-title">Demographics</div><div class="page-sub" id="demo-sub">Voluntary equality data — anonymised aggregates only</div></div>
+      <button class="btn btn-ghost btn-sm" onclick="window.civaraExportDemographics()">Export CSV</button>
+    </div>
+    <div class="alert alert-info">Demographics are collected voluntarily for anonymised reporting. They are never shared with funders at individual level. Records with no equality data are excluded from these counts.</div>
+    <div class="stats-grid" id="demo-stats"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+      <div class="card"><div class="card-title">Age group</div><div id="demo-age"></div></div>
+      <div class="card"><div class="card-title">Ethnicity</div><div id="demo-ethnicity"></div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+      <div class="card"><div class="card-title">Gender</div><div id="demo-gender"></div></div>
+      <div class="card"><div class="card-title">Disability</div><div id="demo-disability"></div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+      <div class="card"><div class="card-title">Sexual orientation</div><div id="demo-orientation"></div></div>
+      <div class="card"><div class="card-title">Religion or belief</div><div id="demo-religion"></div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="card"><div class="card-title">Marital status</div><div id="demo-marital"></div></div>
+      <div class="card"><div class="card-title">Postcode (first half)</div><div id="demo-postcode"></div></div>
+    </div>
+  `;
+}
+
+function patchGoRouter(){
+  if(window._civaraRouterPatched)return;
+  window._civaraRouterPatched=true;
+  const origGo=window.go;
+  if(typeof origGo!=='function')return;
+  window.go=function(page){
+    if(page==='demographics'){
+      document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+      document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+      const el=$('page-demographics');if(el)el.classList.add('active');
+      document.querySelectorAll('.nav-btn').forEach(b=>{if(b.getAttribute('onclick')?.includes("'demographics'"))b.classList.add('active');});
+      renderDemographics();
+      return;
+    }
+    return origGo(page);
+  };
+}
+
+function renderDemographics(){
+  const P=(window.DB&&window.DB.participants)||[];
+  const withData=P.filter(p=>p.equality_data&&Object.keys(p.equality_data).length>0);
+  $('demo-sub').textContent=withData.length+' of '+P.length+' participants have equality data ('+pct(withData.length,P.length||1)+'%)';
+  $('demo-stats').innerHTML=[
+    {l:'Total participants',v:P.length},
+    {l:'Data completed',v:withData.length},
+    {l:'Completion rate',v:pct(withData.length,P.length||1)+'%'},
+    {l:'Disclosed disability',v:withData.filter(p=>p.equality_data.disability&&p.equality_data.disability!=='none').length}
+  ].map(s=>'<div class="stat-card"><div class="stat-lbl">'+s.l+'</div><div class="stat-val">'+s.v+'</div></div>').join('');
+  const fields=[
+    {id:'demo-age',key:'age'},
+    {id:'demo-ethnicity',key:'ethnicity'},
+    {id:'demo-gender',key:'gender'},
+    {id:'demo-disability',key:'disability'},
+    {id:'demo-orientation',key:'orientation'},
+    {id:'demo-religion',key:'religion'},
+    {id:'demo-marital',key:'marital'},
+    {id:'demo-postcode',key:'postcode'}
+  ];
+  fields.forEach(f=>{
+    const counts={};
+    withData.forEach(p=>{const v=p.equality_data[f.key]||'(not stated)';counts[v]=(counts[v]||0)+1;});
+    const pairs=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+    const total=withData.length||1;
+    const el=$(f.id);if(!el)return;
+    if(!pairs.length){el.innerHTML='<div style="color:var(--txt3);font-size:12px">No data yet.</div>';return;}
+    el.innerHTML=pairs.map(([label,count])=>{
+      const p=Math.round(count/total*100);
+      return '<div class="demo-bar-wrap"><div class="demo-bar-top"><span>'+escapeHTML(label)+'</span><span style="font-weight:600;color:var(--em)">'+count+' ('+p+'%)</span></div><div class="demo-bar-track"><div class="demo-bar-fill" style="width:'+p+'%"></div></div></div>';
+    }).join('');
+  });
+}
+
+window.civaraExportDemographics=function(){
+  const P=(window.DB&&window.DB.participants)||[];
+  const rows=[['Participant ID','Age','Ethnicity','Gender','Disability','Orientation','Religion','Marital','Postcode']];
+  P.forEach(p=>{
+    const e=p.equality_data||{};
+    rows.push(['CV-'+String(p.id).padStart(4,'0'),e.age||'',e.ethnicity||'',e.gender||'',e.disability||'',e.orientation||'',e.religion||'',e.marital||'',e.postcode||'']);
+  });
+  const csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='civara-demographics-anonymised.csv';
+  a.click();
+};
+
+function patchEqualityModal(){
+  // Wrap openEqualityModal so it loads the new fields when editing
+  const tries=()=>{
+    if(typeof window.openEqualityModal!=='function')return setTimeout(tries,300);
+    if(window._civaraEqualityPatched)return;
+    window._civaraEqualityPatched=true;
+    const orig=window.openEqualityModal;
+    window.openEqualityModal=function(pid){
+      orig(pid);
+      const p=(window.DB&&window.DB.participants||[]).find(x=>x.id===pid);
+      const ed=p?.equality_data||{};
+      ['orientation','religion','marital','postcode'].forEach(k=>{
+        const el=$('eq-'+k);if(el)el.value=ed[k]||'';
+      });
+    };
+    // Wrap saveEqualityData to include the new fields
+    if(typeof window.saveEqualityData==='function'){
+      const origSave=window.saveEqualityData;
+      window.saveEqualityData=async function(){
+        // Mutate the DOM hooks: stash extras on a known global, original reads age/ethnicity/gender/disability
+        // We monkey-patch by overriding entirely:
+        return saveEqualityWithExtras();
+      };
+    }
+  };
+  tries();
+}
+
+async function saveEqualityWithExtras(){
+  const _editEqPId=window._editEqPId;
+  if(!_editEqPId)return;
+  const btn=$('eq-save-btn');if(btn){btn.textContent='Saving…';btn.disabled=true;}
+  try{
+    const data={
+      age:$('eq-age').value,
+      ethnicity:$('eq-ethnicity').value,
+      gender:$('eq-gender').value,
+      disability:$('eq-disability').value,
+      orientation:$('eq-orientation')?.value||'',
+      religion:$('eq-religion')?.value||'',
+      marital:$('eq-marital')?.value||'',
+      postcode:$('eq-postcode')?.value||''
+    };
+    Object.keys(data).forEach(k=>{if(!data[k])delete data[k];});
+    if(window.sb){try{await window.sbUpdate('participants',{equality_data:data},_editEqPId);}catch(e){}}
+    const idx=(window.DB&&window.DB.participants||[]).findIndex(x=>x.id===_editEqPId);
+    if(idx>=0)window.DB.participants[idx].equality_data=data;
+    closeModal('modal-eq');
+    if(typeof window.renderEqMonitoringList==='function')window.renderEqMonitoringList();
+    if($('page-demographics')?.classList.contains('active'))renderDemographics();
+  }catch(e){alert('Save failed: '+e.message);}
+  finally{if(btn){btn.textContent='Save';btn.disabled=false;}}
+}
+
+// ─────────────────────────────────────────────────────────────
+// 3. PERIOD-BASED CONTRACT REPORTING
+// ─────────────────────────────────────────────────────────────
+function patchReportGenerator(){
+  const tries=()=>{
+    const el=$('reports-contract-list');
+    if(!el)return setTimeout(tries,300);
+    // Inject period picker above the contract list, once
+    if($('civara-period-picker'))return;
+    const picker=document.createElement('div');
+    picker.id='civara-period-picker';
+    picker.className='card';
+    picker.innerHTML=`
+      <div class="card-title">Reporting period</div>
+      <div class="period-pick-row">
+        <div class="form-row">
+          <label>Period type</label>
+          <select id="civara-period-type" onchange="window.civaraOnPeriodTypeChange()">
+            <option value="cumulative">Cumulative (all-time)</option>
+            <option value="month">Month</option>
+            <option value="quarter">Quarter</option>
+            <option value="custom">Custom range</option>
+          </select>
+        </div>
+        <div class="form-row" id="civara-period-month-wrap" style="display:none">
+          <label>Month</label>
+          <input type="month" id="civara-period-month" value="${(new Date()).toISOString().slice(0,7)}"/>
+        </div>
+        <div class="form-row" id="civara-period-quarter-wrap" style="display:none">
+          <label>Quarter</label>
+          <select id="civara-period-quarter">
+            ${quarterOptions()}
+          </select>
+        </div>
+        <div class="form-row" id="civara-period-from-wrap" style="display:none">
+          <label>From</label>
+          <input type="date" id="civara-period-from"/>
+        </div>
+        <div class="form-row" id="civara-period-to-wrap" style="display:none">
+          <label>To</label>
+          <input type="date" id="civara-period-to"/>
+        </div>
+      </div>
+      <div id="civara-period-summary" style="margin-top:10px;font-size:12px;color:var(--txt3)">Reports use cumulative all-time data.</div>
+    `;
+    el.parentNode.insertBefore(picker,el);
+    // Also wrap generateAIReport so it injects period filtering
+    if(typeof window.generateAIReport==='function'&&!window._civaraReportPatched){
+      window._civaraReportPatched=true;
+      window.generateAIReport=patchedGenerateAIReport;
+    }
+  };
+  tries();
+}
+
+function quarterOptions(){
+  const now=new Date();const year=now.getFullYear();
+  const items=[];
+  for(let y=year;y>=year-2;y--){
+    for(let q=4;q>=1;q--){
+      items.push({value:y+'-Q'+q,label:'Q'+q+' '+y+' ('+quarterRange(y,q).from+' to '+quarterRange(y,q).to+')'});
+    }
+  }
+  // Default to current quarter
+  const curQ=Math.floor(now.getMonth()/3)+1;
+  return items.map(it=>'<option value="'+it.value+'" '+(it.value===year+'-Q'+curQ?'selected':'')+'>'+it.label+'</option>').join('');
+}
+function quarterRange(year,q){
+  const startMonth=(q-1)*3;
+  const from=new Date(year,startMonth,1);
+  const to=new Date(year,startMonth+3,0);
+  return{from:from.toISOString().split('T')[0],to:to.toISOString().split('T')[0]};
+}
+
+window.civaraOnPeriodTypeChange=function(){
+  const t=$('civara-period-type').value;
+  ['month','quarter','from','to'].forEach(k=>{const el=$('civara-period-'+k+'-wrap');if(el)el.style.display='none';});
+  if(t==='month')$('civara-period-month-wrap').style.display='block';
+  else if(t==='quarter')$('civara-period-quarter-wrap').style.display='block';
+  else if(t==='custom'){$('civara-period-from-wrap').style.display='block';$('civara-period-to-wrap').style.display='block';}
+  updatePeriodSummary();
+};
+
+function getCurrentPeriod(){
+  const t=$('civara-period-type')?.value||'cumulative';
+  if(t==='cumulative')return{type:'cumulative',from:null,to:null,label:'all-time / cumulative'};
+  if(t==='month'){
+    const m=$('civara-period-month').value;if(!m)return{type:'cumulative',from:null,to:null,label:'all-time'};
+    const[y,mo]=m.split('-').map(Number);
+    const from=new Date(y,mo-1,1).toISOString().split('T')[0];
+    const to=new Date(y,mo,0).toISOString().split('T')[0];
+    const monName=new Date(y,mo-1,1).toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+    return{type:'month',from,to,label:monName};
+  }
+  if(t==='quarter'){
+    const v=$('civara-period-quarter').value;
+    const[y,q]=v.split('-Q');
+    const r=quarterRange(parseInt(y),parseInt(q));
+    return{type:'quarter',from:r.from,to:r.to,label:'Q'+q+' '+y};
+  }
+  if(t==='custom'){
+    const from=$('civara-period-from').value,to=$('civara-period-to').value;
+    if(!from||!to)return{type:'cumulative',from:null,to:null,label:'all-time'};
+    return{type:'custom',from,to,label:from+' to '+to};
+  }
+  return{type:'cumulative',from:null,to:null,label:'all-time'};
+}
+
+function updatePeriodSummary(){
+  const p=getCurrentPeriod();
+  const s=$('civara-period-summary');
+  if(!s)return;
+  if(p.type==='cumulative')s.textContent='Reports use cumulative all-time data.';
+  else s.textContent='Reports will be filtered to '+p.label+' ('+p.from+' → '+p.to+').';
+}
+
+function inPeriod(dateStr,period){
+  if(period.type==='cumulative'||!period.from||!period.to)return true;
+  if(!dateStr)return false;
+  const d=String(dateStr).slice(0,10);
+  return d>=period.from&&d<=period.to;
+}
+
+async function patchedGenerateAIReport(type,contractId){
+  const progressEl=$('brain-progress'),reportEl=$('report-output');
+  if(!progressEl||!reportEl)return;
+  reportEl.innerHTML='';
+  progressEl.scrollIntoView({behavior:'smooth',block:'start'});
+  const period=getCurrentPeriod();
+  const contract=window.DB.contracts.find(c=>String(c.id)===String(contractId));
+  const funder=contract?.funder_id?(window.DB.funders||[]).find(f=>String(f.id)===String(contract.funder_id)):null;
+  const allP=window.DB.participants,allE=window.DB.events,allFB=window.DB.feedback;
+  const orgName=window.currentOrg?.name||'Organisation';
+  const todayStr=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
+  // Filter to contract + period
+  const linked=allP.filter(p=>toArr(p.contract_ids).includes(String(contractId)));
+  const linkedInPeriod=linked.filter(p=>inPeriod(p.last_contact||p.created_at,period));
+  // For "outcomes in period", we look at participants with outcomes whose last_contact falls in the period.
+  const linkedOutcomes=linkedInPeriod.filter(p=>p.outcomes&&p.outcomes.length>0).length;
+  const jobs=linkedInPeriod.filter(p=>p.outcomes&&p.outcomes.includes('Employment')).length;
+  const sustained=linkedInPeriod.filter(p=>p.stage==='Sustained').length;
+  const eventsInPeriod=allE.filter(e=>inPeriod(e.date,period));
+  const fbInPeriod=allFB.filter(f=>{const ev=allE.find(e=>String(e.id)===String(f.eventId));return ev?inPeriod(ev.date,period):period.type==='cumulative';});
+  const avgCB=fbInPeriod.length?(fbInPeriod.reduce((a,f)=>a+num(f.cb),0)/fbInPeriod.length).toFixed(1):null;
+  const avgCA=fbInPeriod.length?(fbInPeriod.reduce((a,f)=>a+num(f.ca),0)/fbInPeriod.length).toFixed(1):null;
+  const periodLabel=period.type==='cumulative'?'cumulative (all activity to date)':period.label;
+  const steps=[
+    {label:'Filtering to '+periodLabel,meta:linkedInPeriod.length+' participants in scope · '+eventsInPeriod.length+' events'},
+    {label:'Cross-checking funder requirements',meta:'Mapping data against '+(funder?.name||'funder')+' framework'},
+    {label:'Writing the report',meta:'Org Brain composing narrative with your live numbers'},
+    {label:'Quality Supervisor check',meta:'Verifying tone, claims and structure'},
+    {label:'Ready',meta:'Report delivered — review and download below'}
+  ];
+  const sys='You are a professional UK bid writer producing a funder report. Write in clean formal British English. Structure with these sections in order, each beginning with ## and the section title: Executive Summary, Delivery Overview, Participant Outcomes, Distance Travelled and Wellbeing, Participant Voice, Forward Plan. Use **bold** sparingly for key statistics. 600-800 words. Use only data provided — never invent participants, outcomes or quotes. State the reporting period clearly in the Executive Summary. If a data point is not provided, omit gracefully. Do not use hashtags (#) anywhere except as section heading markers. Do not use horizontal rules or emoji.';
+  const prompt=[
+    'Organisation: '+orgName,
+    'Report date: '+todayStr,
+    'Reporting period: '+periodLabel+(period.from?(' ('+period.from+' to '+period.to+')'):''),
+    'Contract: '+(contract?.name||'Unnamed contract'),
+    'Funder: '+(funder?.name||'Funder'),
+    'Contract value: £'+num(contract?.value).toLocaleString(),
+    'Target starts: '+(contract?.target_starts||0),
+    'Actual starts in period: '+linkedInPeriod.length,
+    'Target outcomes: '+(contract?.target_outcomes||0),
+    'Actual outcomes in period: '+linkedOutcomes,
+    'Employment outcomes in period: '+jobs,
+    'Sustained outcomes in period: '+sustained,
+    'Events delivered in period: '+eventsInPeriod.length,
+    avgCB?'Average confidence before (period): '+avgCB+' / 5':'',
+    avgCA?'Average confidence after (period): '+avgCA+' / 5':'',
+    'Feedback responses in period: '+fbInPeriod.length,
+  ].filter(Boolean).join('\n');
+  const raw=await window.runAgent({container:progressEl,headerLabel:'Org Brain — Funder Report',headerSub:'Reading your data, mapping to funder requirements, writing the report',steps,sys,prompt,maxTok:1400});
+  if(!raw)return;
+  const cleaned=window.cleanReportText(raw);
+  const bodyHTML=window.reportTextToHTML(cleaned,raw);
+  const reportTitle=(contract?.name||'Programme Report')+' — '+orgName+' ('+periodLabel+')';
+  window._lastReportText=cleaned;window._lastReportTitle=reportTitle;
+  const _logoUrl=window.getOrgLogoUrl(window.currentOrg);
+  const _headerHTML=_logoUrl
+    ?'<div class="report-header-flex"><div class="report-header-text"><div class="report-meta">'+escapeHTML((funder?.name||'Funder Report')+' · '+periodLabel)+'</div><div class="report-title">'+escapeHTML(contract?.name||'Programme Report')+'</div><div class="report-subtitle">'+escapeHTML(orgName)+' · '+escapeHTML(todayStr)+'</div></div><div class="report-header-logo"><img src="'+escapeHTML(_logoUrl)+'" alt="'+escapeHTML(orgName)+'" class="org-logo-report" onerror="this.style.display=\'none\'"/></div></div>'
+    :'<div class="report-header"><div class="report-meta">'+escapeHTML((funder?.name||'Funder Report')+' · '+periodLabel)+'</div><div class="report-title">'+escapeHTML(contract?.name||'Programme Report')+'</div><div class="report-subtitle">'+escapeHTML(orgName)+' · '+escapeHTML(todayStr)+'</div></div>';
+  reportEl.innerHTML=
+    '<div class="report-actions">'+
+      '<button class="btn btn-p" onclick="window.downloadReportPDF()">⬇ Download as PDF</button>'+
+      '<button class="btn btn-ghost btn-sm" onclick="window.copyReportText()" id="copy-report-btn">📋 Copy text</button>'+
+      '<button class="btn btn-ghost btn-sm" onclick="window.generateAIReport(\''+escapeHTML(type)+'\',\''+escapeHTML(String(contractId))+'\')">↻ Regenerate</button>'+
+    '</div>'+
+    '<div class="report-doc">'+
+      _headerHTML+
+      '<div class="report-body">'+bodyHTML+'</div>'+
+      '<div class="report-footer">Generated by Civara · Org Brain · '+escapeHTML(todayStr)+' · Period: '+escapeHTML(periodLabel)+'</div>'+
+    '</div>';
+  reportEl.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+// ─────────────────────────────────────────────────────────────
+// 4. OPPORTUNITIES FINDER UPGRADE
+// ─────────────────────────────────────────────────────────────
+function patchOpportunitiesFinder(){
+  const tries=()=>{
+    if(typeof window.runBDResearch!=='function')return setTimeout(tries,300);
+    if(window._civaraBDPatched)return;
+    window._civaraBDPatched=true;
+    window.runBDResearch=runBDResearchUpgraded;
+  };
+  tries();
+}
+
+async function runBDResearchUpgraded(){
+  const wrap=$('bd-opps-wrap');const res=$('bd-opps-result');
+  if(!wrap||!res)return;
+  wrap.style.display='block';
+  const area=$('bd-area').value,size=$('bd-size').value,specific=$('bd-specific').value;
+  const steps=[
+    {label:'Searching live funding sources',meta:area+' · '+size},
+    {label:'Quality Supervisor checking each result',meta:'Verifying deadlines, eligibility and links'},
+    {label:'Structuring opportunities',meta:''},
+    {label:'Ready',meta:''},
+  ];
+  const sys=`You are a UK funding researcher. Find 3-6 currently open funding opportunities relevant to the criteria. Return a SINGLE JSON object with no commentary, no markdown fences, no explanation. Schema:
+{
+  "opportunities": [
+    {
+      "funder": "name of funder",
+      "programme": "name of programme or fund",
+      "summary": "1-2 sentence plain-English summary of what they fund",
+      "value_band": "e.g. £10,000-£100,000 or 'Up to £500k'",
+      "deadline": "YYYY-MM-DD or descriptive (e.g. 'Rolling', 'Q3 2025')",
+      "eligibility": "1 sentence on who can apply",
+      "fit_reason": "1-2 sentences on why this fits the org",
+      "url": "https://... direct link to the funding page",
+      "tender_doc_url": "https://... direct link to PDF/Word tender document if you found one, otherwise empty string"
+    }
+  ]
+}
+Use ONLY real, verifiable funding programmes that are currently open. If you cannot verify a deadline, mark it "Verify on funder site". Always include a real URL.`;
+  const prompt='Area: '+area+'\nOrg size: '+size+'\nFunders or programmes of interest: '+(specific||'open to all suitable opportunities');
+  const raw=await window.runAgent({container:res,headerLabel:'BD Manager Agent',headerSub:'Live web search · Quality Supervisor verifying results',steps,sys,prompt,maxTok:1500,webSearch:true});
+  if(!raw)return;
+  let opps=[];
+  try{
+    const cleaned=raw.replace(/```json|```/gi,'').trim();
+    const m=cleaned.match(/\{[\s\S]*\}/);
+    if(!m)throw new Error('No JSON found in agent response.');
+    const parsed=JSON.parse(m[0]);
+    opps=parsed.opportunities||[];
+  }catch(e){
+    res.innerHTML='<div class="alert alert-warn">Could not parse opportunities (the agent responded with free text rather than JSON). Try again — usually fine on retry.</div><details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--txt3)">Show raw response</summary><pre style="font-size:11px;background:var(--bg);padding:10px;border-radius:8px;margin-top:8px;white-space:pre-wrap;word-break:break-word">'+escapeHTML(raw)+'</pre></details>';
+    return;
+  }
+  if(!opps.length){res.innerHTML='<div class="alert alert-info">No open opportunities matched. Try adjusting the area or size, or naming a specific funder.</div>';return;}
+  res.innerHTML=opps.map((o,i)=>{
+    const hasTender=o.tender_doc_url&&/^https?:\/\//.test(o.tender_doc_url);
+    const hasUrl=o.url&&/^https?:\/\//.test(o.url);
+    return `<div class="tender-card">
+      <div class="tender-card-hd">
+        <div>
+          <div class="tender-card-funder">${escapeHTML(o.funder||'')}</div>
+          <div class="tender-card-title">${escapeHTML(o.programme||'Untitled programme')}</div>
+        </div>
+      </div>
+      <div style="font-size:13px;color:var(--txt2);margin-bottom:8px">${escapeHTML(o.summary||'')}</div>
+      <div class="tender-card-meta">
+        ${o.value_band?'<span><strong>Value:</strong> '+escapeHTML(o.value_band)+'</span>':''}
+        ${o.deadline?'<span><strong>Deadline:</strong> '+escapeHTML(o.deadline)+'</span>':''}
+        ${o.eligibility?'<span><strong>Eligibility:</strong> '+escapeHTML(o.eligibility)+'</span>':''}
+      </div>
+      ${o.fit_reason?'<div style="font-size:12px;color:var(--em);background:rgba(31,111,109,.06);border-radius:6px;padding:8px 10px;margin-bottom:10px"><strong>Why it fits:</strong> '+escapeHTML(o.fit_reason)+'</div>':''}
+      <div class="tender-card-actions">
+        ${hasUrl?'<a class="btn btn-p btn-sm" href="'+escapeHTML(o.url)+'" target="_blank" rel="noopener noreferrer">↗ Open funder page</a>':''}
+        ${hasTender?'<button class="btn btn-ghost btn-sm" onclick="window.civaraFetchTender('+i+',\''+escapeHTML(o.tender_doc_url).replace(/\'/g,"\\'")+'\',\''+escapeHTML(o.programme||'tender').replace(/\'/g,"\\'")+'\')">⬇ Download tender doc</button>':''}
+        ${hasUrl?'<button class="btn btn-ghost btn-sm" onclick="window.civaraDraftEoiFor('+i+')">✦ Draft EOI for this</button>':''}
+      </div>
+      <div id="civara-tender-status-${i}" style="font-size:12px;color:var(--txt3);margin-top:8px"></div>
+    </div>`;
+  }).join('');
+  // Stash for later
+  window._civaraOpps=opps;
+}
+
+window.civaraFetchTender=async function(idx,url,filename){
+  const status=$('civara-tender-status-'+idx);
+  if(!status)return;
+  status.innerHTML='<span style="color:var(--purple)">Fetching tender document…</span>';
+  try{
+    const{data:{session}}=await window.sb.auth.getSession();
+    const token=session?.access_token;
+    const r=await fetch('/api/fetch-tender?url='+encodeURIComponent(url),{headers:{'Authorization':token?'Bearer '+token:''}});
+    if(!r.ok){
+      const err=await r.json().catch(()=>({error:'HTTP '+r.status}));
+      throw new Error(err.error||'HTTP '+r.status);
+    }
+    const blob=await r.blob();
+    const safeName=filename.replace(/[^a-z0-9 \-_]/gi,'').slice(0,80)||'tender';
+    const ext=(url.match(/\.(pdf|docx?|xlsx?)(\?|$)/i)?.[1]||'pdf').toLowerCase();
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=safeName+'.'+ext;
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+    status.innerHTML='<span style="color:var(--em)">✓ Downloaded.</span>';
+  }catch(e){
+    status.innerHTML='<span style="color:var(--red)">⚠ Could not fetch ('+escapeHTML(e.message)+'). Try opening the funder page directly.</span>';
   }
 };
+
+window.civaraDraftEoiFor=function(idx){
+  const o=(window._civaraOpps||[])[idx];if(!o)return;
+  if(typeof window.go==='function')window.go('bd');
+  // Pre-fill the EOI form
+  setTimeout(()=>{
+    const fEl=$('eoi-funder'),bEl=$('eoi-brief');
+    if(fEl)fEl.value=(o.funder||'')+(o.programme?' — '+o.programme:'');
+    if(bEl){
+      bEl.value=[
+        o.summary||'',
+        '',
+        'Value: '+(o.value_band||'TBC'),
+        'Deadline: '+(o.deadline||'TBC'),
+        'Eligibility: '+(o.eligibility||'TBC'),
+        '',
+        'Funder URL: '+(o.url||''),
+        'Tender doc: '+(o.tender_doc_url||'(see funder page)')
+      ].join('\n');
+    }
+    bEl?.scrollIntoView({behavior:'smooth',block:'center'});
+  },300);
+};
+
+})();
