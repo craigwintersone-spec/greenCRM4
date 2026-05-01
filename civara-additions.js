@@ -1,43 +1,78 @@
 /* ============================================================
- * CIVARA ADDITIONS - v2
+ * CIVARA ADDITIONS - v3
  * Drop-in replacement for civara-additions.js
  *
- * Changes vs v1:
- *  - Switched all inline onclick handlers to addEventListener
- *    (kills the "demo is not defined" errors and similar
- *    apostrophe/quote escape bugs).
- *  - Tender finder pushes the agent to find direct PDF/DOCX
- *    links on funder sites and uses /api/fetch-tender to
- *    download the pack server-side.
- *  - When no direct doc is available, the card honestly says
- *    so instead of hiding the action.
- *  - Demographics section now appears on Add Participant
- *    (collapsible, optional, all 8 fields).
- *  - Demographics section also still appears on the
- *    HR & Equality > Equality monitoring tab (unchanged).
- *  - CSV import unchanged.
- *  - Period reporting unchanged.
+ * v3 fixes the "nothing happens" issue:
+ *  - In app.html, DB/sb/orgId etc. are declared with `const`
+ *    inside a <script> block, so they DO NOT live on window.
+ *  - v1 and v2 polled for window.DB and waited forever.
+ *  - v3 reads them through DOM hooks and via a small wrapper
+ *    that grabs them from the existing functions like sbInsert
+ *    that ARE on window (because they're declared with `function`,
+ *    which DOES bind to window in non-module scripts).
+ *
+ * If a function isn't actually on window in your app, the
+ * additions log a warning but keep working for everything else.
  * ============================================================ */
 
 (function(){
 'use strict';
 
-// ─── Wait for app boot ─────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// Wait for app boot.
+// We don't rely on window.DB — instead we wait for DOM elements
+// that boot() creates (the modals, the participants page, etc.)
+// ─────────────────────────────────────────────────────────────
 function whenReady(fn){
-  if(typeof window.DB!=='undefined'&&typeof window.sbInsert==='function'){return fn();}
+  if(document.getElementById('modal-p')
+     && document.getElementById('page-participants')
+     && document.querySelector('.nav-btn')){
+    return setTimeout(fn,400);
+  }
   setTimeout(()=>whenReady(fn),120);
 }
 whenReady(init);
 
-function init(){
-  injectModalsAndPages();
-  patchGoRouter();
-  patchEqualityModal();
-  patchAddParticipantModal();
-  patchOpportunitiesFinder();
-  patchReportGenerator();
-  console.log('[civara-additions v2] ready');
+// ─────────────────────────────────────────────────────────────
+// Bridge to app internals.
+// app.html declares everything with `const` or `function` inside
+// a single big <script> block. Top-level `function` declarations
+// DO get bound to window in regular (non-module) scripts, so the
+// agent runners, openAddP, generateAIReport, runBDResearch etc.
+// are reachable as window.XYZ. But `const DB = ...` is NOT.
+//
+// To work around that, we get a live snapshot of DB by reading
+// the DOM (rendered tables) where we can, OR we hijack the next
+// call to a known function like sbInsert and read DB from inside
+// it via window.DB.
+//
+// Simpler: most of the time we just need to call existing
+// functions (openAddP, saveP, sbInsert) and they'll do the right
+// thing. We only need DB for read-only things like the
+// Demographics page, where we can read it through a getter.
+// ─────────────────────────────────────────────────────────────
+
+let _appBridge=null;
+function getApp(){
+  if(_appBridge)return _appBridge;
+  // Try Function() to read top-level consts from the same realm.
+  // This works because civara-additions.js is loaded as a non-module
+  // script after app.html's main script, in the same global scope.
+  try{
+    _appBridge=new Function('return{DB:typeof DB!=="undefined"?DB:null,sb:typeof sb!=="undefined"?sb:null,orgId:typeof orgId!=="undefined"?orgId:null,currentOrg:typeof currentOrg!=="undefined"?currentOrg:null};')();
+  }catch(e){
+    _appBridge={DB:null,sb:null,orgId:null,currentOrg:null};
+  }
+  // Refresh the snapshot whenever called — orgId/DB mutate over time.
+  return _appBridge;
 }
+function refreshApp(){_appBridge=null;return getApp();}
+
+// Helpers that always re-read fresh state
+function DB(){return refreshApp().DB||{participants:[],volunteers:[],events:[],feedback:[],contacts:[],employers:[],referrals:[],partner_referrals:[],circular:[],contracts:[],evidence:[],funders:[]};}
+function SB(){return refreshApp().sb;}
+function ORG_ID(){return refreshApp().orgId;}
+function CURRENT_ORG(){return refreshApp().currentOrg;}
 
 // ─── Helpers ───────────────────────────────────────────────────
 const $=id=>document.getElementById(id);
@@ -47,7 +82,20 @@ function pct(n,d){return d?Math.round(n/d*100):0;}
 function num(v){return isNaN(+v)?0:+v;}
 function toArr(v){return Array.isArray(v)?v:(typeof v==='string'&&v.startsWith('[')?(()=>{try{return JSON.parse(v)}catch(e){return[]}})():[]);}
 
-// ─── Inject modals + pages ─────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────────
+function init(){
+  console.log('[civara-additions v3] initialising');
+  injectModalsAndPages();
+  patchGoRouter();
+  patchEqualityModal();
+  patchAddParticipantModal();
+  patchOpportunitiesFinder();
+  patchReportGenerator();
+  console.log('[civara-additions v3] ready — DB has', DB().participants.length, 'participants');
+}
+
 function injectModalsAndPages(){
   if(!$('modal-csv')){
     const m=document.createElement('div');
@@ -89,7 +137,6 @@ function injectImportButton(){
   tries();
 }
 
-// ─── Demographics: expand equality modal ───────────────────────
 function expandEqualityModal(){
   const tries=()=>{
     const modal=$('modal-eq');
@@ -99,32 +146,27 @@ function expandEqualityModal(){
     if(!footer)return;
     const wrap=document.createElement('div');
     wrap.dataset.civaraExtra='1';
-    wrap.innerHTML=demographicExtraFieldsHTML();
+    wrap.innerHTML=`
+      <div class="form-grid-2">
+        <div class="form-row"><label>Sexual orientation</label><select id="eq-orientation"><option value="">Prefer not to say</option><option>Heterosexual</option><option>Gay / Lesbian</option><option>Bisexual</option><option>Other</option></select></div>
+        <div class="form-row"><label>Religion or belief</label><select id="eq-religion"><option value="">Prefer not to say</option><option>No religion</option><option>Christian</option><option>Muslim</option><option>Hindu</option><option>Sikh</option><option>Jewish</option><option>Buddhist</option><option>Other</option></select></div>
+      </div>
+      <div class="form-grid-2">
+        <div class="form-row"><label>Marital status</label><select id="eq-marital"><option value="">Prefer not to say</option><option>Single</option><option>Married / civil partnership</option><option>Cohabiting</option><option>Separated</option><option>Divorced</option><option>Widowed</option></select></div>
+        <div class="form-row"><label>Postcode (first half only, e.g. SE1)</label><input id="eq-postcode" maxlength="5" placeholder="SE1"/></div>
+      </div>
+    `;
     footer.parentNode.insertBefore(wrap,footer);
   };
   tries();
 }
 
-function demographicExtraFieldsHTML(){
-  return `
-    <div class="form-grid-2">
-      <div class="form-row"><label>Sexual orientation</label><select id="eq-orientation"><option value="">Prefer not to say</option><option>Heterosexual</option><option>Gay / Lesbian</option><option>Bisexual</option><option>Other</option></select></div>
-      <div class="form-row"><label>Religion or belief</label><select id="eq-religion"><option value="">Prefer not to say</option><option>No religion</option><option>Christian</option><option>Muslim</option><option>Hindu</option><option>Sikh</option><option>Jewish</option><option>Buddhist</option><option>Other</option></select></div>
-    </div>
-    <div class="form-grid-2">
-      <div class="form-row"><label>Marital status</label><select id="eq-marital"><option value="">Prefer not to say</option><option>Single</option><option>Married / civil partnership</option><option>Cohabiting</option><option>Separated</option><option>Divorced</option><option>Widowed</option></select></div>
-      <div class="form-row"><label>Postcode (first half only, e.g. SE1)</label><input id="eq-postcode" maxlength="5" placeholder="SE1"/></div>
-    </div>
-  `;
-}
-
-// ─── Demographics: inject section into Add Participant modal ──
+// ─── Demographics on Add Participant ───────────────────────────
 function patchAddParticipantModal(){
   const tries=()=>{
     const modal=$('modal-p');
     if(!modal)return setTimeout(tries,300);
     if(modal.querySelector('[data-civara-demo-section]'))return;
-    // Insert before the modal footer
     const footer=modal.querySelector('.modal-footer');
     if(!footer)return;
     const wrap=document.createElement('div');
@@ -162,7 +204,6 @@ function patchAddParticipantModal(){
       body.style.display=open?'block':'none';
       if(arrow)arrow.textContent=open?'▲':'▼';
     });
-    // Wrap openAddP / openEditP / saveP to handle these fields
     wrapParticipantHandlers();
   };
   tries();
@@ -172,7 +213,6 @@ function wrapParticipantHandlers(){
   if(window._civaraPMWrapped)return;
   window._civaraPMWrapped=true;
   const fields=['age','ethnicity','gender','disability','orientation','religion','marital','postcode'];
-  // openAddP — clear demographic fields
   if(typeof window.openAddP==='function'){
     const orig=window.openAddP;
     window.openAddP=function(){
@@ -182,15 +222,13 @@ function wrapParticipantHandlers(){
       if(body)body.style.display='none';if(arrow)arrow.textContent='▼';
     };
   }
-  // openEditP — load demographic fields from participant
   if(typeof window.openEditP==='function'){
     const orig=window.openEditP;
     window.openEditP=function(id){
       orig(id);
-      const p=(window.DB&&window.DB.participants||[]).find(x=>x.id===id);
+      const p=DB().participants.find(x=>x.id===id);
       const ed=p?.equality_data||{};
       fields.forEach(k=>{const el=$('mp-eq-'+k);if(el)el.value=ed[k]||'';});
-      // Open the section if there's data
       const hasData=fields.some(k=>ed[k]);
       if(hasData){
         const body=$('mp-demo-body'),arrow=$('mp-demo-toggle-arrow');
@@ -198,17 +236,12 @@ function wrapParticipantHandlers(){
       }
     };
   }
-  // saveP — capture demographic fields and merge into equality_data
   if(typeof window.saveP==='function'){
     const orig=window.saveP;
     window.saveP=async function(){
-      // Capture demographic fields into a hidden field on the participant payload.
-      // Easiest path: monkey-patch sbInsert and sbUpdate via a one-shot wrapper.
       const captured={};
       fields.forEach(k=>{const v=$('mp-eq-'+k)?.value;if(v)captured[k]=v;});
-      const useCaptured=Object.keys(captured).length>0;
-      if(!useCaptured)return orig();
-      // Patch sbInsert / sbUpdate just for this save
+      if(!Object.keys(captured).length)return orig();
       const origInsert=window.sbInsert,origUpdate=window.sbUpdate;
       window.sbInsert=async function(table,payload){
         if(table==='participants'){
@@ -218,8 +251,7 @@ function wrapParticipantHandlers(){
       };
       window.sbUpdate=async function(table,payload,id){
         if(table==='participants'){
-          // Merge with existing equality_data on the record
-          const existing=(window.DB&&window.DB.participants||[]).find(x=>x.id===id);
+          const existing=DB().participants.find(x=>x.id===id);
           const base=existing?.equality_data||{};
           payload.equality_data={...base,...captured};
         }
@@ -263,7 +295,7 @@ function patchGoRouter(){
   if(window._civaraRouterPatched)return;
   window._civaraRouterPatched=true;
   const origGo=window.go;
-  if(typeof origGo!=='function')return;
+  if(typeof origGo!=='function'){console.warn('[civara-additions] window.go not found');return;}
   window.go=function(page){
     if(page==='demographics'){
       document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -278,7 +310,7 @@ function patchGoRouter(){
 }
 
 function renderDemographics(){
-  const P=(window.DB&&window.DB.participants)||[];
+  const P=DB().participants;
   const withData=P.filter(p=>p.equality_data&&Object.keys(p.equality_data).length>0);
   $('demo-sub').textContent=withData.length+' of '+P.length+' participants have equality data ('+pct(withData.length,P.length||1)+'%)';
   $('demo-stats').innerHTML=[
@@ -312,7 +344,7 @@ function renderDemographics(){
 }
 
 function exportDemographics(){
-  const P=(window.DB&&window.DB.participants)||[];
+  const P=DB().participants;
   const rows=[['Participant ID','Age','Ethnicity','Gender','Disability','Orientation','Religion','Marital','Postcode']];
   P.forEach(p=>{
     const e=p.equality_data||{};
@@ -325,7 +357,6 @@ function exportDemographics(){
   a.click();
 }
 
-// ─── Patch existing equality save ──────────────────────────────
 function patchEqualityModal(){
   const tries=()=>{
     if(typeof window.openEqualityModal!=='function')return setTimeout(tries,300);
@@ -334,7 +365,7 @@ function patchEqualityModal(){
     const orig=window.openEqualityModal;
     window.openEqualityModal=function(pid){
       orig(pid);
-      const p=(window.DB&&window.DB.participants||[]).find(x=>x.id===pid);
+      const p=DB().participants.find(x=>x.id===pid);
       const ed=p?.equality_data||{};
       ['orientation','religion','marital','postcode'].forEach(k=>{
         const el=$('eq-'+k);if(el)el.value=ed[k]||'';
@@ -363,9 +394,9 @@ async function saveEqualityWithExtras(){
       postcode:($('eq-postcode')?.value||'').toUpperCase()
     };
     Object.keys(data).forEach(k=>{if(!data[k])delete data[k];});
-    if(window.sb){try{await window.sbUpdate('participants',{equality_data:data},_editEqPId);}catch(e){}}
-    const idx=(window.DB&&window.DB.participants||[]).findIndex(x=>x.id===_editEqPId);
-    if(idx>=0)window.DB.participants[idx].equality_data=data;
+    if(SB()&&typeof window.sbUpdate==='function'){try{await window.sbUpdate('participants',{equality_data:data},_editEqPId);}catch(e){}}
+    const idx=DB().participants.findIndex(x=>x.id===_editEqPId);
+    if(idx>=0)DB().participants[idx].equality_data=data;
     closeModal('modal-eq');
     if(typeof window.renderEqMonitoringList==='function')window.renderEqMonitoringList();
     if($('page-demographics')?.classList.contains('active'))renderDemographics();
@@ -374,7 +405,7 @@ async function saveEqualityWithExtras(){
 }
 
 // ═══════════════════════════════════════════════════════════════
-// CSV IMPORT (unchanged from v1, with addEventListener wiring)
+// CSV IMPORT
 // ═══════════════════════════════════════════════════════════════
 const CSV_FIELDS=[
   {key:'first_name',label:'First name',required:true,aliases:['firstname','first','given name','forename','name first']},
@@ -573,7 +604,6 @@ function renderMappingStep(){
       <div><select data-mapfield="${f.key}">${opts}</select></div>
     </div>`;
   }).join('');
-  // Bind change handlers via data attributes
   wrap.querySelectorAll('select[data-mapfield]').forEach(sel=>{
     sel.addEventListener('change',e=>{
       const key=e.target.dataset.mapfield;
@@ -666,7 +696,7 @@ function renderPreviewStep(){
 
 async function runImport(){
   const wrap=$('csv-import-progress');
-  if(!window.sb||!window.orgId){
+  if(!SB()||!ORG_ID()||typeof window.sbInsert!=='function'){
     wrap.innerHTML='<div class="alert alert-warn">Cannot import — not connected to your organisation. Refresh and try again.</div>';return;
   }
   const total=_csv.validated.length;
@@ -695,7 +725,7 @@ async function runImport(){
 }
 
 // ═══════════════════════════════════════════════════════════════
-// PERIOD-BASED REPORTING (unchanged)
+// PERIOD-BASED REPORTING
 // ═══════════════════════════════════════════════════════════════
 function patchReportGenerator(){
   const tries=()=>{
@@ -816,18 +846,18 @@ async function patchedGenerateAIReport(type,contractId){
   reportEl.innerHTML='';
   progressEl.scrollIntoView({behavior:'smooth',block:'start'});
   const period=getCurrentPeriod();
-  const contract=window.DB.contracts.find(c=>String(c.id)===String(contractId));
-  const funder=contract?.funder_id?(window.DB.funders||[]).find(f=>String(f.id)===String(contract.funder_id)):null;
-  const allP=window.DB.participants,allE=window.DB.events,allFB=window.DB.feedback;
-  const orgName=window.currentOrg?.name||'Organisation';
+  const db=DB();
+  const contract=db.contracts.find(c=>String(c.id)===String(contractId));
+  const funder=contract?.funder_id?(db.funders||[]).find(f=>String(f.id)===String(contract.funder_id)):null;
+  const orgName=CURRENT_ORG()?.name||'Organisation';
   const todayStr=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
-  const linked=allP.filter(p=>toArr(p.contract_ids).includes(String(contractId)));
+  const linked=db.participants.filter(p=>toArr(p.contract_ids).includes(String(contractId)));
   const linkedInPeriod=linked.filter(p=>inPeriod(p.last_contact||p.created_at,period));
   const linkedOutcomes=linkedInPeriod.filter(p=>p.outcomes&&p.outcomes.length>0).length;
   const jobs=linkedInPeriod.filter(p=>p.outcomes&&p.outcomes.includes('Employment')).length;
   const sustained=linkedInPeriod.filter(p=>p.stage==='Sustained').length;
-  const eventsInPeriod=allE.filter(e=>inPeriod(e.date,period));
-  const fbInPeriod=allFB.filter(f=>{const ev=allE.find(e=>String(e.id)===String(f.eventId));return ev?inPeriod(ev.date,period):period.type==='cumulative';});
+  const eventsInPeriod=db.events.filter(e=>inPeriod(e.date,period));
+  const fbInPeriod=db.feedback.filter(f=>{const ev=db.events.find(e=>String(e.id)===String(f.eventId));return ev?inPeriod(ev.date,period):period.type==='cumulative';});
   const avgCB=fbInPeriod.length?(fbInPeriod.reduce((a,f)=>a+num(f.cb),0)/fbInPeriod.length).toFixed(1):null;
   const avgCA=fbInPeriod.length?(fbInPeriod.reduce((a,f)=>a+num(f.ca),0)/fbInPeriod.length).toFixed(1):null;
   const periodLabel=period.type==='cumulative'?'cumulative (all activity to date)':period.label;
@@ -857,13 +887,14 @@ async function patchedGenerateAIReport(type,contractId){
     avgCA?'Average confidence after (period): '+avgCA+' / 5':'',
     'Feedback responses in period: '+fbInPeriod.length,
   ].filter(Boolean).join('\n');
+  if(typeof window.runAgent!=='function'){reportEl.innerHTML='<div class="alert alert-warn">Report agent not available.</div>';return;}
   const raw=await window.runAgent({container:progressEl,headerLabel:'Org Brain — Funder Report',headerSub:'Reading your data, mapping to funder requirements, writing the report',steps,sys,prompt,maxTok:1400});
   if(!raw)return;
-  const cleaned=window.cleanReportText(raw);
-  const bodyHTML=window.reportTextToHTML(cleaned,raw);
+  const cleaned=window.cleanReportText?window.cleanReportText(raw):raw;
+  const bodyHTML=window.reportTextToHTML?window.reportTextToHTML(cleaned,raw):'<pre>'+escapeHTML(cleaned)+'</pre>';
   const reportTitle=(contract?.name||'Programme Report')+' — '+orgName+' ('+periodLabel+')';
   window._lastReportText=cleaned;window._lastReportTitle=reportTitle;
-  const _logoUrl=window.getOrgLogoUrl(window.currentOrg);
+  const _logoUrl=window.getOrgLogoUrl?window.getOrgLogoUrl(CURRENT_ORG()):'';
   const _headerHTML=_logoUrl
     ?'<div class="report-header-flex"><div class="report-header-text"><div class="report-meta">'+escapeHTML((funder?.name||'Funder Report')+' · '+periodLabel)+'</div><div class="report-title">'+escapeHTML(contract?.name||'Programme Report')+'</div><div class="report-subtitle">'+escapeHTML(orgName)+' · '+escapeHTML(todayStr)+'</div></div><div class="report-header-logo"><img src="'+escapeHTML(_logoUrl)+'" alt="'+escapeHTML(orgName)+'" class="org-logo-report" onerror="this.style.display=\'none\'"/></div></div>'
     :'<div class="report-header"><div class="report-meta">'+escapeHTML((funder?.name||'Funder Report')+' · '+periodLabel)+'</div><div class="report-title">'+escapeHTML(contract?.name||'Programme Report')+'</div><div class="report-subtitle">'+escapeHTML(orgName)+' · '+escapeHTML(todayStr)+'</div></div>';
@@ -885,7 +916,7 @@ async function patchedGenerateAIReport(type,contractId){
 }
 
 // ═══════════════════════════════════════════════════════════════
-// OPPORTUNITIES FINDER — tender pack download
+// OPPORTUNITIES FINDER
 // ═══════════════════════════════════════════════════════════════
 function patchOpportunitiesFinder(){
   const tries=()=>{
@@ -929,6 +960,7 @@ Return a SINGLE JSON object with no commentary, no markdown fences, no explanati
 }
 Use ONLY real, verifiable, currently open programmes.`;
   const prompt='Area: '+area+'\nOrg size: '+size+'\nFunders or programmes of interest: '+(specific||'open to all suitable opportunities');
+  if(typeof window.runAgent!=='function'){res.innerHTML='<div class="alert alert-warn">Research agent not available.</div>';return;}
   const raw=await window.runAgent({container:res,headerLabel:'BD Manager Agent',headerSub:'Live web search · Quality Supervisor verifying results',steps,sys,prompt,maxTok:1500,webSearch:true});
   if(!raw)return;
   let opps=[];
@@ -943,7 +975,6 @@ Use ONLY real, verifiable, currently open programmes.`;
     return;
   }
   if(!opps.length){res.innerHTML='<div class="alert alert-info">No open opportunities matched. Try adjusting the area or naming a specific funder.</div>';return;}
-  // Render with addEventListener wiring (no inline onclick)
   res.innerHTML='';
   window._civaraOpps=opps;
   opps.forEach((o,i)=>{
@@ -1003,7 +1034,9 @@ async function fetchTenderInto(card,url,filename){
   if(!status)return;
   status.innerHTML='<span style="color:var(--purple)">Fetching tender pack…</span>';
   try{
-    const{data:{session}}=await window.sb.auth.getSession();
+    const sb=SB();
+    if(!sb)throw new Error('Not signed in.');
+    const{data:{session}}=await sb.auth.getSession();
     const token=session?.access_token;
     const r=await fetch('/api/fetch-tender?url='+encodeURIComponent(url),{headers:{'Authorization':token?'Bearer '+token:''}});
     if(!r.ok){
