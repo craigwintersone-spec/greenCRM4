@@ -1,28 +1,9 @@
-/* ============================================================
- * CIVARA ADDITIONS - v3
- * Drop-in replacement for civara-additions.js
- *
- * v3 fixes the "nothing happens" issue:
- *  - In app.html, DB/sb/orgId etc. are declared with `const`
- *    inside a <script> block, so they DO NOT live on window.
- *  - v1 and v2 polled for window.DB and waited forever.
- *  - v3 reads them through DOM hooks and via a small wrapper
- *    that grabs them from the existing functions like sbInsert
- *    that ARE on window (because they're declared with `function`,
- *    which DOES bind to window in non-module scripts).
- *
- * If a function isn't actually on window in your app, the
- * additions log a warning but keep working for everything else.
- * ============================================================ */
+/* civara-additions.js v4 — companion to app.html */
 
 (function(){
 'use strict';
 
-// ─────────────────────────────────────────────────────────────
-// Wait for app boot.
-// We don't rely on window.DB — instead we wait for DOM elements
-// that boot() creates (the modals, the participants page, etc.)
-// ─────────────────────────────────────────────────────────────
+// ─── Boot wait ─────────────────────────────────────────────────
 function whenReady(fn){
   if(document.getElementById('modal-p')
      && document.getElementById('page-participants')
@@ -33,42 +14,16 @@ function whenReady(fn){
 }
 whenReady(init);
 
-// ─────────────────────────────────────────────────────────────
-// Bridge to app internals.
-// app.html declares everything with `const` or `function` inside
-// a single big <script> block. Top-level `function` declarations
-// DO get bound to window in regular (non-module) scripts, so the
-// agent runners, openAddP, generateAIReport, runBDResearch etc.
-// are reachable as window.XYZ. But `const DB = ...` is NOT.
-//
-// To work around that, we get a live snapshot of DB by reading
-// the DOM (rendered tables) where we can, OR we hijack the next
-// call to a known function like sbInsert and read DB from inside
-// it via window.DB.
-//
-// Simpler: most of the time we just need to call existing
-// functions (openAddP, saveP, sbInsert) and they'll do the right
-// thing. We only need DB for read-only things like the
-// Demographics page, where we can read it through a getter.
-// ─────────────────────────────────────────────────────────────
-
+// ─── Bridge to app.html internals ──────────────────────────────
 let _appBridge=null;
-function getApp(){
-  if(_appBridge)return _appBridge;
-  // Try Function() to read top-level consts from the same realm.
-  // This works because civara-additions.js is loaded as a non-module
-  // script after app.html's main script, in the same global scope.
+function refreshApp(){
   try{
     _appBridge=new Function('return{DB:typeof DB!=="undefined"?DB:null,sb:typeof sb!=="undefined"?sb:null,orgId:typeof orgId!=="undefined"?orgId:null,currentOrg:typeof currentOrg!=="undefined"?currentOrg:null};')();
   }catch(e){
     _appBridge={DB:null,sb:null,orgId:null,currentOrg:null};
   }
-  // Refresh the snapshot whenever called — orgId/DB mutate over time.
   return _appBridge;
 }
-function refreshApp(){_appBridge=null;return getApp();}
-
-// Helpers that always re-read fresh state
 function DB(){return refreshApp().DB||{participants:[],volunteers:[],events:[],feedback:[],contacts:[],employers:[],referrals:[],partner_referrals:[],circular:[],contracts:[],evidence:[],funders:[]};}
 function SB(){return refreshApp().sb;}
 function ORG_ID(){return refreshApp().orgId;}
@@ -82,18 +37,16 @@ function pct(n,d){return d?Math.round(n/d*100):0;}
 function num(v){return isNaN(+v)?0:+v;}
 function toArr(v){return Array.isArray(v)?v:(typeof v==='string'&&v.startsWith('[')?(()=>{try{return JSON.parse(v)}catch(e){return[]}})():[]);}
 
-// ─────────────────────────────────────────────────────────────
-// INIT
-// ─────────────────────────────────────────────────────────────
+// ─── Init ──────────────────────────────────────────────────────
 function init(){
-  console.log('[civara-additions v3] initialising');
+  console.log('[civara-additions v4] initialising');
   injectModalsAndPages();
   patchGoRouter();
   patchEqualityModal();
   patchAddParticipantModal();
   patchOpportunitiesFinder();
   patchReportGenerator();
-  console.log('[civara-additions v3] ready — DB has', DB().participants.length, 'participants');
+  console.log('[civara-additions v4] ready — DB has',DB().participants.length,'participants');
 }
 
 function injectModalsAndPages(){
@@ -199,7 +152,7 @@ function patchAddParticipantModal(){
     `;
     footer.parentNode.insertBefore(wrap,footer);
     $('mp-demo-toggle').addEventListener('click',()=>{
-      const body=$('mp-demo-body');const arrow=$('mp-demo-toggle-arrow');
+      const body=$('mp-demo-body'),arrow=$('mp-demo-toggle-arrow');
       const open=body.style.display==='none';
       body.style.display=open?'block':'none';
       if(arrow)arrow.textContent=open?'▲':'▼';
@@ -885,7 +838,7 @@ async function patchedGenerateAIReport(type,contractId){
     'Events delivered in period: '+eventsInPeriod.length,
     avgCB?'Average confidence before (period): '+avgCB+' / 5':'',
     avgCA?'Average confidence after (period): '+avgCA+' / 5':'',
-    'Feedback responses in period: '+fbInPeriod.length,
+    'Feedback responses in period: '+fbInPeriod.length
   ].filter(Boolean).join('\n');
   if(typeof window.runAgent!=='function'){reportEl.innerHTML='<div class="alert alert-warn">Report agent not available.</div>';return;}
   const raw=await window.runAgent({container:progressEl,headerLabel:'Org Brain — Funder Report',headerSub:'Reading your data, mapping to funder requirements, writing the report',steps,sys,prompt,maxTok:1400});
@@ -928,111 +881,9 @@ function patchOpportunitiesFinder(){
   tries();
 }
 
-async function runBDResearchUpgraded(){
-  const wrap=$('bd-opps-wrap'),res=$('bd-opps-result');
-  if(!wrap||!res)return;
-  wrap.style.display='block';
-  const area=$('bd-area').value,size=$('bd-size').value,specific=$('bd-specific').value;
-  const steps=[
-    {label:'Searching live funding sources',meta:area+' · '+size},
-    {label:'Hunting direct tender pack URLs',meta:'gov.uk · Find a Tender · funder portals'},
-    {label:'Quality Supervisor check',meta:'Verifying deadlines and links'},
-    {label:'Structuring opportunities',meta:''},
-    {label:'Ready',meta:''}
-  ];
-  const sys=`You are a UK funding researcher. After your web search, you MUST return ONLY a JSON object — no prose, no markdown, no commentary, no headings, no greetings. Your entire response must start with { and end with }.
-
-Find 3-6 currently open funding opportunities relevant to the criteria. For each, hunt for a DIRECT downloadable tender pack URL (PDF, DOCX, or ZIP) — check gov.uk, find-tender.service.gov.uk, Contracts Finder, GLA portals, City Bridge Foundation, National Lottery, and the funder's own site. If you cannot find a direct file URL, set tender_doc_url to "" — DO NOT make one up.
-
-Schema (return EXACTLY this shape):
-{
-  "opportunities": [
-    {
-      "funder": "string",
-      "programme": "string",
-      "summary": "1-2 sentences",
-      "value_band": "e.g. £10k-£100k or 'Up to £500k'",
-      "deadline": "YYYY-MM-DD or 'Rolling' or 'Verify on funder site'",
-      "eligibility": "1 sentence",
-      "fit_reason": "1-2 sentences",
-      "url": "https://...",
-      "tender_doc_url": "https://... or empty string"
-    }
-  ]
-}
-
-Use ONLY real, verifiable, currently open programmes. RETURN ONLY THE JSON OBJECT.`;
-  const prompt='Area: '+area+'\nOrg size: '+size+'\nFunders or programmes of interest: '+(specific||'open to all suitable opportunities')+'\n\nReturn the JSON object now.';
-  if(typeof window.runAgent!=='function'){res.innerHTML='<div class="alert alert-warn">Research agent not available.</div>';return;}
-  const raw=await window.runAgent({container:res,headerLabel:'BD Manager Agent',headerSub:'Live web search · Quality Supervisor verifying results',steps,sys,prompt,maxTok:1800,webSearch:true});
-  if(!raw)return;
-
-  // ─── Robust JSON extraction ────────────────────────────────
-  let opps=tryParseJSON(raw);
-  // Fallback 1: if parse failed, ask the model to convert its own prose to JSON
-  if(!opps){
-    try{
-      const fix=await window.callClaude(
-        'You convert text into JSON. Return ONLY a JSON object with shape {"opportunities":[{funder, programme, summary, value_band, deadline, eligibility, fit_reason, url, tender_doc_url}]}. No prose.',
-        'Convert this text into the JSON schema above. If a field is missing in the source, use an empty string. Source text:\n\n'+raw,
-        1200
-      );
-      opps=tryParseJSON(fix);
-    }catch(e){/* swallow */}
-  }
-  if(!opps){
-    res.innerHTML='<div class="alert alert-warn"><strong>Could not parse opportunities.</strong> The agent returned text instead of JSON. <button class="btn btn-ghost btn-sm" style="margin-left:8px" onclick="window.runBDResearch()">↻ Try again</button></div><details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--txt3)">Show raw response (for debugging)</summary><pre style="font-size:11px;background:var(--bg);padding:10px;border-radius:8px;margin-top:8px;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow:auto">'+escapeHTML(raw)+'</pre></details>';
-    return;
-  }
-  if(!opps.length){res.innerHTML='<div class="alert alert-info">No open opportunities matched. Try adjusting the area or naming a specific funder.</div>';return;}
-  res.innerHTML='';
-  window._civaraOpps=opps;
-  opps.forEach((o,i)=>{
-    const card=document.createElement('div');
-    card.className='tender-card';
-    const hasTender=o.tender_doc_url&&/^https?:\/\//.test(o.tender_doc_url);
-    const hasUrl=o.url&&/^https?:\/\//.test(o.url);
-    card.innerHTML=`
-      <div class="tender-card-hd">
-        <div>
-          <div class="tender-card-funder">${escapeHTML(o.funder||'')}</div>
-          <div class="tender-card-title">${escapeHTML(o.programme||'Untitled programme')}</div>
-        </div>
-      </div>
-      <div style="font-size:13px;color:var(--txt2);margin-bottom:8px">${escapeHTML(o.summary||'')}</div>
-      <div class="tender-card-meta">
-        ${o.value_band?'<span><strong>Value:</strong> '+escapeHTML(o.value_band)+'</span>':''}
-        ${o.deadline?'<span><strong>Deadline:</strong> '+escapeHTML(o.deadline)+'</span>':''}
-        ${o.eligibility?'<span><strong>Eligibility:</strong> '+escapeHTML(o.eligibility)+'</span>':''}
-      </div>
-      ${o.fit_reason?'<div style="font-size:12px;color:var(--em);background:rgba(31,111,109,.06);border-radius:6px;padding:8px 10px;margin-bottom:10px"><strong>Why it fits:</strong> '+escapeHTML(o.fit_reason)+'</div>':''}
-      <div class="tender-card-actions" data-actions></div>
-      <div class="civara-tender-status" data-status style="font-size:12px;color:var(--txt3);margin-top:8px"></div>
-    `;
-    const actions=card.querySelector('[data-actions]');
-    if(hasUrl){
-      const a=document.createElement('a');
-      a.className='btn btn-p btn-sm';a.href=o.url;a.target='_blank';a.rel='noopener noreferrer';
-     a.textContent='⬇ View on funder site';
-      actions.appendChild(a);
-    }
-    if(hasUrl){
-      const draft=document.createElement('button');
-      draft.className='btn btn-ghost btn-sm';
-      draft.textContent='✦ Draft EOI for this';
-      draft.addEventListener('click',()=>draftEoiFor(i));
-      actions.appendChild(draft);
-    }
-    res.appendChild(card);
-  });
-}
-
-// Helper used by runBDResearchUpgraded
 function tryParseJSON(text){
   if(!text)return null;
-  // Strip markdown code fences
   let cleaned=text.replace(/```json|```/gi,'').trim();
-  // Find the first { ... last }
   const first=cleaned.indexOf('{');
   const last=cleaned.lastIndexOf('}');
   if(first<0||last<0||last<=first)return null;
@@ -1044,46 +895,40 @@ function tryParseJSON(text){
     return null;
   }
 }
+
+async function runBDResearchUpgraded(){
+  const wrap=$('bd-opps-wrap'),res=$('bd-opps-result');
+  if(!wrap||!res)return;
+  wrap.style.display='block';
   const area=$('bd-area').value,size=$('bd-size').value,specific=$('bd-specific').value;
   const steps=[
     {label:'Searching live funding sources',meta:area+' · '+size},
-    {label:'Hunting direct tender pack URLs',meta:'gov.uk · Find a Tender · funder portals'},
+    {label:'Identifying opportunities',meta:'gov.uk · Find a Tender · funder portals'},
     {label:'Quality Supervisor check',meta:'Verifying deadlines and links'},
     {label:'Structuring opportunities',meta:''},
     {label:'Ready',meta:''}
   ];
-  const sys=`You are a UK funding researcher. Find 3-6 currently open funding opportunities relevant to the criteria. For each, hunt for a DIRECT downloadable tender pack URL (PDF, DOCX, or ZIP) — check gov.uk, Find a Tender (find-tender.service.gov.uk), Contracts Finder, GLA's funding portal, City Bridge Foundation grants pages, National Lottery, and the funder's own site. If you cannot find a direct file URL, set tender_doc_url to "" — DO NOT make one up.
-
-Return a SINGLE JSON object with no commentary, no markdown fences, no explanation. Schema:
-{
-  "opportunities": [
-    {
-      "funder": "name of funder",
-      "programme": "name of programme",
-      "summary": "1-2 sentence plain-English summary",
-      "value_band": "e.g. £10k-£100k or 'Up to £500k'",
-      "deadline": "YYYY-MM-DD or 'Rolling' or 'Verify on funder site'",
-      "eligibility": "1 sentence on who can apply",
-      "fit_reason": "1-2 sentences on why this fits the org",
-      "url": "https://... funder programme page (always include a real URL)",
-      "tender_doc_url": "https://... DIRECT link to PDF/DOCX/ZIP tender pack, or empty string if behind a portal"
-    }
-  ]
-}
-Use ONLY real, verifiable, currently open programmes.`;
-  const prompt='Area: '+area+'\nOrg size: '+size+'\nFunders or programmes of interest: '+(specific||'open to all suitable opportunities');
+  const sys='You are a UK funding researcher. After your web search, you MUST return ONLY a JSON object — no prose, no markdown, no commentary. Your entire response must start with { and end with }.\n\nFind 3-6 currently open funding opportunities. Always include a real https:// URL for the funder programme page.\n\nSchema:\n{"opportunities":[{"funder":"string","programme":"string","summary":"1-2 sentences","value_band":"e.g. £10k-£100k","deadline":"YYYY-MM-DD or Rolling or Verify on funder site","eligibility":"1 sentence","fit_reason":"1-2 sentences","url":"https://..."}]}\n\nUse ONLY real, verifiable, currently open programmes. RETURN ONLY THE JSON OBJECT.';
+  const prompt='Area: '+area+'\nOrg size: '+size+'\nFunders or programmes of interest: '+(specific||'open to all suitable opportunities')+'\n\nReturn the JSON object now.';
   if(typeof window.runAgent!=='function'){res.innerHTML='<div class="alert alert-warn">Research agent not available.</div>';return;}
-  const raw=await window.runAgent({container:res,headerLabel:'BD Manager Agent',headerSub:'Live web search · Quality Supervisor verifying results',steps,sys,prompt,maxTok:1500,webSearch:true});
+  const raw=await window.runAgent({container:res,headerLabel:'BD Manager Agent',headerSub:'Live web search · Quality Supervisor verifying results',steps,sys,prompt,maxTok:1800,webSearch:true});
   if(!raw)return;
-  let opps=[];
-  try{
-    const cleaned=raw.replace(/```json|```/gi,'').trim();
-    const m=cleaned.match(/\{[\s\S]*\}/);
-    if(!m)throw new Error('No JSON found in agent response.');
-    const parsed=JSON.parse(m[0]);
-    opps=parsed.opportunities||[];
-  }catch(e){
-    res.innerHTML='<div class="alert alert-warn">Could not parse opportunities (the agent responded with free text rather than JSON). Try again — usually fine on retry.</div>';
+
+  let opps=tryParseJSON(raw);
+  if(!opps&&typeof window.callClaude==='function'){
+    try{
+      const fix=await window.callClaude(
+        'You convert text into JSON. Return ONLY a JSON object with shape {"opportunities":[{funder, programme, summary, value_band, deadline, eligibility, fit_reason, url}]}. No prose.',
+        'Convert this text into the JSON schema above. If a field is missing, use empty string. Source:\n\n'+raw,
+        1200
+      );
+      opps=tryParseJSON(fix);
+    }catch(e){/* swallow */}
+  }
+  if(!opps){
+    res.innerHTML='<div class="alert alert-warn"><strong>Could not parse opportunities.</strong> The agent returned text instead of JSON. <button class="btn btn-ghost btn-sm" style="margin-left:8px" id="civara-bd-retry">↻ Try again</button></div><details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--txt3)">Show raw response (for debugging)</summary><pre style="font-size:11px;background:var(--bg);padding:10px;border-radius:8px;margin-top:8px;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow:auto">'+escapeHTML(raw)+'</pre></details>';
+    const retry=$('civara-bd-retry');
+    if(retry)retry.addEventListener('click',()=>window.runBDResearch());
     return;
   }
   if(!opps.length){res.innerHTML='<div class="alert alert-info">No open opportunities matched. Try adjusting the area or naming a specific funder.</div>';return;}
@@ -1092,7 +937,6 @@ Use ONLY real, verifiable, currently open programmes.`;
   opps.forEach((o,i)=>{
     const card=document.createElement('div');
     card.className='tender-card';
-    const hasTender=o.tender_doc_url&&/^https?:\/\//.test(o.tender_doc_url);
     const hasUrl=o.url&&/^https?:\/\//.test(o.url);
     card.innerHTML=`
       <div class="tender-card-hd">
@@ -1109,64 +953,26 @@ Use ONLY real, verifiable, currently open programmes.`;
       </div>
       ${o.fit_reason?'<div style="font-size:12px;color:var(--em);background:rgba(31,111,109,.06);border-radius:6px;padding:8px 10px;margin-bottom:10px"><strong>Why it fits:</strong> '+escapeHTML(o.fit_reason)+'</div>':''}
       <div class="tender-card-actions" data-actions></div>
-      <div class="civara-tender-status" data-status style="font-size:12px;color:var(--txt3);margin-top:8px"></div>
     `;
     const actions=card.querySelector('[data-actions]');
     if(hasUrl){
       const a=document.createElement('a');
       a.className='btn btn-p btn-sm';a.href=o.url;a.target='_blank';a.rel='noopener noreferrer';
-      a.textContent='↗ Open funder page';
+      a.textContent='⬇ View on funder site';
       actions.appendChild(a);
-    }
-    if(hasTender){
-      const dl=document.createElement('button');
-      dl.className='btn btn-ghost btn-sm';
-      dl.textContent='⬇ Download tender pack';
-      dl.addEventListener('click',()=>fetchTenderInto(card,o.tender_doc_url,o.programme||'tender'));
-      actions.appendChild(dl);
     }else{
-      const note=document.createElement('span');
-      note.style.cssText='font-size:11px;color:var(--txt3);align-self:center';
-      note.textContent='Pack only available via funder portal — open the page to register.';
-      actions.appendChild(note);
+      const span=document.createElement('span');
+      span.style.cssText='font-size:12px;color:var(--txt3)';
+      span.textContent='No funder link returned — search '+(o.funder||'this funder')+' on gov.uk';
+      actions.appendChild(span);
     }
-    if(hasUrl){
-      const draft=document.createElement('button');
-      draft.className='btn btn-ghost btn-sm';
-      draft.textContent='✦ Draft EOI for this';
-      draft.addEventListener('click',()=>draftEoiFor(i));
-      actions.appendChild(draft);
-    }
+    const draft=document.createElement('button');
+    draft.className='btn btn-ghost btn-sm';
+    draft.textContent='✦ Draft EOI for this';
+    draft.addEventListener('click',()=>draftEoiFor(i));
+    actions.appendChild(draft);
     res.appendChild(card);
   });
-}
-
-async function fetchTenderInto(card,url,filename){
-  const status=card.querySelector('[data-status]');
-  if(!status)return;
-  status.innerHTML='<span style="color:var(--purple)">Fetching tender pack…</span>';
-  try{
-    const sb=SB();
-    if(!sb)throw new Error('Not signed in.');
-    const{data:{session}}=await sb.auth.getSession();
-    const token=session?.access_token;
-    const r=await fetch('/api/fetch-tender?url='+encodeURIComponent(url),{headers:{'Authorization':token?'Bearer '+token:''}});
-    if(!r.ok){
-      const err=await r.json().catch(()=>({error:'HTTP '+r.status}));
-      throw new Error(err.error||'HTTP '+r.status);
-    }
-    const blob=await r.blob();
-    const safeName=(filename||'tender').replace(/[^a-z0-9 \-_]/gi,'').slice(0,80)||'tender';
-    const ext=(url.match(/\.(pdf|docx?|xlsx?|zip)(\?|$)/i)?.[1]||'pdf').toLowerCase();
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(blob);
-    a.download=safeName+'.'+ext;
-    document.body.appendChild(a);a.click();a.remove();
-    setTimeout(()=>URL.revokeObjectURL(a.href),5000);
-    status.innerHTML='<span style="color:var(--em)">✓ Downloaded.</span>';
-  }catch(e){
-    status.innerHTML='<span style="color:var(--red)">⚠ Could not fetch ('+escapeHTML(e.message)+'). Try the funder page link instead.</span>';
-  }
 }
 
 function draftEoiFor(idx){
@@ -1183,8 +989,7 @@ function draftEoiFor(idx){
         'Deadline: '+(o.deadline||'TBC'),
         'Eligibility: '+(o.eligibility||'TBC'),
         '',
-        'Funder URL: '+(o.url||''),
-        'Tender doc: '+(o.tender_doc_url||'(see funder page)')
+        'Funder URL: '+(o.url||'')
       ].join('\n');
     }
     bEl?.scrollIntoView({behavior:'smooth',block:'center'});
