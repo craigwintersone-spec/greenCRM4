@@ -117,15 +117,15 @@ module.exports = async function handler(req, res) {
 
   // 3. Forward to Anthropic
   try {
-    const { useWebSearch, ...rest } = req.body || {};
-    const body = { ...rest };
+    const { web_search, ...rest } = req.body || {};
+const body = { ...rest };
 
-    if (useWebSearch) {
-      body.tools = [
-        ...(body.tools || []),
-        { type: 'web_search_20250305', name: 'web_search' },
-      ];
-    }
+if (web_search) {
+  body.tools = [
+    ...(body.tools || []),
+    { type: 'web_search_20250305', name: 'web_search' },
+  ];
+}
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
