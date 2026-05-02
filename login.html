@@ -1,49 +1,26 @@
 // ─────────────────────────────────────────────────────────────
-// PATCH for login.html signup flow
+// PATCH for login.html — Replace uploadAndSaveBranding() with this
 //
-// Replace the existing uploadAndSaveBranding() function in login.html
-// with this version. The previous version assumed a DB trigger created
-// the org; this version creates the org and membership client-side
-// after signup, since your DB doesn't have such a trigger.
+// Calls the create_org_on_signup RPC to atomically create org +
+// membership, then uploads the logo and writes its URL to the org.
 //
-// The require_auth_for_org_insert trigger automatically sets owner_id
-// from auth.uid(), so we don't need to set it ourselves — but we do
-// need a valid session, which we have right after signUp() returns.
+// Make sure the call site in doSignUp() passes the org name:
+//   await uploadAndSaveBranding(data.session.user.id, org)
 // ─────────────────────────────────────────────────────────────
 
 async function uploadAndSaveBranding(userId, orgName){
-  // 1. Create the organisation. The require_auth_for_org_insert trigger
-  // will set owner_id automatically from the authenticated session.
-  const{data:orgRow,error:orgErr}=await sb.from('organisations').insert({
-    name:orgName,
-    plan:'free',
-    status:'active',
-    modules:{
-      participants:true,
-      volunteers:true,
-      events:true,
-      employers:true,
-      circular:true,
-      funders:true
-    },
-    settings:{branding_completed:true},
-    brand_color:selectedColour
-  }).select('id').single();
-  if(orgErr)throw new Error('Could not create organisation: '+orgErr.message);
-  const orgId=orgRow.id;
-
-  // 2. Create the membership linking user to org as manager
-  const{error:memErr}=await sb.from('memberships').insert({
-    user_id:userId,
-    org_id:orgId,
-    role:'manager',
-    status:'active'
+  // 1. Atomically create org + membership via RPC
+  // (RLS-bypassing SECURITY DEFINER function — single round trip)
+  const{data:newOrgId,error:rpcErr}=await sb.rpc('create_org_on_signup',{
+    org_name:orgName,
+    brand_color_val:selectedColour
   });
-  if(memErr)throw new Error('Could not link membership: '+memErr.message);
+  if(rpcErr)throw new Error('Could not create organisation: '+rpcErr.message);
+  if(!newOrgId)throw new Error('Organisation creation returned no id');
 
-  // 3. Upload logo
+  // 2. Upload logo to storage
   const ext=(selectedLogoFile.name.split('.').pop()||'png').toLowerCase();
-  const path=orgId+'/logo-'+Date.now()+'.'+ext;
+  const path=newOrgId+'/logo-'+Date.now()+'.'+ext;
   const{error:upErr}=await sb.storage.from('org-logos').upload(path,selectedLogoFile,{
     cacheControl:'3600',upsert:false
   });
@@ -51,25 +28,10 @@ async function uploadAndSaveBranding(userId, orgName){
   const{data:urlData}=sb.storage.from('org-logos').getPublicUrl(path);
   const logoUrl=urlData.publicUrl;
 
-  // 4. Save logo URL to the org
+  // 3. Save logo URL to the org row
+  // (orgs_update RLS policy allows this since user is now manager)
   const{error:updErr}=await sb.from('organisations').update({
     logo_url:logoUrl
-  }).eq('id',orgId);
-  if(updErr)throw new Error('Could not save logo: '+updErr.message);
+  }).eq('id',newOrgId);
+  if(updErr)throw new Error('Could not save logo URL: '+updErr.message);
 }
-
-// ─────────────────────────────────────────────────────────────
-// ALSO update the call site in doSignUp() to pass the org name.
-// Find this block in doSignUp():
-//
-//   if(data&&data.session){
-//     try{await uploadAndSaveBranding(data.session.user.id)}
-//
-// And change it to:
-//
-//   if(data&&data.session){
-//     try{await uploadAndSaveBranding(data.session.user.id, org)}
-//
-// (i.e. add `, org` as the second argument — `org` is already a local
-// variable in doSignUp from the org name field)
-// ─────────────────────────────────────────────────────────────
