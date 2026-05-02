@@ -1,0 +1,34 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.cursor/
+
+# Vercel
+.vercel/
+
+# Node (in case you add tools later)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm/
+.pnpm-store/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+
+# Misc
+*.tmp
+*.bak
+.cache/
