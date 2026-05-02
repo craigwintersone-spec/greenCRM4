@@ -48,250 +48,157 @@ body{
 a{color:var(--em);text-decoration:none}
 a:hover{color:var(--em-dark);text-decoration:underline}
 
-/* ───── Header ───── */
 header{
   background:var(--surface);
   border-bottom:1px solid var(--border);
   padding:14px 24px;
 }
 .header-inner{
-  max-width:1200px;
-  margin:0 auto;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
+  max-width:1200px;margin:0 auto;
+  display:flex;align-items:center;justify-content:space-between;
 }
-.brand{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  text-decoration:none;
-  color:var(--text);
-}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--text)}
 .brand:hover{text-decoration:none}
-.brand img{
-  height:32px;
-  width:auto;
-  display:block;
-}
-.brand-name{
-  font-size:18px;
-  font-weight:700;
-  letter-spacing:-.01em;
-  color:var(--text);
-}
-.header-link{
-  font-size:14px;
-  color:var(--text-soft);
-  font-weight:500;
-}
+.brand img{height:32px;width:auto;display:block}
+.header-link{font-size:14px;color:var(--text-soft);font-weight:500}
 
-/* ───── Main layout ───── */
 main{
-  flex:1;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding:48px 20px;
+  flex:1;display:flex;align-items:center;justify-content:center;
+  padding:40px 20px;
 }
 .auth-card{
-  width:100%;
-  max-width:440px;
-  background:var(--surface);
-  border:1px solid var(--border);
-  border-radius:var(--radius);
-  padding:36px 32px;
-  box-shadow:var(--shadow-lg);
+  width:100%;max-width:480px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);padding:36px 32px;box-shadow:var(--shadow-lg);
 }
-.auth-logo{
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  gap:12px;
-  margin-bottom:24px;
-}
-.auth-logo img{
-  height:48px;
-  width:auto;
-}
-.auth-logo .tagline{
-  font-size:13px;
-  color:var(--text-muted);
-  font-weight:500;
-}
+.auth-logo{display:flex;flex-direction:column;align-items:center;gap:12px;margin-bottom:24px}
+.auth-logo img{height:48px;width:auto}
+.auth-logo .tagline{font-size:13px;color:var(--text-muted);font-weight:500}
 .auth-card h1{
-  font-size:24px;
-  font-weight:700;
-  letter-spacing:-.01em;
-  text-align:center;
-  margin-bottom:8px;
+  font-size:24px;font-weight:700;letter-spacing:-.01em;text-align:center;margin-bottom:8px;
 }
-.auth-card .sub{
-  font-size:14px;
-  color:var(--text-soft);
-  text-align:center;
-  margin-bottom:28px;
-}
+.auth-card .sub{font-size:14px;color:var(--text-soft);text-align:center;margin-bottom:28px}
 
-/* ───── Tabs ───── */
 .tabs{
-  display:flex;
-  gap:4px;
-  background:var(--card);
-  padding:4px;
-  border-radius:var(--radius-sm);
-  margin-bottom:24px;
+  display:flex;gap:4px;background:var(--card);
+  padding:4px;border-radius:var(--radius-sm);margin-bottom:24px;
 }
 .tab{
-  flex:1;
-  padding:9px 12px;
-  border:none;
-  background:transparent;
-  font-size:14px;
-  font-weight:600;
-  color:var(--text-soft);
-  border-radius:8px;
-  cursor:pointer;
-  transition:all .15s;
+  flex:1;padding:9px 12px;border:none;background:transparent;
+  font-size:14px;font-weight:600;color:var(--text-soft);
+  border-radius:8px;cursor:pointer;transition:all .15s;
 }
 .tab:hover{color:var(--text)}
-.tab.active{
-  background:var(--surface);
-  color:var(--em);
-  box-shadow:var(--shadow);
-}
+.tab.active{background:var(--surface);color:var(--em);box-shadow:var(--shadow)}
 
-/* ───── Forms ───── */
 .field{margin-bottom:16px}
-label{
-  display:block;
-  font-size:13px;
-  font-weight:600;
-  color:var(--text);
-  margin-bottom:6px;
-}
+label{display:block;font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px}
+.req{color:var(--danger);margin-left:2px}
 input[type=text],input[type=email],input[type=password]{
-  width:100%;
-  padding:11px 14px;
-  border:1px solid var(--border-strong);
-  border-radius:var(--radius-sm);
-  font-size:15px;
-  font-family:inherit;
-  background:var(--surface);
-  color:var(--text);
+  width:100%;padding:11px 14px;
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  font-size:15px;font-family:inherit;background:var(--surface);color:var(--text);
   transition:border-color .15s,box-shadow .15s;
 }
-input:focus{
-  outline:none;
-  border-color:var(--em);
-  box-shadow:0 0 0 3px rgba(31,111,109,.15);
-}
-.hint{
-  font-size:12px;
-  color:var(--text-muted);
-  margin-top:5px;
-}
+input:focus{outline:none;border-color:var(--em);box-shadow:0 0 0 3px rgba(31,111,109,.15)}
+.hint{font-size:12px;color:var(--text-muted);margin-top:5px}
+
 .btn{
-  width:100%;
-  padding:12px 16px;
-  background:var(--em);
-  color:#fff;
-  border:none;
-  border-radius:var(--radius-sm);
-  font-size:15px;
-  font-weight:600;
-  cursor:pointer;
-  transition:background .15s;
-  font-family:inherit;
+  width:100%;padding:12px 16px;background:var(--em);color:#fff;border:none;
+  border-radius:var(--radius-sm);font-size:15px;font-weight:600;cursor:pointer;
+  transition:background .15s;font-family:inherit;
 }
 .btn:hover:not(:disabled){background:var(--em-dark)}
 .btn:disabled{opacity:.5;cursor:not-allowed}
-.btn-secondary{
-  background:transparent;
-  color:var(--em);
-  border:1px solid var(--border-strong);
-}
-.btn-secondary:hover:not(:disabled){
-  background:var(--card);
-  border-color:var(--em);
-}
+.btn-secondary{background:transparent;color:var(--em);border:1px solid var(--border-strong)}
+.btn-secondary:hover:not(:disabled){background:var(--card);border-color:var(--em)}
 
-/* ───── Divider ───── */
 .divider{
-  display:flex;
-  align-items:center;
-  gap:12px;
-  margin:20px 0;
-  color:var(--text-muted);
-  font-size:12px;
-  font-weight:500;
+  display:flex;align-items:center;gap:12px;margin:20px 0;
+  color:var(--text-muted);font-size:12px;font-weight:500;
 }
-.divider::before,.divider::after{
-  content:'';
-  flex:1;
-  height:1px;
-  background:var(--border);
-}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border)}
 
-/* ───── Status messages ───── */
-.msg{
-  padding:11px 14px;
-  border-radius:var(--radius-sm);
-  font-size:14px;
-  margin-bottom:16px;
-  display:none;
-}
+.msg{padding:11px 14px;border-radius:var(--radius-sm);font-size:14px;margin-bottom:16px;display:none}
 .msg.show{display:block}
-.msg.error{
-  background:var(--danger-bg);
-  color:var(--danger);
-  border:1px solid #FECACA;
-}
-.msg.success{
-  background:var(--success-bg);
-  color:var(--success);
-  border:1px solid #BBF7D0;
-}
-.msg.info{
-  background:#EFF6FF;
-  color:#1D4ED8;
-  border:1px solid #BFDBFE;
-}
+.msg.error{background:var(--danger-bg);color:var(--danger);border:1px solid #FECACA}
+.msg.success{background:var(--success-bg);color:var(--success);border:1px solid #BBF7D0}
+.msg.info{background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE}
 
-/* ───── Footer ───── */
-.foot-link{
-  text-align:center;
-  margin-top:20px;
-  font-size:13px;
-  color:var(--text-soft);
-}
+.foot-link{text-align:center;margin-top:20px;font-size:13px;color:var(--text-soft)}
 footer{
-  padding:24px;
-  text-align:center;
-  font-size:13px;
-  color:var(--text-muted);
-  border-top:1px solid var(--border);
-  background:var(--surface);
+  padding:24px;text-align:center;font-size:13px;color:var(--text-muted);
+  border-top:1px solid var(--border);background:var(--surface);
 }
 footer a{color:var(--text-soft);margin:0 8px}
 
-/* ───── Loading ───── */
 .spinner{
-  display:inline-block;
-  width:14px;
-  height:14px;
-  border:2px solid rgba(255,255,255,.3);
-  border-top-color:#fff;
-  border-radius:50%;
-  animation:spin .8s linear infinite;
-  vertical-align:-2px;
-  margin-right:8px;
+  display:inline-block;width:14px;height:14px;
+  border:2px solid rgba(255,255,255,.3);border-top-color:#fff;
+  border-radius:50%;animation:spin .8s linear infinite;
+  vertical-align:-2px;margin-right:8px;
 }
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* SIGNUP STEPS */
+.steps{
+  display:flex;align-items:center;gap:8px;justify-content:center;
+  margin-bottom:22px;font-size:12px;color:var(--text-muted);font-weight:600;
+}
+.step{
+  display:flex;align-items:center;gap:6px;padding:5px 10px;
+  border-radius:20px;background:var(--card);
+}
+.step.active{background:var(--em);color:#fff}
+.step.done{background:rgba(31,111,109,.12);color:var(--em)}
+.step-num{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.06);
+  font-size:11px;font-weight:700;
+}
+.step.active .step-num{background:rgba(255,255,255,.25)}
+.step.done .step-num{background:rgba(31,111,109,.18)}
+.step-arrow{color:var(--text-muted);font-size:14px}
+
+/* LOGO UPLOAD */
+.logo-uploader{
+  border:2px dashed var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--card);padding:18px;text-align:center;
+  transition:border-color .15s;cursor:pointer;
+}
+.logo-uploader:hover{border-color:var(--em)}
+.logo-uploader.has-logo{border-style:solid;border-color:var(--border)}
+.logo-preview{
+  width:100%;height:90px;display:flex;align-items:center;justify-content:center;
+  background:#fff;border-radius:8px;margin-bottom:8px;overflow:hidden;
+  border:1px solid var(--border);
+}
+.logo-preview img{max-width:100%;max-height:100%;object-fit:contain}
+.logo-placeholder{color:var(--text-muted);font-size:13px}
+.logo-status{font-size:12px;margin-top:6px;font-weight:600;min-height:16px}
+
+/* COLOUR SWATCHES */
+.colour-swatches{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin-top:6px}
+.swatch{
+  width:100%;aspect-ratio:1;border-radius:8px;cursor:pointer;
+  border:3px solid transparent;transition:all .15s;position:relative;
+}
+.swatch:hover{transform:scale(1.06)}
+.swatch.selected{border-color:var(--text);transform:scale(1.06)}
+.swatch.selected::after{
+  content:'✓';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  color:#fff;font-weight:700;font-size:16px;text-shadow:0 1px 2px rgba(0,0,0,.4);
+}
+
+/* STEP NAV */
+.step-nav{display:flex;gap:10px;margin-top:18px}
+.step-nav .btn-secondary{flex:0 0 auto;width:auto;padding:12px 20px}
+.step-nav .btn{flex:1}
 
 @media(max-width:520px){
   .auth-card{padding:28px 20px}
   .auth-card h1{font-size:21px}
+  .colour-swatches{grid-template-columns:repeat(6,1fr)}
 }
 </style>
 </head>
@@ -299,9 +206,7 @@ footer a{color:var(--text-soft);margin:0 8px}
 
 <header>
   <div class="header-inner">
-    <a href="index.html" class="brand">
-      <img src="logo.png" alt="Civara"/>
-    </a>
+    <a href="index.html" class="brand"><img src="logo.png" alt="Civara"/></a>
     <a href="index.html" class="header-link">← Back to home</a>
   </div>
 </header>
@@ -320,7 +225,7 @@ footer a{color:var(--text-soft);margin:0 8px}
 
     <div id="msg" class="msg"></div>
 
-    <!-- ───── Sign in form ───── -->
+    <!-- ───── Sign in ───── -->
     <div id="form-signin">
       <h1>Welcome back</h1>
       <p class="sub">Sign in to your Civara account</p>
@@ -329,7 +234,6 @@ footer a{color:var(--text-soft);margin:0 8px}
         <label for="signin-email">Email</label>
         <input type="email" id="signin-email" autocomplete="email" placeholder="you@organisation.org"/>
       </div>
-
       <div class="field">
         <label for="signin-password">Password</label>
         <input type="password" id="signin-password" autocomplete="current-password" placeholder="••••••••"/>
@@ -342,37 +246,70 @@ footer a{color:var(--text-soft);margin:0 8px}
       </div>
     </div>
 
-    <!-- ───── Sign up form ───── -->
+    <!-- ───── Sign up — multi-step ───── -->
     <div id="form-signup" style="display:none">
       <h1>Create your account</h1>
       <p class="sub">Get started with Civara in under a minute</p>
 
-      <div class="field">
-        <label for="signup-name">Your name</label>
-        <input type="text" id="signup-name" autocomplete="name" placeholder="Jane Smith"/>
+      <div class="steps">
+        <div class="step active" id="step-1"><span class="step-num">1</span>Account</div>
+        <span class="step-arrow">›</span>
+        <div class="step" id="step-2"><span class="step-num">2</span>Branding</div>
       </div>
 
-      <div class="field">
-        <label for="signup-email">Work email</label>
-        <input type="email" id="signup-email" autocomplete="email" placeholder="you@organisation.org"/>
+      <!-- STEP 1: account details -->
+      <div id="signup-step-1">
+        <div class="field">
+          <label for="signup-name">Your name<span class="req">*</span></label>
+          <input type="text" id="signup-name" autocomplete="name" placeholder="Jane Smith"/>
+        </div>
+        <div class="field">
+          <label for="signup-email">Work email<span class="req">*</span></label>
+          <input type="email" id="signup-email" autocomplete="email" placeholder="you@organisation.org"/>
+        </div>
+        <div class="field">
+          <label for="signup-password">Password<span class="req">*</span></label>
+          <input type="password" id="signup-password" autocomplete="new-password" placeholder="At least 8 characters"/>
+          <div class="hint">Use 8+ characters with a mix of letters and numbers</div>
+        </div>
+        <div class="field">
+          <label for="signup-org">Organisation name<span class="req">*</span></label>
+          <input type="text" id="signup-org" autocomplete="organization" placeholder="Acme Charity"/>
+          <div class="hint">We'll create a workspace for your team</div>
+        </div>
+
+        <button class="btn" id="btn-next" type="button" onclick="goToStep2()">Continue →</button>
+
+        <div class="foot-link" style="margin-top:16px">
+          By creating an account you agree to our <a href="#">Terms</a> and <a href="#">Privacy Policy</a>.
+        </div>
       </div>
 
-      <div class="field">
-        <label for="signup-password">Password</label>
-        <input type="password" id="signup-password" autocomplete="new-password" placeholder="At least 8 characters"/>
-        <div class="hint">Use 8+ characters with a mix of letters and numbers</div>
-      </div>
+      <!-- STEP 2: branding -->
+      <div id="signup-step-2" style="display:none">
+        <div class="field">
+          <label>Organisation logo<span class="req">*</span></label>
+          <div class="logo-uploader" id="logo-drop" onclick="document.getElementById('signup-logo').click()">
+            <div class="logo-preview" id="logo-preview">
+              <span class="logo-placeholder">Click to upload your logo</span>
+            </div>
+            <button type="button" class="btn-secondary btn" style="padding:8px 14px;font-size:13px;width:auto" onclick="event.stopPropagation();document.getElementById('signup-logo').click()">Choose file</button>
+            <input type="file" id="signup-logo" accept="image/png,image/jpeg,image/svg+xml,image/webp" style="display:none" onchange="handleLogoSelect(event)"/>
+            <div class="logo-status" id="logo-status"></div>
+          </div>
+          <div class="hint">PNG, JPG, SVG or WebP · max 2MB</div>
+        </div>
 
-      <div class="field">
-        <label for="signup-org">Organisation name</label>
-        <input type="text" id="signup-org" autocomplete="organization" placeholder="Acme Charity"/>
-        <div class="hint">We'll create a workspace for your team</div>
-      </div>
+        <div class="field">
+          <label>Brand colour<span class="req">*</span></label>
+          <div class="colour-swatches" id="colour-swatches"></div>
+          <div class="hint">This becomes your accent colour throughout the app</div>
+        </div>
 
-      <button class="btn" id="btn-signup" type="button" onclick="doSignUp()">Create account</button>
-
-      <div class="foot-link" style="margin-top:16px">
-        By creating an account you agree to our <a href="#">Terms</a> and <a href="#">Privacy Policy</a>.
+        <div class="step-nav">
+          <button class="btn btn-secondary" type="button" onclick="goToStep1()">← Back</button>
+          <button class="btn" id="btn-signup" type="button" onclick="doSignUp()">Create account</button>
+        </div>
       </div>
     </div>
   </div>
@@ -389,89 +326,95 @@ footer a{color:var(--text-soft);margin:0 8px}
 const SB_URL='https://nznfrxzgvcjhfsdaphyp.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw';
 
+const BRAND_COLOURS=[
+  {hex:'#1F6F6D',name:'Civara teal'},
+  {hex:'#175655',name:'Deep teal'},
+  {hex:'#2A9D8F',name:'Sea green'},
+  {hex:'#0EA5E9',name:'Sky'},
+  {hex:'#6366F1',name:'Indigo'},
+  {hex:'#7C3AED',name:'Violet'},
+  {hex:'#EC4899',name:'Pink'},
+  {hex:'#F59E0B',name:'Amber'},
+  {hex:'#EF4444',name:'Red'},
+  {hex:'#10B981',name:'Emerald'},
+  {hex:'#0F766E',name:'Forest'},
+  {hex:'#1E293B',name:'Slate'}
+];
+
 let sb=null;
 function initSupabase(){
   if(sb)return sb;
   if(!window.supabase){console.error('Supabase library not loaded');return null}
-  try{
-    sb=window.supabase.createClient(SB_URL,SB_KEY);
-    return sb;
-  }catch(e){
-    console.error('Supabase init failed:',e);
-    return null;
-  }
+  try{sb=window.supabase.createClient(SB_URL,SB_KEY);return sb}
+  catch(e){console.error('Supabase init failed:',e);return null}
 }
 initSupabase();
 
 document.getElementById('year').textContent=new Date().getFullYear();
 
-// ───── Tab switching ─────
+const $=id=>document.getElementById(id);
+const escapeHTML=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+let selectedLogoFile=null;
+let selectedColour='#1F6F6D';
+
+// ── Tabs ────────────────────────────────────────────────────
 function switchTab(which){
-  document.getElementById('tab-signin').classList.toggle('active',which==='signin');
-  document.getElementById('tab-signup').classList.toggle('active',which==='signup');
-  document.getElementById('form-signin').style.display=which==='signin'?'block':'none';
-  document.getElementById('form-signup').style.display=which==='signup'?'block':'none';
+  $('tab-signin').classList.toggle('active',which==='signin');
+  $('tab-signup').classList.toggle('active',which==='signup');
+  $('form-signin').style.display=which==='signin'?'block':'none';
+  $('form-signup').style.display=which==='signup'?'block':'none';
   hideMsg();
 }
 
-// ───── Pre-fill from URL params ─────
+// ── URL params ──────────────────────────────────────────────
 const params=new URLSearchParams(window.location.search);
-if(params.get('signup')==='1'){switchTab('signup')}
+if(params.get('signup')==='1')switchTab('signup');
 if(params.get('email')){
-  document.getElementById('signin-email').value=params.get('email');
-  document.getElementById('signup-email').value=params.get('email');
+  $('signin-email').value=params.get('email');
+  $('signup-email').value=params.get('email');
 }
 
-// ───── Message helpers ─────
+// ── Messages ────────────────────────────────────────────────
 function showMsg(text,kind){
-  const m=document.getElementById('msg');
-  m.textContent=text;
-  m.className='msg show '+(kind||'info');
+  const m=$('msg');m.textContent=text;m.className='msg show '+(kind||'info');
 }
-function hideMsg(){
-  const m=document.getElementById('msg');
-  m.className='msg';
-  m.textContent='';
-}
+function hideMsg(){const m=$('msg');m.className='msg';m.textContent=''}
 
-// ───── Already signed in? bounce to app ─────
+// ── Already signed in? ──────────────────────────────────────
 (async()=>{
   if(!sb)return;
   try{
     const{data}=await sb.auth.getSession();
-    if(data?.session){
-      window.location.href='app.html';
-    }
+    if(data&&data.session)window.location.href='app.html';
   }catch(e){console.error('session check failed',e)}
 })();
 
-// ───── Sign in ─────
+// ── Sign in ─────────────────────────────────────────────────
 async function doSignIn(){
-  const email=document.getElementById('signin-email').value.trim();
-  const password=document.getElementById('signin-password').value;
+  const email=$('signin-email').value.trim();
+  const password=$('signin-password').value;
   if(!email||!password){showMsg('Please enter your email and password','error');return}
   if(!sb){showMsg('Authentication service unavailable','error');return}
 
-  const btn=document.getElementById('btn-signin');
-  btn.disabled=true;
-  btn.innerHTML='<span class="spinner"></span>Signing in…';
+  const btn=$('btn-signin');
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Signing in…';
   hideMsg();
 
   try{
-    const{data,error}=await sb.auth.signInWithPassword({email,password});
+    const{error}=await sb.auth.signInWithPassword({email,password});
     if(error)throw error;
     showMsg('Signed in — redirecting…','success');
     setTimeout(()=>{window.location.href='app.html'},600);
   }catch(e){
     showMsg(e.message||'Sign-in failed. Please check your credentials.','error');
-    btn.disabled=false;
-    btn.textContent='Sign in';
+    btn.disabled=false;btn.textContent='Sign in';
   }
 }
 
-// ───── Password reset ─────
+// ── Reset ───────────────────────────────────────────────────
 async function doReset(){
-  const email=document.getElementById('signin-email').value.trim();
+  const email=$('signin-email').value.trim();
   if(!email){showMsg('Enter your email above first','error');return}
   if(!sb){showMsg('Authentication service unavailable','error');return}
 
@@ -487,12 +430,13 @@ async function doReset(){
   }
 }
 
-// ───── Sign up ─────
-async function doSignUp(){
-  const name=document.getElementById('signup-name').value.trim();
-  const email=document.getElementById('signup-email').value.trim();
-  const password=document.getElementById('signup-password').value;
-  const org=document.getElementById('signup-org').value.trim();
+// ── Step navigation ─────────────────────────────────────────
+function goToStep2(){
+  // Validate step 1
+  const name=$('signup-name').value.trim();
+  const email=$('signup-email').value.trim();
+  const password=$('signup-password').value;
+  const org=$('signup-org').value.trim();
 
   if(!name||!email||!password||!org){
     showMsg('Please fill in all fields','error');return;
@@ -500,47 +444,161 @@ async function doSignUp(){
   if(password.length<8){
     showMsg('Password must be at least 8 characters','error');return;
   }
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){
+    showMsg('Please enter a valid email address','error');return;
+  }
+
+  hideMsg();
+  $('signup-step-1').style.display='none';
+  $('signup-step-2').style.display='block';
+  $('step-1').classList.remove('active');
+  $('step-1').classList.add('done');
+  $('step-2').classList.add('active');
+  renderSwatches();
+}
+
+function goToStep1(){
+  hideMsg();
+  $('signup-step-2').style.display='none';
+  $('signup-step-1').style.display='block';
+  $('step-1').classList.add('active');
+  $('step-1').classList.remove('done');
+  $('step-2').classList.remove('active');
+}
+
+// ── Logo handling ───────────────────────────────────────────
+function handleLogoSelect(e){
+  const file=e.target.files&&e.target.files[0];
+  if(!file)return;
+  if(file.size>2*1024*1024){
+    $('logo-status').textContent='⚠ File too large (max 2MB)';
+    $('logo-status').style.color='var(--danger)';
+    selectedLogoFile=null;return;
+  }
+  selectedLogoFile=file;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    $('logo-preview').innerHTML='<img src="'+ev.target.result+'" alt="Logo preview"/>';
+    $('logo-drop').classList.add('has-logo');
+  };
+  reader.readAsDataURL(file);
+  $('logo-status').textContent='✓ '+file.name+' ready';
+  $('logo-status').style.color='var(--success)';
+}
+
+// ── Swatches ────────────────────────────────────────────────
+function renderSwatches(){
+  $('colour-swatches').innerHTML=BRAND_COLOURS.map(c=>
+    '<div class="swatch '+(c.hex.toLowerCase()===selectedColour.toLowerCase()?'selected':'')+
+    '" style="background:'+c.hex+'" title="'+escapeHTML(c.name)+
+    '" onclick="pickColour(\''+c.hex+'\')"></div>'
+  ).join('');
+}
+function pickColour(hex){selectedColour=hex;renderSwatches()}
+
+// ── Sign up ─────────────────────────────────────────────────
+async function doSignUp(){
+  const name=$('signup-name').value.trim();
+  const email=$('signup-email').value.trim();
+  const password=$('signup-password').value;
+  const org=$('signup-org').value.trim();
+
+  if(!name||!email||!password||!org){showMsg('Please fill in all fields','error');return}
+  if(!selectedLogoFile){showMsg('Please upload your organisation logo','error');return}
+  if(!selectedColour){showMsg('Please pick a brand colour','error');return}
   if(!sb){showMsg('Authentication service unavailable','error');return}
 
-  const btn=document.getElementById('btn-signup');
-  btn.disabled=true;
-  btn.innerHTML='<span class="spinner"></span>Creating account…';
+  const btn=$('btn-signup');
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Creating account…';
   hideMsg();
 
   try{
+    // 1. Create auth user — pass org metadata so trigger/handler can create the org
     const{data,error}=await sb.auth.signUp({
-      email,
-      password,
+      email,password,
       options:{
-        data:{full_name:name,org_name:org},
+        data:{
+          full_name:name,
+          org_name:org,
+          brand_color:selectedColour
+        },
         emailRedirectTo:window.location.origin+'/app.html?welcome=1'
       }
     });
     if(error)throw error;
 
-    if(data?.session){
-      // Auto-confirmed — go straight in
+    // 2. If we have a session, upload logo and write branding to the org
+    if(data&&data.session){
+      try{await uploadAndSaveBranding(data.session.user.id)}
+      catch(e){
+        console.warn('Branding save failed — user can complete it in settings:',e);
+        // Don't block signup if branding write fails — they can fix it in settings
+      }
       showMsg('Account created — redirecting…','success');
-      setTimeout(()=>{window.location.href='app.html?welcome=1'},600);
+      setTimeout(()=>{window.location.href='app.html?welcome=1'},800);
     }else{
-      // Email confirmation required
+      // Email confirmation required — stash branding for later
+      try{
+        const reader=new FileReader();
+        reader.onload=()=>{
+          try{
+            sessionStorage.setItem('pending_brand',JSON.stringify({
+              colour:selectedColour,
+              logo_data:reader.result,
+              logo_name:selectedLogoFile.name
+            }));
+          }catch(e){/* quota exceeded — ignore */}
+        };
+        reader.readAsDataURL(selectedLogoFile);
+      }catch(e){/* ignore */}
       showMsg('Account created! Check your email to confirm and finish setup.','success');
       btn.textContent='Check your email';
     }
   }catch(e){
     showMsg(e.message||'Could not create account. Try a different email?','error');
-    btn.disabled=false;
-    btn.textContent='Create account';
+    btn.disabled=false;btn.textContent='Create account';
   }
 }
 
-// ───── Enter key submits ─────
-document.getElementById('signin-password').addEventListener('keydown',e=>{
-  if(e.key==='Enter')doSignIn();
-});
-document.getElementById('signup-org').addEventListener('keydown',e=>{
-  if(e.key==='Enter')doSignUp();
-});
+// ── Upload logo + save branding ─────────────────────────────
+// Looks up the org the trigger created for this user, then writes
+// logo_url + brand_color + branding_completed flag.
+async function uploadAndSaveBranding(userId){
+  // Find org via memberships (assumes a trigger creates org+membership on signup)
+  let orgId=null;
+  for(let i=0;i<5;i++){
+    const{data}=await sb.from('memberships').select('org_id').eq('user_id',userId).eq('status','active').limit(1);
+    if(data&&data.length){orgId=data[0].org_id;break}
+    await new Promise(r=>setTimeout(r,500)); // wait briefly for trigger
+  }
+  if(!orgId)throw new Error('Could not locate new organisation');
+
+  // Upload logo
+  const ext=(selectedLogoFile.name.split('.').pop()||'png').toLowerCase();
+  const path=orgId+'/logo-'+Date.now()+'.'+ext;
+  const{error:upErr}=await sb.storage.from('org-logos').upload(path,selectedLogoFile,{
+    cacheControl:'3600',upsert:false
+  });
+  if(upErr)throw new Error('Logo upload failed: '+upErr.message);
+  const{data:urlData}=sb.storage.from('org-logos').getPublicUrl(path);
+  const logoUrl=urlData.publicUrl;
+
+  // Read current settings, merge branding_completed
+  const{data:orgData}=await sb.from('organisations').select('settings').eq('id',orgId).single();
+  const newSettings=Object.assign({},(orgData&&orgData.settings)||{},{branding_completed:true});
+
+  // Save to org row
+  const{error:updErr}=await sb.from('organisations').update({
+    logo_url:logoUrl,
+    brand_color:selectedColour,
+    settings:newSettings
+  }).eq('id',orgId);
+  if(updErr)throw new Error('Could not save branding: '+updErr.message);
+}
+
+// ── Enter key submits ───────────────────────────────────────
+$('signin-password').addEventListener('keydown',e=>{if(e.key==='Enter')doSignIn()});
+$('signup-org').addEventListener('keydown',e=>{if(e.key==='Enter')goToStep2()});
 </script>
 
 </body>
