@@ -38,7 +38,6 @@ async function boot() {
 
   // 2. RBAC
   try { await loadUserAccess(); } catch (e) { console.warn('RBAC load failed:', e); }
-
   if (!orgId) {
     const urlOrg = new URLSearchParams(window.location.search).get('org_id');
     if (urlOrg) orgId = urlOrg;
@@ -54,9 +53,9 @@ async function boot() {
     if (orgData) {
       currentOrg = orgData;
       applyBranding(orgData);
-
       // Banner
-      const b = $('org-banner'); b.style.display = 'flex';
+      const b = $('org-banner');
+      b.style.display = 'flex';
       $('ob-txt').textContent = orgData.name + (orgData.sector ? ' · ' + orgData.sector : '');
       $('ob-plan').textContent = orgData.plan === 'pro' ? '✦ PRO'
                                : orgData.plan === 'network' ? 'Network'
