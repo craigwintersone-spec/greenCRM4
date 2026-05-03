@@ -369,8 +369,12 @@ async function init(){
     return;
   }
 
+  // Verify org via the SECURITY DEFINER RPC.
+  // After the RLS migration, anon cannot read `organisations` directly —
+  // get_org_for_invite returns just {id,name} for the requested org.
   try{
-    const{data:org,error}=await sb.from('organisations').select('id,name').eq('id',URL_ORG_ID).maybeSingle();
+    const{data:orgRows,error}=await sb.rpc('get_org_for_invite',{org_id:URL_ORG_ID});
+    const org = orgRows && orgRows[0];
     if(error||!org){
       showScreen('blocked-screen');
       $('blocked-msg').innerHTML='The organisation in this link could not be found. Please contact the organisation that asked you to register and ask for the correct link.';
