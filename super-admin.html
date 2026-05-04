@@ -648,11 +648,30 @@ function renderSubscriptions(){
   }).join('');
 }
 // ============================================================
-// SENTINEL — back-office AI ops layer
+// SENTINEL — back-office AI ops layer (v1.5)
 // ============================================================
 
 let _sentinelDecisions = [];
 let _sentinelBriefings = [];
+let _sentinelActions = [];
+
+// Static agent roster — these are the agents Sentinel has wired up.
+// "live" = actually runs and produces real output.
+// "soon" = UI placeholder until we build it (next batch).
+const SENTINEL_AGENTS = [
+  { id:'cos', name:'Chief of Staff', icon:'🎯', role:'Coordinates all agents · daily briefing', status:'live', cos:true },
+  { id:'cs', name:'Customer Success', icon:'💜', role:'Spots churn risk in your customer base', status:'live' },
+  { id:'onboarding', name:'Onboarding', icon:'🚀', role:'Watches new signups for activation', status:'live' },
+  { id:'insights', name:'Insights', icon:'🧠', role:'Surfaces cross-domain patterns', status:'live' },
+  { id:'sales', name:'Sales', icon:'💼', role:'Inbound demos and qualifying', status:'soon' },
+  { id:'finance', name:'Finance', icon:'💰', role:'MRR, Stripe reconciliation, dunning', status:'soon' },
+  { id:'support', name:'Support', icon:'🛟', role:'Auto-resolves common tickets', status:'soon' },
+  { id:'product', name:'Product', icon:'🧭', role:'Clusters feature requests', status:'soon' },
+  { id:'marketing', name:'Marketing', icon:'📣', role:'Content, social, newsletter', status:'soon' },
+  { id:'dev', name:'Dev', icon:'⚙️', role:'Self-fixes errors, ships PRs', status:'soon' },
+  { id:'legal', name:'Legal & GDPR', icon:'⚖️', role:'DPAs, privacy, data requests', status:'soon' },
+  { id:'bd', name:'BD Researcher', icon:'🔍', role:'Browser-driving funder portals', status:'soon' },
+];
 
 async function loadSentinel(){
   if(!sb) return;
@@ -668,7 +687,7 @@ async function loadSentinel(){
     if(e1) throw e1;
     _sentinelDecisions = decs || [];
   } catch(e) {
-    console.error('[sentinel] decisions load failed:', e);
+    console.error('[sentinel] decisions:', e);
     _sentinelDecisions = [];
   }
 
@@ -682,8 +701,22 @@ async function loadSentinel(){
     if(e2) throw e2;
     _sentinelBriefings = briefs || [];
   } catch(e) {
-    console.error('[sentinel] briefings load failed:', e);
+    console.error('[sentinel] briefings:', e);
     _sentinelBriefings = [];
+  }
+
+  // Actions (activity stream)
+  try {
+    const { data: acts, error: e3 } = await sb
+      .from('sentinel_actions')
+      .select('*')
+      .order('created_at',{ascending:false})
+      .limit(30);
+    if(e3) throw e3;
+    _sentinelActions = acts || [];
+  } catch(e) {
+    console.error('[sentinel] actions:', e);
+    _sentinelActions = [];
   }
 
   renderSentinel();
@@ -692,16 +725,36 @@ async function loadSentinel(){
 function renderSentinel(){
   const pending = _sentinelDecisions.filter(d => d.status === 'pending');
   const churn = pending.filter(d => d.agent === 'Customer Success').length;
+  const insights = pending.filter(d => d.agent === 'Insights');
+  const otherDecisions = pending.filter(d => d.agent !== 'Insights');
+
+  // Active agent count
+  const liveAgents = SENTINEL_AGENTS.filter(a => a.status === 'live').length;
+  $('sentinel-active-count').textContent = liveAgents + ' agents live';
 
   // Stats
   $('sentinel-st-pending').textContent = pending.length;
   $('sentinel-st-churn').textContent = churn;
-  $('sentinel-st-briefings').textContent = _sentinelBriefings.length;
-  $('sentinel-st-lastrun').textContent = _sentinelBriefings.length
-    ? new Date(_sentinelBriefings[0].created_at).toLocaleString('en-GB',{
-        day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'
-      })
-    : 'Never';
+
+  // Actions today
+  const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+  const actionsToday = _sentinelActions.filter(a => new Date(a.created_at) >= todayStart).length;
+  $('sentinel-st-actions').textContent = actionsToday;
+
+  // Cost this month (sum of cost_pence)
+  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
+  const monthActions = _sentinelActions.filter(a => new Date(a.created_at) >= monthStart);
+  const costPence = monthActions.reduce((s,a) => s + (a.cost_pence||0), 0);
+  const costPounds = (costPence/100).toFixed(2);
+  $('sentinel-st-cost').textContent = '£' + costPounds;
+
+  // Hours saved (rough heuristic: ~5 min saved per action)
+  const allTimeActions = _sentinelActions.length;
+  const hoursSaved = Math.round((allTimeActions * 5) / 60);
+  $('sentinel-st-hours').textContent = hoursSaved + 'h';
+  // Vs junior ops salary (£30k / 12 = £2,500/mo for ~160h work)
+  const equivalentValue = Math.round((hoursSaved / 160) * 2500);
+  $('sentinel-st-vs-hiring').textContent = '~£' + equivalentValue.toLocaleString() + ' equivalent';
 
   // Briefing card vs empty state
   if(_sentinelBriefings.length){
@@ -721,37 +774,85 @@ function renderSentinel(){
     ? 'Last briefing: ' + new Date(_sentinelBriefings[0].created_at).toLocaleString('en-GB')
     : 'No briefings yet — click Run agents now';
 
-  // Decisions list
-  $('sentinel-decisions-meta').textContent = pending.length
-    ? pending.length + ' pending'
+  // Decisions list (excluding insights)
+  $('sentinel-decisions-meta').textContent = otherDecisions.length
+    ? otherDecisions.length + ' pending'
     : 'All clear';
 
-  if(!pending.length){
+  if(!otherDecisions.length){
     $('sentinel-decisions-list').innerHTML =
       '<div style="text-align:center;padding:20px;color:var(--txt3);font-size:13px">' +
       '✓ No decisions awaiting you. Sentinel will check again at 06:00 tomorrow.</div>';
   } else {
-    const tierClass = { urgent:'b-suspended', high:'b-trial', medium:'b-pro' };
-    $('sentinel-decisions-list').innerHTML = pending.map(d => `
-      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid ${
-        d.tier==='urgent'?'var(--red)':d.tier==='high'?'var(--amber)':'var(--em)'
-      };border-radius:var(--radius);padding:14px 16px;margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:8px">
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <span class="badge ${tierClass[d.tier]||'b-pro'}">${d.tier||'medium'}</span>
-            <span class="badge" style="background:var(--card);color:var(--txt2);border:1px solid var(--border)">${escapeHTML(d.agent||'')}</span>
-          </div>
-          <span style="font-size:11px;color:var(--txt3)">${new Date(d.created_at).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</span>
-        </div>
-        <div style="font-size:14px;font-weight:700;color:var(--txt);margin-bottom:5px">${escapeHTML(d.title||'')}</div>
-        <div style="font-size:13px;color:var(--txt2);line-height:1.5;margin-bottom:12px">${escapeHTML(d.description||'')}</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          ${d.primary_action ? `<button class="btn btn-p btn-sm" onclick="resolveSentinelDecision(${d.id},'approved')">${escapeHTML(d.primary_action)}</button>`:''}
-          ${d.secondary_action ? `<button class="btn btn-ghost btn-sm" onclick="resolveSentinelDecision(${d.id},'modified')">${escapeHTML(d.secondary_action)}</button>`:''}
-          <button class="btn btn-danger btn-sm" onclick="resolveSentinelDecision(${d.id},'dismissed')">Dismiss</button>
-        </div>
+    $('sentinel-decisions-list').innerHTML = otherDecisions.map(d => sentinelDecisionCard(d)).join('');
+  }
+
+  // Insights panel
+  if(!insights.length){
+    $('sentinel-insights-list').innerHTML =
+      '<div style="padding:14px;color:var(--txt3);font-size:13px;text-align:center">' +
+      'Insights agent will surface cross-domain patterns once you have more data.</div>';
+  } else {
+    $('sentinel-insights-list').innerHTML = insights.map(d => `
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:8px">
+        <div style="font-size:10px;color:var(--purple);text-transform:uppercase;letter-spacing:.7px;font-weight:700;margin-bottom:6px;display:inline-block;background:var(--purple-bg);padding:2px 8px;border-radius:20px">Pattern</div>
+        <div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:4px">${escapeHTML(d.title||'')}</div>
+        <div style="font-size:12px;color:var(--txt2);line-height:1.5;margin-bottom:8px">${escapeHTML(d.description||'')}</div>
+        <button class="btn btn-ghost btn-sm" onclick="resolveSentinelDecision(${d.id},'dismissed')">Dismiss</button>
       </div>
     `).join('');
+  }
+
+  // Agent roster
+  $('sentinel-roster-meta').textContent = liveAgents + ' live · ' + (SENTINEL_AGENTS.length - liveAgents) + ' coming';
+  $('sentinel-agents-grid').innerHTML = SENTINEL_AGENTS.map(a => {
+    const recentAction = _sentinelActions.find(act => act.agent === a.name);
+    const lastSeen = recentAction
+      ? new Date(recentAction.created_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})
+      : '—';
+    const isLive = a.status === 'live';
+    const cardStyle = isLive
+      ? `background:var(--surface);border:1px solid var(--border);${a.cos?'border-color:var(--em);background:rgba(31,111,109,.03)':''}`
+      : 'background:var(--card);border:1px solid var(--border);opacity:.7';
+    return `
+      <div style="${cardStyle};border-radius:var(--radius);padding:14px;position:relative">
+        ${!isLive ? '<span style="position:absolute;top:8px;right:8px;font-size:9px;background:var(--amber-bg);color:#92400E;padding:2px 6px;border-radius:6px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">Soon</span>' : ''}
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+          <div style="width:36px;height:36px;border-radius:8px;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:18px">${a.icon}</div>
+          ${isLive ? '<div style="width:8px;height:8px;border-radius:50%;background:var(--green);margin-top:4px"></div>' : ''}
+        </div>
+        <div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:2px">${a.name}</div>
+        <div style="font-size:11px;color:var(--txt3);margin-bottom:10px;line-height:1.4;min-height:30px">${a.role}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding-top:10px;border-top:1px solid var(--border);font-size:11px">
+          <span style="color:var(--txt3)">${isLive ? 'Last: ' + lastSeen : 'Not yet wired'}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Activity stream
+  if(!_sentinelActions.length){
+    $('sentinel-activity-list').innerHTML =
+      '<div style="text-align:center;padding:20px;color:var(--txt3);font-size:13px">' +
+      'No activity yet. Click "Run agents now" to generate the first batch.</div>';
+  } else {
+    $('sentinel-activity-list').innerHTML = _sentinelActions.slice(0,12).map(a => {
+      const agent = SENTINEL_AGENTS.find(x => x.name === a.agent);
+      const icon = agent ? agent.icon : '•';
+      return `
+        <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px">
+          <div style="width:32px;height:32px;border-radius:8px;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">${icon}</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;margin-bottom:2px">
+              <span style="font-weight:700;color:var(--txt);font-size:12px">${escapeHTML(a.agent||'')}</span>
+              <span style="color:var(--txt2);font-size:13px">${escapeHTML(a.action||'')}</span>
+              <span style="font-size:11px;color:var(--txt3);margin-left:auto;white-space:nowrap">${sentinelTimeAgo(a.created_at)}</span>
+            </div>
+            ${a.detail ? `<div style="color:var(--txt3);font-size:12px">${escapeHTML(a.detail)}</div>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
   }
 
   // Recent briefings
@@ -771,6 +872,29 @@ function renderSentinel(){
   }
 }
 
+function sentinelDecisionCard(d){
+  const tierColor = d.tier==='urgent'?'var(--red)':d.tier==='high'?'var(--amber)':'var(--em)';
+  const tierClass = { urgent:'b-suspended', high:'b-trial', medium:'b-pro' };
+  return `
+    <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid ${tierColor};border-radius:var(--radius);padding:14px 16px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:8px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <span class="badge ${tierClass[d.tier]||'b-pro'}">${d.tier||'medium'}</span>
+          <span class="badge" style="background:var(--card);color:var(--txt2);border:1px solid var(--border)">${escapeHTML(d.agent||'')}</span>
+        </div>
+        <span style="font-size:11px;color:var(--txt3)">${new Date(d.created_at).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</span>
+      </div>
+      <div style="font-size:14px;font-weight:700;color:var(--txt);margin-bottom:5px">${escapeHTML(d.title||'')}</div>
+      <div style="font-size:13px;color:var(--txt2);line-height:1.5;margin-bottom:12px">${escapeHTML(d.description||'')}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${d.primary_action ? `<button class="btn btn-p btn-sm" onclick="resolveSentinelDecision(${d.id},'approved')">${escapeHTML(d.primary_action)}</button>`:''}
+        ${d.secondary_action ? `<button class="btn btn-ghost btn-sm" onclick="resolveSentinelDecision(${d.id},'modified')">${escapeHTML(d.secondary_action)}</button>`:''}
+        <button class="btn btn-danger btn-sm" onclick="resolveSentinelDecision(${d.id},'dismissed')">Dismiss</button>
+      </div>
+    </div>
+  `;
+}
+
 function sentinelFormatText(t){
   if(!t) return '';
   return escapeHTML(t)
@@ -781,6 +905,16 @@ function sentinelFormatText(t){
 function sentinelTruncate(t,n){
   if(!t) return '';
   return escapeHTML(t.length > n ? t.slice(0,n) + '…' : t);
+}
+function sentinelTimeAgo(iso){
+  const ms = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(ms/60000);
+  if(m < 1) return 'just now';
+  if(m < 60) return m + 'm ago';
+  const h = Math.floor(m/60);
+  if(h < 24) return h + 'h ago';
+  const d = Math.floor(h/24);
+  return d + 'd ago';
 }
 function escapeHTML(s){
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -837,8 +971,6 @@ showPage = function(p){
   _origShowPage(p);
   if(p === 'sentinel') loadSentinel();
 };
-
-// boot() is called below
 boot();
 </script>
 boot();
