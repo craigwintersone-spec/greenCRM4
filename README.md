@@ -108,6 +108,48 @@ The `js/agents.js` file calls Claude via a server-side `/api/claude` route (you'
 2. Use the `runAgent({ container, headerLabel, headerSub, steps, sys, prompt })` helper
 3. Wire it to a button somewhere
 
+# Sentinel — back-office ops layer
+
+## What it is
+A super-admin-only AI dashboard at /super-admin.html → 🎯 Sentinel.
+Generates a daily morning briefing across all your customers and queues
+churn-risk decisions for your approval.
+
+## Setup
+1. Run `supabase-sentinel-schema.sql` once in Supabase SQL Editor.
+2. Confirm these env vars exist in Vercel (Production scope):
+   - SUPABASE_URL
+   - SUPABASE_SERVICE_ROLE_KEY
+   - ANTHROPIC_API_KEY
+3. Optional: set CRON_SECRET in Vercel and use `Authorization: Bearer <secret>` 
+   if you want to protect the endpoint from random hits.
+4. Deploy.
+
+## First run
+Sign in to /super-admin.html, click 🎯 Sentinel, then "⚡ Run agents now".
+Wait ~15 seconds. You should see the briefing card and any churn decisions.
+
+## Daily schedule
+With vercel.json updated, /api/sentinel-cron runs at 06:00 UTC daily.
+
+## Cost
+~£0.005-0.01 per run on Claude Haiku 4.5. About 30p/month if you only have 
+the cron firing once a day.
+
+## Adding agents
+Sentinel currently runs two agents:
+- Chief of Staff briefing — generates the daily narrative
+- Churn detector — flags inactive paying customers
+
+To add more, edit /api/sentinel-cron.js and add a new async function 
+following the same pattern as runChurnDetector. Call it in the handler. 
+Decisions go to sentinel_decisions, briefings to sentinel_briefings.
+
+## If something breaks
+- Briefing missing → check Vercel function logs for /api/sentinel-cron
+- "Not authorized" → check super_admins table contains your user_id
+- Empty briefing narrative → Claude API key issue, check ANTHROPIC_API_KEY
+- "Run failed" alert → check browser console for the underlying error
 ## License
 
 Proprietary. © Civara.
