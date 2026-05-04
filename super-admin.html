@@ -261,9 +261,16 @@ tr:last-child td{border-bottom:none}
 </div>
 
 <div id="page-sentinel" class="page">
+  <!-- Header -->
   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;flex-wrap:wrap;gap:10px">
     <div>
-      <div class="page-title">🎯 Sentinel</div>
+      <div class="page-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        🎯 Sentinel
+        <span style="display:inline-flex;align-items:center;gap:6px;background:var(--green-bg);border:1px solid #BBF7D0;color:var(--green);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">
+          <span style="width:6px;height:6px;border-radius:50%;background:var(--green);animation:sentinel-pulse 2s infinite"></span>
+          <span id="sentinel-active-count">— agents</span>
+        </span>
+      </div>
       <div class="page-sub" id="sentinel-status">Your autonomous operations team</div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -272,20 +279,27 @@ tr:last-child td{border-bottom:none}
     </div>
   </div>
 
-  <!-- Briefing -->
-  <div class="revenue-highlight" id="sentinel-briefing-card" style="display:none;background:linear-gradient(135deg,var(--em),var(--em3));flex-direction:column;align-items:flex-start">
+  <!-- Mode bar (display only for now) -->
+  <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+    <button class="btn btn-ghost btn-sm" disabled style="opacity:.6;cursor:not-allowed">🎙️ Voice mode <span style="font-size:9px;background:var(--amber-bg);color:#92400E;padding:1px 6px;border-radius:8px;margin-left:6px">SOON</span></button>
+    <button class="btn btn-ghost btn-sm" disabled style="opacity:.6;cursor:not-allowed">⚡ Dispatch <span style="font-size:9px;background:var(--amber-bg);color:#92400E;padding:1px 6px;border-radius:8px;margin-left:6px">SOON</span></button>
+    <button class="btn btn-ghost btn-sm" disabled style="opacity:.6;cursor:not-allowed">🌐 Browser sessions <span style="font-size:9px;background:var(--amber-bg);color:#92400E;padding:1px 6px;border-radius:8px;margin-left:6px">SOON</span></button>
+    <button class="btn btn-ghost btn-sm" disabled style="opacity:.6;cursor:not-allowed">🤖 Self-fix overnight <span style="font-size:9px;background:var(--amber-bg);color:#92400E;padding:1px 6px;border-radius:8px;margin-left:6px">SOON</span></button>
+  </div>
+
+  <!-- Briefing hero -->
+  <div class="revenue-highlight" id="sentinel-briefing-card" style="display:none;background:linear-gradient(135deg,var(--em),var(--em3));flex-direction:column;align-items:flex-start;padding:28px">
     <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.85);margin-bottom:6px;font-weight:600" id="sentinel-briefing-eyebrow">Morning Briefing</div>
-    <div style="font-size:20px;font-weight:800;color:#fff;letter-spacing:-.3px;margin-bottom:10px" id="sentinel-briefing-headline">—</div>
+    <div style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-.3px;margin-bottom:14px" id="sentinel-briefing-headline">—</div>
     <div style="font-size:14px;line-height:1.7;color:rgba(255,255,255,.95);max-width:900px" id="sentinel-briefing-narrative">—</div>
   </div>
 
-  <!-- Empty state if no briefing yet -->
+  <!-- Empty state -->
   <div class="card" id="sentinel-empty" style="display:none">
     <div class="card-title">No briefing yet</div>
     <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:14px">
       Sentinel runs automatically at 06:00 every day. To see your first briefing now, click
-      <strong>"Run agents now"</strong> above. It will query your customer data, generate a briefing via Claude,
-      and queue any churn-risk decisions for you to review.
+      <strong>"Run agents now"</strong> above.
     </p>
     <p style="font-size:12px;color:var(--txt3)">First run takes ~10-30 seconds. Cost: ~£0.01 per run.</p>
   </div>
@@ -294,18 +308,61 @@ tr:last-child td{border-bottom:none}
   <div class="stats-grid">
     <div class="stat"><div class="stat-lbl">Pending decisions</div><div class="stat-val" id="sentinel-st-pending">—</div></div>
     <div class="stat"><div class="stat-lbl">Churn risks flagged</div><div class="stat-val" style="color:var(--amber)" id="sentinel-st-churn">—</div></div>
-    <div class="stat"><div class="stat-lbl">Briefings this week</div><div class="stat-val" id="sentinel-st-briefings">—</div></div>
-    <div class="stat"><div class="stat-lbl">Last run</div><div class="stat-val" style="font-size:14px" id="sentinel-st-lastrun">—</div></div>
+    <div class="stat"><div class="stat-lbl">Actions today</div><div class="stat-val" id="sentinel-st-actions">—</div></div>
+    <div class="stat"><div class="stat-lbl">Cost this month</div><div class="stat-val" style="font-size:22px" id="sentinel-st-cost">—</div></div>
   </div>
 
-  <!-- Decisions -->
+  <!-- Time saved counter -->
+  <div style="background:linear-gradient(135deg,rgba(31,111,109,.06),rgba(42,157,143,.04));border:1px solid rgba(31,111,109,.2);border-radius:var(--radiuslg);padding:18px 22px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:14px">
+      <div style="font-size:28px">⚡</div>
+      <div>
+        <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;font-weight:600">Estimated hours saved this month</div>
+        <div style="font-size:22px;font-weight:800;color:var(--em);letter-spacing:-.5px" id="sentinel-st-hours">—</div>
+      </div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;font-weight:600">vs hiring</div>
+      <div style="font-size:14px;color:var(--txt2)" id="sentinel-st-vs-hiring">—</div>
+    </div>
+  </div>
+
+  <!-- Two columns: decisions + insights -->
+  <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:16px;margin-bottom:16px" id="sentinel-twocol">
+    <!-- Decisions -->
+    <div class="card">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span>⚠️ Decisions awaiting you</span>
+        <span style="color:var(--txt3);font-size:11px;font-weight:500;text-transform:none;letter-spacing:0" id="sentinel-decisions-meta"></span>
+      </div>
+      <div id="sentinel-decisions-list">
+        <div style="text-align:center;padding:20px;color:var(--txt3)"><div class="spinner"></div> Loading…</div>
+      </div>
+    </div>
+
+    <!-- Cross-domain insights -->
+    <div class="card">
+      <div class="card-title">🧠 Cross-domain intelligence</div>
+      <div id="sentinel-insights-list">
+        <div style="text-align:center;padding:20px;color:var(--txt3);font-size:13px">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Agent roster -->
   <div class="card">
     <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-      <span>⚠️ Decisions awaiting you</span>
-      <span style="color:var(--txt3);font-size:11px;font-weight:500;text-transform:none;letter-spacing:0" id="sentinel-decisions-meta"></span>
+      <span>👥 Your agent roster</span>
+      <span style="color:var(--txt3);font-size:11px;font-weight:500;text-transform:none;letter-spacing:0" id="sentinel-roster-meta"></span>
     </div>
-    <div id="sentinel-decisions-list">
-      <div style="text-align:center;padding:20px;color:var(--txt3)"><div class="spinner"></div> Loading…</div>
+    <div id="sentinel-agents-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px"></div>
+  </div>
+
+  <!-- Activity stream -->
+  <div class="card">
+    <div class="card-title">📡 Live activity stream</div>
+    <div id="sentinel-activity-list">
+      <div style="text-align:center;padding:20px;color:var(--txt3);font-size:13px">—</div>
     </div>
   </div>
 
@@ -318,6 +375,17 @@ tr:last-child td{border-bottom:none}
   </div>
 </div>
 
+<style>
+@keyframes sentinel-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(21,128,61,.5); }
+  70% { box-shadow: 0 0 0 8px rgba(21,128,61,0); }
+  100% { box-shadow: 0 0 0 0 rgba(21,128,61,0); }
+}
+@media(max-width:900px){
+  #sentinel-twocol { grid-template-columns: 1fr !important; }
+  #sentinel-agents-grid { grid-template-columns: repeat(2,1fr) !important; }
+}
+</style>
 </main>
 
 </main>
