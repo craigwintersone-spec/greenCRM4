@@ -1,6 +1,9 @@
 {
   "cleanUrls": false,
   "trailingSlash": false,
+  "crons": [
+    { "path": "/api/sentinel-cron", "schedule": "0 6 * * *" }
+  ],
   "headers": [
     {
       "source": "/css/(.*)",
