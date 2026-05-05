@@ -663,15 +663,14 @@ const SENTINEL_AGENTS = [
   { id:'cs', name:'Customer Success', icon:'💜', role:'Spots churn risk in your customer base', status:'live' },
   { id:'onboarding', name:'Onboarding', icon:'🚀', role:'Watches new signups for activation', status:'live' },
   { id:'insights', name:'Insights', icon:'🧠', role:'Surfaces cross-domain patterns', status:'live' },
-  { id:'sales', name:'Sales', icon:'💼', role:'Inbound demos and qualifying', status:'soon' },
+{ id:'sales', name:'Sales', icon:'💼', role:'Cold outreach to UK charity prospects', status:'live' },
   { id:'finance', name:'Finance', icon:'💰', role:'MRR, Stripe reconciliation, dunning', status:'soon' },
   { id:'support', name:'Support', icon:'🛟', role:'Auto-resolves common tickets', status:'soon' },
   { id:'product', name:'Product', icon:'🧭', role:'Clusters feature requests', status:'soon' },
   { id:'marketing', name:'Marketing', icon:'📣', role:'Content, social, newsletter', status:'soon' },
   { id:'dev', name:'Dev', icon:'⚙️', role:'Self-fixes errors, ships PRs', status:'soon' },
   { id:'legal', name:'Legal & GDPR', icon:'⚖️', role:'DPAs, privacy, data requests', status:'soon' },
-  { id:'bd', name:'BD Researcher', icon:'🔍', role:'Browser-driving funder portals', status:'soon' },
-];
+{ id:'bd', name:'BD Researcher', icon:'🔍', role:'Finds grants for Civara to apply for', status:'live' },];
 
 async function loadSentinel(){
   if(!sb) return;
@@ -784,24 +783,57 @@ function renderSentinel(){
       '<div style="text-align:center;padding:20px;color:var(--txt3);font-size:13px">' +
       '✓ No decisions awaiting you. Sentinel will check again at 06:00 tomorrow.</div>';
   } else {
-    $('sentinel-decisions-list').innerHTML = otherDecisions.map(d => sentinelDecisionCard(d)).join('');
+   function sentinelDecisionCard(d){
+  const tierColor = d.tier==='urgent'?'var(--red)':d.tier==='high'?'var(--amber)':'var(--em)';
+  const tierClass = { urgent:'b-suspended', high:'b-trial', medium:'b-pro' };
+  const meta = d.metadata || {};
+  const isOutreach = meta.kind === 'outreach';
+
+  let outreachBlock = '';
+  if(isOutreach){
+    const subject = (meta.subject||'').replace(/"/g,'&quot;');
+    const body = (meta.body||'').replace(/"/g,'&quot;');
+    outreachBlock = `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin:8px 0">
+        ${meta.subject ? `<div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:4px">Subject</div>
+        <div style="font-size:13px;font-weight:600;color:var(--txt);margin-bottom:10px">${escapeHTML(meta.subject)}</div>`:''}
+        <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:4px">${meta.outreach_kind==='grant'?'EOI body':'Email body'}</div>
+        <div style="font-size:12px;color:var(--txt2);line-height:1.6;white-space:pre-wrap;background:var(--card);padding:10px;border-radius:6px;border:1px solid var(--border);max-height:240px;overflow-y:auto">${escapeHTML(meta.body||'')}</div>
+        ${meta.source_url ? `<div style="margin-top:8px"><a href="${escapeHTML(meta.source_url)}" target="_blank" style="font-size:11px;color:var(--em);text-decoration:none">↗ ${escapeHTML(meta.source_url)}</a></div>`:''}
+        ${meta.deadline ? `<div style="margin-top:6px;font-size:11px;color:var(--amber);font-weight:600">⏰ Deadline: ${escapeHTML(meta.deadline)}${meta.value?' · '+escapeHTML(meta.value):''}</div>`:''}
+      </div>
+    `;
   }
 
-  // Insights panel
-  if(!insights.length){
-    $('sentinel-insights-list').innerHTML =
-      '<div style="padding:14px;color:var(--txt3);font-size:13px;text-align:center">' +
-      'Insights agent will surface cross-domain patterns once you have more data.</div>';
-  } else {
-    $('sentinel-insights-list').innerHTML = insights.map(d => `
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:8px">
-        <div style="font-size:10px;color:var(--purple);text-transform:uppercase;letter-spacing:.7px;font-weight:700;margin-bottom:6px;display:inline-block;background:var(--purple-bg);padding:2px 8px;border-radius:20px">Pattern</div>
-        <div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:4px">${escapeHTML(d.title||'')}</div>
-        <div style="font-size:12px;color:var(--txt2);line-height:1.5;margin-bottom:8px">${escapeHTML(d.description||'')}</div>
-        <button class="btn btn-ghost btn-sm" onclick="resolveSentinelDecision(${d.id},'dismissed')">Dismiss</button>
+  const copyButton = isOutreach
+    ? `<button class="btn btn-p btn-sm" onclick="copyOutreachDraft(${d.id})">📋 Copy ${meta.outreach_kind==='grant'?'EOI':'email'}</button>`
+    : (d.primary_action ? `<button class="btn btn-p btn-sm" onclick="resolveSentinelDecision(${d.id},'approved')">${escapeHTML(d.primary_action)}</button>` : '');
+
+  const sentButton = isOutreach
+    ? `<button class="btn btn-ghost btn-sm" onclick="markOutreachSent(${d.id})">✓ Sent</button>`
+    : (d.secondary_action ? `<button class="btn btn-ghost btn-sm" onclick="resolveSentinelDecision(${d.id},'modified')">${escapeHTML(d.secondary_action)}</button>` : '');
+
+  return `
+    <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid ${tierColor};border-radius:var(--radius);padding:14px 16px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:8px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <span class="badge ${tierClass[d.tier]||'b-pro'}">${d.tier||'medium'}</span>
+          <span class="badge" style="background:var(--card);color:var(--txt2);border:1px solid var(--border)">${escapeHTML(d.agent||'')}</span>
+          ${isOutreach ? `<span class="badge" style="background:var(--purple-bg);color:var(--purple);border:1px solid #DDD6FE">${meta.outreach_kind==='grant'?'Grant EOI':'Cold email'}</span>`:''}
+        </div>
+        <span style="font-size:11px;color:var(--txt3)">${new Date(d.created_at).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</span>
       </div>
-    `).join('');
-  }
+      <div style="font-size:14px;font-weight:700;color:var(--txt);margin-bottom:5px">${escapeHTML(d.title||'')}</div>
+      <div style="font-size:13px;color:var(--txt2);line-height:1.5;margin-bottom:8px">${escapeHTML(d.description||'')}</div>
+      ${outreachBlock}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+        ${copyButton}
+        ${sentButton}
+        <button class="btn btn-danger btn-sm" onclick="resolveSentinelDecision(${d.id},'dismissed')">Dismiss</button>
+      </div>
+    </div>
+  `;
+}
 
   // Agent roster
   $('sentinel-roster-meta').textContent = liveAgents + ' live · ' + (SENTINEL_AGENTS.length - liveAgents) + ' coming';
@@ -932,7 +964,33 @@ async function resolveSentinelDecision(id, status){
     alert('Could not update decision: ' + e.message);
   }
 }
+async function copyOutreachDraft(decisionId){
+  const d = _sentinelDecisions.find(x => x.id === decisionId);
+  if(!d || !d.metadata) { alert('Draft not found'); return; }
+  const m = d.metadata;
+  const text = (m.subject ? 'Subject: ' + m.subject + '\n\n' : '') + (m.body || '');
+  try {
+    await navigator.clipboard.writeText(text);
+    alert('✓ Copied to clipboard. Paste into your email client and send.');
+  } catch(e) {
+    alert('Copy failed: ' + e.message);
+  }
+}
 
+async function markOutreachSent(decisionId){
+  const d = _sentinelDecisions.find(x => x.id === decisionId);
+  if(!d) return;
+  const outreachId = d.metadata && d.metadata.outreach_id;
+  try {
+    if(outreachId){
+      await sb.from('sentinel_outreach').update({ status: 'sent' }).eq('id', outreachId);
+    }
+    await sb.from('sentinel_decisions').update({ status: 'approved', resolved_at: new Date().toISOString() }).eq('id', decisionId);
+    await loadSentinel();
+  } catch(e) {
+    alert('Could not mark as sent: ' + e.message);
+  }
+}
 async function runSentinelNow(){
   if(!confirm('Run all Sentinel agents now? This calls Claude and may take 10-30 seconds.')) return;
 
