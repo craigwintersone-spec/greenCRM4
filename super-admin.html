@@ -273,11 +273,12 @@ tr:last-child td{border-bottom:none}
       </div>
       <div class="page-sub" id="sentinel-status">Your autonomous operations team</div>
     </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-ghost btn-sm" onclick="loadSentinel()">↻ Refresh</button>
-      <button class="btn btn-p btn-sm" onclick="runSentinelNow()">⚡ Run agents now</button>
-    </div>
-  </div>
+   <div style="display:flex;gap:8px;flex-wrap:wrap">
+  <button class="btn btn-ghost btn-sm" onclick="loadSentinel()">↻ Refresh</button>
+  <button class="btn btn-p btn-sm" onclick="runSentinelCore()">⚡ Run core agents</button>
+  <button class="btn btn-ghost btn-sm" onclick="runSentinelSales()">💼 Run Sales</button>
+  <button class="btn btn-ghost btn-sm" onclick="runSentinelBD()">🔍 Run BD</button>
+</div>
 
   <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
     <button class="btn btn-ghost btn-sm" disabled style="opacity:.6;cursor:not-allowed">🎙️ Voice mode <span style="font-size:9px;background:var(--amber-bg);color:#92400E;padding:1px 6px;border-radius:8px;margin-left:6px">SOON</span></button>
@@ -921,33 +922,57 @@ async function markOutreachSent(decisionId){
   }
 }
 
-async function runSentinelNow(){
-  if(!confirm('Run all Sentinel agents now? This calls Claude and may take 10-30 seconds.')) return;
-  $('sentinel-status').textContent = 'Running agents… please wait';
+async function runSentinelCore(){
+  if(!confirm('Run core agents (briefing, churn, onboarding, insights)? Takes ~10 seconds.')) return;
+  $('sentinel-status').textContent = 'Running core agents…';
   try {
     const { data: { session } } = await sb.auth.getSession();
     const token = session && session.access_token;
-    const r = await fetch('/api/sentinel-cron', {
+    const r = await fetch('/api/sentinel-cron-core', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': token ? 'Bearer ' + token : ''
-      }
+      headers: { 'Content-Type': 'application/json', 'Authorization': token ? 'Bearer ' + token : '' }
     });
     const data = await r.json();
-    if(!r.ok){
-      alert('Run failed: ' + (data.error || 'Unknown error'));
-      $('sentinel-status').textContent = 'Run failed';
-      return;
-    }
-    if(data.errors && data.errors.length){
-      console.warn('[sentinel] partial errors:', data.errors);
-    }
+    if(!r.ok){ alert('Run failed: ' + (data.error || 'Unknown')); return; }
     await loadSentinel();
-  } catch(e) {
-    alert('Run failed: ' + e.message);
-    $('sentinel-status').textContent = 'Run failed';
-  }
+  } catch(e) { alert('Run failed: ' + e.message); }
+}
+
+async function runSentinelSales(){
+  if(!confirm('Run Sales agent? Uses web search, takes ~40 seconds. Costs ~£0.10.')) return;
+  $('sentinel-status').textContent = 'Sales agent running… ~40s';
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    const token = session && session.access_token;
+    const r = await fetch('/api/sentinel-cron-sales', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': token ? 'Bearer ' + token : '' }
+    });
+    const data = await r.json();
+    if(!r.ok){ alert('Sales run failed: ' + (data.error || 'Unknown')); return; }
+    await loadSentinel();
+  } catch(e) { alert('Sales run failed: ' + e.message); }
+}
+
+async function runSentinelBD(){
+  if(!confirm('Run BD Researcher? Uses web search, takes ~40 seconds. Costs ~£0.10.\n\nWait at least 60 seconds since last web-search run.')) return;
+  $('sentinel-status').textContent = 'BD agent running… ~40s';
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    const token = session && session.access_token;
+    const r = await fetch('/api/sentinel-cron-bd', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': token ? 'Bearer ' + token : '' }
+    });
+    const data = await r.json();
+    if(!r.ok){ alert('BD run failed: ' + (data.error || 'Unknown')); return; }
+    await loadSentinel();
+  } catch(e) { alert('BD run failed: ' + e.message); }
+}
+
+// Backward compat — the existing button calls runSentinelNow()
+async function runSentinelNow(){
+  await runSentinelCore();
 }
 
 const _origShowPage = showPage;
