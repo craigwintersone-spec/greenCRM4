@@ -2,26 +2,22 @@
   "cleanUrls": false,
   "trailingSlash": false,
   "crons": [
-    { "path": "/api/sentinel-cron", "schedule": "0 6 * * *" }
+    { "path": "/api/sentinel-cron-core", "schedule": "0 6 * * *" },
+    { "path": "/api/sentinel-cron-sales", "schedule": "30 6 * * *" },
+    { "path": "/api/sentinel-cron-bd", "schedule": "0 7 * * *" }
   ],
   "headers": [
     {
       "source": "/css/(.*)",
-      "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=3600, must-revalidate" }
-      ]
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600, must-revalidate" }]
     },
     {
       "source": "/js/(.*)",
-      "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=3600, must-revalidate" }
-      ]
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600, must-revalidate" }]
     },
     {
       "source": "/(.*).html",
-      "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
-      ]
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]
     }
   ]
 }
