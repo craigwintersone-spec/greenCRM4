@@ -1,7 +1,6 @@
 // /api/sentinel-cron.js
 // Runs daily at 06:00 via Vercel cron (or manually from the UI).
-// Agents: Chief of Staff, Customer Success, Onboarding, Insights, Sales, BD Researcher.
-// Sales + BD use Claude web search and are weekly-capped to 5 each.
+// Rate-limit aware: Sales + BD spaced 60s apart, smaller token budgets.
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -10,12 +9,14 @@ const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
 const CRON_SECRET = process.env.CRON_SECRET || null;
 
 const COST_PER_CALL_PENCE = 1;
-const COST_PER_SEARCH_CALL_PENCE = 5; // web search calls are pricier
+const COST_PER_SEARCH_CALL_PENCE = 5;
 
 const WEEKLY_CAP_SALES = 5;
 const WEEKLY_CAP_GRANTS = 5;
 
-// ── Service-role helpers ─────────────────────────────────────
+// Pause between agents that use web search, to stay under input token rate limit (50k/min on tier 1)
+const RATE_LIMIT_PAUSE_MS = 65000;
+
 async function sbSelect(table, query) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
     headers: {
@@ -53,7 +54,6 @@ async function logAction(agent, action, detail, orgId, costPence) {
   }
 }
 
-// ── Claude helpers ───────────────────────────────────────────
 async function callClaudeServer(system, prompt, maxTok = 600, useWebSearch = false) {
   const body = {
     model: CLAUDE_MODEL,
@@ -85,7 +85,6 @@ async function callClaudeServer(system, prompt, maxTok = 600, useWebSearch = fal
     .join('\n');
 }
 
-// Try to parse JSON out of an LLM response that may have extra prose
 function extractJSON(text) {
   if (!text) return null;
   const cleaned = text.replace(/```json|```/gi, '').trim();
@@ -252,7 +251,6 @@ async function runInsights() {
   return { count: insights.length };
 }
 
-// ── Helpers for Sales + BD ───────────────────────────────────
 async function getRecentOutreach(kind, daysBack = 90) {
   const cutoff = new Date(Date.now() - daysBack * 86400000).toISOString();
   return await sbSelect('sentinel_outreach', `select=target_key&kind=eq.${kind}&created_at=gte.${cutoff}`);
@@ -274,69 +272,65 @@ async function runSalesAgent() {
     return { drafted: 0, skipped: 'weekly_cap' };
   }
 
-  // Fetch dedupe list (last 90 days)
   const recent = await getRecentOutreach('sales', 90);
   const recentKeys = new Set(recent.map((r) => r.target_key));
 
-  // Phase 1 — find prospects with web search
+  // Tighter prompt to keep input tokens low
   const findSys =
-    'You are a UK charity sector researcher helping Civara, a CRM SaaS for charities, find new sales prospects. ' +
-    'Use web search to find UK charities currently a strong fit: registered in last 12 months OR newly funded, ' +
-    'in sectors employability, youth, justice/probation, circular economy, social enterprise. Focus on small-medium ' +
-    `(turnover under £2M, fewer than 30 staff). Return up to ${remaining + 3} candidates as a JSON array. ` +
-    'Each item: {"name":"charity name","registered_no":"...","website":"https://...","why_fit":"1 sentence reason",' +
-    '"recent_signal":"e.g. just won X grant / launched Y programme","contact_hint":"role and name if findable"}. ' +
-    'Skip charities you cannot find a clear ICP signal for. Output ONLY the JSON array, no preamble.';
+    'Find UK charities to pitch a charity CRM to. Return JSON array only, no prose. ' +
+    `Up to ${Math.min(remaining + 2, 6)} items. Each: ` +
+    '{"name":"...","website":"...","why_fit":"1 line","recent_signal":"1 line if known","contact_hint":"role"}. ' +
+    'Focus: small charities (5-30 staff) in employability, youth, justice, circular economy, registered or funded recently.';
 
   const findPrompt =
-    'Find UK charity prospects who would benefit from Civara. Civara is a CRM with 6 built-in AI agents ' +
-    '(Morning Briefing, BD Manager, Social Media, HR/Equality, Outcomes Analyst, Case Note). ' +
-    'Pricing: £29-£249/mo. ICP: 5-30 staff, multiple frontline workers, holds public funder contracts ' +
-    '(MoJ, GLA, City Bridge, Lottery, Trust for London). Avoid orgs that already use Salesforce NPSP, Beacon, or Lamplight.';
+    'Civara CRM with built-in AI agents. £29-£249/mo. ICP: small UK charities holding public funder contracts (MoJ, GLA, City Bridge, Lottery, Trust for London).';
 
   let candidates = [];
   let findCost = 0;
+  let searchReturnedAnything = false;
   try {
-    const raw = await callClaudeServer(findSys, findPrompt, 1500, true);
+    const raw = await callClaudeServer(findSys, findPrompt, 1200, true);
     findCost = COST_PER_SEARCH_CALL_PENCE;
     candidates = extractJSON(raw) || [];
+    searchReturnedAnything = candidates.length > 0;
   } catch (e) {
     await logAction('Sales', 'Search failed', e.message, null, 0);
     return { drafted: 0, error: e.message };
   }
 
-  // Filter dedupe + cap
+  // Honest reporting: distinguish "search empty" from "all duplicates"
   const fresh = candidates
     .filter((c) => c && c.name && !recentKeys.has(slugify(c.name)))
     .slice(0, remaining);
 
+  if (!searchReturnedAnything) {
+    await logAction('Sales', 'Search returned empty', `Web search did not find suitable candidates this run`, null, findCost);
+    return { drafted: 0, reason: 'empty_search' };
+  }
   if (!fresh.length) {
-    await logAction('Sales', 'No new prospects', `${candidates.length} found, all already drafted in last 90 days`, null, findCost);
-    return { drafted: 0 };
+    await logAction('Sales', 'All candidates were duplicates', `${candidates.length} found, all already drafted in last 90 days`, null, findCost);
+    return { drafted: 0, reason: 'all_duplicates' };
   }
 
-  // Phase 2 — draft outreach for each
   const draftSys =
-    'You are a UK SaaS founder writing a cold outreach email to a charity CEO. ' +
-    'Tone: warm, specific, no salesy fluff, British English. 100-140 words. Include a SUBJECT LINE on the first line ' +
-    'prefixed "Subject: ", then a blank line, then the email. The email must reference the specific charity\'s ' +
-    'recent signal (grant won, programme launched, new registration). Mention Civara is a CRM with built-in ' +
-    'AI agents that save 5-10 hours/week of admin. Soft CTA: "worth a 15-min call?". Sign off "Craig". No emoji.';
+    'Write a cold email from Craig (UK charity-CRM founder) to a charity CEO. ' +
+    'First line "Subject: ..." then blank line then 100-130 word email. Warm, specific, British English, no fluff. ' +
+    'Reference the charity\'s recent signal. Mention Civara saves 5-10 hours/week of admin via built-in AI. ' +
+    'Soft CTA: "worth a 15-min call?". Sign "Craig". No emoji.';
 
   const drafted = [];
   for (const c of fresh) {
     try {
       const draftPrompt =
-        `Charity: ${c.name}\nWebsite: ${c.website || 'unknown'}\nRecent signal: ${c.recent_signal || 'unknown'}\n` +
-        `Contact hint: ${c.contact_hint || 'CEO'}\nWhy a fit: ${c.why_fit || ''}`;
-      const raw = await callClaudeServer(draftSys, draftPrompt, 500, false);
+        `Charity: ${c.name}\nWebsite: ${c.website || 'unknown'}\nSignal: ${c.recent_signal || 'unknown'}\n` +
+        `Contact: ${c.contact_hint || 'CEO'}\nFit: ${c.why_fit || ''}`;
+      const raw = await callClaudeServer(draftSys, draftPrompt, 400, false);
 
       const lines = raw.split('\n');
       const subjectLine = lines.find((l) => /^subject:/i.test(l)) || 'Subject: A quick question about your work';
       const subject = subjectLine.replace(/^subject:\s*/i, '').trim();
       const body = raw.replace(/^subject:.*\n+/i, '').trim();
 
-      // Score fit roughly from signal richness
       const fit = (c.recent_signal && c.recent_signal.length > 20) ? 8 : 6;
 
       const outreachRow = await sbInsert('sentinel_outreach', [{
@@ -353,11 +347,11 @@ async function runSalesAgent() {
       }]);
       const outId = outreachRow && outreachRow[0] && outreachRow[0].id;
 
-      const decisionRow = await sbInsert('sentinel_decisions', [{
+      await sbInsert('sentinel_decisions', [{
         agent: 'Sales',
         tier: fit >= 8 ? 'high' : 'medium',
         title: `Cold prospect drafted: ${c.name}`,
-        description: `${c.why_fit || 'UK charity matching ICP'}. ${c.recent_signal ? 'Signal: ' + c.recent_signal : ''} Fit ${fit}/10. Draft ready below.`,
+        description: `${c.why_fit || 'UK charity matching ICP'}. ${c.recent_signal ? 'Signal: ' + c.recent_signal : ''} Fit ${fit}/10.`,
         primary_action: 'View & copy draft',
         secondary_action: 'Skip this one',
         status: 'pending',
@@ -368,7 +362,8 @@ async function runSalesAgent() {
       }]);
 
       drafted.push(c.name);
-      await new Promise((r) => setTimeout(r, 800)); // gentle pacing
+      // Pause between draft calls — gentler on rate limit
+      await new Promise((r) => setTimeout(r, 2000));
     } catch (e) {
       console.warn(`[sentinel] draft failed for ${c.name}: ${e.message}`);
     }
@@ -393,29 +388,24 @@ async function runBDResearcher() {
   const recent = await getRecentOutreach('grant', 180);
   const recentKeys = new Set(recent.map((r) => r.target_key));
 
+  // Tighter prompt
   const findSys =
-    'You are a UK grants researcher helping Civara, a tech-for-good SaaS, find live grant opportunities. ' +
-    'Use web search to find currently open grants/funds Civara could realistically apply for. Targets: ' +
-    'AI for public good, charity sector innovation, tech-for-good SaaS, early-stage UK SaaS, sole founders, ' +
-    'social impact tech, civic tech. Funders to check: Innovate UK, NESTA, Cabinet Office, UKSPF, ' +
-    'AccelerateAI, Catalyst, Tech for Good UK, Innovate Fund, Comic Relief Tech for Good. ' +
-    `Return up to ${remaining + 3} as JSON array: ` +
-    '{"funder":"name","programme":"specific call/programme","deadline":"YYYY-MM-DD or text","value":"£ range",' +
-    '"why_fit":"1 sentence","application_url":"https://..."}. Verify deadlines are still open. ' +
-    'Output ONLY the JSON array, no preamble.';
+    'Find live UK grants Civara (a charity-sector AI SaaS) could apply for. JSON array only, no prose. ' +
+    `Up to ${Math.min(remaining + 2, 6)} items. Each: ` +
+    '{"funder":"...","programme":"...","deadline":"...","value":"£ range","why_fit":"1 line","application_url":"..."}. ' +
+    'Funders to check: Innovate UK, NESTA, Catalyst, Tech for Good UK, Comic Relief Tech for Good, UKSPF.';
 
   const findPrompt =
-    'Find live grants for Civara. Civara is: UK SaaS, charity sector CRM with 6 AI agents, solo founder (Craig), ' +
-    'pre-revenue/early-stage, serves UK charities of 5-30 staff, mission to reduce admin burden so frontline ' +
-    'staff can focus on people. Pre-seed/seed stage. Looking for grants £5k-£100k that fund product, AI development, ' +
-    'or charity sector adoption.';
+    'Civara: UK charity CRM with AI agents. Solo founder Craig. Pre-seed. Grants £5k-£100k for product / AI / charity adoption.';
 
   let candidates = [];
   let findCost = 0;
+  let searchReturnedAnything = false;
   try {
-    const raw = await callClaudeServer(findSys, findPrompt, 1500, true);
+    const raw = await callClaudeServer(findSys, findPrompt, 1200, true);
     findCost = COST_PER_SEARCH_CALL_PENCE;
     candidates = extractJSON(raw) || [];
+    searchReturnedAnything = candidates.length > 0;
   } catch (e) {
     await logAction('BD Researcher', 'Search failed', e.message, null, 0);
     return { drafted: 0, error: e.message };
@@ -425,28 +415,27 @@ async function runBDResearcher() {
     .filter((c) => c && c.funder && c.programme && !recentKeys.has(slugify(c.funder + '-' + c.programme)))
     .slice(0, remaining);
 
+  if (!searchReturnedAnything) {
+    await logAction('BD Researcher', 'Search returned empty', `Web search did not find suitable grants this run`, null, findCost);
+    return { drafted: 0, reason: 'empty_search' };
+  }
   if (!fresh.length) {
-    await logAction('BD Researcher', 'No new grants', `${candidates.length} found, all already drafted in last 180 days`, null, findCost);
-    return { drafted: 0 };
+    await logAction('BD Researcher', 'All grants were duplicates', `${candidates.length} found, all already drafted in last 180 days`, null, findCost);
+    return { drafted: 0, reason: 'all_duplicates' };
   }
 
   const draftSys =
-    'You are writing an Expression of Interest for a grant on behalf of Civara. ' +
-    'Civara is a UK CRM SaaS for charities with 6 built-in AI agents that automate admin work — Morning Briefing, ' +
-    'BD Manager, Social Media, HR/Equality, Outcomes Analyst, Case Note. Founded by Craig, a solo founder. ' +
-    'Mission: reduce admin burden so frontline charity staff can focus on people. Currently early-stage with ' +
-    'a small group of UK charity customers across employability and circular economy. ' +
-    'Write an EOI in clean British English, 250-350 words, with sections: ' +
-    '## About Civara, ## Why this grant fits, ## What we would do with the funding, ## Impact and measurement. ' +
-    'Honest, specific, no inflated claims. End with "Craig | Founder, Civara" on its own line.';
+    'Write an EOI for Civara (UK charity CRM with 6 AI agents, solo founder Craig). 250-350 words British English. ' +
+    'Sections: ## About Civara, ## Why this grant fits, ## What we would do with the funding, ## Impact and measurement. ' +
+    'Honest, specific, no inflated claims. End "Craig | Founder, Civara".';
 
   const drafted = [];
   for (const g of fresh) {
     try {
       const draftPrompt =
         `Funder: ${g.funder}\nProgramme: ${g.programme}\nDeadline: ${g.deadline || 'unknown'}\n` +
-        `Value: ${g.value || 'unknown'}\nWhy fit: ${g.why_fit || ''}\nURL: ${g.application_url || ''}`;
-      const raw = await callClaudeServer(draftSys, draftPrompt, 800, false);
+        `Value: ${g.value || 'unknown'}\nFit: ${g.why_fit || ''}\nURL: ${g.application_url || ''}`;
+      const raw = await callClaudeServer(draftSys, draftPrompt, 700, false);
 
       const fit = (g.why_fit && g.why_fit.length > 20) ? 8 : 6;
 
@@ -481,7 +470,7 @@ async function runBDResearcher() {
       }]);
 
       drafted.push(`${g.funder} — ${g.programme}`);
-      await new Promise((r) => setTimeout(r, 800));
+      await new Promise((r) => setTimeout(r, 2000));
     } catch (e) {
       console.warn(`[sentinel] grant draft failed for ${g.funder}: ${e.message}`);
     }
@@ -506,6 +495,7 @@ module.exports = async function handler(req, res) {
 
   const results = { briefing: null, churn: null, onboarding: null, insights: null, sales: null, bd: null, errors: [] };
 
+  // Light agents first
   try { results.briefing = await runChiefOfStaffBriefing(); }
   catch (e) { results.errors.push({ agent: 'briefing', error: e.message }); }
 
@@ -518,8 +508,13 @@ module.exports = async function handler(req, res) {
   try { results.insights = await runInsights(); }
   catch (e) { results.errors.push({ agent: 'insights', error: e.message }); }
 
+  // Web-search agents — space them out to stay under tier-1 rate limit
   try { results.sales = await runSalesAgent(); }
   catch (e) { results.errors.push({ agent: 'sales', error: e.message }); }
+
+  // Pause before BD so we don't both call web search inside the same minute
+  console.log('[sentinel] pausing before BD agent to respect rate limit…');
+  await new Promise((r) => setTimeout(r, RATE_LIMIT_PAUSE_MS));
 
   try { results.bd = await runBDResearcher(); }
   catch (e) { results.errors.push({ agent: 'bd', error: e.message }); }
