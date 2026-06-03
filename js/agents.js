@@ -8,11 +8,15 @@
 //   • clean / format AI output
 //   • all specific agents: morning briefing, intake, case note,
 //     RAG explainer, feedback analyst, outcomes analyst,
-//     employer matcher, HR scans, equity, wellbeing, benchmarking,
+//     employer matcher, equity, benchmarking, language coach (self-help),
 //     report generator, social media, BD research, EOI generator
 //
-// All agents go through runAgent() which handles the progress UI,
-// rate-limit retries, and plan gating.
+// NOTE (v5 — surveillance removed):
+//   The staff-stress "Wellbeing Scan" and the manager "flag queue"
+//   have been removed. The language tool is now a SELF-HELP COACH:
+//   it only analyses text the user gives it, shows suggestions to
+//   that user, stores nothing, names no one, and never reports to a
+//   manager. This avoids the employee-monitoring / DPIA exposure.
 
 'use strict';
 
@@ -21,7 +25,6 @@ const _aiQueue = { running: false, queue: [], lastCallAt: 0 };
 
 let _aiNoteAccepted = '';
 let _originalNote   = '';
-let _hrFlags        = [];
 let _lastEOIText    = '';
 let _lastReportText = '';
 let _lastReportTitle = '';
@@ -71,7 +74,8 @@ async function _processAIQueue() {
       _aiQueue.lastCallAt = Date.now();
       job.resolve(text);
     } catch (e) {
-      _aiQueue.lastCallAt = Date.now();
+      // Don't penalise the rate-gap timer for a plan-gate rejection
+      if (e.message !== 'AI_PLAN_GATE') _aiQueue.lastCallAt = Date.now();
       job.reject(e);
     }
   }
@@ -465,67 +469,48 @@ async function runEmployerMatcher() {
   if (raw) aiResult(el, raw);
 }
 
-// ── HR / Equality agents ─────────────────────────────────────
-function renderHRFlags() {
-  const el = $('hr-flags-list'); if (!el) return;
-  if (!_hrFlags.length) {
-    el.innerHTML = '<div style="color:var(--txt3);font-size:13px;padding:10px 0">No flags in the review queue.</div>';
+// ── Equality agents (aggregate / anonymised only) ────────────
+//
+// REMOVED in v5: runWellbeingScan (scanned advisors' notes for stress
+// patterns — employee monitoring) and the manager flag-queue
+// (_hrFlags, renderHRFlags, dismissHRFlag, resolveHRFlag) and the
+// strict/advisory/silent manager-alert modes (saveHRMode,
+// saveHRSettings, updateHRModeBanner).
+//
+// The Equity and Benchmarking agents below work on AGGREGATE,
+// ANONYMISED data only — no individual is named, nothing is logged
+// to a manager. They are safe to keep.
+
+// Self-help language coach. Analyses ONLY text the user gives it,
+// shows gentle suggestions to that user, stores nothing, names no
+// one, and never reports to a manager.
+async function runLanguageCoach() {
+  const el = $('language-coach-result'); if (!el) return;
+  const input = ($('language-coach-input') && $('language-coach-input').value || '').trim();
+  if (!input) {
+    el.innerHTML = '<div class="alert alert-info">Paste or type something above, then run the coach to get gentler, more inclusive phrasing suggestions.</div>';
     return;
   }
-  el.innerHTML = _hrFlags.map((f, i) =>
-    '<div style="background:var(--bg);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:8px;padding:12px 14px;margin-bottom:8px">' +
-      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">' +
-        '<div style="flex:1">' +
-          '<div style="font-size:12px;font-weight:600;color:var(--txt);margin-bottom:4px">' +
-            escapeHTML(f.who || 'Unknown') + ' · <span style="color:var(--txt3);font-weight:400">' + escapeHTML(f.context || 'Case note') + '</span>' +
-          '</div>' +
-          '<div style="font-size:13px;color:var(--txt2);font-style:italic;margin-bottom:6px">"' + escapeHTML(f.snippet || '') + '"</div>' +
-          '<div style="font-size:12px;color:var(--purple)">✦ ' + escapeHTML(f.suggestion || 'Consider person-first language') + '</div>' +
-        '</div>' +
-        '<div style="display:flex;gap:4px">' +
-          '<button class="btn btn-ghost btn-sm" onclick="dismissHRFlag(' + i + ')">Dismiss</button>' +
-          '<button class="btn btn-p btn-sm" onclick="resolveHRFlag(' + i + ')">✓ Resolved</button>' +
-        '</div>' +
-      '</div>' +
-    '</div>'
-  ).join('');
-}
-function dismissHRFlag(i) { _hrFlags.splice(i, 1); renderHRFlags(); }
-function resolveHRFlag(i) { _hrFlags.splice(i, 1); renderHRFlags(); }
-
-async function runFullLanguageScan() {
-  const el = $('language-scan-result'); if (!el) return;
-  const samples = [];
-  DB.participants.forEach(p => {
-    toArr(p.notes).forEach(nt => {
-      if (nt.t) samples.push({ who: p.first_name + ' ' + p.last_name, text: nt.t, context: 'Case note (' + (nt.d || '') + ')' });
-    });
-  });
-  if (!samples.length) { el.innerHTML = '<div class="alert alert-info">No case notes to scan yet.</div>'; return; }
   const steps = [
-    { label: 'Reading case notes', meta: samples.length + ' notes across ' + DB.participants.length + ' participants' },
-    { label: 'Checking for non-inclusive language', meta: 'All 9 protected characteristics' },
-    { label: 'Building flag queue', meta: '' },
+    { label: 'Reading your text', meta: input.length + ' characters' },
+    { label: 'Suggesting inclusive phrasing', meta: 'Person-first, strengths-based' },
     { label: 'Ready', meta: '' }
   ];
-  const sys = 'You are a positive language coach. Return ONLY a JSON array of flagged items, max 5. Each: {"who":"name","context":"case note","snippet":"phrase","suggestion":"reframe"}. If nothing concerning, return [].';
-  const prompt = samples.slice(0, 15).map(s => '[' + s.who + '] ' + s.text).join('\n\n');
+  const sys = 'You are a supportive UK positive-language coach helping a charity worker improve their own writing. ' +
+    'Gently suggest more inclusive, person-first, strengths-based phrasing for any wording that could be improved. ' +
+    'Be encouraging, never judgemental. For each suggestion show the original phrase and a kinder rewrite. ' +
+    'If the text is already good, say so warmly. Use **bold** for the suggested rewrites. ' +
+    'This is private self-help feedback for the writer only. No hashtags, no markdown headings.';
   const raw = await runAgent({
     container: el,
-    headerLabel: 'Language Coach Agent',
-    headerSub: 'Scanning your case notes for inclusive language',
-    steps, sys, prompt, maxTok: 600
+    headerLabel: 'Language Coach',
+    headerSub: 'Private, self-help suggestions — nothing is saved or shared',
+    steps, sys, prompt: input, maxTok: 600
   });
-  if (!raw) return;
-  try {
-    const m = raw.match(/\[[\s\S]*\]/);
-    const flags = m ? JSON.parse(m[0]) : [];
-    _hrFlags = flags; renderHRFlags();
-    el.innerHTML = '<div class="ai-response"><p>Scan complete. <strong>' + flags.length + '</strong> item' +
-      (flags.length === 1 ? '' : 's') + ' added to the review queue.' +
-      (flags.length === 0 ? ' Nothing concerning detected.' : '') + '</p></div>';
-  } catch (e) {
-    el.innerHTML = '<div class="alert alert-warn">Could not parse scan results.</div>';
+  if (raw) {
+    el.innerHTML = '<div class="ai-panel"><div class="ai-panel-title"><span class="ai-icon">💬</span>Coaching suggestions — for you only</div>' +
+      '<div class="ai-response">' + aiPanelHTML(raw) + '</div>' +
+      '<div style="margin-top:12px;font-size:11px;color:var(--txt3);padding:8px 12px;background:var(--bg);border-radius:6px">🔒 These suggestions are shown to you only. Nothing here is stored, logged, or sent to a manager.</div></div>';
   }
 }
 
@@ -541,7 +526,7 @@ async function runEquityAnalysis() {
     { label: 'Writing summary', meta: '' },
     { label: 'Ready', meta: '' }
   ];
-  const sys = 'You are a UK equality analyst. Concise summary, **bold** key findings. Flag any gap over 15%. End with one recommendation. 200 words max. No hashtags, no markdown headings.';
+  const sys = 'You are a UK equality analyst. Concise summary, **bold** key findings. Flag any gap over 15%. End with one recommendation. 200 words max. Work only with aggregate numbers — never name an individual. No hashtags, no markdown headings.';
   const prompt = 'Total: ' + P.length +
     '\nOutcome rate: ' + rate + '%' +
     '\nSafeguarding flags: ' + P.filter(p => p.safeguarding).length +
@@ -554,42 +539,6 @@ async function runEquityAnalysis() {
   });
   if (raw) {
     el.innerHTML = '<div class="ai-panel"><div class="ai-panel-title"><span class="ai-icon">📊</span>Equity analysis</div>' +
-      '<div class="ai-response">' + aiPanelHTML(raw) + '</div></div>';
-  }
-}
-
-async function runWellbeingScan() {
-  const el = $('wellbeing-result'); if (!el) return;
-  const byAdvisor = {};
-  DB.participants.forEach(p => {
-    if (!p.advisor || p.advisor === 'Unassigned') return;
-    if (!byAdvisor[p.advisor]) byAdvisor[p.advisor] = [];
-    toArr(p.notes).forEach(nt => { if (nt.t) byAdvisor[p.advisor].push(nt.t); });
-  });
-  const advisors = Object.keys(byAdvisor).filter(a => byAdvisor[a].length >= 2);
-  if (!advisors.length) {
-    el.innerHTML = '<div class="alert alert-info">Not enough advisor case notes yet to scan for patterns.</div>';
-    return;
-  }
-  const steps = [
-    { label: 'Grouping notes by advisor', meta: advisors.length + ' advisors' },
-    { label: 'Looking for stress patterns', meta: 'Repeated patterns only — never single phrases' },
-    { label: 'Drafting manager-only summary', meta: '' },
-    { label: 'Ready', meta: '' }
-  ];
-  const sys = 'You are a UK staff wellbeing analyst. Scan for stress/burnout patterns. Be measured — only flag genuine repeated patterns. **bold** advisor names. 250 words max. Manager-only output. No hashtags, no markdown headings.';
-  const prompt = advisors.map(a =>
-    'Advisor: ' + a + '\nNotes (' + byAdvisor[a].length + '):\n' +
-    byAdvisor[a].slice(0, 8).map((n, i) => (i + 1) + '. ' + n).join('\n')
-  ).join('\n\n---\n\n');
-  const raw = await runAgent({
-    container: el,
-    headerLabel: 'Wellbeing Scan Agent',
-    headerSub: 'Manager-only · scanning for stress patterns',
-    steps, sys, prompt, maxTok: 500
-  });
-  if (raw) {
-    el.innerHTML = '<div class="ai-panel"><div class="ai-panel-title"><span class="ai-icon">💚</span>Manager-only wellbeing summary</div>' +
       '<div class="ai-response">' + aiPanelHTML(raw) + '</div></div>';
   }
 }
@@ -607,8 +556,7 @@ async function runBenchmarking() {
   const sys = 'You are a UK sector benchmarking analyst. Anonymised comparison vs typical similar-size charities. **bold** the org position. 200 words max. Note benchmarks are illustrative. No hashtags, no markdown headings.';
   const prompt = 'Sector: ' + ((currentOrg && currentOrg.sector) || 'employability charity') +
     '\nParticipants: ' + P.length +
-    '\nOutcome rate: ' + rate + '%' +
-    '\nFlags in queue: ' + _hrFlags.length;
+    '\nOutcome rate: ' + rate + '%';
   const raw = await runAgent({
     container: el,
     headerLabel: 'Benchmarking Agent',
@@ -620,35 +568,6 @@ async function runBenchmarking() {
       '<div class="ai-response">' + aiPanelHTML(raw) + '</div>' +
       '<div style="margin-top:12px;font-size:11px;color:var(--txt3);padding:8px 12px;background:var(--bg);border-radius:6px">🔒 No organisation names ever shared.</div></div>';
   }
-}
-
-// HR settings (mode + manager email)
-function saveHRMode() {
-  const mode = (document.querySelector('input[name="hr-mode"]:checked') || {}).value || 'advisory';
-  safeStorage.set('hr_mode', mode);
-  updateHRModeBanner();
-}
-function saveHRSettings() {
-  const mode = (document.querySelector('input[name="hr-mode"]:checked') || {}).value || 'advisory';
-  const email = $('hr-manager-email').value.trim();
-  safeStorage.set('hr_mode', mode);
-  safeStorage.set('hr_manager_email', email);
-  updateHRModeBanner();
-  const msg = $('hr-settings-saved');
-  if (msg) { msg.style.display = 'flex'; setTimeout(() => msg.style.display = 'none', 2500); }
-}
-function updateHRModeBanner() {
-  const mode = (document.querySelector('input[name="hr-mode"]:checked') || {}).value || 'advisory';
-  const banner = $('hr-mode-banner');
-  if (!banner) return;
-  const cfg = {
-    strict:   { txt: '⚖️ Strict mode active — flags block save, manager alerted instantly.', cls: 'alert-warn' },
-    advisory: { txt: '💬 Advisory mode active — soft warnings, can proceed, flags logged for manager review.', cls: 'alert-info' },
-    silent:   { txt: '🔕 Silent mode active — no interruption, flags logged quietly, weekly digest to manager.', cls: 'alert-ok' }
-  }[mode];
-  banner.className = 'alert ' + cfg.cls;
-  banner.style.marginBottom = '16px';
-  banner.textContent = cfg.txt;
 }
 
 // ── Report generator ─────────────────────────────────────────
