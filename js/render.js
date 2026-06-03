@@ -888,48 +888,30 @@ function renderSafeguarding() {
 // HR / EQUALITY (page-level — sub-tabs handled by router.js)
 // ─────────────────────────────────────────────────────────────
 
+// ── HR / EQUALITY (page-level — sub-tabs handled below) ──────
+// v5: flag-queue, manager modes and wellbeing scan removed.
+// Default tab is the self-help Language Coach, which needs no render.
 function renderHR() {
-  // Banner driven by saved HR mode
-  if (typeof updateHRModeBanner === 'function') {
-    try { updateHRModeBanner(); } catch (e) { /* ignore */ }
-  }
-  // Default tab is flags — render whatever's currently visible
-  if ($('hr-flags-list') && typeof renderHRFlags === 'function') {
-    try { renderHRFlags(); } catch (e) { /* ignore */ }
-  }
+  // The monitoring tab reads from the DB, so keep it fresh.
   if (typeof renderEqMonitoringList === 'function') {
     try { renderEqMonitoringList(); } catch (e) { /* ignore */ }
   }
-
-  // Restore HR mode radio from storage
-  const saved = safeStorage.get('hr_mode') || 'advisory';
-  const radio = $('hr-mode-' + saved);
-  if (radio) radio.checked = true;
-  const email = safeStorage.get('hr_manager_email') || '';
-  if ($('hr-manager-email')) $('hr-manager-email').value = email;
 }
 
-// Stub for the equality monitoring list — the demographics extension
-// patches/replaces this if it loads.
-function renderEqMonitoringList() {
-  const el = $('eq-monitoring-list'); if (!el) return;
-  const P = DB.participants || [];
-  const withData = P.filter(p => p.equality_data && Object.keys(p.equality_data).length).length;
-  const badge = $('eq-completion-badge');
-  if (badge) badge.textContent = withData + ' / ' + P.length + ' completed';
-
-  if (!P.length) {
-    el.innerHTML = renderEmpty('No participants yet.');
-    return;
+// Switch between the Equality & Inclusion sub-tabs.
+// Called from the buttons in #page-hr in app.html.
+function switchHRTab(name, btn) {
+  const tabs = ['coach', 'equity', 'monitoring', 'benchmark'];
+  tabs.forEach(t => {
+    const pane = $('hr-tab-' + t);
+    if (pane) pane.style.display = (t === name) ? 'block' : 'none';
+  });
+  document.querySelectorAll('#page-hr .vtab-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  // Refresh the monitoring list when its tab is opened.
+  if (name === 'monitoring' && typeof renderEqMonitoringList === 'function') {
+    try { renderEqMonitoringList(); } catch (e) { /* ignore */ }
   }
-  el.innerHTML = P.map(p =>
-    '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">' +
-      '<div style="font-size:13px">' + escapeHTML(p.first_name + ' ' + p.last_name) + '</div>' +
-      '<button class="btn btn-ghost btn-sm" onclick="openEqualityModal(\'' + escapeHTML(String(p.id)) + '\')">' +
-        (p.equality_data && Object.keys(p.equality_data).length ? 'Edit' : '+ Complete') +
-      '</button>' +
-    '</div>'
-  ).join('');
 }
 
 // ─────────────────────────────────────────────────────────────
