@@ -50,7 +50,7 @@
   <div class="nav-section">Growth</div>
   <button class="nav-btn" onclick="go('social')"><span class="icon">📣</span><span>Social Media</span><span class="ai-dot"></span></button>
   <button class="nav-btn" onclick="go('bd')"><span class="icon">💼</span><span>BD Manager</span><span class="ai-dot"></span></button>
-  <button class="nav-btn" onclick="go('hr')"><span class="icon">🛡️</span><span>HR &amp; Equality</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" onclick="go('hr')"><span class="icon">🛡️</span><span>Equality &amp; Inclusion</span><span class="ai-dot"></span></button>
 
   <div class="nav-section">Settings</div>
   <button class="nav-btn" onclick="go('safeguarding')"><span class="icon">🔐</span><span>Safeguarding</span></button>
@@ -374,41 +374,51 @@
 <!-- HR & EQUALITY -->
 <div id="page-hr" class="page">
   <div class="page-header">
-    <div><div class="page-title">🛡️ HR &amp; Equality</div><div class="page-sub">Equality Act 2010 · GDPR · Always on</div></div>
+    <div><div class="page-title">🛡️ Equality &amp; Inclusion</div><div class="page-sub">Equality Act 2010 · GDPR · Aggregate &amp; anonymised</div></div>
   </div>
-  <div id="hr-mode-banner" class="alert alert-info" style="margin-bottom:16px"></div>
+
+  <div class="alert alert-info" style="margin-bottom:16px">
+    💬 The Language Coach is a private, self-help tool. It only checks text you paste in, shows suggestions to you alone, and never stores anything or notifies anyone. Equity and benchmarking work on aggregate, anonymised numbers only — no individual is ever named.
+  </div>
+
   <div class="vtab-bar" style="margin-bottom:20px">
-    <button class="vtab-btn active" onclick="switchHRTab('flags',this)">🚩 Flags queue</button>
+    <button class="vtab-btn active" onclick="switchHRTab('coach',this)">💬 Language coach</button>
     <button class="vtab-btn" onclick="switchHRTab('equity',this)">📊 Outcome equity</button>
     <button class="vtab-btn" onclick="switchHRTab('monitoring',this)">📋 Equality monitoring</button>
-    <button class="vtab-btn" onclick="switchHRTab('wellbeing',this)">💚 Staff wellbeing</button>
     <button class="vtab-btn" onclick="switchHRTab('benchmark',this)">🏆 Benchmarking</button>
-    <button class="vtab-btn" onclick="switchHRTab('settings',this)">⚙️ Settings</button>
   </div>
-  <div id="hr-tab-flags">
+
+  <!-- LANGUAGE COACH (self-help) -->
+  <div id="hr-tab-coach">
     <div class="ai-panel" style="margin-bottom:16px">
-      <div class="ai-panel-title"><span class="ai-icon">🛡️</span>Positive Language Coach · Always on</div>
-      <div style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:10px">The language coach scans case notes and referrals automatically. Flags appear here for manager review.</div>
-      <button class="btn btn-ai btn-sm" onclick="runFullLanguageScan()">🔍 Run full language scan now</button>
-      <div id="language-scan-result" style="margin-top:12px"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Manager review queue</div>
-      <div id="hr-flags-list"></div>
+      <div class="ai-panel-title"><span class="ai-icon">💬</span>Positive Language Coach · Self-help</div>
+      <div style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:12px">
+        Paste a case note, referral, or any wording you're unsure about. The coach suggests gentler, more inclusive, person-first phrasing — just for you. Nothing is saved, logged, or shared with anyone.
+      </div>
+      <div class="form-row" style="margin-bottom:10px">
+        <label>Your text</label>
+        <textarea id="language-coach-input" style="min-height:120px" placeholder="Paste the wording you'd like a second opinion on…"></textarea>
+      </div>
+      <button class="btn btn-ai btn-sm" onclick="runLanguageCoach()">✦ Suggest kinder phrasing</button>
+      <div id="language-coach-result" style="margin-top:12px"></div>
     </div>
   </div>
+
+  <!-- OUTCOME EQUITY -->
   <div id="hr-tab-equity" style="display:none">
     <div class="ai-panel">
       <div class="ai-panel-title"><span class="ai-icon">📊</span>Outcome Equity Analysis</div>
-      <div style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:10px">Cross-references outcomes against all protected characteristics. Flags any gap over 15%.</div>
+      <div style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:10px">Cross-references outcomes against protected characteristics using aggregate numbers only. Flags any gap over 15%. No individual is named.</div>
       <button class="btn btn-ai btn-sm" onclick="runEquityAnalysis()">✦ Run equity analysis</button>
     </div>
     <div id="equity-result"></div>
   </div>
+
+  <!-- EQUALITY MONITORING -->
   <div id="hr-tab-monitoring" style="display:none">
     <div class="card" style="margin-bottom:16px">
       <div class="card-title">About equality monitoring</div>
-      <div style="font-size:13px;color:var(--txt2);line-height:1.7">Completion is <strong style="color:var(--txt)">voluntary</strong>. Data is stored separately, used only for anonymised reporting, never shared with funders at individual level.</div>
+      <div style="font-size:13px;color:var(--txt2);line-height:1.7">Completion is <strong style="color:var(--txt)">voluntary</strong>. Data is stored separately, used only for anonymised reporting, and never shared with funders at individual level.</div>
     </div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
@@ -418,43 +428,15 @@
       <div id="eq-monitoring-list"></div>
     </div>
   </div>
-  <div id="hr-tab-wellbeing" style="display:none">
-    <div class="ai-panel">
-      <div class="ai-panel-title"><span class="ai-icon">💚</span>Staff Wellbeing Flag · Weekly scan</div>
-      <div style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:10px">Scans advisor case notes for stress patterns. Manager-only.</div>
-      <button class="btn btn-ai btn-sm" onclick="runWellbeingScan()">💚 Scan advisor notes now</button>
-    </div>
-    <div id="wellbeing-result"></div>
-  </div>
+
+  <!-- BENCHMARKING -->
   <div id="hr-tab-benchmark" style="display:none">
     <div class="ai-panel">
       <div class="ai-panel-title"><span class="ai-icon">🏆</span>Anonymised Benchmarking</div>
-      <div style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:10px">Compares your inclusive language and outcome equity against anonymised aggregates from similar Civara organisations.</div>
+      <div style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:10px">Compares your outcome equity against anonymised aggregates from similar-size Civara organisations. No names are ever shared.</div>
       <button class="btn btn-ai btn-sm" onclick="runBenchmarking()">✦ Generate benchmark report</button>
     </div>
     <div id="benchmark-result"></div>
-  </div>
-  <div id="hr-tab-settings" style="display:none">
-    <div class="card">
-      <div class="card-title">HR &amp; Equality mode</div>
-      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
-        <label style="display:flex;align-items:flex-start;gap:12px;padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;text-transform:none;letter-spacing:0">
-          <input type="radio" name="hr-mode" value="strict" id="hr-mode-strict" style="width:auto;background:none;border:none;padding:0;margin-top:2px" onchange="saveHRMode()"/>
-          <div><div style="font-size:13px;font-weight:600;color:var(--txt)">⚖️ Strict</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">Blocks save · Must acknowledge · Full audit log · Instant manager alert.</div></div>
-        </label>
-        <label style="display:flex;align-items:flex-start;gap:12px;padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;text-transform:none;letter-spacing:0">
-          <input type="radio" name="hr-mode" value="advisory" id="hr-mode-advisory" style="width:auto;background:none;border:none;padding:0;margin-top:2px" onchange="saveHRMode()" checked/>
-          <div><div style="font-size:13px;font-weight:600;color:var(--txt)">💬 Advisory</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">Soft warning · Can proceed · Flag logged · Manager sees queue.</div></div>
-        </label>
-        <label style="display:flex;align-items:flex-start;gap:12px;padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;text-transform:none;letter-spacing:0">
-          <input type="radio" name="hr-mode" value="silent" id="hr-mode-silent" style="width:auto;background:none;border:none;padding:0;margin-top:2px" onchange="saveHRMode()"/>
-          <div><div style="font-size:13px;font-weight:600;color:var(--txt)">🔕 Silent</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">No interruption · Flag logged quietly · Weekly digest to manager.</div></div>
-        </label>
-      </div>
-      <div class="form-row"><label>Manager alert email</label><input id="hr-manager-email" placeholder="manager@yourorg.org.uk" style="max-width:320px"/></div>
-      <button class="btn btn-p btn-sm" onclick="saveHRSettings()">Save settings</button>
-      <div class="alert alert-ok" id="hr-settings-saved" style="display:none;margin-top:10px">✓ Settings saved</div>
-    </div>
   </div>
 </div>
 
