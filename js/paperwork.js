@@ -232,13 +232,11 @@
       postcode: pick(p, 'postcode', 'post_code', 'zip'),
       pid: pick(p, 'participant_id', 'pid', 'ref', 'reference', 'id'),
       startDate: fmtDate(pick(p, 'start_date', 'startDate', 'start')) || fmtDate(new Date().toISOString()),
-      // referral & background
       referralSource: pick(p, 'referral_source', 'referralSource', 'source') || elVal('mp-rs'),
       advisor: pick(p, 'advisor', 'adviser', 'key_worker') || elVal('mp-adv'),
       stage: pick(p, 'stage', 'journey_stage') || elVal('mp-st'),
       risk: pick(p, 'risk', 'risk_level') || elVal('mp-risk'),
       background: pick(p, 'referral_background', 'background', 'intake', 'intake_text', 'referral_notes') || elVal('mp-intake-text'),
-      // assessment
       caseNote: pick(p, 'case_note', 'case_notes', 'notes', 'note', 'assessment') || elVal('mp-note'),
       barriers: pick(p, 'barriers', 'barrier_list') || readChecked('barrier-checks'),
       safeguarding: pick(p, 'safeguarding', 'safeguarding_flag', 'safe') || elVal('mp-safe'),
@@ -246,7 +244,6 @@
       work: pick(p, 'work_readiness', 'work') || elVal('mp-work'),
       wellbeing: pick(p, 'wellbeing') || elVal('mp-well'),
       skills: pick(p, 'skills', 'skills_score') || elVal('mp-skillsc'),
-      // characteristics
       gender: pick(p, 'gender'),
       rightToWork: pick(p, 'right_to_work', 'rightToWork'),
       basicSkills: pick(p, 'basic_skills', 'basicSkills'),
