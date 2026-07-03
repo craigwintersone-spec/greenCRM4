@@ -67,56 +67,14 @@ function go(page) {
 // the codebase and can be re-enabled per org in Settings, or by reverting the
 // // launch: comments here. To broaden the product later, undo those lines.
 function applyModules(mods, plan) {
-  const m = {
-    participants: mods.participants != null ? mods.participants : true,
-    volunteers:   mods.volunteers   != null ? mods.volunteers   : false, // launch: was true (deferred)
-    events:       mods.events       != null ? mods.events       : false, // launch: was true (deferred)
-    employers:    mods.employers    != null ? mods.employers    : false,
-    circular:     mods.circular     != null ? mods.circular     : false,
-    funders:      true    // launch: Funder Reporting is a core pillar — forced ON for every org, so any old saved `false` can't hide Funders/Contracts/Reports
-  };
-  // Which pages each module gates
-  const gates = {
-    participants: ['participants', 'pipeline', 'referrals', 'partnerrefs', 'outcomes', 'safeguarding', 'evidence'],
-    volunteers:   ['volunteers'],
-    events:       ['events', 'feedback'],                                 // launch: 'impact' moved to funders (below)
-    employers:    ['employers'],
-    circular:     ['circular'],
-    funders:      ['funding', 'reports', 'rag', 'funders', 'impact']      // launch: gained 'impact' so it ships with reporting
-  };
-  Object.keys(gates).forEach(modKey => {
-    gates[modKey].forEach(page => {
-      const btn = document.querySelector('.nav-btn[onclick="go(\'' + page + '\')"]');
-      if (btn) btn.style.display = m[modKey] ? '' : 'none';
-    });
+  // ── LAUNCH: the sidebar in app.html is the single source of truth. ──
+  // Whatever buttons are in the HTML are the ones we want, so this function
+  // just makes sure they are all VISIBLE. It never hides anything — that is
+  // what stops the "buttons flash on refresh then disappear" glitch.
+  // To take a button out of the product, delete it from app.html's sidebar
+  // (not here). `mods` and `plan` are still accepted so existing calls work,
+  // but they are no longer used to hide anything.
+  document.querySelectorAll('.nav-btn').forEach(function (btn) {
+    btn.style.display = '';
   });
-
-  // ── launch: hide pages outside the employability product ──
-  // These aren't employability, so they don't belong in the CRM sidebar for
-  // this launch. hr + social have no module gate; volunteers/events/feedback/
-  // circular DO have gates, but we hard-hide them here so they stay gone even
-  // if an org's module flags are on. Nothing is deleted — remove a name from
-  // this list to bring that page back.
-  ['hr', 'social', 'volunteers', 'events', 'feedback', 'circular'].forEach(page => {
-    const btn = document.querySelector('.nav-btn[onclick="go(\'' + page + '\')"]');
-    if (btn) btn.style.display = 'none';
-  });
-
-  // ── launch: BD Manager is a launch pillar, but AI-plan only ──
-  // AI_PLANS comes from config.js (loads first). We resolve the plan from the
-  // explicit `plan` arg first, then fall back to likely current-org globals.
-  // `typeof` guards mean an undeclared global can NEVER throw here.
-  // If the plan can't be resolved at all (e.g. not wired yet), BD stays
-  // VISIBLE — fail-open, so nothing silently disappears. Once you know which
-  // variable holds the org plan, pass it in as applyModules(mods, thatPlan)
-  // or add it to the chain below.
-  const bdPlan = plan
-    || (typeof currentOrg !== 'undefined' && currentOrg && currentOrg.plan)
-    || (typeof activeOrg  !== 'undefined' && activeOrg  && activeOrg.plan)
-    || null;
-  const bdBtn = document.querySelector('.nav-btn[onclick="go(\'bd\')"]');
-  if (bdBtn) {
-    // Resolvable plan → gate strictly. Unresolvable → leave visible.
-    bdBtn.style.display = (bdPlan == null || AI_PLANS.includes(bdPlan)) ? '' : 'none';
-  }
 }
