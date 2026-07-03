@@ -395,12 +395,17 @@ tr:last-child td{border-bottom:none}
     <label>Modules to enable</label>
     <div class="mod-grid">
       <div class="mod-item on" id="cmod-item-participants"><span style="font-size:13px;color:var(--txt)">👤 Participants</span><input type="checkbox" id="cmod-participants" checked style="width:auto;cursor:pointer"/></div>
-      <div class="mod-item on" id="cmod-item-volunteers"><span style="font-size:13px;color:var(--txt)">🤝 Volunteers</span><input type="checkbox" id="cmod-volunteers" checked style="width:auto;cursor:pointer"/></div>
-      <div class="mod-item on" id="cmod-item-events"><span style="font-size:13px;color:var(--txt)">📅 Events & Feedback</span><input type="checkbox" id="cmod-events" checked style="width:auto;cursor:pointer"/></div>
+      <div class="mod-item on" id="cmod-item-funders"><span style="font-size:13px;color:var(--txt)">💰 Funders & Reports</span><input type="checkbox" id="cmod-funders" checked style="width:auto;cursor:pointer"/></div>
+      <div class="mod-item" id="cmod-item-volunteers"><span style="font-size:13px;color:var(--txt)">🤝 Volunteers</span><input type="checkbox" id="cmod-volunteers" style="width:auto;cursor:pointer"/></div>
+      <div class="mod-item" id="cmod-item-events"><span style="font-size:13px;color:var(--txt)">📅 Events & Feedback</span><input type="checkbox" id="cmod-events" style="width:auto;cursor:pointer"/></div>
       <div class="mod-item" id="cmod-item-employers"><span style="font-size:13px;color:var(--txt)">🏢 Employers</span><input type="checkbox" id="cmod-employers" style="width:auto;cursor:pointer"/></div>
       <div class="mod-item" id="cmod-item-circular"><span style="font-size:13px;color:var(--txt)">♻️ Circular Economy</span><input type="checkbox" id="cmod-circular" style="width:auto;cursor:pointer"/></div>
-      <div class="mod-item" id="cmod-item-funders"><span style="font-size:13px;color:var(--txt)">💰 Funders & Reports</span><input type="checkbox" id="cmod-funders" style="width:auto;cursor:pointer"/></div>
     </div>
+  </div>
+  <div style="margin-top:14px">
+    <label>Invite first manager (optional)</label>
+    <input type="email" id="co-manager-email" placeholder="manager@theirorg.org.uk"/>
+    <div style="font-size:11px;color:var(--txt3);margin-top:4px">Creates a manager invite link you can send. They accept, then invite their own team.</div>
   </div>
   <div class="modal-footer">
     <button class="btn btn-ghost" onclick="closeCreate()">Cancel</button>
@@ -568,6 +573,7 @@ function filterOrgs(){
 
 function openCreateOrg(){
   $('co-name').value='';$('co-plan').value='free';$('co-status').value='active';
+  const _me=$('co-manager-email');if(_me)_me.value='';
   ['create-err','create-ok'].forEach(id=>$(id).style.display='none');
   $('create-btn').textContent='Create organisation';$('create-btn').disabled=false;
   $('modal-create').classList.add('open');
@@ -580,11 +586,31 @@ async function createOrg(){
   const btn=$('create-btn');btn.textContent='Creating…';btn.disabled=true;
   const modules={participants:$('cmod-participants').checked,volunteers:$('cmod-volunteers').checked,events:$('cmod-events').checked,employers:$('cmod-employers').checked,circular:$('cmod-circular').checked,funders:$('cmod-funders').checked};
   const{data,error}=await sb.from('organisations').insert([{name,sector:$('co-sector').value,plan:$('co-plan').value,status:$('co-status').value,modules,settings:{}}]).select().single();
+  if(error){btn.textContent='Create organisation';btn.disabled=false;$('create-err').textContent='Error: '+error.message;$('create-err').style.display='block';return;}
+
+  // Optionally seed the first manager so the org's team can start work.
+  let inviteHtml='';
+  const mgrEmail=($('co-manager-email').value||'').trim();
+  if(mgrEmail){
+    btn.textContent='Creating invite…';
+    const{data:inv,error:invErr}=await sb.from('invitations')
+      .insert([{org_id:data.id,email:mgrEmail.toLowerCase(),role:'manager',invited_by:currentUser.id}])
+      .select().single();
+    if(invErr){
+      inviteHtml='<div style="margin-top:8px;color:var(--red);font-size:12px">Org created, but the manager invite failed: '+invErr.message+'</div>';
+    }else{
+      const link=window.location.origin+window.location.pathname.replace('super-admin.html','')+'invite.html?token='+inv.token;
+      inviteHtml='<div style="margin-top:10px;font-size:12px;color:var(--txt2)">Manager invite link — send to '+mgrEmail+':</div>'+
+        '<div style="margin-top:6px;background:var(--card);border:1px dashed var(--border-strong);border-radius:8px;padding:10px;font-family:ui-monospace,monospace;font-size:11px;color:var(--em);word-break:break-all">'+link+'</div>'+
+        '<button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="navigator.clipboard.writeText(\''+link+'\');this.textContent=\'✓ Copied\'">📋 Copy link</button>';
+    }
+  }
+
   btn.textContent='Create organisation';btn.disabled=false;
-  if(error){$('create-err').textContent='Error: '+error.message;$('create-err').style.display='block';return;}
-  $('create-ok').innerHTML='✓ <strong>'+name+'</strong> created! <a href="app.html?org_id='+data.id+'" target="_blank" style="color:var(--em)">Open CRM →</a>';
+  $('create-ok').innerHTML='✓ <strong>'+name+'</strong> created! <a href="app.html?org_id='+data.id+'" target="_blank" style="color:var(--em)">Open CRM →</a>'+inviteHtml;
   $('create-ok').style.display='block';
-  await loadOrgs();setTimeout(closeCreate,4000);
+  await loadOrgs();
+  if(!mgrEmail) setTimeout(closeCreate,4000);   // keep open so you can copy the invite link
 }
 
 function openEdit(id){
