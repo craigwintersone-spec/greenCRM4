@@ -91,10 +91,13 @@ function applyModules(mods, plan) {
     });
   });
 
-  // ── launch: hide ungated pages outside the three pillars ──
-  // hr and social have no module gate, so they'd otherwise always show.
-  // Remove this block to bring them back.
-  ['hr', 'social'].forEach(page => {
+  // ── launch: hide pages outside the employability product ──
+  // These aren't employability, so they don't belong in the CRM sidebar for
+  // this launch. hr + social have no module gate; volunteers/events/feedback/
+  // circular DO have gates, but we hard-hide them here so they stay gone even
+  // if an org's module flags are on. Nothing is deleted — remove a name from
+  // this list to bring that page back.
+  ['hr', 'social', 'volunteers', 'events', 'feedback', 'circular'].forEach(page => {
     const btn = document.querySelector('.nav-btn[onclick="go(\'' + page + '\')"]');
     if (btn) btn.style.display = 'none';
   });
