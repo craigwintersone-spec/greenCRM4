@@ -73,7 +73,7 @@ function applyModules(mods, plan) {
     events:       mods.events       != null ? mods.events       : false, // launch: was true (deferred)
     employers:    mods.employers    != null ? mods.employers    : false,
     circular:     mods.circular     != null ? mods.circular     : false,
-    funders:      mods.funders      != null ? mods.funders      : true    // launch: was false (core pillar)
+    funders:      true    // launch: Funder Reporting is a core pillar — forced ON for every org, so any old saved `false` can't hide Funders/Contracts/Reports
   };
   // Which pages each module gates
   const gates = {
