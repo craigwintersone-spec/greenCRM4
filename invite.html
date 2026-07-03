@@ -209,20 +209,17 @@ async function boot(){
   }
   if(!token){showError('No invitation token in the link. Please use the link your team sent you.');return;}
 
-  // Look up invitation
-  const{data,error}=await sb.from('invitations').select('id,org_id,email,role,token,expires_at,accepted_at').eq('token',token).maybeSingle();
+  // Look up invitation via secure function (works before login; returns only this token's row)
+  const{data:rows,error}=await sb.rpc('get_invitation',{p_token:token});
   if(error){showError('Could not validate the invitation: '+error.message);return;}
+  const data=Array.isArray(rows)?rows[0]:rows;
   if(!data){showError('This invitation link is invalid or has already been used.');return;}
   if(data.accepted_at){showError('This invitation has already been accepted. Please sign in to the CRM directly.');return;}
   if(new Date(data.expires_at)<new Date()){showError('This invitation has expired. Please ask for a new one.');return;}
 
-  invitation=data;
-
-  // get org name and verify org still exists
-  const{data:org,error:orgErr}=await sb.from('organisations').select('name').eq('id',data.org_id).maybeSingle();
-  if(orgErr){showError('Could not load the organisation for this invitation: '+orgErr.message);return;}
-  if(!org){showError('The organisation for this invitation no longer exists. Please ask for a new invitation.');return;}
-  orgName=org.name;
+  // token is all accept_invitation() needs — no table row/id required
+  invitation={token:token,org_id:data.org_id,email:data.email,role:data.role};
+  orgName=data.org_name||'your organisation';
 
   // Pre-fill form
   $('inv-org').textContent=orgName;
@@ -254,22 +251,21 @@ function showMsg(html,type){
 }
 
 async function acceptInvitation(userId){
-  // Insert membership
-  const{error:memErr}=await sb.from('memberships').insert([{
-    user_id:userId,
-    org_id:invitation.org_id,
-    role:invitation.role,
-    status:'active',
-    joined_at:new Date().toISOString()
-  }]);
-  // FIX #1: use Postgres SQLSTATE code (23505 = unique_violation) instead of fragile string match.
-  // Membership already exists is fine — that's the whole point of accepting an invite.
-  if(memErr && memErr.code !== '23505'){
-    throw new Error('Could not add you to the organisation: '+memErr.message);
+  // Accept via secure function: it verifies your email matches the invite,
+  // creates the membership, and marks the invite accepted — all server-side.
+  // (A brand-new invitee can't insert their own membership directly under RLS.)
+  const{data,error}=await sb.rpc('accept_invitation',{p_token:invitation.token});
+  if(error){throw new Error('Could not add you to the organisation: '+error.message);}
+  if(!data||data.ok!==true){
+    const map={
+      email_mismatch:'This invitation is for a different email address. Please sign in with the invited email.',
+      expired:'This invitation has expired. Please ask for a new one.',
+      already_accepted:'This invitation has already been accepted. Please sign in to the CRM.',
+      invalid:'This invitation is no longer valid. Please ask for a new one.',
+      not_authenticated:'Please sign in and try again.'
+    };
+    throw new Error(map[data&&data.error]||'Could not accept the invitation. Please ask for a new invite.');
   }
-
-  // Mark invitation accepted
-  await sb.from('invitations').update({accepted_at:new Date().toISOString()}).eq('id',invitation.id);
 }
 
 async function doSignUp(){
