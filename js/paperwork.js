@@ -1,11 +1,9 @@
 // js/paperwork.js — Civara auto-fill paperwork (Phase 1: Participant Start Form)
 // ---------------------------------------------------------------------------
-// window.civaraGenerateStartForm() opens a confirm box, prefilled from the open
-// participant (incl. referral background + case notes), and downloads a filled
-// Word (.docx) Start Form. No database changes. No external libraries.
-//
-// Switch on: put this at js/paperwork.js, add <script src="js/paperwork.js"></script>
-// to app.html, and a button: onclick="civaraGenerateStartForm()".
+// window.civaraGenerateStartForm() reads the OPEN Add Participant form and
+// downloads a filled Word (.docx) Start Form immediately — no second pop-up.
+// Fill the participant in once, click "📄 Start Form", done.
+// No database changes. No external libraries.
 'use strict';
 
 (function () {
@@ -218,20 +216,21 @@
   function ls(key, def) { try { return localStorage.getItem(key) || def || ''; } catch (e) { return def || ''; } }
   function lsSet(key, val) { try { localStorage.setItem(key, val); } catch (e) {} }
 
-  function gatherPrefill(p) {
+  // Read straight from the open Add Participant form (with optional object override).
+  function gather(p) {
     p = p || {};
     return {
-      title: pick(p, 'title'),
+      title: pick(p, 'title') || elVal('mp-ptitle'),
       forename: pick(p, 'forename', 'first_name', 'firstName', 'fn') || elVal('mp-fn'),
       surname: pick(p, 'surname', 'last_name', 'lastName', 'ln') || elVal('mp-ln'),
-      ni: pick(p, 'ni_number', 'ni', 'national_insurance', 'nino'),
-      dob: fmtDate(pick(p, 'dob', 'date_of_birth', 'dateOfBirth', 'birth_date')),
+      ni: pick(p, 'ni_number', 'ni', 'national_insurance', 'nino') || elVal('mp-ni'),
+      dob: fmtDate(pick(p, 'dob', 'date_of_birth', 'dateOfBirth') || elVal('mp-dob')),
       phone: pick(p, 'phone', 'telephone', 'tel', 'mobile') || elVal('mp-phone'),
       email: pick(p, 'email', 'email_address') || elVal('mp-email'),
-      address: pick(p, 'address', 'address_line', 'street'),
-      postcode: pick(p, 'postcode', 'post_code', 'zip'),
-      pid: pick(p, 'participant_id', 'pid', 'ref', 'reference', 'id'),
-      startDate: fmtDate(pick(p, 'start_date', 'startDate', 'start')) || fmtDate(new Date().toISOString()),
+      address: pick(p, 'address', 'address_line', 'street') || elVal('mp-address'),
+      postcode: pick(p, 'postcode', 'post_code', 'zip') || elVal('mp-postcode'),
+      pid: pick(p, 'participant_id', 'pid', 'ref', 'reference') || elVal('mp-pid'),
+      startDate: fmtDate(pick(p, 'start_date', 'startDate', 'start') || elVal('mp-start')) || fmtDate(new Date().toISOString()),
       referralSource: pick(p, 'referral_source', 'referralSource', 'source') || elVal('mp-rs'),
       advisor: pick(p, 'advisor', 'adviser', 'key_worker') || elVal('mp-adv'),
       stage: pick(p, 'stage', 'journey_stage') || elVal('mp-st'),
@@ -244,134 +243,50 @@
       work: pick(p, 'work_readiness', 'work') || elVal('mp-work'),
       wellbeing: pick(p, 'wellbeing') || elVal('mp-well'),
       skills: pick(p, 'skills', 'skills_score') || elVal('mp-skillsc'),
-      gender: pick(p, 'gender'),
-      rightToWork: pick(p, 'right_to_work', 'rightToWork'),
-      basicSkills: pick(p, 'basic_skills', 'basicSkills'),
-      labourStatus: pick(p, 'labour_status', 'labourStatus', 'employment_status'),
-      interpersonal: pick(p, 'interpersonal_support', 'interpersonal'),
-      provider: ls('civara_provider', ''),
-      project: ls('civara_project', '')
-    };
-  }
-
-  /* ---------- confirm modal --------------------------------------------- */
-  function field(label, id, value, type) {
-    return '<div style="margin-bottom:11px"><label style="display:block;font-size:12px;font-weight:600;color:#4A5552;margin-bottom:5px">' +
-      esc(label) + '</label><input id="' + id + '" type="' + (type || 'text') + '" value="' + esc(value) +
-      '" style="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid #E0DAD0;border-radius:9px;font-size:14px;font-family:inherit"/></div>';
-  }
-  function area(label, id, value) {
-    return '<div style="margin-bottom:11px;grid-column:1 / -1"><label style="display:block;font-size:12px;font-weight:600;color:#4A5552;margin-bottom:5px">' +
-      esc(label) + '</label><textarea id="' + id + '" style="width:100%;box-sizing:border-box;min-height:84px;padding:9px 11px;border:1px solid #E0DAD0;border-radius:9px;font-size:14px;font-family:inherit;resize:vertical">' +
-      esc(value) + '</textarea></div>';
-  }
-  function select(label, id, value, options) {
-    const opts = options.map(o => '<option value="' + esc(o) + '"' + (o === value ? ' selected' : '') + '>' + esc(o || '—') + '</option>').join('');
-    return '<div style="margin-bottom:11px"><label style="display:block;font-size:12px;font-weight:600;color:#4A5552;margin-bottom:5px">' +
-      esc(label) + '</label><select id="' + id + '" style="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid #E0DAD0;border-radius:9px;font-size:14px;font-family:inherit;background:#fff">' +
-      opts + '</select></div>';
-  }
-  function subhead(t) {
-    return '<div style="grid-column:1 / -1;font-size:12px;font-weight:700;color:#7A847F;text-transform:uppercase;letter-spacing:.5px;margin:8px 0 8px">' + esc(t) + '</div>';
-  }
-
-  function openStartFormModal(d) {
-    closeStartFormModal();
-    const wrap = document.createElement('div');
-    wrap.id = 'civara-paperwork-overlay';
-    wrap.style.cssText = 'position:fixed;inset:0;background:rgba(23,86,85,.4);z-index:9000;display:flex;align-items:flex-start;justify-content:center;padding:24px;overflow-y:auto';
-    wrap.innerHTML =
-      '<div style="background:#fff;border:1px solid #E0DAD0;border-radius:14px;max-width:660px;width:100%;margin:auto;padding:24px;box-shadow:0 8px 28px -12px rgba(23,86,85,.4);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif">' +
-      '<div style="font-size:20px;font-weight:700;color:#175655;margin-bottom:4px">Generate Start Form</div>' +
-      '<div style="font-size:13px;color:#7A847F;margin-bottom:18px">Details are pulled from the participant — including referral background and case notes. Complete anything missing, then download the filled Word form.</div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 14px">' +
-        subhead('Delivery') +
-        field('Delivery organisation', 'pf-provider', d.provider) +
-        field('Programme / project', 'pf-project', d.project) +
-        subhead('Participant details') +
-        field('Title', 'pf-title', d.title) +
-        '<div></div>' +
-        field('Forename', 'pf-forename', d.forename) +
-        field('Surname', 'pf-surname', d.surname) +
-        field('NI number', 'pf-ni', d.ni) +
-        field('Date of birth', 'pf-dob', d.dob) +
-        field('Telephone', 'pf-phone', d.phone) +
-        field('Email', 'pf-email', d.email) +
-        field('Address', 'pf-address', d.address) +
-        field('Post code', 'pf-postcode', d.postcode) +
-        field('Participant ID', 'pf-pid', d.pid) +
-        field('Start date', 'pf-start', d.startDate) +
-        subhead('Referral & background') +
-        field('Referral source', 'pf-refsrc', d.referralSource) +
-        field('Adviser', 'pf-advisor', d.advisor) +
-        field('Journey stage', 'pf-stage', d.stage) +
-        field('Risk level', 'pf-risk', d.risk) +
-        area('Referral background', 'pf-background', d.background) +
-        subhead('Initial assessment') +
-        area('Adviser notes / initial assessment', 'pf-casenote', d.caseNote) +
-        field('Barriers identified', 'pf-barriers', d.barriers) +
-        field('Safeguarding flag', 'pf-safe', d.safeguarding) +
-        field('Confidence (1–10)', 'pf-conf', d.confidence, 'number') +
-        field('Work readiness (1–10)', 'pf-work', d.work, 'number') +
-        field('Wellbeing (1–10)', 'pf-well', d.wellbeing, 'number') +
-        field('Skills (1–10)', 'pf-skills', d.skills, 'number') +
-        subhead('Characteristics') +
-        select('Gender', 'pf-gender', d.gender, ['', 'Male', 'Female', 'Other', 'Prefer not to say']) +
-        select('Right to live & work in UK', 'pf-rtw', d.rightToWork, ['', 'Yes', 'No']) +
-        select('Basic skills (Maths & English)', 'pf-bskills', d.basicSkills, ['', 'Yes', 'No']) +
-        select('Labour market status', 'pf-labour', d.labourStatus, ['', 'Unemployed', 'Economically inactive']) +
-        select('Needs interpersonal-skills support', 'pf-inter', d.interpersonal, ['', 'Yes', 'No']) +
-      '</div>' +
-      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">' +
-        '<button id="pf-cancel" style="padding:10px 16px;border-radius:9px;border:1px solid #E0DAD0;background:#fff;color:#4A5552;font-weight:600;cursor:pointer;font-family:inherit">Cancel</button>' +
-        '<button id="pf-go" style="padding:10px 18px;border-radius:9px;border:none;background:#1F6F6D;color:#fff;font-weight:600;cursor:pointer;font-family:inherit">📄 Download Start Form</button>' +
-      '</div>' +
-      '</div>';
-    document.body.appendChild(wrap);
-    wrap.addEventListener('click', e => { if (e.target === wrap) closeStartFormModal(); });
-    document.getElementById('pf-cancel').onclick = closeStartFormModal;
-    document.getElementById('pf-go').onclick = doGenerate;
-  }
-  function closeStartFormModal() {
-    const el = document.getElementById('civara-paperwork-overlay');
-    if (el) el.remove();
-  }
-
-  function doGenerate() {
-    const d = {
-      provider: elVal('pf-provider'), project: elVal('pf-project'),
-      title: elVal('pf-title'), forename: elVal('pf-forename'), surname: elVal('pf-surname'),
-      ni: elVal('pf-ni'), dob: elVal('pf-dob'), phone: elVal('pf-phone'), email: elVal('pf-email'),
-      address: elVal('pf-address'), postcode: elVal('pf-postcode'), pid: elVal('pf-pid'),
-      startDate: elVal('pf-start'),
-      referralSource: elVal('pf-refsrc'), advisor: elVal('pf-advisor'),
-      stage: elVal('pf-stage'), risk: elVal('pf-risk'), background: elVal('pf-background'),
-      caseNote: elVal('pf-casenote'), barriers: elVal('pf-barriers'), safeguarding: elVal('pf-safe'),
-      confidence: elVal('pf-conf'), work: elVal('pf-work'), wellbeing: elVal('pf-well'), skills: elVal('pf-skills'),
-      gender: elVal('pf-gender'), rightToWork: elVal('pf-rtw'), basicSkills: elVal('pf-bskills'),
-      labourStatus: elVal('pf-labour'), interpersonal: elVal('pf-inter'),
+      gender: pick(p, 'gender') || elVal('mp-gender'),
+      rightToWork: pick(p, 'right_to_work', 'rightToWork') || elVal('mp-rtw'),
+      basicSkills: pick(p, 'basic_skills', 'basicSkills') || elVal('mp-bskills'),
+      labourStatus: pick(p, 'labour_status', 'labourStatus', 'employment_status') || elVal('mp-labour'),
+      interpersonal: pick(p, 'interpersonal_support', 'interpersonal') || elVal('mp-inter'),
+      provider: elVal('mp-provider') || ls('civara_provider', ''),
+      project: elVal('mp-project') || ls('civara_project', ''),
       generatedOn: new Date().toLocaleDateString('en-GB')
     };
-    lsSet('civara_provider', d.provider); lsSet('civara_project', d.project);
+  }
 
+  function download(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+
+  // Remember delivery org / project between participants, and prefill the
+  // fields when the form is on screen.
+  function prefillDelivery() {
+    const pv = document.getElementById('mp-provider'), pj = document.getElementById('mp-project');
+    if (pv && !pv.value) pv.value = ls('civara_provider', '');
+    if (pj && !pj.value) pj.value = ls('civara_project', '');
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', prefillDelivery);
+  } else {
+    prefillDelivery();
+  }
+
+  /* ---------- public entry point — generate straight away --------------- */
+  window.civaraGenerateStartForm = function (p) {
+    if (p && p.preventDefault) p = null;              // called as onclick handler
+    if (!window.TextEncoder) { alert('This browser is too old to generate the form.'); return; }
+    const d = gather(p);
+    if (!d.forename && !d.surname) { alert('Add the participant\u2019s name first, then click Start Form.'); return; }
+    lsSet('civara_provider', d.provider); lsSet('civara_project', d.project);
     let blob;
     try { blob = buildDocxBlob(d); }
     catch (e) { alert('Sorry — could not build the form: ' + e.message); return; }
-
     const name = ('Start Form - ' + (d.forename || '') + ' ' + (d.surname || '')).trim().replace(/\s+/g, ' ') || 'Start Form';
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = name + '.docx';
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
-    closeStartFormModal();
-  }
-
-  /* ---------- public entry point ---------------------------------------- */
-  window.civaraGenerateStartForm = function (p) {
-    if (p && p.preventDefault) p = null;
-    if (!window.TextEncoder) { alert('This browser is too old to generate the form.'); return; }
-    openStartFormModal(gatherPrefill(p));
+    download(blob, name + '.docx');
   };
 
 })();
