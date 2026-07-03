@@ -529,7 +529,7 @@
     <div style="display:flex;gap:8px;margin-top:6px"><button class="btn btn-p btn-sm" onclick="acceptAINote()">Use this</button><button class="btn btn-ghost btn-sm" onclick="rejectAINote()">Use original</button></div>
   </div>
   <button class="btn btn-ai btn-sm" style="margin-bottom:12px" onclick="runCaseNoteAI()" id="note-ai-btn">✦ Case Note Agent — structure note</button>
-  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeParticipantModal()">Cancel</button><button class="btn btn-p" id="p-save-btn" onclick="saveP()">Save</button></div>
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeParticipantModal()">Cancel</button><button class="btn btn-ghost" onclick="civaraGenerateStartForm()">📄 Start Form</button><button class="btn btn-p" id="p-save-btn" onclick="saveP()">Save</button></div>
 </div></div>
 
 <div class="modal-overlay" id="modal-c"><div class="modal"><h2 id="c-title">Add contact</h2><div class="form-grid-2"><div class="form-row"><label>First name</label><input id="cf-fn"/></div><div class="form-row"><label>Last name</label><input id="cf-ln"/></div></div><div class="form-row"><label>Email</label><input id="cf-em" type="email"/></div><div class="form-grid-2"><div class="form-row"><label>Role</label><select id="cf-role"><option>Donor</option><option>Partner</option><option>Funder</option><option>Trustee</option></select></div><div class="form-row"><label>Status</label><select id="cf-st"><option>Prospect</option><option>Engaged</option><option>Active Supporter</option><option>Lapsed</option></select></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-c')">Cancel</button><button class="btn btn-p" id="c-save-btn" onclick="saveC()">Save</button></div></div></div>
@@ -615,6 +615,9 @@
 
 <!-- Entry point -->
 <script src="js/boot.js"></script>
+
+<!-- Auto-fill paperwork (Phase 1: Start Form generator) -->
+<script src="js/paperwork.js"></script>
 
 <!-- Extensions (run after boot, patch existing functions) -->
 <script src="js/extensions/demographics.js"></script>
