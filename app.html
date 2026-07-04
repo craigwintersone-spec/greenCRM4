@@ -1326,28 +1326,39 @@
 
   // Add an upload button to each contract card after the Funding page renders.
   function augmentContractCards(){
-    if(typeof sb==='undefined'||!sb) return;
-    sb.from('contracts').select('id,template_name').not('template_data','is',null).then(function(res){
-      var have={}; ((res&&res.data)||[]).forEach(function(r){ have[String(r.id)]=r.template_name||'form.docx'; });
-      var el=document.getElementById('fund-list'); if(!el) return;
-      Array.prototype.forEach.call(el.querySelectorAll('button[onclick^="openEditCon"]'), function(edit){
-        var m=/openEditCon\('([^']+)'\)/.exec(edit.getAttribute('onclick')||''); if(!m) return;
-        var id=m[1], row=edit.parentNode;
-        if(row.querySelector('.civ-tpl-btn')) return;
-        var b=document.createElement('button');
-        b.className='btn btn-ghost btn-sm civ-tpl-btn';
-        b.textContent = have[id] ? '📄 Form ✓' : '⬆ Form';
-        b.title = have[id] ? ('Template: '+have[id]+' — click to replace') : 'Upload this funder\u2019s blank Word form';
-        b.setAttribute('onclick', "civaraUploadContractTemplate('"+id+"')");
-        row.insertBefore(b, edit);
-        row.insertBefore(document.createTextNode(' '), edit);
-      });
-    }).catch(function(){});
+    var el=document.getElementById('fund-list'); if(!el) return;
+    var idToBtn={};
+    Array.prototype.forEach.call(el.querySelectorAll('button[onclick^="openEditCon"]'), function(edit){
+      var m=/openEditCon\('([^']+)'\)/.exec(edit.getAttribute('onclick')||''); if(!m) return;
+      var id=m[1], row=edit.parentNode;
+      if(row.querySelector('.civ-tpl-btn')) { idToBtn[id]=row.querySelector('.civ-tpl-btn'); return; }
+      var b=document.createElement('button');
+      b.className='btn btn-ghost btn-sm civ-tpl-btn';
+      b.textContent='⬆ Form';
+      b.title='Upload this funder\u2019s blank Word form';
+      b.setAttribute('onclick', "civaraUploadContractTemplate('"+id+"')");
+      row.insertBefore(b, edit);
+      row.insertBefore(document.createTextNode(' '), edit);
+      idToBtn[id]=b;
+    });
+    // Best-effort: mark contracts that already have a template. Never blocks the button.
+    if(typeof sb!=='undefined' && sb){
+      try {
+        sb.from('contracts').select('id,template_name').not('template_data','is',null).then(function(res){
+          ((res&&res.data)||[]).forEach(function(r){
+            var b=idToBtn[String(r.id)];
+            if(b){ b.textContent='📄 Form ✓'; b.title='Template: '+(r.template_name||'form.docx')+' — click to replace'; }
+          });
+        }).catch(function(){});
+      } catch(e){}
+    }
   }
   var _origRenderFunding=window.renderFunding;
   if(typeof _origRenderFunding==='function'){
     window.renderFunding=function(){ var r=_origRenderFunding.apply(this,arguments); try{augmentContractCards();}catch(e){} return r; };
   }
+  // Safety net: if the contracts page is already on screen, add the buttons now.
+  setTimeout(function(){ try{ augmentContractCards(); }catch(e){} }, 1500);
 
   // ---- Fill a funder form for the participant currently open ----
   function gatherData(){
