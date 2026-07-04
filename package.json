@@ -1,7 +1,17 @@
 {
   "name": "green-crm",
   "version": "1.0.0",
+  "engines": {{
+  "name": "green-crm",
+  "version": "1.0.0",
   "engines": {
+    "node": "24.x"
+  },
+  "dependencies": {
+    "docxtemplater": "^3.69.0",
+    "pizzip": "^3.2.0"
+  }
+}
     "node": "24.x"
   }
 }
