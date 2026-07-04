@@ -11,6 +11,25 @@
 const PizZip = require('pizzip');
 const Docxtemplater = require('docxtemplater');
 
+
+// Custom tag parser: normal {{field}} tags return the value; special
+// {{TICK:<base64url of {f,v}>}} tags return ☒ if data[f] === v, else ☐.
+function tickParser(tag) {
+  return {
+    get: function (scope) {
+      if (tag.indexOf('TICK:') === 0) {
+        try {
+          var o = JSON.parse(Buffer.from(tag.slice(5), 'base64url').toString('utf8'));
+          return String((scope && scope[o.f]) != null ? scope[o.f] : '') === String(o.v) ? '\u2612' : '\u2610';
+        } catch (e) { return '\u2610'; }
+      }
+      if (tag === '.') return scope;
+      var v = scope ? scope[tag] : '';
+      return (v == null ? '' : v);
+    }
+  };
+}
+
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -49,6 +68,7 @@ module.exports = async (req, res) => {
         delimiters: { start: '{{', end: '}}' },
         paragraphLoop: true,
         linebreaks: true,
+        parser: tickParser,
         nullGetter: function () { return ''; }   // blank for any tag we didn't supply
       });
       doc.render(data);
