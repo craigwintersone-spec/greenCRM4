@@ -553,6 +553,7 @@
     <div class="form-grid-2"><div class="form-row"><label>Basic skills (Maths &amp; English)</label><select id="mp-bskills"><option value=""></option><option>Yes</option><option>No</option></select></div><div class="form-row"><label>Labour market status</label><select id="mp-labour"><option value=""></option><option>Unemployed</option><option>Economically inactive</option></select></div></div>
     <div class="form-grid-2"><div class="form-row"><label>Needs interpersonal-skills support</label><select id="mp-inter"><option value=""></option><option>Yes</option><option>No</option></select></div><div class="form-row"><label>Delivery organisation</label><input id="mp-provider"/></div></div>
     <div class="form-row"><label>Programme / project</label><input id="mp-project"/></div>
+    <div style="margin-top:10px"><button type="button" class="btn btn-p btn-sm" onclick="civaraFillFunderForm()">📄 Fill funder form (from contract template)</button><div style="font-size:11px;color:var(--txt3);margin-top:5px">Fills this contract's own uploaded Word form with this participant's details.</div></div>
   </div></details>
 
   <details><summary style="cursor:pointer;padding:10px 12px;margin-top:12px;background:#E7F0EF;border:1px solid #9CC3C0;border-left:4px solid #1F6F6D;border-radius:9px;font-weight:700;font-size:13px;color:#175655;user-select:none">💼 Job outcome — <span style="font-weight:500;color:#3E6F6C">only when they get a job</span></summary>
@@ -1282,6 +1283,111 @@
         setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
       });
     }).catch(function(e){ alert('Could not download: '+((e&&e.message)||e)); });
+  };
+})();
+</script>
+
+<!-- Funder form filling (Phase 2) ---------------------------------------------
+     Upload each contract's own blank funder .docx, then fill it with a
+     participant's details via the Vercel /api/fill-form function. -->
+<script>
+(function () {
+  if (typeof DB === 'undefined') return;
+  var FILL_API = '/api/fill-form';
+
+  function b64(file){ return new Promise(function(res,rej){ var fr=new FileReader(); fr.onload=function(){res(fr.result);}; fr.onerror=function(){rej(new Error('read failed'));}; fr.readAsDataURL(file); }); }
+  function fmtDate(v){ if(!v) return ''; var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(v)); return m?(m[3]+'/'+m[2]+'/'+m[1]):String(v); }
+  function gv(id){ var el=document.getElementById(id); return el?(el.value||''):''; }
+  function dl(blob,name){ var url=URL.createObjectURL(blob); var a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){URL.revokeObjectURL(url);},4000); }
+
+  // ---- Upload a blank funder form onto a contract ----
+  window.civaraUploadContractTemplate = function(contractId){
+    var input=document.createElement('input'); input.type='file'; input.accept='.docx';
+    input.onchange=function(){
+      var f=input.files&&input.files[0]; if(!f) return;
+      if(!/\.docx$/i.test(f.name)){ alert('Please upload a Word .docx file.'); return; }
+      if(f.size>3*1024*1024){ alert('That file is over 3MB. Funder forms are usually well under this — please attach a smaller .docx.'); return; }
+      b64(f).then(function(data){
+        sbUpdate('contracts', {template_data:data, template_name:f.name}, contractId).then(function(){
+          if(typeof refreshTable==='function') return refreshTable('contracts');
+        }).then(function(){
+          if(typeof renderFunding==='function') renderFunding();
+          alert('Form template uploaded: '+f.name);
+        }).catch(function(e){
+          var msg=String((e&&e.message)||'').toLowerCase();
+          if(msg.indexOf('template_data')!==-1||msg.indexOf('template_name')!==-1){
+            alert("Couldn't save the template — the 'template_data' column is missing.\n\nRun add-contract-template-columns.sql in Supabase, then try again.");
+          } else { alert('Upload failed: '+((e&&e.message)||e)); }
+        });
+      });
+    };
+    input.click();
+  };
+
+  // Add an upload button to each contract card after the Funding page renders.
+  function augmentContractCards(){
+    if(typeof sb==='undefined'||!sb) return;
+    sb.from('contracts').select('id,template_name').not('template_data','is',null).then(function(res){
+      var have={}; ((res&&res.data)||[]).forEach(function(r){ have[String(r.id)]=r.template_name||'form.docx'; });
+      var el=document.getElementById('fund-list'); if(!el) return;
+      Array.prototype.forEach.call(el.querySelectorAll('button[onclick^="openEditCon"]'), function(edit){
+        var m=/openEditCon\('([^']+)'\)/.exec(edit.getAttribute('onclick')||''); if(!m) return;
+        var id=m[1], row=edit.parentNode;
+        if(row.querySelector('.civ-tpl-btn')) return;
+        var b=document.createElement('button');
+        b.className='btn btn-ghost btn-sm civ-tpl-btn';
+        b.textContent = have[id] ? '📄 Form ✓' : '⬆ Form';
+        b.title = have[id] ? ('Template: '+have[id]+' — click to replace') : 'Upload this funder\u2019s blank Word form';
+        b.setAttribute('onclick', "civaraUploadContractTemplate('"+id+"')");
+        row.insertBefore(b, edit);
+        row.insertBefore(document.createTextNode(' '), edit);
+      });
+    }).catch(function(){});
+  }
+  var _origRenderFunding=window.renderFunding;
+  if(typeof _origRenderFunding==='function'){
+    window.renderFunding=function(){ var r=_origRenderFunding.apply(this,arguments); try{augmentContractCards();}catch(e){} return r; };
+  }
+
+  // ---- Fill a funder form for the participant currently open ----
+  function gatherData(){
+    return {
+      forename: gv('mp-fn'), surname: gv('mp-ln'), title: gv('mp-ptitle'),
+      ni: gv('mp-ni'), dob: fmtDate(gv('mp-dob')), address: gv('mp-address'),
+      postcode: gv('mp-postcode'), phone: gv('mp-phone'), email: gv('mp-email'),
+      participant_id: gv('mp-pid'), start_date: fmtDate(gv('mp-start')),
+      gender: gv('mp-gender'), right_to_work: gv('mp-rtw'), basic_skills: gv('mp-bskills'),
+      labour_status: gv('mp-labour'), interpersonal: gv('mp-inter'),
+      adviser: gv('mp-adv'), referral_source: gv('mp-rs'), stage: gv('mp-st'), risk: gv('mp-risk'),
+      outcome_type: gv('mp-outcome-type'), job_title: gv('mp-job-title'), employer: gv('mp-employer'),
+      job_start: fmtDate(gv('mp-job-start')), hours: gv('mp-hours'), pay: gv('mp-pay'),
+      exit_date: fmtDate(gv('mp-exit-date')), leave_reason: gv('mp-leave-reason'),
+      provider: gv('mp-provider'), project: gv('mp-project'),
+      today: new Date().toLocaleDateString('en-GB')
+    };
+  }
+
+  window.civaraFillFunderForm = function(){
+    if(typeof sb==='undefined'||!sb){ alert('Not connected.'); return; }
+    var ids = (typeof getSelectedContractIds==='function') ? getSelectedContractIds() : [];
+    if(!ids.length){ alert('Link this participant to a contract first — open the “Referral & journey” section and tick a contract under “Link to contracts”, then try again.'); return; }
+    sb.from('contracts').select('id,name,template_data,template_name').in('id', ids).then(function(res){
+      var rows=((res&&res.data)||[]).filter(function(r){ return r.template_data; });
+      if(!rows.length){ alert('None of this participant\u2019s contracts has a form template yet.\n\nGo to Funders/Contracts, find the contract and click “⬆ Form” to upload the funder\u2019s blank Word form.'); return; }
+      var chosen=rows[0];
+      if(rows.length>1){
+        var pick=window.prompt('This participant has more than one contract with a form. Type the number:\n\n'+rows.map(function(r,i){return (i+1)+'. '+r.name;}).join('\n'),'1');
+        var idx=parseInt(pick,10)-1;
+        if(isNaN(idx)||idx<0||idx>=rows.length) return;
+        chosen=rows[idx];
+      }
+      var data=gatherData();
+      var fname=('Form - '+chosen.name+' - '+(data.forename||'')+' '+(data.surname||'')).replace(/\s+/g,' ').trim();
+      fetch(FILL_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({templateBase64:chosen.template_data,data:data,fileName:fname})})
+        .then(function(r){ if(!r.ok){ return r.text().then(function(t){ throw new Error(t||('HTTP '+r.status)); }); } return r.blob(); })
+        .then(function(blob){ dl(blob, fname+'.docx'); })
+        .catch(function(e){ alert('Could not fill the form: '+((e&&e.message)||e)+'\n\n(If this says the filler was not found, the Vercel /api/fill-form function may not be deployed yet.)'); });
+    }).catch(function(e){ alert('Could not load the contract: '+((e&&e.message)||e)); });
   };
 })();
 </script>
