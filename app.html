@@ -1068,7 +1068,18 @@
       return r;
     };
   }
-  wrap('openEditP','participants', function(item){ fillPaperwork(item); });
+  wrap('openEditP','participants', function(item){
+    fillPaperwork(item);
+    // Also pull paperwork straight from Supabase, so it loads even if the
+    // in-memory cache/mapper dropped the column.
+    if (typeof sb !== 'undefined' && sb) {
+      try {
+        sb.from('participants').select('paperwork').eq('id', item.id).single().then(function(res){
+          if (res && res.data) fillPaperwork({ paperwork: res.data.paperwork });
+        }).catch(function(){});
+      } catch (e) {}
+    }
+  });
   wrap('openNotes','participants');
   wrap('addNote','participants');
   wrap('deleteP','participants');
@@ -1085,7 +1096,13 @@
     function attempt(pl){ return editId ? sbUpdate('participants', pl, editId) : sbInsert('participants', pl); }
     return attempt(payload).catch(function(e){
       if(String((e&&e.message)||'').toLowerCase().indexOf('paperwork')!==-1){
-        var p2=Object.assign({}, payload); delete p2.paperwork; return attempt(p2);
+        var p2=Object.assign({}, payload); delete p2.paperwork;
+        return attempt(p2).then(function(r){
+          setTimeout(function(){
+            alert("Saved — but the paperwork fields (NI, DOB, address, job info…) could NOT be stored because the 'paperwork' column is missing from your participants table.\n\nFix it in Supabase → SQL Editor by running:\n\nALTER TABLE participants ADD COLUMN IF NOT EXISTS paperwork jsonb;\nNOTIFY pgrst, 'reload schema';\n\nThen save the participant again.");
+          }, 100);
+          return r;
+        });
       }
       throw e;
     });
