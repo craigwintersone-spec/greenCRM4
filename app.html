@@ -1002,46 +1002,143 @@
 <script src="js/extensions/opportunities.js"></script>
 <script src="js/extensions/partner-portal.js"></script>
 
-<!-- Participant handlers fix: Supabase row ids can be numbers while the table's
-     onclick handlers pass them as strings, so the strict (===) lookups in
-     modals.js failed and Edit / Notes / Delete did nothing. These wrappers match
-     the id loosely, then call the original handler with the REAL row id (which
-     its own strict comparison then matches). Also clears the Start/End-form
-     fields when opening a participant so one person's data can't carry over. -->
+<!-- Participant handlers + paperwork persistence (Phase 2) ---------------------
+     (1) Match Supabase row ids loosely so Edit / Notes / Delete work when ids
+         are stored as numbers.
+     (2) Save the extra Start/End-form fields into one `paperwork` JSON column,
+         and refill them when a participant is re-opened. If that column does
+         not exist yet, saving still works (paperwork is skipped) — so you can
+         deploy this before or after running add-paperwork-column.sql. -->
 <script>
 (function () {
   if (typeof DB === 'undefined') return;
-  function byId(list, id) {
-    list = list || [];
-    for (var i = 0; i < list.length; i++) if (String(list[i].id) === String(id)) return list[i];
-    return null;
+
+  function byId(list, id){ list=list||[]; for(var i=0;i<list.length;i++) if(String(list[i].id)===String(id)) return list[i]; return null; }
+  function gv(id){ var el=document.getElementById(id); return el ? (el.value||'') : ''; }
+  function sv(id, v){ var el=document.getElementById(id); if(el) el.value=(v==null?'':v); }
+
+  // db.js's participant mapper predates the `paperwork` column and lists fields
+  // explicitly, so it drops paperwork on every reload — which is why saved job/
+  // personal info vanished on reopen. Extend the mapper to carry it through,
+  // then refresh so already-loaded rows pick it up.
+  if (typeof MAPPERS !== 'undefined' && MAPPERS.participants && !MAPPERS._pwPatched) {
+    var _origPMap = MAPPERS.participants;
+    MAPPERS.participants = function(r){ var o=_origPMap(r); o.paperwork = r.paperwork || {}; return o; };
+    MAPPERS._pwPatched = true;
+    if (typeof refreshTable === 'function' && typeof sb !== 'undefined' && sb && typeof orgId !== 'undefined' && orgId) {
+      try { refreshTable('participants').then(function(){ if (typeof renderParticipants === 'function') renderParticipants(); }); } catch (e) {}
+    }
   }
-  var PAPERWORK_FIELDS = ['mp-ptitle','mp-ni','mp-dob','mp-address','mp-postcode','mp-pid','mp-start','mp-gender','mp-rtw','mp-bskills','mp-labour','mp-inter','mp-outcome-type','mp-job-title','mp-employer','mp-job-start','mp-hours','mp-pay','mp-exit-date','mp-leave-reason'];
-  function clearPaperwork() {
-    PAPERWORK_FIELDS.forEach(function (f) { var el = document.getElementById(f); if (el) el.value = ''; });
+
+  var PW=['mp-ptitle','mp-ni','mp-dob','mp-address','mp-postcode','mp-pid','mp-start','mp-gender','mp-rtw','mp-bskills','mp-labour','mp-inter','mp-outcome-type','mp-job-title','mp-employer','mp-job-start','mp-hours','mp-pay','mp-exit-date','mp-leave-reason'];
+  function clearPaperwork(){ PW.forEach(function(f){ sv(f,''); }); }
+
+  function readPaperwork(){
+    return {
+      title: gv('mp-ptitle'), ni: gv('mp-ni'), dob: gv('mp-dob'),
+      address: gv('mp-address'), postcode: gv('mp-postcode'), pid: gv('mp-pid'),
+      start_date: gv('mp-start'), gender: gv('mp-gender'), right_to_work: gv('mp-rtw'),
+      basic_skills: gv('mp-bskills'), labour_status: gv('mp-labour'), interpersonal: gv('mp-inter'),
+      outcome_type: gv('mp-outcome-type'), job_title: gv('mp-job-title'), employer: gv('mp-employer'),
+      job_start: gv('mp-job-start'), hours: gv('mp-hours'), pay: gv('mp-pay'),
+      exit_date: gv('mp-exit-date'), leave_reason: gv('mp-leave-reason'),
+      provider: gv('mp-provider'), project: gv('mp-project')
+    };
   }
-  function wrap(name, listName, after) {
-    var orig = window[name];
-    if (typeof orig !== 'function') return;
-    window[name] = function (id) {
-      var item = byId(DB[listName], id);
-      if (!item) return;
-      var r = orig.call(this, item.id);
-      if (after) { try { after(); } catch (e) {} }
+  function fillPaperwork(item){
+    var pw=(item&&item.paperwork)||{};
+    sv('mp-ptitle',pw.title); sv('mp-ni',pw.ni); sv('mp-dob',pw.dob);
+    sv('mp-address',pw.address); sv('mp-postcode',pw.postcode); sv('mp-pid',pw.pid);
+    sv('mp-start',pw.start_date); sv('mp-gender',pw.gender); sv('mp-rtw',pw.right_to_work);
+    sv('mp-bskills',pw.basic_skills); sv('mp-labour',pw.labour_status); sv('mp-inter',pw.interpersonal);
+    sv('mp-outcome-type',pw.outcome_type); sv('mp-job-title',pw.job_title); sv('mp-employer',pw.employer);
+    sv('mp-job-start',pw.job_start); sv('mp-hours',pw.hours); sv('mp-pay',pw.pay);
+    sv('mp-exit-date',pw.exit_date); sv('mp-leave-reason',pw.leave_reason);
+    if(pw.provider) sv('mp-provider',pw.provider);
+    if(pw.project) sv('mp-project',pw.project);
+  }
+
+  // ---- loose-id wrappers ----
+  function wrap(name, listName, after){
+    var orig=window[name]; if(typeof orig!=='function') return;
+    window[name]=function(id){
+      var item=byId(DB[listName], id); if(!item) return;
+      var r=orig.call(this, item.id);
+      if(after){ try{ after(item); }catch(e){} }
       return r;
     };
   }
-  wrap('openEditP', 'participants', clearPaperwork);
-  wrap('openNotes', 'participants');
-  wrap('addNote', 'participants');
-  wrap('deleteP', 'participants');
-  wrap('openEqualityModal', 'participants');
-  wrap('convertToParticipant', 'partner_referrals');
+  wrap('openEditP','participants', function(item){ fillPaperwork(item); });
+  wrap('openNotes','participants');
+  wrap('addNote','participants');
+  wrap('deleteP','participants');
+  wrap('openEqualityModal','participants');
+  wrap('convertToParticipant','partner_referrals');
 
-  var _origAddP = window.openAddP;
-  if (typeof _origAddP === 'function') {
-    window.openAddP = function () { var r = _origAddP.apply(this, arguments); clearPaperwork(); return r; };
+  var _origAddP=window.openAddP;
+  if(typeof _origAddP==='function'){
+    window.openAddP=function(){ var r=_origAddP.apply(this, arguments); clearPaperwork(); return r; };
   }
+
+  // ---- save with paperwork (graceful fallback if the column is missing) ----
+  function saveParticipantRow(payload, editId){
+    function attempt(pl){ return editId ? sbUpdate('participants', pl, editId) : sbInsert('participants', pl); }
+    return attempt(payload).catch(function(e){
+      if(String((e&&e.message)||'').toLowerCase().indexOf('paperwork')!==-1){
+        var p2=Object.assign({}, payload); delete p2.paperwork; return attempt(p2);
+      }
+      throw e;
+    });
+  }
+
+  window.saveP = async function(){
+    var btn=document.getElementById('p-save-btn'); btn.textContent='Saving…'; btn.disabled=true;
+    try{
+      var note=gv('mp-note');
+      var contractIds=getSelectedContractIds();
+      var d={
+        first_name: gv('mp-fn')||'Unknown',
+        last_name:  gv('mp-ln')||'',
+        ref_source: gv('mp-rs'),
+        stage:      gv('mp-st'),
+        advisor:    gv('mp-adv'),
+        barriers:   getChkArr('barrier-checks'),
+        outcomes:   getChkArr('outcome-checks'),
+        safeguarding: gv('mp-safe')||null,
+        risk:       gv('mp-risk'),
+        last_contact: today(),
+        contract_ids: contractIds,
+        phone:      gv('mp-phone')||'',
+        email:      gv('mp-email')||'',
+        scores: {
+          confidence:     parseInt(gv('mp-conf'))||null,
+          work_readiness: parseInt(gv('mp-work'))||null,
+          wellbeing:      parseInt(gv('mp-well'))||null,
+          skills:         parseInt(gv('mp-skillsc'))||null
+        },
+        paperwork: readPaperwork()
+      };
+      if(_editPId){
+        var ex=byId(DB.participants, _editPId);
+        var notes=toArr(ex&&ex.notes).slice();
+        if(note) notes.push({t:note, d:today(), s:'Staff'});
+        await saveParticipantRow(Object.assign({}, d, {notes:notes}), _editPId);
+      } else {
+        var notes2=note?[{t:note, d:today(), s:'Staff'}]:[];
+        await saveParticipantRow(Object.assign({}, d, {notes:notes2}), null);
+        if(_editPartnerRefId){ try{ await sbUpdate('partner_referrals', {status:'Converted'}, _editPartnerRefId); }catch(e){} }
+      }
+      if(sb) await refreshTable('participants');
+      if(sb) await refreshTable('partner_referrals');
+      _editPartnerRefId=null;
+      closeModal('modal-p');
+      renderParticipants();
+    } catch(e){
+      alert('Save failed: '+e.message);
+    } finally {
+      btn.textContent='Save'; btn.disabled=false;
+    }
+  };
 })();
 </script>
 
