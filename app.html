@@ -1045,5 +1045,111 @@
 })();
 </script>
 
+<!-- Evidence file attachments (Phase 2) ---------------------------------------
+     Stores the attached file on the evidence record (base64 in file_data), so
+     it inherits the evidence table's org security — no storage bucket needed.
+     Adds a ⬇ download button in the Evidence Hub. If the file_data/file_name
+     columns don't exist yet, saving still works (the file is just skipped). -->
+<script>
+(function () {
+  if (typeof DB === 'undefined') return;
+  function gvE(id){ var el=document.getElementById(id); return el ? (el.value||'') : ''; }
+  function readAsDataURL(file){
+    return new Promise(function(res, rej){
+      var fr=new FileReader();
+      fr.onload=function(){ res(fr.result); };
+      fr.onerror=function(){ rej(new Error('Could not read the file')); };
+      fr.readAsDataURL(file);
+    });
+  }
+  function insertEvidenceRow(rec){
+    return sbInsert('evidence', rec).catch(function(e){
+      var msg=String((e&&e.message)||'').toLowerCase();
+      if(msg.indexOf('file_data')!==-1 || msg.indexOf('file_name')!==-1){
+        var r2=Object.assign({}, rec); delete r2.file_data; delete r2.file_name;
+        return sbInsert('evidence', r2);   // column not added yet — save without the file
+      }
+      throw e;
+    });
+  }
+
+  // Save evidence, attaching the picked file if there is one.
+  window.saveEvid = async function(){
+    var btn=document.getElementById('evid-save-btn'); btn.textContent='Saving…'; btn.disabled=true;
+    try{
+      var rec={
+        participant_name: gvE('evid-p'),
+        type:            gvE('evid-type'),
+        linked_outcome:  gvE('evid-out'),
+        staff:           gvE('evid-staff'),
+        evidence_date:   gvE('evid-date'),
+        status:          'Pending'
+      };
+      var input=document.getElementById('evid-file');
+      var file=input && input.files && input.files[0];
+      if(file){
+        if(file.size > 5*1024*1024){ alert('That file is over 5MB. Please attach a smaller file.'); btn.textContent='Save'; btn.disabled=false; return; }
+        rec.file_data=await readAsDataURL(file);
+        rec.file_name=file.name;
+        rec.status='Received';
+      }
+      await insertEvidenceRow(rec);
+      await refreshTable('evidence');
+      closeModal('modal-evid');
+      renderEvidence();
+    } catch(e){ alert('Save failed: '+e.message); }
+    finally { btn.textContent='Save'; btn.disabled=false; }
+  };
+
+  // Clear the file picker each time the modal is opened.
+  var _origOpenAddEvid=window.openAddEvid;
+  if(typeof _origOpenAddEvid==='function'){
+    window.openAddEvid=function(){ var r=_origOpenAddEvid.apply(this, arguments); var fi=document.getElementById('evid-file'); if(fi) fi.value=''; return r; };
+  }
+
+  // After the Evidence Hub renders, add a ⬇ button to rows that have a file.
+  function augmentDownloads(){
+    if(typeof sb==='undefined' || !sb) return;
+    sb.from('evidence').select('id,file_name').not('file_data','is',null).then(function(res){
+      var rows=(res&&res.data)||[]; if(!rows.length) return;
+      var names={}; rows.forEach(function(r){ names[String(r.id)]=r.file_name||'file'; });
+      var tbody=document.getElementById('evid-table'); if(!tbody) return;
+      Array.prototype.forEach.call(tbody.querySelectorAll('tr'), function(tr){
+        var del=tr.querySelector('button[onclick^="deleteEvid"]'); if(!del) return;
+        var m=/deleteEvid\('([^']+)'\)/.exec(del.getAttribute('onclick')||''); if(!m) return;
+        var id=m[1];
+        if(names[id] && !tr.querySelector('.evid-dl')){
+          var b=document.createElement('button');
+          b.className='btn btn-ghost btn-sm evid-dl';
+          b.textContent='⬇ '+names[id];
+          b.setAttribute('onclick', "civaraDownloadEvidence('"+id+"')");
+          del.parentNode.insertBefore(b, del);
+          del.parentNode.insertBefore(document.createTextNode(' '), del);
+        }
+      });
+    }).catch(function(){});
+  }
+  var _origRenderEvidence=window.renderEvidence;
+  if(typeof _origRenderEvidence==='function'){
+    window.renderEvidence=function(){ var r=_origRenderEvidence.apply(this, arguments); try{ augmentDownloads(); }catch(e){} return r; };
+  }
+
+  // Fetch the file for one evidence row and download it.
+  window.civaraDownloadEvidence=function(id){
+    if(typeof sb==='undefined' || !sb) return;
+    sb.from('evidence').select('file_data,file_name').eq('id', id).single().then(function(res){
+      var row=res&&res.data;
+      if(!row || !row.file_data){ alert('No file is attached to this evidence.'); return; }
+      fetch(row.file_data).then(function(r){ return r.blob(); }).then(function(blob){
+        var url=URL.createObjectURL(blob);
+        var a=document.createElement('a'); a.href=url; a.download=row.file_name||'evidence';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+      });
+    }).catch(function(e){ alert('Could not download: '+((e&&e.message)||e)); });
+  };
+})();
+</script>
+
 </body>
 </html>
