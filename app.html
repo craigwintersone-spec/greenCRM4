@@ -506,44 +506,65 @@
 
 <div class="modal-overlay" id="modal-p"><div class="modal">
   <h2 id="mp-title">Add participant</h2>
-  <div class="form-grid-2"><div class="form-row"><label>First name</label><input id="mp-fn"/></div><div class="form-row"><label>Last name</label><input id="mp-ln"/></div></div>
-  <div class="form-grid-2"><div class="form-row"><label>Referral source</label><select id="mp-rs"><option>Self-referral</option><option>Probation</option><option>Jobcentre Plus</option><option>Community org</option><option>School / college</option></select></div><div class="form-row"><label>Advisor</label><select id="mp-adv"><option>Sarah T.</option><option>Marcus O.</option><option>Priya S.</option><option>Unassigned</option></select></div></div>
-  <div class="form-grid-2"><div class="form-row"><label>Stage</label><select id="mp-st"><option>Referred</option><option>Engaged</option><option>In Support</option><option>Job Ready</option><option>Outcome Achieved</option><option>Sustained</option><option>Closed</option></select></div><div class="form-row"><label>Risk level</label><select id="mp-risk"><option>Low</option><option>Medium</option><option>High</option></select></div></div>
-  <div class="form-grid-2"><div class="form-row"><label>Phone</label><input id="mp-phone"/></div><div class="form-row"><label>Email</label><input type="email" id="mp-email"/></div></div>
-  <div class="form-grid-2"><div class="form-row"><label>Title</label><input id="mp-ptitle" placeholder="Mr / Mrs / Ms"/></div><div class="form-row"><label>Participant ID</label><input id="mp-pid"/></div></div>
-  <div class="form-grid-2"><div class="form-row"><label>NI number</label><input id="mp-ni" placeholder="AB123456C"/></div><div class="form-row"><label>Date of birth</label><input type="date" id="mp-dob"/></div></div>
-  <div class="form-row"><label>Address</label><input id="mp-address"/></div>
-  <div class="form-grid-2"><div class="form-row"><label>Post code</label><input id="mp-postcode"/></div><div class="form-row"><label>Start date</label><input type="date" id="mp-start"/></div></div>
-  <div style="font-size:12px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin:8px 0 8px">For funder paperwork</div>
-  <div class="form-grid-2"><div class="form-row"><label>Gender</label><select id="mp-gender"><option value=""></option><option>Male</option><option>Female</option><option>Other</option><option>Prefer not to say</option></select></div><div class="form-row"><label>Right to live &amp; work in UK</label><select id="mp-rtw"><option value=""></option><option>Yes</option><option>No</option></select></div></div>
-  <div class="form-grid-2"><div class="form-row"><label>Basic skills (Maths &amp; English)</label><select id="mp-bskills"><option value=""></option><option>Yes</option><option>No</option></select></div><div class="form-row"><label>Labour market status</label><select id="mp-labour"><option value=""></option><option>Unemployed</option><option>Economically inactive</option></select></div></div>
-  <div class="form-grid-2"><div class="form-row"><label>Needs interpersonal-skills support</label><select id="mp-inter"><option value=""></option><option>Yes</option><option>No</option></select></div><div class="form-row"><label>Delivery organisation</label><input id="mp-provider"/></div></div>
-  <div class="form-row"><label>Programme / project</label><input id="mp-project"/></div>
-  <div style="font-size:12px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin:8px 0 8px">Job outcome (for End Form)</div>
-  <div class="form-grid-2"><div class="form-row"><label>Outcome type</label><select id="mp-outcome-type"><option value=""></option><option>Employment</option><option>Self-employment</option><option>Apprenticeship</option><option>Training</option><option>Education</option><option>Other</option></select></div><div class="form-row"><label>Job title</label><input id="mp-job-title"/></div></div>
-  <div class="form-grid-2"><div class="form-row"><label>Employer</label><input id="mp-employer"/></div><div class="form-row"><label>Job start date</label><input type="date" id="mp-job-start"/></div></div>
-  <div class="form-grid-2"><div class="form-row"><label>Hours per week</label><input id="mp-hours" type="number"/></div><div class="form-row"><label>Pay (e.g. £12.50/hr)</label><input id="mp-pay"/></div></div>
-  <div class="form-grid-2"><div class="form-row"><label>Exit / leaving date</label><input type="date" id="mp-exit-date"/></div><div class="form-row"><label>Reason for leaving</label><input id="mp-leave-reason"/></div></div>
-  <div style="margin:2px 0 8px"><button type="button" class="btn btn-ghost btn-sm" onclick="civaraAddJobEvidence()">📎 Add job evidence (payslip, contract…)</button></div>
-  <div class="form-row"><label>Next contact due</label><input type="date" id="mp-due"/></div>
-  <div class="form-row"><label>Referral background (for AI intake)</label><textarea id="mp-intake-text" placeholder="Paste referral letter or background notes…" style="min-height:70px"></textarea></div>
-  <div id="mp-ai-intake-result"></div>
-  <div style="margin-bottom:12px"><button class="btn btn-ai btn-sm" onclick="runIntakeAI()">✦ Intake Agent — suggest barriers &amp; risk</button></div>
-  <div class="form-row"><label>Barriers</label><div id="barrier-checks" class="chk-group"></div></div>
-  <div class="form-row"><label>Outcomes achieved</label><div id="outcome-checks" class="chk-group"></div></div>
-  <div class="form-row"><label>Link to contracts</label><div class="con-select" id="mp-contracts-list"></div></div>
-  <div class="form-row"><label>Safeguarding flag</label><select id="mp-safe"><option value="">None</option><option>Domestic abuse</option><option>Mental health</option><option>Substance misuse</option><option>Homelessness risk</option></select></div>
-  <div class="score-box"><div class="score-label">Distance Travelled (1–10)</div>
-    <div class="form-grid-2"><div class="form-row"><label>Confidence</label><input type="number" id="mp-conf" min="1" max="10"/></div><div class="form-row"><label>Work readiness</label><input type="number" id="mp-work" min="1" max="10"/></div></div>
-    <div class="form-grid-2"><div class="form-row"><label>Wellbeing</label><input type="number" id="mp-well" min="1" max="10"/></div><div class="form-row"><label>Skills</label><input type="number" id="mp-skillsc" min="1" max="10"/></div></div>
-  </div>
-  <div class="form-row"><label>Case note</label><textarea id="mp-note"></textarea></div>
-  <div id="mp-note-preview" style="display:none">
-    <div style="font-size:11px;color:var(--purple);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;font-weight:700">✦ Case Note Agent — structured preview</div>
-    <div class="ai-note-box" id="mp-note-preview-text"></div>
-    <div style="display:flex;gap:8px;margin-top:6px"><button class="btn btn-p btn-sm" onclick="acceptAINote()">Use this</button><button class="btn btn-ghost btn-sm" onclick="rejectAINote()">Use original</button></div>
-  </div>
-  <button class="btn btn-ai btn-sm" style="margin-bottom:12px" onclick="runCaseNoteAI()" id="note-ai-btn">✦ Case Note Agent — structure note</button>
+
+  <details open><summary style="cursor:pointer;padding:10px 12px;margin-top:6px;background:var(--bg);border:1px solid var(--border);border-radius:9px;font-weight:700;font-size:13px;color:var(--txt);user-select:none">👤 Participant details</summary>
+  <div style="padding:12px 2px 2px">
+    <div class="form-grid-2"><div class="form-row"><label>First name</label><input id="mp-fn"/></div><div class="form-row"><label>Last name</label><input id="mp-ln"/></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Title</label><input id="mp-ptitle" placeholder="Mr / Mrs / Ms"/></div><div class="form-row"><label>Date of birth</label><input type="date" id="mp-dob"/></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>NI number</label><input id="mp-ni" placeholder="AB123456C"/></div><div class="form-row"><label>Participant ID</label><input id="mp-pid"/></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Phone</label><input id="mp-phone"/></div><div class="form-row"><label>Email</label><input type="email" id="mp-email"/></div></div>
+    <div class="form-row"><label>Address</label><input id="mp-address"/></div>
+    <div class="form-grid-2"><div class="form-row"><label>Post code</label><input id="mp-postcode"/></div><div class="form-row"><label>Start date</label><input type="date" id="mp-start"/></div></div>
+  </div></details>
+
+  <details open><summary style="cursor:pointer;padding:10px 12px;margin-top:12px;background:var(--bg);border:1px solid var(--border);border-radius:9px;font-weight:700;font-size:13px;color:var(--txt);user-select:none">🧭 Referral &amp; journey</summary>
+  <div style="padding:12px 2px 2px">
+    <div class="form-grid-2"><div class="form-row"><label>Referral source</label><select id="mp-rs"><option>Self-referral</option><option>Probation</option><option>Jobcentre Plus</option><option>Community org</option><option>School / college</option></select></div><div class="form-row"><label>Advisor</label><select id="mp-adv"><option>Sarah T.</option><option>Marcus O.</option><option>Priya S.</option><option>Unassigned</option></select></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Stage</label><select id="mp-st"><option>Referred</option><option>Engaged</option><option>In Support</option><option>Job Ready</option><option>Outcome Achieved</option><option>Sustained</option><option>Closed</option></select></div><div class="form-row"><label>Risk level</label><select id="mp-risk"><option>Low</option><option>Medium</option><option>High</option></select></div></div>
+    <div class="form-row"><label>Next contact due</label><input type="date" id="mp-due"/></div>
+    <div class="form-row"><label>Link to contracts</label><div class="con-select" id="mp-contracts-list"></div></div>
+    <div class="form-row"><label>Referral background (for AI intake)</label><textarea id="mp-intake-text" placeholder="Paste referral letter or background notes…" style="min-height:70px"></textarea></div>
+    <div id="mp-ai-intake-result"></div>
+    <div style="margin-bottom:4px"><button class="btn btn-ai btn-sm" onclick="runIntakeAI()">✦ Intake Agent — suggest barriers &amp; risk</button></div>
+  </div></details>
+
+  <details open><summary style="cursor:pointer;padding:10px 12px;margin-top:12px;background:var(--bg);border:1px solid var(--border);border-radius:9px;font-weight:700;font-size:13px;color:var(--txt);user-select:none">📋 Assessment &amp; notes</summary>
+  <div style="padding:12px 2px 2px">
+    <div class="form-row"><label>Barriers</label><div id="barrier-checks" class="chk-group"></div></div>
+    <div class="form-row"><label>Outcomes achieved</label><div id="outcome-checks" class="chk-group"></div></div>
+    <div class="form-row"><label>Safeguarding flag</label><select id="mp-safe"><option value="">None</option><option>Domestic abuse</option><option>Mental health</option><option>Substance misuse</option><option>Homelessness risk</option></select></div>
+    <div class="score-box"><div class="score-label">Distance Travelled (1–10)</div>
+      <div class="form-grid-2"><div class="form-row"><label>Confidence</label><input type="number" id="mp-conf" min="1" max="10"/></div><div class="form-row"><label>Work readiness</label><input type="number" id="mp-work" min="1" max="10"/></div></div>
+      <div class="form-grid-2"><div class="form-row"><label>Wellbeing</label><input type="number" id="mp-well" min="1" max="10"/></div><div class="form-row"><label>Skills</label><input type="number" id="mp-skillsc" min="1" max="10"/></div></div>
+    </div>
+    <div class="form-row"><label>Case note</label><textarea id="mp-note"></textarea></div>
+    <div id="mp-note-preview" style="display:none">
+      <div style="font-size:11px;color:var(--purple);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;font-weight:700">✦ Case Note Agent — structured preview</div>
+      <div class="ai-note-box" id="mp-note-preview-text"></div>
+      <div style="display:flex;gap:8px;margin-top:6px"><button class="btn btn-p btn-sm" onclick="acceptAINote()">Use this</button><button class="btn btn-ghost btn-sm" onclick="rejectAINote()">Use original</button></div>
+    </div>
+    <button class="btn btn-ai btn-sm" onclick="runCaseNoteAI()" id="note-ai-btn">✦ Case Note Agent — structure note</button>
+  </div></details>
+
+  <details><summary style="cursor:pointer;padding:10px 12px;margin-top:12px;background:var(--bg);border:1px solid var(--border);border-radius:9px;font-weight:700;font-size:13px;color:var(--txt);user-select:none">📑 Funder paperwork &amp; eligibility</summary>
+  <div style="padding:12px 2px 2px">
+    <div style="font-size:12px;color:var(--txt3);margin-bottom:10px">Eligibility details used to fill funder Start/End forms. Optional.</div>
+    <div class="form-grid-2"><div class="form-row"><label>Gender</label><select id="mp-gender"><option value=""></option><option>Male</option><option>Female</option><option>Other</option><option>Prefer not to say</option></select></div><div class="form-row"><label>Right to live &amp; work in UK</label><select id="mp-rtw"><option value=""></option><option>Yes</option><option>No</option></select></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Basic skills (Maths &amp; English)</label><select id="mp-bskills"><option value=""></option><option>Yes</option><option>No</option></select></div><div class="form-row"><label>Labour market status</label><select id="mp-labour"><option value=""></option><option>Unemployed</option><option>Economically inactive</option></select></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Needs interpersonal-skills support</label><select id="mp-inter"><option value=""></option><option>Yes</option><option>No</option></select></div><div class="form-row"><label>Delivery organisation</label><input id="mp-provider"/></div></div>
+    <div class="form-row"><label>Programme / project</label><input id="mp-project"/></div>
+  </div></details>
+
+  <details><summary style="cursor:pointer;padding:10px 12px;margin-top:12px;background:#E7F0EF;border:1px solid #9CC3C0;border-left:4px solid #1F6F6D;border-radius:9px;font-weight:700;font-size:13px;color:#175655;user-select:none">💼 Job outcome — <span style="font-weight:500;color:#3E6F6C">only when they get a job</span></summary>
+  <div style="padding:12px 2px 2px">
+    <div style="font-size:12px;color:var(--txt3);margin-bottom:10px">Fill this in later, when the participant starts work. Feeds the End Form and job evidence.</div>
+    <div class="form-grid-2"><div class="form-row"><label>Outcome type</label><select id="mp-outcome-type"><option value=""></option><option>Employment</option><option>Self-employment</option><option>Apprenticeship</option><option>Training</option><option>Education</option><option>Other</option></select></div><div class="form-row"><label>Job title</label><input id="mp-job-title"/></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Employer</label><input id="mp-employer"/></div><div class="form-row"><label>Job start date</label><input type="date" id="mp-job-start"/></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Hours per week</label><input id="mp-hours" type="number"/></div><div class="form-row"><label>Pay (e.g. £12.50/hr)</label><input id="mp-pay"/></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Exit / leaving date</label><input type="date" id="mp-exit-date"/></div><div class="form-row"><label>Reason for leaving</label><input id="mp-leave-reason"/></div></div>
+    <div style="margin:4px 0 2px"><button type="button" class="btn btn-ghost btn-sm" onclick="civaraAddJobEvidence()">📎 Add job evidence (payslip, contract…)</button></div>
+  </div></details>
+
   <div class="modal-footer"><button class="btn btn-ghost" onclick="closeParticipantModal()">Cancel</button><button class="btn btn-ghost" onclick="civaraGenerateStartForm()">📄 Start Form</button><button class="btn btn-ghost" onclick="civaraGenerateEndForm()">📄 End Form</button><button class="btn btn-p" id="p-save-btn" onclick="saveP()">Save</button></div>
 </div></div>
 
