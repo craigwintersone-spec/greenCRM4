@@ -519,6 +519,12 @@
   <div class="form-grid-2"><div class="form-row"><label>Basic skills (Maths &amp; English)</label><select id="mp-bskills"><option value=""></option><option>Yes</option><option>No</option></select></div><div class="form-row"><label>Labour market status</label><select id="mp-labour"><option value=""></option><option>Unemployed</option><option>Economically inactive</option></select></div></div>
   <div class="form-grid-2"><div class="form-row"><label>Needs interpersonal-skills support</label><select id="mp-inter"><option value=""></option><option>Yes</option><option>No</option></select></div><div class="form-row"><label>Delivery organisation</label><input id="mp-provider"/></div></div>
   <div class="form-row"><label>Programme / project</label><input id="mp-project"/></div>
+  <div style="font-size:12px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin:8px 0 8px">Job outcome (for End Form)</div>
+  <div class="form-grid-2"><div class="form-row"><label>Outcome type</label><select id="mp-outcome-type"><option value=""></option><option>Employment</option><option>Self-employment</option><option>Apprenticeship</option><option>Training</option><option>Education</option><option>Other</option></select></div><div class="form-row"><label>Job title</label><input id="mp-job-title"/></div></div>
+  <div class="form-grid-2"><div class="form-row"><label>Employer</label><input id="mp-employer"/></div><div class="form-row"><label>Job start date</label><input type="date" id="mp-job-start"/></div></div>
+  <div class="form-grid-2"><div class="form-row"><label>Hours per week</label><input id="mp-hours" type="number"/></div><div class="form-row"><label>Pay (e.g. £12.50/hr)</label><input id="mp-pay"/></div></div>
+  <div class="form-grid-2"><div class="form-row"><label>Exit / leaving date</label><input type="date" id="mp-exit-date"/></div><div class="form-row"><label>Reason for leaving</label><input id="mp-leave-reason"/></div></div>
+  <div style="margin:2px 0 8px"><button type="button" class="btn btn-ghost btn-sm" onclick="civaraAddJobEvidence()">📎 Add job evidence (payslip, contract…)</button></div>
   <div class="form-row"><label>Next contact due</label><input type="date" id="mp-due"/></div>
   <div class="form-row"><label>Referral background (for AI intake)</label><textarea id="mp-intake-text" placeholder="Paste referral letter or background notes…" style="min-height:70px"></textarea></div>
   <div id="mp-ai-intake-result"></div>
@@ -538,7 +544,7 @@
     <div style="display:flex;gap:8px;margin-top:6px"><button class="btn btn-p btn-sm" onclick="acceptAINote()">Use this</button><button class="btn btn-ghost btn-sm" onclick="rejectAINote()">Use original</button></div>
   </div>
   <button class="btn btn-ai btn-sm" style="margin-bottom:12px" onclick="runCaseNoteAI()" id="note-ai-btn">✦ Case Note Agent — structure note</button>
-  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeParticipantModal()">Cancel</button><button class="btn btn-ghost" onclick="civaraGenerateStartForm()">📄 Start Form</button><button class="btn btn-p" id="p-save-btn" onclick="saveP()">Save</button></div>
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeParticipantModal()">Cancel</button><button class="btn btn-ghost" onclick="civaraGenerateStartForm()">📄 Start Form</button><button class="btn btn-ghost" onclick="civaraGenerateEndForm()">📄 End Form</button><button class="btn btn-p" id="p-save-btn" onclick="saveP()">Save</button></div>
 </div></div>
 
 <div class="modal-overlay" id="modal-c"><div class="modal"><h2 id="c-title">Add contact</h2><div class="form-grid-2"><div class="form-row"><label>First name</label><input id="cf-fn"/></div><div class="form-row"><label>Last name</label><input id="cf-ln"/></div></div><div class="form-row"><label>Email</label><input id="cf-em" type="email"/></div><div class="form-grid-2"><div class="form-row"><label>Role</label><select id="cf-role"><option>Donor</option><option>Partner</option><option>Funder</option><option>Trustee</option></select></div><div class="form-row"><label>Status</label><select id="cf-st"><option>Prospect</option><option>Engaged</option><option>Active Supporter</option><option>Lapsed</option></select></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-c')">Cancel</button><button class="btn btn-p" id="c-save-btn" onclick="saveC()">Save</button></div></div></div>
@@ -625,14 +631,13 @@
 <!-- Entry point -->
 <script src="js/boot.js"></script>
 
-<!-- Auto-fill paperwork (Phase 1: Start Form) — inlined so it is ONE file, no separate paperwork.js needed -->
+<!-- Auto-fill paperwork (Start & End Form + job evidence) — inlined so it is ONE file -->
 <script>
-// js/paperwork.js — Civara auto-fill paperwork (Phase 1: Participant Start Form)
+// Civara auto-fill paperwork — Start Form + End Form (inlined into app.html)
 // ---------------------------------------------------------------------------
-// window.civaraGenerateStartForm() reads the OPEN Add Participant form and
-// downloads a filled Word (.docx) Start Form immediately — no second pop-up.
-// Fill the participant in once, click "📄 Start Form", done.
-// No database changes. No external libraries.
+// window.civaraGenerateStartForm()  -> fills & downloads a Participant Start Form
+// window.civaraGenerateEndForm()    -> fills & downloads a Participant End/Exit Form
+// Both read the OPEN Add Participant form. No pop-up, no DB changes, no libraries.
 'use strict';
 
 (function () {
@@ -744,7 +749,16 @@
       '<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>' + bold + color + '<w:sz w:val="' + sz + '"/></w:rPr>' +
       valueRuns(text) + '</w:r></w:p>';
   }
+  function docWrap(body) {
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+      body +
+      '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>' +
+      '<w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/>' +
+      '</w:sectPr></w:body></w:document>';
+  }
 
+  /* ---------- form content ---------------------------------------------- */
   function buildStartFormXml(d) {
     const detail = [
       ['Title', d.title], ['Forename', d.forename], ['Surname', d.surname],
@@ -770,7 +784,7 @@
     ];
     const provider = [['Delivery organisation', d.provider], ['Programme / project', d.project]];
 
-    const body =
+    return docWrap(
       para('Participant Start Form', { center: true, bold: true, sz: 32, after: 40 }) +
       para('Initial registration & assessment — prepared in Civara on ' + d.generatedOn,
         { center: true, sz: 18, color: '808080', after: 160 }) +
@@ -784,17 +798,40 @@
       heading('Delivery') + rowsTable(provider) +
       para('', { after: 120 }) +
       para('Participant signature: ______________________________    Date: ____________', { sz: 20, after: 120 }) +
-      para('Adviser signature: __________________________________    Date: ____________', { sz: 20 });
-
-    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
-      '<w:body>' + body +
-      '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>' +
-      '<w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/>' +
-      '</w:sectPr></w:body></w:document>';
+      para('Adviser signature: __________________________________    Date: ____________', { sz: 20 })
+    );
   }
 
-  function buildDocxBlob(d) {
+  function buildEndFormXml(d) {
+    const detail = [
+      ['Title', d.title], ['Forename', d.forename], ['Surname', d.surname],
+      ['NI number', d.ni], ['Date of birth', d.dob], ['Telephone', d.phone],
+      ['Email address', d.email], ['Participant ID', d.pid]
+    ];
+    const dates = [['Programme start date', d.startDate], ['Exit / leaving date', d.exitDate]];
+    const outcome = [
+      ['Outcome type', d.outcomeType], ['Job title', d.jobTitle], ['Employer', d.employer],
+      ['Job start date', d.jobStart], ['Hours per week', d.hours], ['Pay', d.pay]
+    ];
+    const provider = [['Delivery organisation', d.provider], ['Programme / project', d.project]];
+
+    return docWrap(
+      para('Participant End / Exit Form', { center: true, bold: true, sz: 32, after: 40 }) +
+      para('Programme exit & outcome — prepared in Civara on ' + d.generatedOn,
+        { center: true, sz: 18, color: '808080', after: 160 }) +
+      heading('Part 1: Participant Details') + rowsTable(detail) +
+      heading('Part 2: Programme Dates') + rowsTable(dates) +
+      heading('Part 3: Outcome') + rowsTable(outcome) +
+      para('Reason for leaving', { bold: true, sz: 20, after: 40 }) + fullBox(d.leaveReason) +
+      para('Adviser notes', { bold: true, sz: 20, after: 40 }) + fullBox(d.caseNote) +
+      heading('Delivery') + rowsTable(provider) +
+      para('', { after: 120 }) +
+      para('Participant signature: ______________________________    Date: ____________', { sz: 20, after: 120 }) +
+      para('Adviser signature: __________________________________    Date: ____________', { sz: 20 })
+    );
+  }
+
+  function packDocx(documentXml) {
     const contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
@@ -811,9 +848,10 @@
       { name: '[Content_Types].xml', data: strBytes(contentTypes) },
       { name: '_rels/.rels', data: strBytes(rels) },
       { name: 'word/_rels/document.xml.rels', data: strBytes(docRels) },
-      { name: 'word/document.xml', data: strBytes(buildStartFormXml(d)) }
+      { name: 'word/document.xml', data: strBytes(documentXml) }
     ]);
   }
+  function buildDocxBlob(d) { return packDocx(buildStartFormXml(d)); } // (kept name for tests)
 
   /* ---------- data helpers ---------------------------------------------- */
   function fmtDate(v) {
@@ -845,7 +883,6 @@
   function ls(key, def) { try { return localStorage.getItem(key) || def || ''; } catch (e) { return def || ''; } }
   function lsSet(key, val) { try { localStorage.setItem(key, val); } catch (e) {} }
 
-  // Read straight from the open Add Participant form (with optional object override).
   function gather(p) {
     p = p || {};
     return {
@@ -882,6 +919,19 @@
       generatedOn: new Date().toLocaleDateString('en-GB')
     };
   }
+  function gatherEnd(p) {
+    p = p || {};
+    const d = gather(p);
+    d.outcomeType = pick(p, 'outcome_type', 'outcomeType') || elVal('mp-outcome-type');
+    d.jobTitle = pick(p, 'job_title', 'jobTitle') || elVal('mp-job-title');
+    d.employer = pick(p, 'employer', 'employer_name') || elVal('mp-employer');
+    d.jobStart = fmtDate(pick(p, 'job_start', 'jobStart') || elVal('mp-job-start'));
+    d.hours = pick(p, 'hours', 'hours_per_week') || elVal('mp-hours');
+    d.pay = pick(p, 'pay', 'salary', 'wage') || elVal('mp-pay');
+    d.exitDate = fmtDate(pick(p, 'exit_date', 'exitDate', 'leaving_date') || elVal('mp-exit-date'));
+    d.leaveReason = pick(p, 'leave_reason', 'leaving_reason', 'reason') || elVal('mp-leave-reason');
+    return d;
+  }
 
   function download(blob, filename) {
     const url = URL.createObjectURL(blob);
@@ -891,31 +941,53 @@
     setTimeout(() => URL.revokeObjectURL(url), 4000);
   }
 
-  // Remember delivery org / project between participants, and prefill the
-  // fields when the form is on screen.
   function prefillDelivery() {
     const pv = document.getElementById('mp-provider'), pj = document.getElementById('mp-project');
     if (pv && !pv.value) pv.value = ls('civara_provider', '');
     if (pj && !pj.value) pj.value = ls('civara_project', '');
   }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', prefillDelivery);
-  } else {
-    prefillDelivery();
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', prefillDelivery);
+  else prefillDelivery();
 
-  /* ---------- public entry point — generate straight away --------------- */
+  /* ---------- public entry points --------------------------------------- */
   window.civaraGenerateStartForm = function (p) {
-    if (p && p.preventDefault) p = null;              // called as onclick handler
+    if (p && p.preventDefault) p = null;
     if (!window.TextEncoder) { alert('This browser is too old to generate the form.'); return; }
     const d = gather(p);
     if (!d.forename && !d.surname) { alert('Add the participant\u2019s name first, then click Start Form.'); return; }
     lsSet('civara_provider', d.provider); lsSet('civara_project', d.project);
     let blob;
-    try { blob = buildDocxBlob(d); }
+    try { blob = packDocx(buildStartFormXml(d)); }
     catch (e) { alert('Sorry — could not build the form: ' + e.message); return; }
     const name = ('Start Form - ' + (d.forename || '') + ' ' + (d.surname || '')).trim().replace(/\s+/g, ' ') || 'Start Form';
     download(blob, name + '.docx');
+  };
+
+  window.civaraGenerateEndForm = function (p) {
+    if (p && p.preventDefault) p = null;
+    if (!window.TextEncoder) { alert('This browser is too old to generate the form.'); return; }
+    const d = gatherEnd(p);
+    if (!d.forename && !d.surname) { alert('Add the participant\u2019s name first, then click End Form.'); return; }
+    lsSet('civara_provider', d.provider); lsSet('civara_project', d.project);
+    let blob;
+    try { blob = packDocx(buildEndFormXml(d)); }
+    catch (e) { alert('Sorry — could not build the form: ' + e.message); return; }
+    const name = ('End Form - ' + (d.forename || '') + ' ' + (d.surname || '')).trim().replace(/\s+/g, ' ') || 'End Form';
+    download(blob, name + '.docx');
+  };
+
+  // Quick-log job evidence (payslip, contract…) against this participant by
+  // opening the app's existing Evidence Hub logger, prefilled for a job outcome.
+  window.civaraAddJobEvidence = function () {
+    const name = (elVal('mp-fn') + ' ' + elVal('mp-ln')).trim();
+    try { if (typeof openAddEvid === 'function') openAddEvid(); } catch (e) {}
+    setTimeout(function () {
+      const p = document.getElementById('evid-p'); if (p && name) p.value = name;
+      const t = document.getElementById('evid-type'); if (t) t.value = 'Payslip';
+      const o = document.getElementById('evid-out'); if (o) o.value = 'Employment';
+      const s = document.getElementById('evid-staff'); if (s && !s.value) s.value = elVal('mp-adv');
+      const dt = document.getElementById('evid-date'); if (dt && !dt.value) dt.value = new Date().toISOString().slice(0, 10);
+    }, 0);
   };
 
 })();
