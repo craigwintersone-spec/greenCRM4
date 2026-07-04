@@ -1002,5 +1002,48 @@
 <script src="js/extensions/opportunities.js"></script>
 <script src="js/extensions/partner-portal.js"></script>
 
+<!-- Participant handlers fix: Supabase row ids can be numbers while the table's
+     onclick handlers pass them as strings, so the strict (===) lookups in
+     modals.js failed and Edit / Notes / Delete did nothing. These wrappers match
+     the id loosely, then call the original handler with the REAL row id (which
+     its own strict comparison then matches). Also clears the Start/End-form
+     fields when opening a participant so one person's data can't carry over. -->
+<script>
+(function () {
+  if (typeof DB === 'undefined') return;
+  function byId(list, id) {
+    list = list || [];
+    for (var i = 0; i < list.length; i++) if (String(list[i].id) === String(id)) return list[i];
+    return null;
+  }
+  var PAPERWORK_FIELDS = ['mp-ptitle','mp-ni','mp-dob','mp-address','mp-postcode','mp-pid','mp-start','mp-gender','mp-rtw','mp-bskills','mp-labour','mp-inter','mp-outcome-type','mp-job-title','mp-employer','mp-job-start','mp-hours','mp-pay','mp-exit-date','mp-leave-reason'];
+  function clearPaperwork() {
+    PAPERWORK_FIELDS.forEach(function (f) { var el = document.getElementById(f); if (el) el.value = ''; });
+  }
+  function wrap(name, listName, after) {
+    var orig = window[name];
+    if (typeof orig !== 'function') return;
+    window[name] = function (id) {
+      var item = byId(DB[listName], id);
+      if (!item) return;
+      var r = orig.call(this, item.id);
+      if (after) { try { after(); } catch (e) {} }
+      return r;
+    };
+  }
+  wrap('openEditP', 'participants', clearPaperwork);
+  wrap('openNotes', 'participants');
+  wrap('addNote', 'participants');
+  wrap('deleteP', 'participants');
+  wrap('openEqualityModal', 'participants');
+  wrap('convertToParticipant', 'partner_referrals');
+
+  var _origAddP = window.openAddP;
+  if (typeof _origAddP === 'function') {
+    window.openAddP = function () { var r = _origAddP.apply(this, arguments); clearPaperwork(); return r; };
+  }
+})();
+</script>
+
 </body>
 </html>
