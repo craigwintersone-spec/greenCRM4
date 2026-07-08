@@ -42,8 +42,15 @@ module.exports = async (req, res) => {
   }
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-    const orgId = body.orgId || 'default';
-    const scope = buildScope(body.data || {});
+    const orgId = body.orgId || body.org_id || body.org || 'default';
+    const rawData = body.data || body.participant || body.participantData || body.fields || {};
+    const scope = buildScope(rawData);
+    // Accept the uploaded form under any common field name, and strip an
+    // optional data-URI prefix. Keeps existing front-end calls working.
+    const docB64 = stripDataUri(
+      body.docxBase64 || body.templateBase64 || body.formBase64 ||
+      body.fileBase64 || body.base64 || (body.file && body.file.base64) || ''
+    );
 
     // ---- Branch: learn from a human correction ----
     if (body.action === 'learn') {
@@ -55,10 +62,10 @@ module.exports = async (req, res) => {
     if (!process.env.ANTHROPIC_API_KEY) {
       return res.status(500).json({ ok: false, error: 'ANTHROPIC_API_KEY is not set.' });
     }
-    if (!body.docxBase64) return res.status(400).json({ ok: false, error: 'Missing docxBase64.' });
+    if (!docB64) return res.status(400).json({ ok: false, error: 'No form file received. Send the uploaded .docx as docxBase64 (templateBase64 also accepted).' });
 
     let zip;
-    try { zip = new PizZip(Buffer.from(body.docxBase64, 'base64')); }
+    try { zip = new PizZip(Buffer.from(docB64, 'base64')); }
     catch (e) { return res.status(400).json({ ok: false, error: 'Not a valid .docx (could not unzip).' }); }
 
     const docFile = zip.file('word/document.xml');
@@ -355,6 +362,11 @@ function looksLikeField(text) {
       || /\b(name|date|address|postcode|phone|email|dob|status|gender|number|title|signature)\b/i.test(text);
 }
 
+function stripDataUri(s) {
+  const str = String(s || '');
+  const i = str.indexOf('base64,');
+  return i > -1 ? str.slice(i + 7) : str;
+}
 function escapeXml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 function escapeRe(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 function normalise(s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
