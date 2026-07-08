@@ -349,11 +349,32 @@ function extractParagraphs(xml) {
   return out;
 }
 
+// Safely set a paragraph's visible text WITHOUT restructuring it.
+// We only rewrite the text inside existing <w:t> nodes (all Word plumbing —
+// runs, run properties, fields, drawings — is left exactly as it was), which
+// keeps the .docx valid so Word opens it. The full new text goes into the
+// first <w:t>; any other <w:t> nodes in that paragraph are emptied. If the
+// paragraph has no <w:t> at all, we insert one run before its closing tag.
 function replaceParagraphText(xml, para, newText) {
-  const pPr = (para.inner.match(/<w:pPr>[\s\S]*?<\/w:pPr>/) || [''])[0];
-  const rPr = (para.inner.match(/<w:rPr>[\s\S]*?<\/w:rPr>/) || [''])[0];
-  const newInner = `${pPr}<w:r>${rPr}<w:t xml:space="preserve">${escapeXml(newText)}</w:t></w:r>`;
-  return xml.replace(para.full, para.full.replace(para.inner, newInner));
+  const safe = escapeXml(newText);
+  const tRe = /<w:t\b[^>]*>[\s\S]*?<\/w:t>/g;
+  let newFull;
+
+  if (tRe.test(para.full)) {
+    let first = true;
+    newFull = para.full.replace(tRe, () => {
+      if (first) { first = false; return `<w:t xml:space="preserve">${safe}</w:t>`; }
+      return '<w:t xml:space="preserve"></w:t>';
+    });
+  } else {
+    // No text node in this paragraph — add a single run just before </w:p>.
+    const rPr = (para.inner.match(/<w:rPr>[\s\S]*?<\/w:rPr>/) || [''])[0];
+    const run = `<w:r>${rPr}<w:t xml:space="preserve">${safe}</w:t></w:r>`;
+    newFull = para.full.replace(/<\/w:p>$/, run + '</w:p>');
+  }
+
+  if (newFull === para.full) return xml;              // nothing changed
+  return xml.replace(para.full, () => newFull);        // fn replacer: no $-pattern surprises
 }
 
 function looksLikeField(text) {
