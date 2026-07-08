@@ -1052,7 +1052,7 @@
     }
   }
 
-  var PW=['mp-ptitle','mp-ni','mp-dob','mp-address','mp-postcode','mp-pid','mp-start','mp-gender','mp-rtw','mp-bskills','mp-labour','mp-inter','mp-outcome-type','mp-job-title','mp-employer','mp-job-start','mp-hours','mp-pay','mp-exit-date','mp-leave-reason'];
+  var PW=['mp-ptitle','mp-ni','mp-dob','mp-address','mp-postcode','mp-pid','mp-start','mp-gender','mp-rtw','mp-bskills','mp-labour','mp-inter','mp-outcome-type','mp-job-title','mp-employer','mp-job-start','mp-hours','mp-pay','mp-exit-date','mp-leave-reason','mp-intake-text','mp-note'];
   function clearPaperwork(){ PW.forEach(function(f){ sv(f,''); }); }
 
   function readPaperwork(){
@@ -1064,6 +1064,7 @@
       outcome_type: gv('mp-outcome-type'), job_title: gv('mp-job-title'), employer: gv('mp-employer'),
       job_start: gv('mp-job-start'), hours: gv('mp-hours'), pay: gv('mp-pay'),
       exit_date: gv('mp-exit-date'), leave_reason: gv('mp-leave-reason'),
+      intake: gv('mp-intake-text'), case_note: gv('mp-note'),
       provider: gv('mp-provider'), project: gv('mp-project')
     };
   }
@@ -1076,6 +1077,7 @@
     sv('mp-outcome-type',pw.outcome_type); sv('mp-job-title',pw.job_title); sv('mp-employer',pw.employer);
     sv('mp-job-start',pw.job_start); sv('mp-hours',pw.hours); sv('mp-pay',pw.pay);
     sv('mp-exit-date',pw.exit_date); sv('mp-leave-reason',pw.leave_reason);
+    sv('mp-intake-text',pw.intake); sv('mp-note',pw.case_note);
     if(pw.provider) sv('mp-provider',pw.provider);
     if(pw.project) sv('mp-project',pw.project);
   }
@@ -1160,7 +1162,8 @@
       if(_editPId){
         var ex=byId(DB.participants, _editPId);
         var notes=toArr(ex&&ex.notes).slice();
-        if(note) notes.push({t:note, d:today(), s:'Staff'});
+        var prevNote=(ex&&ex.paperwork&&ex.paperwork.case_note)||'';
+        if(note && note!==prevNote) notes.push({t:note, d:today(), s:'Staff'});
         await saveParticipantRow(Object.assign({}, d, {notes:notes}), _editPId);
       } else {
         var notes2=note?[{t:note, d:today(), s:'Staff'}]:[];
