@@ -35,10 +35,13 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const TICK_ON = '\u2612';   // ☒
 const TICK_OFF = '\u2610';  // ☐
 
+const FILL_FORM_VERSION = '3.1-safe-xml';
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
+    // Visiting /api/fill-form in a browser shows which version is live.
     res.setHeader('Allow', 'POST');
-    return res.status(405).json({ ok: false, error: 'Method not allowed. Use POST.' });
+    return res.status(405).json({ ok: false, error: 'Method not allowed. Use POST.', version: FILL_FORM_VERSION });
   }
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
