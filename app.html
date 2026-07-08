@@ -1287,9 +1287,13 @@
 })();
 </script>
 
+
 <!-- Funder form filling (Phase 2) ---------------------------------------------
      Upload each contract's own blank funder .docx, then fill it with a
-     participant's details via the Vercel /api/fill-form function. -->
+     participant's details via the Vercel /api/fill-form function.
+     FIXED: the response is JSON containing filledBase64 — decode it byte-safely
+     into a real .docx. (The old code saved the JSON itself as a .docx, which is
+     why Word could not open the downloads.) -->
 <script>
 (function () {
   if (typeof DB === 'undefined') return;
@@ -1299,6 +1303,16 @@
   function fmtDate(v){ if(!v) return ''; var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(v)); return m?(m[3]+'/'+m[2]+'/'+m[1]):String(v); }
   function gv(id){ var el=document.getElementById(id); return el?(el.value||''):''; }
   function dl(blob,name){ var url=URL.createObjectURL(blob); var a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){URL.revokeObjectURL(url);},4000); }
+
+  // Byte-safe: turn a base64 string into a real .docx Blob.
+  // Without the Uint8Array loop the binary gets mangled and Word rejects it.
+  function docxBlobFromBase64(b64str){
+    var clean = b64str.indexOf('base64,') > -1 ? b64str.split('base64,')[1] : b64str;
+    var bin = atob(clean);
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  }
 
   // ---- Upload a blank funder form onto a contract ----
   window.civaraUploadContractTemplate = function(contractId){
@@ -1381,10 +1395,10 @@
   window.civaraFillFunderForm = function(){
     if(typeof sb==='undefined'||!sb){ alert('Not connected.'); return; }
     var ids = (typeof getSelectedContractIds==='function') ? getSelectedContractIds() : [];
-    if(!ids.length){ alert('Link this participant to a contract first — open the “Referral & journey” section and tick a contract under “Link to contracts”, then try again.'); return; }
+    if(!ids.length){ alert('Link this participant to a contract first — open the \u201cReferral & journey\u201d section and tick a contract under \u201cLink to contracts\u201d, then try again.'); return; }
     sb.from('contracts').select('id,name,template_data,template_name').in('id', ids).then(function(res){
       var rows=((res&&res.data)||[]).filter(function(r){ return r.template_data; });
-      if(!rows.length){ alert('None of this participant\u2019s contracts has a form template yet.\n\nGo to Funders/Contracts, find the contract and click “⬆ Form” to upload the funder\u2019s blank Word form.'); return; }
+      if(!rows.length){ alert('None of this participant\u2019s contracts has a form template yet.\n\nGo to Funders/Contracts, find the contract and click \u201c\u2b06 Form\u201d to upload the funder\u2019s blank Word form.'); return; }
       var chosen=rows[0];
       if(rows.length>1){
         var pick=window.prompt('This participant has more than one contract with a form. Type the number:\n\n'+rows.map(function(r,i){return (i+1)+'. '+r.name;}).join('\n'),'1');
@@ -1394,10 +1408,39 @@
       }
       var data=gatherData();
       var fname=('Form - '+chosen.name+' - '+(data.forename||'')+' '+(data.surname||'')).replace(/\s+/g,' ').trim();
-      fetch(FILL_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({templateBase64:chosen.template_data,data:data,fileName:fname})})
-        .then(function(r){ if(!r.ok){ return r.text().then(function(t){ throw new Error(t||('HTTP '+r.status)); }); } return r.blob(); })
-        .then(function(blob){ dl(blob, fname+'.docx'); })
-        .catch(function(e){ alert('Could not fill the form: '+((e&&e.message)||e)+'\n\n(If this says the filler was not found, the Vercel /api/fill-form function may not be deployed yet.)'); });
+      var btnNote='(If this says the filler was not found, the Vercel /api/fill-form function may not be deployed yet.)';
+
+      fetch(FILL_API,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          docxBase64: chosen.template_data,   // the raw funder form saved on the contract
+          filename: fname,
+          orgId: (typeof orgId!=='undefined' && orgId) ? orgId : 'default',
+          data: data
+        })
+      })
+        .then(function(r){
+          return r.json()
+            .then(function(j){ return { status: r.status, json: j }; })
+            .catch(function(){ throw new Error('The filler returned an unreadable response (HTTP '+r.status+').'); });
+        })
+        .then(function(res2){
+          var json = res2.json;
+          if(!json || json.ok !== true || !json.filledBase64){
+            throw new Error((json && json.error) ? json.error : ('HTTP '+res2.status));
+          }
+          // THE FIX: decode filledBase64 into real bytes, then download.
+          var blob = docxBlobFromBase64(json.filledBase64);
+          dl(blob, json.filename || (fname + '.docx'));
+
+          // Tell the user about any fields the AI had no data for.
+          if(json.missing && json.missing.length){
+            var lines = json.missing.slice(0,8).map(function(m){ return '\u2022 ' + m.text; }).join('\n');
+            alert('Form filled and downloaded.\n\n' + json.missing.length + ' field(s) had no data and were left blank:\n\n' + lines + (json.missing.length > 8 ? '\n\u2026' : ''));
+          }
+        })
+        .catch(function(e){ alert('Could not fill the form: '+((e&&e.message)||e)+'\n\n'+btnNote); });
     }).catch(function(e){ alert('Could not load the contract: '+((e&&e.message)||e)); });
   };
 })();
