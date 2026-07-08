@@ -35,7 +35,7 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const TICK_ON = '\u2612';   // ☒
 const TICK_OFF = '\u2610';  // ☐
 
-const FILL_FORM_VERSION = '3.1-safe-xml';
+const FILL_FORM_VERSION = '3.2-clean-alerts';
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -382,8 +382,21 @@ function replaceParagraphText(xml, para, newText) {
 
 function looksLikeField(text) {
   if (!text || text.length < 2) return false;
+  if (isNoiseLine(text)) return false;
   return /[:?]\s*$/.test(text) || /_{2,}|\.{3,}/.test(text)
       || /\b(name|date|address|postcode|phone|email|dob|status|gender|number|title|signature)\b/i.test(text);
+}
+
+// Lines that are structure or Word boilerplate, not fillable fields —
+// keep them out of the "missing" alert so users only see real gaps.
+function isNoiseLine(text) {
+  const t = String(text).trim();
+  return /^(part|section|appendix|annex)\s*\d*\s*[:.\-]?\s*$/i.test(t)   // "Part 1:", "Section 2."
+      || /^(part|section|appendix|annex)\s*\d+\s*[:.\-]/i.test(t)         // "Part 1: Participant Details"
+      || /click\s+(here\s+)?to\s+enter/i.test(t)                           // Word content-control placeholder
+      || /^(choose an item|enter text|select date)\.?$/i.test(t)           // more Word placeholders
+      || /\bsignature\b/i.test(t) && /_{2,}/.test(t)                       // signature lines are signed by hand
+      || /^(for office use|office use only|guidance|notes for)/i.test(t);
 }
 
 function stripDataUri(s) {
