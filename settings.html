@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Civara — Organisation settings</title>
+<title>Vorlana — Organisation settings</title>
 <link rel="icon" type="image/png" href="logo.png"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -209,7 +209,7 @@ label{display:block;font-size:12px;font-weight:600;color:var(--txt2);margin-bott
 
 <div class="header">
   <div class="brand">
-    <img src="logo.png" alt="Civara"/>
+    <img src="logo.png" alt="Vorlana"/>
     <span class="brand-tag">Organisation settings</span>
   </div>
   <div class="header-actions">
@@ -321,7 +321,7 @@ label{display:block;font-size:12px;font-weight:600;color:var(--txt2);margin-bott
 
     <div class="card" style="border-color:rgba(200,69,69,.3)">
       <div class="card-title" style="color:var(--red)">Danger zone</div>
-      <div class="card-sub">These actions cannot be undone. Contact <a href="mailto:hello@civara.co.uk" style="color:var(--em)">hello@civara.co.uk</a> if you need to delete your workspace.</div>
+      <div class="card-sub">These actions cannot be undone. Contact <a href="mailto:hello@vorlana.co.uk" style="color:var(--em)">hello@vorlana.co.uk</a> if you need to delete your workspace.</div>
       <button class="btn btn-danger-outline btn-sm" onclick="confirmExport()">Export all data (CSV)</button>
     </div>
   </div>
@@ -355,7 +355,7 @@ const SET_MODULES=[
 ];
 
 const BRAND_COLOURS=[
-  {hex:'#1F6F6D',name:'Civara teal'},
+  {hex:'#1F6F6D',name:'Vorlana teal'},
   {hex:'#175655',name:'Deep teal'},
   {hex:'#2A9D8F',name:'Sea green'},
   {hex:'#0EA5E9',name:'Sky'},
@@ -548,7 +548,7 @@ function renderPreview(logoDataUrl){
   const html=
     (logoSrc
       ?`<img src="${escapeHTML(logoSrc)}" class="preview-logo-img" alt="Logo"/>`
-      :`<div class="preview-logo-text" style="color:${selectedColour}">${escapeHTML(ORG&&ORG.name||'Civara')}</div>`)+
+      :`<div class="preview-logo-text" style="color:${selectedColour}">${escapeHTML(ORG&&ORG.name||'Vorlana')}</div>`)+
     `<div class="preview-nav active" style="color:${selectedColour};background:${selectedColour}14">📊 Dashboard</div>`+
     navItems.map(m=>`<div class="preview-nav">${escapeHTML(m.n)}</div>`).join('');
   $('preview-sidebar').innerHTML=html;
