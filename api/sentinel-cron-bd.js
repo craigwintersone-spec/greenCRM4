@@ -102,13 +102,13 @@ module.exports = async function handler(req, res) {
   const recentKeys = new Set(recent.map(r => r.target_key));
 
   const findSys =
-    'Find live UK grants Civara (a charity-sector AI SaaS) could apply for. JSON array only, no prose. ' +
+    'Find live UK grants Vorlana (a charity-sector AI SaaS) could apply for. JSON array only, no prose. ' +
     `Up to ${Math.min(remaining + 2, 6)} items. Each: ` +
     '{"funder":"...","programme":"...","deadline":"...","value":"£ range","why_fit":"1 line","application_url":"..."}. ' +
     'Funders: Innovate UK, NESTA, Catalyst, Tech for Good UK, Comic Relief Tech for Good, UKSPF.';
 
   const findPrompt =
-    'Civara: UK charity CRM with AI agents. Solo founder Craig. Pre-seed. Grants £5k-£100k for product / AI / charity adoption.';
+    'Vorlana: UK charity CRM with AI agents. Solo founder Craig. Pre-seed. Grants £5k-£100k for product / AI / charity adoption.';
 
   let candidates = [];
   let findCost = 0;
@@ -135,9 +135,9 @@ module.exports = async function handler(req, res) {
   }
 
   const draftSys =
-    'Write an EOI for Civara (UK charity CRM with 6 AI agents, solo founder Craig). 250-350 words British English. ' +
-    'Sections: ## About Civara, ## Why this grant fits, ## What we would do with the funding, ## Impact and measurement. ' +
-    'Honest, specific, no inflated claims. End "Craig | Founder, Civara".';
+    'Write an EOI for Vorlana (UK charity CRM with 6 AI agents, solo founder Craig). 250-350 words British English. ' +
+    'Sections: ## About Vorlana, ## Why this grant fits, ## What we would do with the funding, ## Impact and measurement. ' +
+    'Honest, specific, no inflated claims. End "Craig | Founder, Vorlana".';
 
   const drafted = [];
   for (const g of fresh) {
