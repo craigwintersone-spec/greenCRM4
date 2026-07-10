@@ -50,7 +50,6 @@ input[readonly]{background:var(--card);opacity:.75;cursor:not-allowed}
 .b-advisor{background:#F5F3FF;color:#6D28D9}
 .b-manager{background:#EFF6FF;color:#1D4ED8}
 .b-admin{background:#F0FDF4;color:#15803D}
-.b-readonly{background:#FEF3C7;color:#92400E}
 .spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--em);border-radius:50%;animation:spin .6s linear infinite;display:inline-block;vertical-align:middle;margin-right:6px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .state{display:none}.state.active{display:block}
@@ -73,7 +72,7 @@ input[readonly]{background:var(--card);opacity:.75;cursor:not-allowed}
   <div id="s-invalid" class="state card">
     <div class="big-icon">❌</div>
     <div class="card-title" style="text-align:center">Invalid or expired invite</div>
-    <div class="card-sub" style="text-align:center;margin-top:8px">This invite link is no longer valid or has already been used. Ask your admin to send a new one.</div>
+    <div class="card-sub" style="text-align:center;margin-top:8px" id="invalid-msg">This invite link is no longer valid or has already been used. Ask your admin to send a new one.</div>
   </div>
 
   <!-- SIGN UP FORM -->
@@ -104,22 +103,22 @@ input[readonly]{background:var(--card);opacity:.75;cursor:not-allowed}
   <!-- ALREADY MEMBER — just sign in -->
   <div id="s-signin" class="state card">
     <div class="card-title">Welcome back</div>
-    <div class="card-sub">You already have a Vorlana account. Sign in to access your organisation.</div>
+    <div class="card-sub">You already have a Vorlana account. Sign in to accept this invitation.</div>
     <div class="invite-box" id="signin-info"></div>
     <div class="msg msg-err" id="si-err"></div>
     <label>Email</label>
     <input id="si-email" type="email" readonly/>
     <label>Password</label>
     <input id="si-pass" type="password" placeholder="••••••••"/>
-    <button class="btn" id="si-btn" onclick="signInExisting()">Sign in →</button>
+    <button class="btn" id="si-btn" onclick="signInExisting()">Sign in & join →</button>
   </div>
 
   <!-- SUCCESS -->
   <div id="s-success" class="state card" style="text-align:center">
     <div class="big-icon">🎉</div>
     <div class="card-title">You're all set!</div>
-    <div class="card-sub" style="margin-top:8px">Your account has been created. Taking you to Vorlana now…</div>
-    <button class="btn" style="margin-top:16px" onclick="goToCRM()">Open Vorlana →</button>
+    <div class="card-sub" style="margin-top:8px">Your account is ready. Taking you to Vorlana now…</div>
+    <button class="btn" style="margin-top:16px" onclick="goToApp()">Open Vorlana →</button>
   </div>
 </div>
 
@@ -136,9 +135,13 @@ function showState(s){
   document.querySelectorAll('.state').forEach(el=>el.classList.remove('active'));
   $('s-'+s).classList.add('active');
 }
+function showInvalid(msg){
+  if(msg) $('invalid-msg').textContent=msg;
+  showState('invalid');
+}
 
 function roleBadge(r){
-  const cls={admin:'b-admin',manager:'b-manager',advisor:'b-advisor','read-only':'b-readonly'};
+  const cls={admin:'b-admin',manager:'b-manager',advisor:'b-advisor'};
   return`<span class="badge ${cls[r]||'b-advisor'}">${r||'advisor'}</span>`;
 }
 
@@ -158,49 +161,80 @@ function checkStrength(){
 }
 
 async function init(){
-  // Check for existing session first
-  const{data:{session}}=await sb.auth.getSession();
-  if(session){
-    // Already logged in — just redirect
-    window.location.href='/app.html';
+  const params=new URLSearchParams(window.location.search);
+  const token=params.get('token')||params.get('invite');
+  if(!token){showInvalid('No invite token was found in this link. Ask your admin to send a fresh invite.');return;}
+
+  // Look up the invite in the REAL table: invitations (keyed by token)
+  let inv=null;
+  try{
+    const{data,error}=await sb.from('invitations').select('*').eq('token',token).maybeSingle();
+    if(error) throw error;
+    inv=data;
+  }catch(e){
+    showInvalid('We couldn\u2019t check this invite right now. Please try again in a moment.');
     return;
   }
 
-  const params=new URLSearchParams(window.location.search);
-  const token=params.get('token')||params.get('invite');
-  if(!token){showState('invalid');return;}
-
-  // Look up invite
-  const{data:inv,error}=await sb.from('invites').select('*').eq('token',token).maybeSingle();
-  if(error||!inv){showState('invalid');return;}
-  if(inv.accepted){showState('invalid');return;}
+  if(!inv){ showInvalid('This invite link is not valid. Ask your admin to send a new one.'); return; }
+  if(inv.accepted_at){ showInvalid('This invite has already been used. If you already have an account, just sign in from the main login page.'); return; }
+  if(inv.expires_at && new Date(inv.expires_at) < new Date()){
+    showInvalid('This invite has expired (invites last 7 days). Ask your admin to send a fresh one.');
+    return;
+  }
 
   invite=inv;
   orgId=inv.org_id;
 
-  // Load org name
-  const{data:orgData}=await sb.from('organisations').select('id,name,sector').eq('id',inv.org_id).maybeSingle();
-  org=orgData;
+  // Load org name for display
+  try{
+    const{data:orgData}=await sb.from('organisations').select('id,name,sector').eq('id',inv.org_id).maybeSingle();
+    org=orgData;
+  }catch(e){ org=null; }
 
   const infoHtml=`
-    <div class="invite-row"><span class="lbl">Organisation</span><span class="val">${org?.name||'Vorlana'}</span></div>
+    <div class="invite-row"><span class="lbl">Organisation</span><span class="val">${(org&&org.name)||'Vorlana'}</span></div>
     <div class="invite-row"><span class="lbl">Your role</span><span class="val">${roleBadge(inv.role)}</span></div>
     <div class="invite-row"><span class="lbl">Invited email</span><span class="val">${inv.email}</span></div>`;
 
-  // Check if email already has an account
-  const{data:existing}=await sb.from('profiles').select('id').eq('email',inv.email).maybeSingle();
+  $('invite-info').innerHTML=infoHtml;
+  $('signin-info').innerHTML=infoHtml;
+  $('f-email').value=inv.email;
+  $('si-email').value=inv.email;
+  showState('form');
+}
 
-  if(existing){
-    // Show sign-in form
-    $('signin-info').innerHTML=infoHtml;
-    $('si-email').value=inv.email;
-    showState('signin');
-  } else {
-    // Show sign-up form
-    $('invite-info').innerHTML=infoHtml;
-    $('f-email').value=inv.email;
-    showState('form');
-  }
+// Create the membership row that actually links the user to the org.
+// Upsert-safe: the table has a unique (user_id, org_id) constraint.
+async function linkMembership(userId){
+  const row={
+    user_id:userId,
+    org_id:invite.org_id,
+    role:invite.role,
+    status:'active',
+    invited_by:invite.invited_by||null,
+    invited_at:invite.created_at||null,
+    joined_at:new Date().toISOString()
+  };
+  const{error}=await sb.from('memberships').upsert(row,{onConflict:'user_id,org_id'});
+  if(error) throw error;
+}
+
+// Keep a profiles row too, if your app reads names/emails from it.
+async function upsertProfile(userId,fullName){
+  try{
+    await sb.from('profiles').upsert({
+      id:userId,
+      full_name:fullName,
+      email:invite.email
+    },{onConflict:'id'});
+  }catch(e){ /* profiles is optional for login; ignore if it fails */ }
+}
+
+async function markAccepted(){
+  try{
+    await sb.from('invitations').update({accepted_at:new Date().toISOString()}).eq('id',invite.id);
+  }catch(e){ /* non-fatal */ }
 }
 
 async function createAccount(){
@@ -215,37 +249,50 @@ async function createAccount(){
 
   const btn=$('submit-btn');btn.disabled=true;btn.textContent='Creating account…';
 
-  // Sign up
+  // Try to create the account
   const{data,error}=await sb.auth.signUp({
     email:invite.email,
     password:pass,
     options:{data:{full_name:name}}
   });
 
-  if(error){showErr('form-err',error.message);btn.disabled=false;btn.textContent='Create account & sign in';return;}
+  if(error){
+    // Email already registered → switch them to the sign-in path
+    const m=(error.message||'').toLowerCase();
+    if(m.includes('already') || m.includes('registered') || m.includes('exists')){
+      showState('signin');
+      return;
+    }
+    showErr('form-err',error.message);
+    btn.disabled=false;btn.textContent='Create account & sign in';
+    return;
+  }
 
-  const uid=data?.user?.id;
-  if(!uid){showErr('form-err','Account created but could not get user ID. Please sign in manually.');btn.disabled=false;btn.textContent='Create account & sign in';return;}
+  // Some projects require email confirmation before a session exists.
+  let userId=data && data.user && data.user.id;
+  let session=data && data.session;
+  if(!session){
+    const si=await sb.auth.signInWithPassword({email:invite.email,password:pass});
+    if(si.error){
+      showErr('form-err','Account created. Please check your email to confirm, then open this link again to finish joining.');
+      btn.disabled=false;btn.textContent='Create account & sign in';
+      return;
+    }
+    userId=si.data.user.id;
+  }
 
-  // Create profile scoped to org
-  await sb.from('profiles').insert({
-    id:uid,
-    full_name:name,
-    email:invite.email,
-    org_id:invite.org_id,
-    role:invite.role,
-    status:'active',
-    invited_by:invite.invited_by
-  });
-
-  // Mark invite as accepted
-  await sb.from('invites').update({accepted:true}).eq('id',invite.id);
-
-  // Sign in immediately
-  await sb.auth.signInWithPassword({email:invite.email,password:pass});
+  try{
+    await upsertProfile(userId,name);
+    await linkMembership(userId);
+    await markAccepted();
+  }catch(e){
+    showErr('form-err','Your account was created but joining the organisation failed: '+e.message+' — please contact your admin.');
+    btn.disabled=false;btn.textContent='Create account & sign in';
+    return;
+  }
 
   showState('success');
-  setTimeout(goToCRM, 2500);
+  setTimeout(goToApp, 2000);
 }
 
 async function signInExisting(){
@@ -253,19 +300,29 @@ async function signInExisting(){
   $('si-err').style.display='none';
   if(!pass){showErr('si-err','Please enter your password.');return;}
   const btn=$('si-btn');btn.disabled=true;btn.textContent='Signing in…';
-  const{error}=await sb.auth.signInWithPassword({email:invite.email,password:pass});
-  if(error){showErr('si-err',error.message);btn.disabled=false;btn.textContent='Sign in →';return;}
-  // Make sure profile is linked to this org
-  await sb.from('profiles').update({org_id:invite.org_id,role:invite.role}).eq('id',(await sb.auth.getUser()).data.user.id);
-  await sb.from('invites').update({accepted:true}).eq('id',invite.id);
+
+  const{data,error}=await sb.auth.signInWithPassword({email:invite.email,password:pass});
+  if(error){showErr('si-err',error.message);btn.disabled=false;btn.textContent='Sign in & join →';return;}
+
+  const userId=data.user.id;
+  try{
+    await upsertProfile(userId, (data.user.user_metadata&&data.user.user_metadata.full_name)||'');
+    await linkMembership(userId);
+    await markAccepted();
+  }catch(e){
+    showErr('si-err','Signed in, but joining the organisation failed: '+e.message);
+    btn.disabled=false;btn.textContent='Sign in & join →';
+    return;
+  }
+
   showState('success');
-  setTimeout(goToCRM, 2500);
+  setTimeout(goToApp, 2000);
 }
 
 function showErr(id,msg){const e=$(id);e.textContent=msg;e.style.display='block';}
 
-function goToCRM(){
-  window.location.href='/app.html'+(orgId?'?org_id='+orgId:'');
+function goToApp(){
+  window.location.href='app.html'+(orgId?'?org_id='+orgId:'');
 }
 
 init();
