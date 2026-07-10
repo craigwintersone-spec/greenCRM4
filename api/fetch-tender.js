@@ -10,7 +10,7 @@
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const ALLOWED_ORIGIN_REGEX = /^https?:\/\/(localhost(:\d+)?|.*\.vercel\.app|civara\.co\.uk|www\.civara\.co\.uk)$/i;
+const ALLOWED_ORIGIN_REGEX = /^https?:\/\/(localhost(:\d+)?|.*\.vercel\.app|vorlana\.com|www\.vorlana\.com)$/i;
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MB cap
 const ALLOWED_CONTENT_TYPES = [
   'application/pdf',
@@ -93,7 +93,7 @@ module.exports = async function handler(req, res) {
       redirect: 'follow',
       signal: controller.signal,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; CivaraTenderBot/1.0)',
+        'User-Agent': 'Mozilla/5.0 (compatible; VorlanaTenderBot/1.0)',
         'Accept': 'application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,*/*;q=0.8',
       },
     });
