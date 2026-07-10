@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Civara — Super Admin</title>
+<title>Vorlana — Super Admin</title>
 <link rel="icon" type="image/png" href="logo.png"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -147,14 +147,14 @@ tr:last-child td{border-bottom:none}
 <body>
 
 <div id="auth-screen">
-  <div class="auth-logo"><img src="logo.png" alt="Civara"/></div>
+  <div class="auth-logo"><img src="logo.png" alt="Vorlana"/></div>
   <div class="auth-sub">Super Admin — restricted access</div>
   <a href="index.html" class="auth-back">← Back to home</a>
   <div class="auth-card">
     <h2>Admin sign in</h2>
-    <p>This area is restricted to Civara staff only.</p>
+    <p>This area is restricted to Vorlana staff only.</p>
     <div class="msg msg-err" id="si-err"></div>
-    <div class="form-row"><label>Email</label><input type="email" id="si-email" placeholder="admin@civara.co.uk" autocomplete="email"/></div>
+    <div class="form-row"><label>Email</label><input type="email" id="si-email" placeholder="admin@vorlana.co.uk" autocomplete="email"/></div>
     <div class="form-row"><label>Password</label><input type="password" id="si-pass" placeholder="••••••••"/></div>
     <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" id="si-btn" onclick="doSignIn()">Sign in to Admin</button>
     <div class="hint"><a href="index.html">← Back to home</a></div>
@@ -165,7 +165,7 @@ tr:last-child td{border-bottom:none}
 <div class="app-wrap">
 <aside class="sidebar">
   <div class="sidebar-logo">
-    <img src="logo.png" alt="Civara"/>
+    <img src="logo.png" alt="Vorlana"/>
     <span class="tag">Admin</span>
   </div>
   <div class="user-strip">
@@ -671,7 +671,7 @@ const SENTINEL_AGENTS = [
   { id:'marketing', name:'Marketing', icon:'📣', role:'Content, social, newsletter', status:'soon' },
   { id:'dev', name:'Dev', icon:'⚙️', role:'Self-fixes errors, ships PRs', status:'soon' },
   { id:'legal', name:'Legal & GDPR', icon:'⚖️', role:'DPAs, privacy, data requests', status:'soon' },
-  { id:'bd', name:'BD Researcher', icon:'🔍', role:'Finds grants for Civara to apply for', status:'live' },
+  { id:'bd', name:'BD Researcher', icon:'🔍', role:'Finds grants for Vorlana to apply for', status:'live' },
 ];
 
 async function loadSentinel(){
