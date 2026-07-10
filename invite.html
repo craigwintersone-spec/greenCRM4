@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Accept Invitation · Civara</title>
+<title>Accept Invitation · Vorlana</title>
 <meta name="robots" content="noindex, nofollow"/>
 <link rel="icon" type="image/png" href="logo.png"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -102,10 +102,10 @@ label{display:block;font-size:13.5px;color:var(--txt);font-weight:600;margin-bot
 <div class="shell">
 
   <aside class="brand-panel">
-    <a href="index.html" class="bp-brand"><span class="dot"></span>Civara</a>
+    <a href="index.html" class="bp-brand"><span class="dot"></span>Vorlana</a>
     <div class="bp-mid">
       <h1>You've been <em>invited.</em></h1>
-      <p>Set up your account to join your team on Civara.</p>
+      <p>Set up your account to join your team on Vorlana.</p>
       <div class="pillar-chips">
         <span class="pchip">Employability</span>
         <span class="pchip">Funder Reporting</span>
@@ -117,7 +117,7 @@ label{display:block;font-size:13.5px;color:var(--txt);font-weight:600;margin-bot
 
   <main class="auth-panel">
     <div class="auth-card">
-      <a href="index.html" class="mobile-brand"><span class="dot"></span>Civara</a>
+      <a href="index.html" class="mobile-brand"><span class="dot"></span>Vorlana</a>
 
       <div id="loading">
         <div class="center"><span class="spinner"></span> Validating invitation…</div>
@@ -261,7 +261,7 @@ async function acceptInvitation(userId){
       email_mismatch:'This invitation is for a different email address. Please sign in with the invited email.',
       expired:'This invitation has expired. Please ask for a new one.',
       already_accepted:'This invitation has already been accepted. Please sign in to the CRM.',
-      invalid:'This invitation is no longer valid. Please ask for a new one.',
+      invalid:'This invitation is no longer valid. Please ask for a new invite.',
       not_authenticated:'Please sign in and try again.'
     };
     throw new Error(map[data&&data.error]||'Could not accept the invitation. Please ask for a new invite.');
