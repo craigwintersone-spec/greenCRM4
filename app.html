@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Civara</title>
+<title>Vorlana</title>
 <link rel="icon" type="image/png" href="logo.png"/>
 <link rel="stylesheet" href="css/app.css"/>
 </head>
@@ -18,7 +18,7 @@
 
 <!-- ─── SIDEBAR ───────────────────────────────────────────── -->
 <div id="sidebar">
-  <div class="sidebar-logo"><img src="logo.png" alt="Civara"/></div>
+  <div class="sidebar-logo"><img src="logo.png" alt="Vorlana"/></div>
 
   <div class="nav-section">Overview</div>
   <button class="nav-btn" onclick="go('dashboard')"><span class="icon">📊</span><span>Dashboard</span><span class="ai-dot"></span></button>
@@ -428,7 +428,7 @@
   <div id="hr-tab-benchmark" style="display:none">
     <div class="ai-panel">
       <div class="ai-panel-title"><span class="ai-icon">🏆</span>Anonymised Benchmarking</div>
-      <div style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:10px">Compares your outcome equity against anonymised aggregates from similar-size Civara organisations. No names are ever shared.</div>
+      <div style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:10px">Compares your outcome equity against anonymised aggregates from similar-size Vorlana organisations. No names are ever shared.</div>
       <button class="btn btn-ai btn-sm" onclick="runBenchmarking()">✦ Generate benchmark report</button>
     </div>
     <div id="benchmark-result"></div>
@@ -460,7 +460,7 @@
 <!-- ─── MODALS ───────────────────────────────────────────── -->
 
 <div class="modal-overlay" id="modal-branding"><div class="modal" style="max-width:520px">
-  <h2 id="branding-modal-title">Welcome to Civara — make it yours</h2>
+  <h2 id="branding-modal-title">Welcome to Vorlana — make it yours</h2>
   <p style="font-size:13px;color:var(--txt3);margin-bottom:18px;line-height:1.6">Set your organisation's logo and brand colour. They'll appear on the sidebar, funder reports, and partner portal. You can change these any time from Settings.</p>
   <div class="form-row">
     <label>Organisation logo</label>
@@ -808,7 +808,7 @@
 
     return docWrap(
       para('Participant Start Form', { center: true, bold: true, sz: 32, after: 40 }) +
-      para('Initial registration & assessment — prepared in Civara on ' + d.generatedOn,
+      para('Initial registration & assessment — prepared in Vorlana on ' + d.generatedOn,
         { center: true, sz: 18, color: '808080', after: 160 }) +
       heading('Part 1: Participant Details') + rowsTable(detail) +
       heading('Part 2: Referral & Background') + rowsTable(referral) +
@@ -839,7 +839,7 @@
 
     return docWrap(
       para('Participant End / Exit Form', { center: true, bold: true, sz: 32, after: 40 }) +
-      para('Programme exit & outcome — prepared in Civara on ' + d.generatedOn,
+      para('Programme exit & outcome — prepared in Vorlana on ' + d.generatedOn,
         { center: true, sz: 18, color: '808080', after: 160 }) +
       heading('Part 1: Participant Details') + rowsTable(detail) +
       heading('Part 2: Programme Dates') + rowsTable(dates) +
