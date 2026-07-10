@@ -239,7 +239,7 @@
       if (!sb) { showErr("Password reset isn't available in this preview — deploy the page to test it."); return; }
       try {
         const { error } = await sb.auth.resetPasswordForEmail(email, {
-          redirectTo: window.location.origin + window.location.pathname
+          redirectTo: window.location.origin + '/reset-password.html'
         });
         if (error) throw error;
         showOk('If an account exists for <b>' + email + '</b>, a reset link is on its way. Check your inbox.');
