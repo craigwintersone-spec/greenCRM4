@@ -19,6 +19,7 @@
     --em2:#175655;
     --em3:#2A9D8F;
     --amber:#C98A2B;
+    --red:#C84545;
     --txt:#22312E;
     --txt2:#4A5552;
     --txt3:#7A847F;
@@ -142,6 +143,48 @@
   .foot-cr{font-size:13px;color:var(--txt3)}
   .foot-legal{font-size:12px;color:var(--txt3);margin-top:18px;line-height:1.6}
 
+  /* ── Demo modal ──────────────────────────────────── */
+  .modal-overlay{
+    position:fixed;inset:0;z-index:100;display:none;
+    align-items:center;justify-content:center;padding:20px;
+    background:rgba(23,42,40,.46);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
+  }
+  .modal-overlay.open{display:flex;animation:fade .18s ease}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .modal{
+    width:100%;max-width:460px;background:var(--surface);border:1px solid var(--border);
+    border-radius:20px;padding:30px;box-shadow:0 30px 80px -30px rgba(23,86,85,.5);
+    position:relative;max-height:92vh;overflow-y:auto;animation:pop .2s ease;
+  }
+  @keyframes pop{from{transform:translateY(10px) scale(.98);opacity:0}to{transform:none;opacity:1}}
+  .modal-close{position:absolute;top:16px;right:16px;background:none;border:none;cursor:pointer;color:var(--txt3);padding:6px;border-radius:8px;display:flex;line-height:0}
+  .modal-close:hover{color:var(--em2);background:var(--bg)}
+  .modal-eyebrow{font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--em3)}
+  .modal h2{font-family:var(--display);font-weight:600;font-size:26px;letter-spacing:-.02em;color:var(--em2);margin:7px 0 6px}
+  .modal .modal-sub{font-size:15px;color:var(--txt2);margin-bottom:22px}
+  .m-field{margin-bottom:14px}
+  .m-field label{display:block;font-size:13px;font-weight:600;color:var(--txt);margin-bottom:6px}
+  .m-field input,.m-field textarea{
+    width:100%;font-family:var(--body);font-size:15px;color:var(--txt);
+    background:var(--surface);border:1px solid var(--border);border-radius:10px;
+    padding:12px 13px;transition:border-color .15s ease,box-shadow .15s ease;resize:vertical;
+  }
+  .m-field textarea{min-height:84px}
+  .m-field input::placeholder,.m-field textarea::placeholder{color:var(--txt3)}
+  .m-field input:focus,.m-field textarea:focus{outline:none;border-color:var(--em);box-shadow:0 0 0 3px rgba(31,111,109,.14)}
+  .m-hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+  .modal .btn-p{width:100%;margin-top:6px;padding:13px}
+  .m-spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:none}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .btn-p.loading .m-spinner{display:inline-block}
+  .m-msg{margin-top:14px;font-size:14px;padding:12px 14px;border-radius:10px;display:none;line-height:1.5}
+  .m-msg.show{display:block}
+  .m-msg.err{background:rgba(200,69,69,.09);border:1px solid rgba(200,69,69,.28);color:#9A3535}
+  .m-msg.ok{background:#F0F7F5;border:1px solid #DCEBE8;color:var(--em2)}
+  .m-success{text-align:center;padding:12px 0}
+  .m-success .big{font-size:40px;margin-bottom:10px}
+  .m-success h2{margin-top:0}
+
   /* ── Responsive ──────────────────────────────────── */
   @media(max-width:900px){
     .hero-grid{grid-template-columns:1fr;gap:40px}
@@ -156,6 +199,7 @@
     section{padding:48px 0}
     .problem,.cta-band{padding:40px 26px}
     .nav-links .signin{display:none}
+    .modal{padding:24px 20px}
   }
   @media(prefers-reduced-motion:reduce){
     *{animation:none!important}
@@ -173,7 +217,7 @@
       <a href="#product">Product</a>
       <a href="#how">How it works</a>
       <a href="login.html" class="signin">Sign in</a>
-      <a href="login.html" class="btn btn-p">Request a demo</a>
+      <a href="#" class="btn btn-p" data-demo>Request a demo</a>
     </nav>
   </div>
 </header>
@@ -187,7 +231,7 @@
         <h1>Prove your outcomes to funders. <em>Skip the admin.</em></h1>
         <p class="sub">Vorlana tracks your caseload, turns it into funder-ready reports, and finds the funding you're missing — so your time goes to people, not paperwork.</p>
         <div class="hero-cta">
-          <a href="login.html" class="btn btn-p">Request a demo</a>
+          <a href="#" class="btn btn-p" data-demo>Request a demo</a>
           <a href="#how" class="btn btn-g">See how it works</a>
         </div>
         <div class="micro">
@@ -310,7 +354,7 @@
         <h2>Spend your week on people, not paperwork.</h2>
         <p>See how Vorlana turns your caseload into funder-ready proof — book a 20-minute demo with your own data in mind.</p>
         <div class="hero-cta" style="justify-content:center">
-          <a href="login.html" class="btn btn-p">Request a demo</a>
+          <a href="#" class="btn btn-p" data-demo>Request a demo</a>
           <a href="login.html" class="btn btn-g">Sign in</a>
         </div>
       </div>
@@ -333,6 +377,135 @@
     <div class="foot-legal">Vorlana is a trading name of Winters Ventures Ltd, registered in England &amp; Wales, company no. 15188761.</div>
   </div>
 </footer>
+
+<!-- ── Demo request modal ─────────────────────────────── -->
+<div class="modal-overlay" id="demoOverlay" role="dialog" aria-modal="true" aria-labelledby="demoTitle">
+  <div class="modal">
+    <button class="modal-close" id="demoClose" aria-label="Close">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+
+    <!-- Form view -->
+    <div id="demoFormView">
+      <div class="modal-eyebrow">Request a demo</div>
+      <h2 id="demoTitle">See Vorlana with your data in mind</h2>
+      <p class="modal-sub">Tell us a little about your team and we'll be in touch to book a 20-minute walkthrough.</p>
+
+      <div class="m-field">
+        <label for="d-name">Your name</label>
+        <input id="d-name" type="text" autocomplete="name" placeholder="Jane Smith"/>
+      </div>
+      <div class="m-field">
+        <label for="d-email">Work email</label>
+        <input id="d-email" type="email" autocomplete="email" placeholder="you@yourorg.org.uk" spellcheck="false"/>
+      </div>
+      <div class="m-field">
+        <label for="d-org">Organisation</label>
+        <input id="d-org" type="text" autocomplete="organization" placeholder="Your charity or organisation"/>
+      </div>
+      <div class="m-field">
+        <label for="d-message">Anything you'd like us to know? <span style="color:var(--txt3);font-weight:400">(optional)</span></label>
+        <textarea id="d-message" placeholder="e.g. we report to the MoJ and GLA and want to cut our reporting time"></textarea>
+      </div>
+
+      <!-- honeypot: hidden from humans, catches bots -->
+      <div class="m-hp" aria-hidden="true">
+        <label>Company URL<input id="d-company-url" type="text" tabindex="-1" autocomplete="off"/></label>
+      </div>
+
+      <button class="btn btn-p" id="demoSubmit" type="button">
+        <span class="m-spinner"></span>
+        <span class="m-label">Request demo</span>
+      </button>
+
+      <div class="m-msg err" id="demoErr"></div>
+    </div>
+
+    <!-- Success view -->
+    <div id="demoSuccessView" class="m-success" style="display:none">
+      <div class="big">🎉</div>
+      <div class="modal-eyebrow">Thank you</div>
+      <h2>Request received</h2>
+      <p class="modal-sub" style="margin-bottom:18px">Thanks — we've got your details and will be in touch shortly to arrange your demo.</p>
+      <button class="btn btn-p" id="demoDone" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function(){
+    var overlay = document.getElementById('demoOverlay');
+    var formView = document.getElementById('demoFormView');
+    var successView = document.getElementById('demoSuccessView');
+    var submitBtn = document.getElementById('demoSubmit');
+    var errBox = document.getElementById('demoErr');
+    var lastFocused = null;
+
+    function openModal(e){
+      if(e) e.preventDefault();
+      lastFocused = document.activeElement;
+      formView.style.display = '';
+      successView.style.display = 'none';
+      errBox.classList.remove('show');
+      overlay.classList.add('open');
+      document.body.style.overflow = 'hidden';
+      setTimeout(function(){ document.getElementById('d-name').focus(); }, 60);
+    }
+    function closeModal(){
+      overlay.classList.remove('open');
+      document.body.style.overflow = '';
+      if(lastFocused && lastFocused.focus) lastFocused.focus();
+    }
+
+    // Wire every "Request a demo" trigger
+    document.querySelectorAll('[data-demo]').forEach(function(el){
+      el.addEventListener('click', openModal);
+    });
+    document.getElementById('demoClose').addEventListener('click', closeModal);
+    document.getElementById('demoDone').addEventListener('click', closeModal);
+    overlay.addEventListener('click', function(e){ if(e.target === overlay) closeModal(); });
+    document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && overlay.classList.contains('open')) closeModal(); });
+
+    function showErr(msg){ errBox.textContent = msg; errBox.classList.add('show'); }
+    function validEmail(v){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
+
+    async function submit(){
+      var name = document.getElementById('d-name').value.trim();
+      var email = document.getElementById('d-email').value.trim();
+      var org = document.getElementById('d-org').value.trim();
+      var message = document.getElementById('d-message').value.trim();
+      var companyUrl = document.getElementById('d-company-url').value.trim(); // honeypot
+      errBox.classList.remove('show');
+
+      if(!name){ showErr('Please enter your name.'); return; }
+      if(!validEmail(email)){ showErr('Please enter a valid work email.'); return; }
+
+      submitBtn.classList.add('loading'); submitBtn.disabled = true;
+      try {
+        var r = await fetch('/api/demo-request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name, email: email, org: org, message: message, company_url: companyUrl })
+        });
+        var data = {};
+        try { data = await r.json(); } catch(e){}
+        if(!r.ok){ throw new Error((data && data.error) || 'Something went wrong. Please try again.'); }
+        // success
+        formView.style.display = 'none';
+        successView.style.display = '';
+      } catch(e){
+        showErr(e.message || 'Could not send your request. Please email hello@vorlana.com directly.');
+      } finally {
+        submitBtn.classList.remove('loading'); submitBtn.disabled = false;
+      }
+    }
+
+    submitBtn.addEventListener('click', submit);
+    document.getElementById('d-message').addEventListener('keydown', function(e){
+      if(e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit();
+    });
+  })();
+</script>
 
 </body>
 </html>
