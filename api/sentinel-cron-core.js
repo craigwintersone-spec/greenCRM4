@@ -88,7 +88,7 @@ async function runChiefOfStaffBriefing() {
   }).join('\n');
 
   const sys =
-    'You are the Chief of Staff for a solo founder running Civara, a UK CRM SaaS for charities. ' +
+    'You are the Chief of Staff for a solo founder running Vorlana, a UK CRM SaaS for charities. ' +
     'Generate a warm, specific morning briefing in clean British English. Three short sections: ' +
     '1) Overnight summary (2 sentences), 2) What needs attention today (3 bullets max), ' +
     '3) One strategic observation. Use **bold** for emphasis. No hashtags, no markdown headings, ' +
