@@ -599,8 +599,35 @@ async function createOrg(){
     if(invErr){
       inviteHtml='<div style="margin-top:8px;color:var(--red);font-size:12px">Org created, but the manager invite failed: '+invErr.message+'</div>';
     }else{
-      const link=window.location.origin+window.location.pathname.replace('super-admin.html','')+'invite.html?token='+inv.token;
-      inviteHtml='<div style="margin-top:10px;font-size:12px;color:var(--txt2)">Manager invite link — send to '+mgrEmail+':</div>'+
+      // Use the clean non-www domain for the invite link to avoid www mismatch issues
+      const link='https://vorlana.com/invite.html?token='+inv.token;
+
+      // Email the invite automatically via Resend (/api/send-invite)
+      let emailNote='';
+      try{
+        const r=await fetch('/api/send-invite',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            email:mgrEmail.toLowerCase(),
+            org_name:name,
+            role:'manager',
+            token:inv.token,
+            inviter_name:(currentUser&&currentUser.email)||''
+          })
+        });
+        if(r.ok){
+          emailNote='<div style="margin-top:8px;color:var(--em);font-size:12px">✉️ Invite emailed to '+mgrEmail+'</div>';
+        }else{
+          const d=await r.json().catch(()=>({}));
+          emailNote='<div style="margin-top:8px;color:var(--amber);font-size:12px">Couldn\u2019t email the invite ('+((d&&d.error)||'unknown')+') — copy the link below and send it manually.</div>';
+        }
+      }catch(e){
+        emailNote='<div style="margin-top:8px;color:var(--amber);font-size:12px">Couldn\u2019t email the invite — copy the link below and send it manually.</div>';
+      }
+
+      inviteHtml=emailNote+
+        '<div style="margin-top:10px;font-size:12px;color:var(--txt2)">Manager invite link (backup — send to '+mgrEmail+'):</div>'+
         '<div style="margin-top:6px;background:var(--card);border:1px dashed var(--border-strong);border-radius:8px;padding:10px;font-family:ui-monospace,monospace;font-size:11px;color:var(--em);word-break:break-all">'+link+'</div>'+
         '<button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="navigator.clipboard.writeText(\''+link+'\');this.textContent=\'✓ Copied\'">📋 Copy link</button>';
     }
