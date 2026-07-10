@@ -112,7 +112,7 @@ module.exports = async function handler(req, res) {
     'Focus: small charities (5-30 staff) in employability, youth, justice, circular economy, registered or funded recently.';
 
   const findPrompt =
-    'Civara CRM with built-in AI agents. £29-£249/mo. ICP: small UK charities holding public funder contracts (MoJ, GLA, City Bridge, Lottery, Trust for London).';
+    'Vorlana CRM with built-in AI agents. £29-£249/mo. ICP: small UK charities holding public funder contracts (MoJ, GLA, City Bridge, Lottery, Trust for London).';
 
   let candidates = [];
   let findCost = 0;
@@ -139,7 +139,7 @@ module.exports = async function handler(req, res) {
   const draftSys =
     'Write a cold email from Craig (UK charity-CRM founder) to a charity CEO. ' +
     'First line "Subject: ..." then blank line then 100-130 word email. Warm, specific, British English, no fluff. ' +
-    'Reference the charity\'s recent signal. Mention Civara saves 5-10 hours/week of admin via built-in AI. ' +
+    'Reference the charity\'s recent signal. Mention Vorlana saves 5-10 hours/week of admin via built-in AI. ' +
     'Soft CTA: "worth a 15-min call?". Sign "Craig". No emoji.';
 
   const drafted = [];
