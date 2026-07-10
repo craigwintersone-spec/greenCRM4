@@ -15,8 +15,8 @@ const ALLOWED_PLANS = ['pro', 'network'];
 // Only these exact origins may call from a browser. NO wildcard vercel.app.
 // While developing, add your ONE specific preview URL here temporarily.
 const ALLOWED_ORIGINS = new Set([
-  'https://civara.co.uk',
-  'https://www.civara.co.uk',
+  'https://vorlana.com',
+  'https://www.vorlana.com',
   'http://localhost:3000',
   'http://localhost:5173',
 ]);
