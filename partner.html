@@ -1,290 +1,612 @@
-// js/extensions/partner-portal.js
-// ─────────────────────────────────────────────────────────────
-// Wires up the "Your partner portal link & QR code" card on the
-// Partner Referrals page. The HTML for the card already lives in
-// app.html — this file is what makes it actually work.
-//
-// What it does:
-//   1. Loads the qrcode.js library from CDN (once).
-//   2. Defines the click handlers that app.html references:
-//        copyPartnerLink, downloadQR, sharePartnerLink,
-//        printPartnerCard, toggleEmailTemplate, copyEmailTemplate
-//   3. Patches renderPartnerRefs so the QR + link render every
-//      time the user opens the page. Has to redraw on each visit
-//      because the canvas is hidden while the page is hidden,
-//      and currentOrg.id only exists after sign-in.
-//
-// Depends on: auth.js (currentOrg), render.js (renderPartnerRefs),
-//             utils.js ($, escapeHTML).
-// Loads after: boot.js — same as every other extensions/*.js file.
-'use strict';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Vorlana — Partner Portal</title>
+<link rel="icon" type="image/png" href="logo.png"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#F5F1EA;
+  --surface:#FFFFFF;
+  --card:#FFFFFF;
+  --border:#E0DAD0;
+  --em:#1F6F6D;
+  --em2:#175655;
+  --em3:#2A9D8F;
+  --txt:#2B2B2B;
+  --txt2:#4A5552;
+  --txt3:#6B7672;
+  --red:#C84545;
+  --amber:#F59E0B;
+  --blue:#3B82F6;
+  --sage:#A7C4BC;
+  --sand:#E6DFD5;
+  --radius:10px;
+  --radiuslg:14px;
+}
+body{background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.6;min-height:100vh}
+button{cursor:pointer;border:none;font-family:inherit}
+input,select,textarea{font-family:inherit;font-size:13px;background:#FFFFFF;border:1px solid var(--border);color:var(--txt);border-radius:var(--radius);padding:8px 12px;width:100%;outline:none;transition:border-color .2s}
+input:focus,select:focus,textarea:focus{border-color:var(--em)}
+textarea{resize:vertical;min-height:80px}
+label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;font-weight:600}
+.btn{padding:9px 18px;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
+.btn-p{background:var(--em);color:#fff}
+.btn-p:hover{background:var(--em2)}
+.btn-ghost{background:#FFFFFF;color:var(--txt2);border:1px solid var(--border)}
+.btn-ghost:hover{border-color:var(--em);color:var(--em)}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn:disabled{opacity:.6;cursor:not-allowed}
+.badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;white-space:nowrap}
+.b-referred{background:#EDE7F6;color:#5E35B1}
+.b-engaged{background:#E3F2FD;color:#1976D2}
+.b-indelivery{background:#E0F2F1;color:#00695C}
+.b-outcome{background:#E8F5E9;color:#2E7D32}
+.b-closed{background:#ECEFF1;color:#546E7A}
+.b-urgent{background:#FFEBEE;color:#C62828}
+.b-standard{background:#E3F2FD;color:#1976D2}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:20px;margin-bottom:16px;box-shadow:0 1px 2px rgba(31,111,109,.04)}
+.form-row{margin-bottom:13px}
+.form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.msg{padding:10px 13px;border-radius:var(--radius);font-size:13px;margin-bottom:13px;display:none}
+.msg-err{background:#FDECEA;border:1px solid #F5C2C0;color:#B71C1C}
+.msg-ok{background:#E8F5E9;border:1px solid #B8DBBA;color:#1B5E20}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;padding:9px 12px;border-bottom:1px solid var(--border);font-weight:700}
+td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;color:var(--txt2);vertical-align:middle}
+tr:hover td{background:rgba(31,111,109,.03)}
+#auth-screen,#blocked-screen{min-height:100vh;display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+#auth-screen.visible,#blocked-screen.visible{display:flex}
+#app-screen{display:none}
+#app-screen.visible{display:block}
 
-(function () {
+/* ── Vorlana logo ───────────────────────────────── */
+.logo-img-lg{height:60px;width:auto;display:block;margin-bottom:6px}
+.logo-img-sm{height:36px;width:auto;display:block}
 
-  // ── 1. Load qrcode.js from CDN once ──────────────────────────
-  // Using davidshimjs/qrcodejs — small, no deps, draws into a
-  // div using either canvas or table fallback. We swap our
-  // <canvas> for a <div> at render time so the lib is happy.
-  const QR_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
-  let _qrLibPromise = null;
+.auth-sub{font-size:13px;color:var(--txt3);margin-bottom:4px;text-align:center}
+.auth-back{font-size:12px;color:var(--txt3);margin-bottom:24px;display:flex;align-items:center;gap:5px;transition:color .2s;text-decoration:none}
+.auth-back:hover{color:var(--em)}
+.auth-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radiuslg);padding:28px;width:100%;max-width:440px;box-shadow:0 4px 16px rgba(31,111,109,.06)}
+.org-banner{background:rgba(31,111,109,.08);border:1px solid rgba(31,111,109,.2);border-radius:var(--radius);padding:12px 14px;margin-bottom:18px;font-size:13px;color:var(--txt2);line-height:1.6}
+.org-banner strong{color:var(--em);font-weight:700}
+.tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:20px}
+.tab{flex:1;background:none;color:var(--txt2);padding:9px;font-size:13px;font-weight:600;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all .2s;font-family:inherit}
+.tab.active{color:var(--em);border-bottom-color:var(--em)}
+.pane{display:none}.pane.active{display:block}
+.section-title{font-size:11px;font-weight:700;color:var(--em);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+.divider{height:1px;background:var(--border);margin:14px 0}
+.app-header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:0 1px 2px rgba(31,111,109,.04)}
+.app-header-left{display:flex;flex-direction:column;gap:4px}
+.app-header-row{display:flex;align-items:center;gap:10px}
+.portal-tag{font-size:11px;color:var(--txt3);font-weight:500;background:var(--bg);padding:3px 10px;border-radius:10px}
+.header-actions{display:flex;gap:8px;align-items:center}
+.user-info{font-size:12px;color:var(--txt3)}
+.app-main{max-width:900px;margin:0 auto;padding:28px}
+.nav-tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:24px}
+.nav-tab{background:none;color:var(--txt2);padding:10px 20px;font-size:13px;font-weight:600;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all .2s;font-family:inherit}
+.nav-tab:hover{color:var(--txt)}
+.nav-tab.active{color:var(--em);border-bottom-color:var(--em)}
+.nav-pane{display:none}.nav-pane.active{display:block}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;text-align:center;box-shadow:0 1px 2px rgba(31,111,109,.04)}
+.stat-val{font-size:26px;font-weight:700;color:var(--em)}
+.stat-lbl{font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-top:3px;font-weight:600}
+.timeline-step{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--radius);margin-bottom:8px;background:var(--bg);border:1px solid var(--border)}
+.timeline-step.done{border-color:var(--em);background:rgba(31,111,109,.06)}
+.timeline-step.current{border-color:var(--amber);background:rgba(245,158,11,.08)}
+.step-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.step-done{background:var(--em)}.step-current{background:var(--amber)}.step-pending{background:var(--border)}
+.step-label{font-size:13px;font-weight:500;color:var(--txt)}
+.step-sub{font-size:11px;color:var(--txt3)}
+.how-step{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--border)}
+.how-num{width:28px;height:28px;border-radius:50%;background:rgba(31,111,109,.12);color:var(--em);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.blocked-card{background:var(--card);border:1px solid var(--red);border-radius:var(--radiuslg);padding:32px;width:100%;max-width:480px;text-align:center;box-shadow:0 4px 16px rgba(200,69,69,.08)}
+.blocked-icon{font-size:42px;margin-bottom:12px}
+@media(max-width:600px){.stats-row{grid-template-columns:repeat(2,1fr)}.form-grid-2{grid-template-columns:1fr}.app-header{padding:12px 16px}.app-main{padding:16px}.logo-img-sm{height:30px}}
+</style>
+</head>
+<body>
 
-  function loadQRLib() {
-    if (window.QRCode) return Promise.resolve();
-    if (_qrLibPromise) return _qrLibPromise;
-    _qrLibPromise = new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = QR_CDN;
-      s.async = true;
-      s.onload = () => resolve();
-      s.onerror = () => {
-        _qrLibPromise = null; // allow retry
-        reject(new Error('Could not load QR library'));
-      };
-      document.head.appendChild(s);
+<!-- BLOCKED SCREEN -->
+<div id="blocked-screen">
+  <img src="logo.png" alt="Vorlana" class="logo-img-lg"/>
+  <div class="auth-sub">Partner Portal</div>
+  <a href="index.html" class="auth-back" style="margin-top:14px">← Back to home</a>
+  <div class="blocked-card">
+    <div class="blocked-icon">🔒</div>
+    <div style="font-size:18px;font-weight:700;color:var(--txt);margin-bottom:10px">Invitation link required</div>
+    <div style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:18px" id="blocked-msg">
+      The partner portal can only be opened via your referral partner's unique invitation link.
+      Please contact the organisation that asked you to register and ask for the correct link.
+    </div>
+    <div style="font-size:12px;color:var(--txt3);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;line-height:1.6">
+      💡 The link will look like:<br/>
+      <code style="font-family:monospace;font-size:11px;color:var(--em3)">partner.html?org=...</code>
+    </div>
+  </div>
+</div>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen">
+  <img src="logo.png" alt="Vorlana" class="logo-img-lg"/>
+  <div class="auth-sub">Partner Portal — Referral &amp; tracking access</div>
+  <a href="index.html" class="auth-back">← Back to home</a>
+
+  <div class="auth-card">
+    <div class="org-banner" id="auth-org-banner" style="display:none">
+      You're signing in as a referral partner for <strong id="auth-org-name">—</strong>.
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" id="auth-tab-signin" onclick="showTab('signin')">Sign in</button>
+      <button class="tab" id="auth-tab-signup" onclick="showTab('signup')">Register</button>
+    </div>
+
+    <div id="pane-signin" class="pane active">
+      <div class="msg msg-err" id="si-err"></div>
+      <div class="form-row"><label>Email</label><input type="email" id="si-email" placeholder="you@probation.gov.uk"/></div>
+      <div class="form-row"><label>Password</label><input type="password" id="si-pass" placeholder="••••••••"/></div>
+      <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:4px" id="si-btn" onclick="doSignIn()">Sign in</button>
+      <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--txt3)">No account? <a onclick="showTab('signup')" style="color:var(--em);cursor:pointer">Register as partner →</a></div>
+    </div>
+
+    <div id="pane-signup" class="pane">
+      <div class="msg msg-err" id="su-err"></div>
+      <div class="msg msg-ok" id="su-ok"></div>
+      <div class="org-banner" id="signup-org-banner" style="display:none">
+        Registering as a referral partner for <strong id="signup-org-name">—</strong>.
+        Your referrals will be sent directly to their team.
+      </div>
+      <div class="section-title">Your organisation</div>
+      <div class="form-row"><label>Your organisation name</label><input id="su-org" placeholder="e.g. London Probation Service"/></div>
+      <div class="form-row"><label>Organisation type</label>
+        <select id="su-type">
+          <option>Probation</option><option>Jobcentre Plus</option><option>Local authority</option>
+          <option>Housing provider</option><option>Community organisation</option>
+          <option>School / college</option><option>Healthcare</option><option>Other</option>
+        </select>
+      </div>
+      <div class="divider"></div>
+      <div class="section-title">Your details</div>
+      <div class="form-row"><label>Your full name</label><input id="su-name" placeholder="Jane Smith"/></div>
+      <div class="form-row"><label>Work email</label><input type="email" id="su-email" placeholder="jane.smith@probation.gov.uk"/></div>
+      <div class="form-row"><label>Password (min 8 characters)</label><input type="password" id="su-pass"/></div>
+      <button class="btn btn-p" style="width:100%;justify-content:center" id="su-btn" onclick="doSignUp()">Register as partner</button>
+      <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--txt3)">Already registered? <a onclick="showTab('signin')" style="color:var(--em);cursor:pointer">Sign in →</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- APP SCREEN -->
+<div id="app-screen">
+  <div class="app-header">
+    <div class="app-header-left">
+      <div class="app-header-row">
+        <img src="logo.png" alt="Vorlana" class="logo-img-sm"/>
+        <span class="portal-tag">Partner Portal</span>
+      </div>
+      <div class="user-info" id="user-info">Loading…</div>
+    </div>
+    <div class="header-actions">
+      <a href="index.html" class="btn btn-ghost btn-sm">🏠 Home</a>
+      <button class="btn btn-ghost btn-sm" onclick="doSignOut()">Sign out</button>
+    </div>
+  </div>
+
+  <div class="app-main">
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="showNav('overview')">📊 Overview</button>
+      <button class="nav-tab" onclick="showNav('new-referral')">➕ New referral</button>
+      <button class="nav-tab" onclick="showNav('my-referrals')">📋 My referrals</button>
+      <button class="nav-tab" onclick="showNav('how-it-works')">ℹ️ How it works</button>
+    </div>
+
+    <!-- OVERVIEW -->
+    <div id="nav-overview" class="nav-pane active">
+      <div class="stats-row">
+        <div class="stat"><div class="stat-val" id="st-total">—</div><div class="stat-lbl">Total referrals</div></div>
+        <div class="stat"><div class="stat-val" id="st-active">—</div><div class="stat-lbl">In delivery</div></div>
+        <div class="stat"><div class="stat-val" id="st-outcomes">—</div><div class="stat-lbl">Outcomes achieved</div></div>
+        <div class="stat"><div class="stat-val" id="st-pending">—</div><div class="stat-lbl">Awaiting allocation</div></div>
+      </div>
+      <div class="card">
+        <div style="font-size:14px;font-weight:700;color:var(--txt);margin-bottom:14px">Recent referral updates</div>
+        <div id="recent-list"></div>
+      </div>
+      <div class="card">
+        <div style="font-size:14px;font-weight:700;color:var(--txt);margin-bottom:14px">Quick actions</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+          <button class="btn btn-p" style="justify-content:center" onclick="showNav('new-referral')">➕ New referral</button>
+          <button class="btn btn-ghost" style="justify-content:center" onclick="showNav('my-referrals')">📋 View all</button>
+          <button class="btn btn-ghost" style="justify-content:center" onclick="showNav('how-it-works')">ℹ️ How it works</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- NEW REFERRAL -->
+    <div id="nav-new-referral" class="nav-pane">
+      <div class="card">
+        <div style="font-size:16px;font-weight:700;color:var(--txt);margin-bottom:4px">Submit a new referral</div>
+        <div style="font-size:13px;color:var(--txt3);margin-bottom:14px">Referrals are sent securely to <strong id="referral-org-name" style="color:var(--em)">your partner organisation</strong>. Complete all required fields. The team will respond within 2 working days.</div>
+        <div class="msg msg-err" id="ref-err"></div>
+        <div class="msg msg-ok" id="ref-ok"></div>
+        <div class="section-title">Personal details</div>
+        <div class="form-grid-2">
+          <div class="form-row"><label>First name *</label><input id="r-fn" placeholder="Jane"/></div>
+          <div class="form-row"><label>Last name *</label><input id="r-ln" placeholder="Smith"/></div>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-row"><label>Date of birth</label><input type="date" id="r-dob"/></div>
+          <div class="form-row"><label>Phone</label><input id="r-phone" placeholder="07700 900000"/></div>
+        </div>
+        <div class="form-row"><label>Email address</label><input type="email" id="r-email" placeholder="jane@example.com"/></div>
+        <div class="divider"></div>
+        <div class="section-title">Referral details</div>
+        <div class="form-grid-2">
+          <div class="form-row"><label>Primary need *</label>
+            <select id="r-need">
+              <option>Employment support</option><option>Training / skills</option>
+              <option>Housing support</option><option>Wellbeing / mental health</option>
+              <option>Multiple / complex needs</option><option>Circular economy / repair training</option>
+            </select>
+          </div>
+          <div class="form-row"><label>Urgency *</label>
+            <select id="r-urgency">
+              <option value="Standard">Standard — within 5 working days</option>
+              <option value="Urgent">Urgent — within 48 hours</option>
+              <option value="Crisis">Crisis — same day response needed</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row"><label>Background &amp; reason for referral *</label>
+          <textarea id="r-notes" placeholder="Brief background, reason for referral, any relevant history…"></textarea>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-row"><label>Key barriers (hold Ctrl/Cmd for multiple)</label>
+            <select id="r-barriers" multiple style="min-height:100px">
+              <option>Housing</option><option>Confidence</option><option>Skills gap</option>
+              <option>Transport</option><option>Childcare</option><option>Mental health</option>
+              <option>Substance misuse</option><option>Criminal record</option>
+              <option>Language barrier</option><option>Benefits</option>
+            </select>
+          </div>
+          <div class="form-row"><label>Safeguarding concerns</label>
+            <select id="r-safe">
+              <option value="">None known</option><option>Domestic abuse</option>
+              <option>Mental health risk</option><option>Substance misuse</option>
+              <option>Homelessness risk</option><option>Child safeguarding</option>
+              <option>Other — noted in background</option>
+            </select>
+          </div>
+        </div>
+        <div class="divider"></div>
+        <div class="section-title">Consent &amp; compliance</div>
+        <div class="form-row"><label>Consent confirmed *</label>
+          <select id="r-consent">
+            <option value="yes">✓ Yes — person has given informed consent</option>
+            <option value="no">✗ No — consent not yet confirmed</option>
+          </select>
+        </div>
+        <div class="form-row"><label>Your reference number (optional)</label><input id="r-ref" placeholder="Your internal case/ref number"/></div>
+        <div style="margin-top:18px;display:flex;gap:10px">
+          <button class="btn btn-p" id="ref-btn" onclick="submitReferral()">Submit referral</button>
+          <button class="btn btn-ghost" onclick="clearReferralForm()">Clear form</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MY REFERRALS -->
+    <div id="nav-my-referrals" class="nav-pane">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div style="font-size:16px;font-weight:700;color:var(--txt)">My referrals</div>
+        <select id="ref-filter" onchange="filterReferrals()" style="width:auto;max-width:180px">
+          <option value="">All statuses</option>
+          <option value="Referred">Referred</option><option value="Engaged">Engaged</option>
+          <option value="In delivery">In delivery</option><option value="Outcome achieved">Outcome achieved</option>
+          <option value="Closed">Closed</option>
+        </select>
+      </div>
+      <div id="referrals-list"></div>
+    </div>
+
+    <!-- HOW IT WORKS -->
+    <div id="nav-how-it-works" class="nav-pane">
+      <div class="card">
+        <div style="font-size:16px;font-weight:700;color:var(--txt);margin-bottom:16px">How the referral process works</div>
+        <div class="how-step"><div class="how-num">1</div><div><div style="font-size:13px;font-weight:600;color:var(--txt)">Submit a referral</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">Complete the New referral form with the person's details, primary need, and confirm consent. Urgent referrals are flagged for same-day or 48-hour response.</div></div></div>
+        <div class="how-step"><div class="how-num">2</div><div><div style="font-size:13px;font-weight:600;color:var(--txt)">Allocation</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">The programme team reviews and allocates an advisor within the agreed timeframe. Status updates to Engaged once contact is made.</div></div></div>
+        <div class="how-step"><div class="how-num">3</div><div><div style="font-size:13px;font-weight:600;color:var(--txt)">Delivery &amp; support</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">The participant receives tailored support. Track their progress under My referrals. Status updates in real time.</div></div></div>
+        <div class="how-step"><div class="how-num">4</div><div><div style="font-size:13px;font-weight:600;color:var(--txt)">Outcome achieved</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">When an outcome is achieved the status updates. You'll see this reflected in your referral dashboard.</div></div></div>
+        <div class="how-step" style="border:none"><div class="how-num">5</div><div><div style="font-size:13px;font-weight:600;color:var(--txt)">Sustainment &amp; closure</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">The team supports sustainment for 12+ weeks where possible. Cases are closed when support ends.</div></div></div>
+      </div>
+      <div class="card">
+        <div style="font-size:14px;font-weight:700;color:var(--txt);margin-bottom:10px">Need help?</div>
+        <p style="font-size:13px;color:var(--txt2);line-height:1.8">For urgent queries contact your programme liaison directly. For technical issues: <a href="mailto:hello@vorlana.com" style="color:var(--em)">hello@vorlana.com</a></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- REFERRAL DETAIL MODAL -->
+<div id="modal-ref" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:center;justify-content:center;padding:16px">
+<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radiuslg);padding:24px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+  <h2 style="font-size:17px;font-weight:700;color:var(--txt);margin-bottom:18px" id="modal-ref-title">Referral detail</h2>
+  <div id="modal-ref-body"></div>
+  <div style="margin-top:18px;text-align:right"><button class="btn btn-ghost" onclick="document.getElementById('modal-ref').style.display='none'">Close</button></div>
+</div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SURL='https://nznfrxzgvcjhfsdaphyp.supabase.co';
+const SKEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw';
+const sb=supabase.createClient(SURL,SKEY);
+
+let USER=null,PARTNER=null,allRefs=[];
+let URL_ORG_ID=null;
+let URL_ORG_NAME=null;
+const $=id=>document.getElementById(id);
+const fmtD=d=>d?new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}):'—';
+const fmtDT=d=>d?new Date(d).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'—';
+
+function showScreen(name){
+  ['blocked-screen','auth-screen','app-screen'].forEach(id=>{
+    const el=$(id);
+    if(!el)return;
+    if(id===name){el.classList.add('visible');}
+    else{el.classList.remove('visible');}
+  });
+}
+
+async function init(){
+  const params=new URLSearchParams(window.location.search);
+  URL_ORG_ID=params.get('org');
+
+  if(!URL_ORG_ID||URL_ORG_ID==='YOUR_ORG_ID'){
+    showScreen('blocked-screen');
+    return;
+  }
+
+  // Verify org via the SECURITY DEFINER RPC.
+  // After the RLS migration, anon cannot read `organisations` directly —
+  // get_org_for_invite returns just {id,name} for the requested org.
+  try{
+    const{data:orgRows,error}=await sb.rpc('get_org_for_invite',{org_id:URL_ORG_ID});
+    const org = orgRows && orgRows[0];
+    if(error||!org){
+      showScreen('blocked-screen');
+      $('blocked-msg').innerHTML='The organisation in this link could not be found. Please contact the organisation that asked you to register and ask for the correct link.';
+      return;
+    }
+    URL_ORG_NAME=org.name;
+  }catch(e){
+    showScreen('blocked-screen');
+    $('blocked-msg').textContent='Could not verify the organisation. Please try again, or contact the organisation that sent you the link.';
+    return;
+  }
+
+  $('auth-org-name').textContent=URL_ORG_NAME;
+  $('auth-org-banner').style.display='block';
+  $('signup-org-name').textContent=URL_ORG_NAME;
+  $('signup-org-banner').style.display='block';
+
+  const{data:{session}}=await sb.auth.getSession();
+  if(session){
+    USER=session.user;
+    await loadPartner();
+    return;
+  }
+
+  showScreen('auth-screen');
+}
+
+async function loadPartner(){
+  const{data:p}=await sb.from('partner_profiles').select('*').eq('id',USER.id).maybeSingle();
+  PARTNER=p;
+
+  if(PARTNER&&PARTNER.org_id&&URL_ORG_ID&&PARTNER.org_id!==URL_ORG_ID){
+    await sb.auth.signOut();
+    USER=null;PARTNER=null;
+    showScreen('auth-screen');
+    $('si-err').textContent='This account is registered with a different organisation. Please use the original invitation link.';
+    $('si-err').style.display='block';
+    return;
+  }
+
+  if(!PARTNER){
+    const{error}=await sb.from('partner_profiles').insert({
+      id:USER.id,full_name:USER.email,email:USER.email,
+      org_name:'Unknown',org_type:'Other',status:'active',org_id:URL_ORG_ID
     });
-    return _qrLibPromise;
-  }
-
-  // ── 2. Build the partner portal URL for the current org ──────
-  function getPartnerPortalUrl() {
-    if (typeof currentOrg === 'undefined' || !currentOrg || !currentOrg.id) return null;
-    // Use the same origin the CRM is served from so it works on
-    // localhost, preview deploys and production without changes.
-    const base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
-    return base + 'partner.html?org=' + encodeURIComponent(currentOrg.id);
-  }
-
-  // ── 3. Render the QR + link into the card ────────────────────
-  // Called from the patched renderPartnerRefs below.
-  async function renderPartnerPortalCard() {
-    const linkEl = document.getElementById('partner-link-display');
-    const canvas = document.getElementById('qr-canvas');
-    if (!linkEl || !canvas) return; // card not on screen
-
-    const url = getPartnerPortalUrl();
-    if (!url) {
-      linkEl.textContent = 'Sign in to generate your partner link.';
+    if(error){
+      console.error('Could not create partner profile:',error);
+      await sb.auth.signOut();
+      showScreen('auth-screen');
       return;
     }
-
-    linkEl.textContent = url;
-
-    // qrcode.js wants a <div>, not a <canvas>. Replace the canvas
-    // with a div the first time, then clear and redraw on each
-    // subsequent visit.
-    let qrTarget = document.getElementById('qr-target');
-    if (!qrTarget) {
-      qrTarget = document.createElement('div');
-      qrTarget.id = 'qr-target';
-      qrTarget.style.width = '140px';
-      qrTarget.style.height = '140px';
-      canvas.parentNode.replaceChild(qrTarget, canvas);
-    } else {
-      qrTarget.innerHTML = '';
-    }
-
-    try {
-      await loadQRLib();
-      // eslint-disable-next-line no-new
-      new window.QRCode(qrTarget, {
-        text: url,
-        width: 140,
-        height: 140,
-        colorDark: '#1F6F6D',
-        colorLight: '#ffffff',
-        correctLevel: window.QRCode.CorrectLevel.M
-      });
-    } catch (e) {
-      qrTarget.innerHTML =
-        '<div style="font-size:11px;color:var(--red);padding:8px">QR could not load. Check your connection.</div>';
-      console.error('[partner-portal] QR generation failed:', e);
-    }
+    const{data:p2}=await sb.from('partner_profiles').select('*').eq('id',USER.id).maybeSingle();
+    PARTNER=p2;
   }
 
-  // ── 4. Click handlers referenced by app.html ─────────────────
+  showScreen('app-screen');
+  $('user-info').textContent=(PARTNER&&PARTNER.full_name?PARTNER.full_name:USER.email)+' · '+(PARTNER&&PARTNER.org_name?PARTNER.org_name:'Partner')+' → '+URL_ORG_NAME;
+  $('referral-org-name').textContent=URL_ORG_NAME;
+  loadOverview();
+}
 
-  window.copyPartnerLink = async function () {
-    const url = getPartnerPortalUrl();
-    if (!url) return;
-    try {
-      await navigator.clipboard.writeText(url);
-      flashBtn('copy-link-btn', '✓ Copied');
-    } catch (e) {
-      // Fallback for older browsers / non-https contexts
-      const ta = document.createElement('textarea');
-      ta.value = url;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      try { document.execCommand('copy'); flashBtn('copy-link-btn', '✓ Copied'); }
-      catch (_) { alert('Copy failed — please copy the link manually.'); }
-      document.body.removeChild(ta);
-    }
-  };
+function showTab(t){
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
+  const tab=$('auth-tab-'+t);
+  if(tab)tab.classList.add('active');
+  $('pane-'+t).classList.add('active');
+}
+function showMsg(id,msg){const e=$(id);e.textContent=msg;e.style.display='block';}
+function hideMsg(){for(let i=0;i<arguments.length;i++){const e=$(arguments[i]);if(e)e.style.display='none';}}
+function setLoad(id,on,lbl){const b=$(id);b.disabled=on;b.textContent=on?'Please wait…':lbl;}
 
-  window.downloadQR = function () {
-    const target = document.getElementById('qr-target');
-    if (!target) return;
-    // qrcode.js renders a <canvas> inside the target on supported
-    // browsers, with a fallback <img>. We grab whichever exists.
-    const canvas = target.querySelector('canvas');
-    const img = target.querySelector('img');
-    let dataUrl = null;
-    if (canvas) {
-      dataUrl = canvas.toDataURL('image/png');
-    } else if (img && img.src) {
-      dataUrl = img.src;
-    }
-    if (!dataUrl) {
-      alert('QR code not ready yet — please try again in a moment.');
-      return;
-    }
-    const orgName = (typeof currentOrg !== 'undefined' && currentOrg && currentOrg.name)
-      ? currentOrg.name : 'vorlana';
-    const slug = orgName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = 'partner-portal-qr-' + (slug || 'vorlana') + '.png';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
+async function doSignIn(){
+  const email=$('si-email').value.trim(),pass=$('si-pass').value;
+  hideMsg('si-err');
+  if(!email||!pass){showMsg('si-err','Please enter your email and password.');return;}
+  setLoad('si-btn',true,'Sign in');
+  const{error}=await sb.auth.signInWithPassword({email,password:pass});
+  setLoad('si-btn',false,'Sign in');
+  if(error){showMsg('si-err',error.message);return;}
+  const{data:{session}}=await sb.auth.getSession();
+  if(session){USER=session.user;await loadPartner();}
+}
 
-  window.sharePartnerLink = async function () {
-    const url = getPartnerPortalUrl();
-    if (!url) return;
-    const orgName = (currentOrg && currentOrg.name) ? currentOrg.name : 'our team';
-    const shareData = {
-      title: orgName + ' — Partner Portal',
-      text: 'Send referrals to ' + orgName + ' via our secure partner portal:',
-      url: url
-    };
-    if (navigator.share) {
-      try { await navigator.share(shareData); }
-      catch (e) { /* user cancelled — silent */ }
-    } else {
-      // Fallback — copy to clipboard
-      window.copyPartnerLink();
-    }
-  };
+async function doSignUp(){
+  if(!URL_ORG_ID){showMsg('su-err','Cannot register without a valid invitation link.');return;}
+  const org=$('su-org').value.trim(),type=$('su-type').value;
+  const name=$('su-name').value.trim(),email=$('su-email').value.trim(),pass=$('su-pass').value;
+  hideMsg('su-err','su-ok');
+  if(!org||!name||!email||!pass){showMsg('su-err','Please fill in all fields.');return;}
+  if(pass.length<8){showMsg('su-err','Password must be at least 8 characters.');return;}
+  setLoad('su-btn',true,'Register as partner');
 
-  window.printPartnerCard = function () {
-    const url = getPartnerPortalUrl();
-    if (!url) return;
-    const orgName = (currentOrg && currentOrg.name) ? escapeHTML(currentOrg.name) : 'Our team';
-    const target = document.getElementById('qr-target');
-    const canvas = target && target.querySelector('canvas');
-    const img = target && target.querySelector('img');
-    const qrSrc = canvas ? canvas.toDataURL('image/png') : (img ? img.src : '');
-
-    const w = window.open('', '_blank', 'width=720,height=900');
-    if (!w) {
-      alert('Pop-up blocked — please allow pop-ups to print the card.');
-      return;
-    }
-    w.document.write(
-      '<!doctype html><html><head><title>Referral card — ' + orgName + '</title>' +
-      '<style>' +
-        '@page{size:A5;margin:14mm}' +
-        'body{font-family:system-ui,-apple-system,sans-serif;color:#2B2B2B;margin:0;padding:0}' +
-        '.card{border:2px solid #1F6F6D;border-radius:14px;padding:28px;text-align:center}' +
-        'h1{font-size:22px;color:#1F6F6D;margin:0 0 6px 0}' +
-        '.sub{font-size:13px;color:#6B7672;margin-bottom:18px}' +
-        '.qr{margin:14px auto;display:inline-block;padding:10px;background:#fff;border:1px solid #E0DAD0;border-radius:10px}' +
-        '.url{font-family:monospace;font-size:11px;color:#1F6F6D;word-break:break-all;margin-top:10px;padding:8px;background:#F5F1EA;border-radius:6px}' +
-        '.foot{font-size:11px;color:#6B7672;margin-top:18px;line-height:1.6}' +
-      '</style></head><body>' +
-      '<div class="card">' +
-        '<h1>Refer to ' + orgName + '</h1>' +
-        '<div class="sub">Scan the QR code or visit the link to register and submit a referral.</div>' +
-        (qrSrc ? '<div class="qr"><img src="' + qrSrc + '" width="220" height="220"/></div>' : '') +
-        '<div class="url">' + escapeHTML(url) + '</div>' +
-        '<div class="foot">Secure portal · GDPR compliant · Powered by Vorlana</div>' +
-      '</div>' +
-      '<script>window.onload=function(){setTimeout(function(){window.print();},250);};<' + '/script>' +
-      '</body></html>'
-    );
-    w.document.close();
-  };
-
-  window.toggleEmailTemplate = function () {
-    const box = document.getElementById('email-template');
-    const btn = document.getElementById('email-tpl-btn');
-    const body = document.getElementById('email-tpl-body');
-    if (!box || !btn || !body) return;
-    const showing = box.style.display !== 'none';
-    if (showing) {
-      box.style.display = 'none';
-      btn.textContent = '✉️ Show email template to send to partners';
-    } else {
-      body.textContent = buildEmailTemplate();
-      box.style.display = 'block';
-      btn.textContent = '✉️ Hide email template';
-    }
-  };
-
-  window.copyEmailTemplate = async function () {
-    const text = buildEmailTemplate();
-    try {
-      await navigator.clipboard.writeText(text);
-      alert('✓ Email template copied to clipboard.');
-    } catch (e) {
-      alert('Copy failed — please select the text manually.');
-    }
-  };
-
-  // ── 5. Helpers ───────────────────────────────────────────────
-
-  function buildEmailTemplate() {
-    const url = getPartnerPortalUrl() || '[your portal link]';
-    const orgName = (currentOrg && currentOrg.name) ? currentOrg.name : 'our team';
-    return (
-      'Subject: Quick way to refer clients to ' + orgName + '\n\n' +
-      'Hi [name],\n\n' +
-      'We\'ve set up a secure partner portal so you can refer clients to ' + orgName + ' in a couple of minutes — no email back-and-forth, no spreadsheets.\n\n' +
-      'How it works:\n' +
-      '  1. Register once using the link below (you\'ll get an account in your name).\n' +
-      '  2. Submit referrals straight from your dashboard.\n' +
-      '  3. Track each referral\'s progress — Referred → Engaged → In delivery → Outcome.\n\n' +
-      'Your unique invitation link:\n' +
-      url + '\n\n' +
-      'Urgent referrals are flagged for same-day or 48-hour response. Standard referrals get a response within 2 working days.\n\n' +
-      'Any questions, just reply to this email.\n\n' +
-      'Thanks,\n' +
-      '[Your name]\n' +
-      orgName
-    );
+  const signUpRes=await sb.auth.signUp({email,password:pass,options:{data:{full_name:name,org_name:org}}});
+  if(signUpRes.error){
+    setLoad('su-btn',false,'Register as partner');
+    showMsg('su-err',signUpRes.error.message);return;
   }
 
-  function flashBtn(id, msg) {
-    const b = document.getElementById(id);
-    if (!b) return;
-    const original = b.textContent;
-    b.textContent = msg;
-    setTimeout(() => { b.textContent = original; }, 1600);
+  const siRes=await sb.auth.signInWithPassword({email,password:pass});
+  if(siRes.error){
+    setLoad('su-btn',false,'Register as partner');
+    if(siRes.error.message.toLowerCase().indexOf('confirm')>=0){
+      showMsg('su-err','Account created. Please check your email to confirm, then sign in via the same invitation link.');
+    }else{
+      showMsg('su-err','Sign-in after registration failed: '+siRes.error.message);
+    }
+    return;
   }
 
-  // ── 6. Patch renderPartnerRefs so the QR draws on every visit ─
-  // We don't replace it — we wrap it so the existing table render
-  // (which is in render.js) still happens.
-  if (typeof window.renderPartnerRefs === 'function') {
-    const _original = window.renderPartnerRefs;
-    window.renderPartnerRefs = function () {
-      const result = _original.apply(this, arguments);
-      // Run after the original so the card markup is in the DOM
-      // (it's static HTML in app.html, but this also handles any
-      // future case where it's injected dynamically).
-      try { renderPartnerPortalCard(); }
-      catch (e) { console.error('[partner-portal] render failed:', e); }
-      return result;
-    };
-  } else {
-    // Fallback — render.js didn't load or function was renamed.
-    // Try once on DOMContentLoaded so the page at least shows the QR.
-    document.addEventListener('DOMContentLoaded', () => {
-      setTimeout(renderPartnerPortalCard, 500);
-    });
+  let sessionReady=false;
+  for(let i=0;i<15;i++){
+    const sRes=await sb.auth.getSession();
+    if(sRes.data&&sRes.data.session&&sRes.data.session.user){sessionReady=true;break;}
+    await new Promise(r=>setTimeout(r,250));
+  }
+  if(!sessionReady){
+    setLoad('su-btn',false,'Register as partner');
+    showMsg('su-err','Could not establish session. Please try signing in.');return;
+  }
+  const{data:{session}}=await sb.auth.getSession();
+  USER=session.user;
+
+  const{error:profErr}=await sb.from('partner_profiles').insert({
+    id:USER.id,full_name:name,email,org_name:org,org_type:type,
+    status:'active',org_id:URL_ORG_ID
+  });
+  if(profErr){
+    setLoad('su-btn',false,'Register as partner');
+    showMsg('su-err','Could not complete registration: '+profErr.message);
+    console.error('partner_profile insert failed:',profErr);
+    return;
   }
 
-})();
+  setLoad('su-btn',false,'Register as partner');
+  showMsg('su-ok','✓ Registered! Loading your dashboard…');
+  setTimeout(loadPartner,800);
+}
+
+async function doSignOut(){
+  await sb.auth.signOut();
+  window.location.reload();
+}
+
+function showNav(n){
+  document.querySelectorAll('.nav-tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.nav-pane').forEach(p=>p.classList.remove('active'));
+  $('nav-'+n).classList.add('active');
+  document.querySelectorAll('.nav-tab').forEach(b=>{if(b.textContent.toLowerCase().includes(n.replace('-',' ').toLowerCase().slice(0,4)))b.classList.add('active');});
+  if(n==='my-referrals')loadReferrals();
+  if(n==='overview')loadOverview();
+}
+
+async function loadOverview(){
+  const{data}=await sb.from('partner_referrals').select('*').eq('partner_id',USER.id).order('created_at',{ascending:false});
+  allRefs=data||[];
+  $('st-total').textContent=allRefs.length;
+  $('st-active').textContent=allRefs.filter(r=>r.status==='In delivery'||r.status==='Engaged').length;
+  $('st-outcomes').textContent=allRefs.filter(r=>r.status==='Outcome achieved').length;
+  $('st-pending').textContent=allRefs.filter(r=>r.status==='Referred').length;
+  const statusBadge=s=>{const m={'Referred':'b-referred','Engaged':'b-engaged','In delivery':'b-indelivery','Outcome achieved':'b-outcome','Closed':'b-closed'};return'<span class="badge '+(m[s]||'b-referred')+'">'+s+'</span>';};
+  $('recent-list').innerHTML=allRefs.slice(0,5).map(r=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="viewRef('+r.id+')"><div><div style="font-size:13px;font-weight:500;color:var(--txt)">'+(r.first_name||'')+' '+(r.last_name||'')+'</div><div style="font-size:11px;color:var(--txt3)">'+fmtD(r.created_at)+' · '+(r.primary_need||'')+'</div></div>'+statusBadge(r.status||'Referred')+'</div>').join('')||'<div style="color:var(--txt3);font-size:13px;padding:12px 0">No referrals yet. Submit your first referral above.</div>';
+}
+
+async function loadReferrals(){
+  const{data}=await sb.from('partner_referrals').select('*').eq('partner_id',USER.id).order('created_at',{ascending:false});
+  allRefs=data||[];
+  renderReferrals(allRefs);
+}
+
+function filterReferrals(){
+  const f=($('ref-filter')||{}).value||'';
+  renderReferrals(f?allRefs.filter(r=>r.status===f):allRefs);
+}
+
+function renderReferrals(refs){
+  const statusBadge=s=>{const m={'Referred':'b-referred','Engaged':'b-engaged','In delivery':'b-indelivery','Outcome achieved':'b-outcome','Closed':'b-closed'};return'<span class="badge '+(m[s]||'b-referred')+'">'+(s||'Referred')+'</span>';};
+  const urgBadge=u=>'<span class="badge '+(u==='Crisis'?'b-urgent':u==='Urgent'?'b-referred':'b-standard')+'">'+(u||'Standard')+'</span>';
+  $('referrals-list').innerHTML=refs.length?'<div class="card" style="padding:0;overflow:hidden"><table><thead><tr><th>Name</th><th>Submitted</th><th>Need</th><th>Urgency</th><th>Status</th><th></th></tr></thead><tbody>'+refs.map(r=>'<tr><td style="color:var(--txt);font-weight:500">'+(r.first_name||'')+' '+(r.last_name||'')+'</td><td style="font-size:12px">'+fmtD(r.created_at)+'</td><td style="font-size:12px;color:var(--txt2)">'+(r.primary_need||'')+'</td><td>'+urgBadge(r.urgency)+'</td><td>'+statusBadge(r.status)+'</td><td><button class="btn btn-ghost btn-sm" onclick="viewRef('+r.id+')">View →</button></td></tr>').join('')+'</tbody></table></div>':'<div style="text-align:center;padding:40px 20px;color:var(--txt3)"><div style="font-size:32px;margin-bottom:8px">📋</div><div>No referrals yet.</div><div style="margin-top:8px"><button class="btn btn-p btn-sm" onclick="showNav(\'new-referral\')">Submit your first referral →</button></div></div>';
+}
+
+function viewRef(id){
+  const r=allRefs.find(x=>x.id===id);if(!r)return;
+  const stages=['Referred','Engaged','In delivery','Outcome achieved','Closed'];
+  const currentIdx=stages.indexOf(r.status||'Referred');
+  $('modal-ref-title').textContent=(r.first_name||'')+' '+(r.last_name||'');
+  $('modal-ref-body').innerHTML='<div style="margin-bottom:16px"><div style="font-size:11px;color:var(--txt3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;font-weight:600">Journey progress</div>'+stages.map((s,i)=>'<div class="timeline-step '+(i<currentIdx?'done':i===currentIdx?'current':'')+'"><div class="step-dot '+(i<currentIdx?'step-done':i===currentIdx?'step-current':'step-pending')+'"></div><div><div class="step-label">'+s+'</div>'+(i===currentIdx?'<div class="step-sub">Current status</div>':i<currentIdx?'<div class="step-sub" style="color:var(--em3)">Completed</div>':'')+'</div></div>').join('')+'</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px"><div style="background:var(--bg);padding:10px;border-radius:var(--radius);border:1px solid var(--border)"><div style="font-size:11px;color:var(--txt3);font-weight:600">SUBMITTED</div><div style="font-size:13px;color:var(--txt);margin-top:2px">'+fmtDT(r.created_at)+'</div></div><div style="background:var(--bg);padding:10px;border-radius:var(--radius);border:1px solid var(--border)"><div style="font-size:11px;color:var(--txt3);font-weight:600">PRIMARY NEED</div><div style="font-size:13px;color:var(--txt);margin-top:2px">'+(r.primary_need||'—')+'</div></div><div style="background:var(--bg);padding:10px;border-radius:var(--radius);border:1px solid var(--border)"><div style="font-size:11px;color:var(--txt3);font-weight:600">URGENCY</div><div style="font-size:13px;color:var(--txt);margin-top:2px">'+(r.urgency||'Standard')+'</div></div><div style="background:var(--bg);padding:10px;border-radius:var(--radius);border:1px solid var(--border)"><div style="font-size:11px;color:var(--txt3);font-weight:600">YOUR REF</div><div style="font-size:13px;color:var(--txt);margin-top:2px">'+(r.partner_ref||'—')+'</div></div></div>'+(r.notes?'<div style="background:var(--bg);padding:12px;border-radius:var(--radius);margin-bottom:10px;border:1px solid var(--border)"><div style="font-size:11px;color:var(--txt3);margin-bottom:4px;font-weight:600">BACKGROUND</div><div style="font-size:13px;color:var(--txt2)">'+r.notes+'</div></div>':'')+(r.safeguarding?'<div style="background:#FFEBEE;border:1px solid #F5C2C0;padding:10px;border-radius:var(--radius);font-size:13px;color:#C62828">🔐 Safeguarding: '+r.safeguarding+'</div>':'');
+  $('modal-ref').style.display='flex';
+}
+
+async function submitReferral(){
+  const fn=$('r-fn').value.trim(),ln=$('r-ln').value.trim();
+  const notes=$('r-notes').value.trim(),consent=$('r-consent').value;
+  hideMsg('ref-err','ref-ok');
+  if(!fn||!ln){showMsg('ref-err','First name and last name are required.');return;}
+  if(!notes){showMsg('ref-err','Please provide background and reason for referral.');return;}
+  if(consent==='no'){showMsg('ref-err','Consent must be confirmed before submitting.');return;}
+  if(!URL_ORG_ID||!PARTNER||!PARTNER.org_id){
+    showMsg('ref-err','Could not identify the receiving organisation. Please reload via the original invitation link.');return;
+  }
+
+  const barriers=[...$('r-barriers').selectedOptions].map(o=>o.value);
+  setLoad('ref-btn',true,'Submitting…');
+  const{error}=await sb.from('partner_referrals').insert({
+    partner_id:USER.id,
+    org_id:PARTNER.org_id,
+    partner_name:PARTNER.org_name||'Partner',
+    first_name:fn,last_name:ln,dob:$('r-dob').value||null,
+    phone:$('r-phone').value,email:$('r-email').value,
+    primary_need:$('r-need').value,urgency:$('r-urgency').value,
+    notes,barriers,safeguarding:$('r-safe').value||null,
+    partner_ref:$('r-ref').value,consent:true,status:'Referred',
+    created_at:new Date().toISOString()
+  });
+  setLoad('ref-btn',false,'Submit referral');
+  if(error){
+    showMsg('ref-err','Error: '+error.message);
+    console.error('referral insert failed:',error);
+    return;
+  }
+  showMsg('ref-ok','✓ Referral for '+fn+' '+ln+' sent to '+URL_ORG_NAME+'. Their team will be in touch within '+($('r-urgency').value==='Crisis'?'a few hours':$('r-urgency').value==='Urgent'?'48 hours':'2 working days')+'.');
+  clearReferralForm();loadOverview();
+}
+
+function clearReferralForm(){
+  ['r-fn','r-ln','r-dob','r-phone','r-email','r-notes','r-ref'].forEach(f=>$(f).value='');
+  $('r-safe').value='';$('r-urgency').value='Standard';$('r-need').value='Employment support';$('r-consent').value='yes';
+  [...$('r-barriers').options].forEach(o=>o.selected=false);
+}
+
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&$('pane-signin').classList.contains('active'))doSignIn();});
+init();
+</script>
+</body>
+</html>
