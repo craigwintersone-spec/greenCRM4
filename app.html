@@ -338,9 +338,17 @@
 
 <!-- BD MANAGER -->
 <div id="page-bd" class="page">
-  <div class="page-header"><div><div class="page-title">💼 BD Manager</div><div class="page-sub">Find funding · Generate Expressions of Interest</div></div></div>
+  <div class="page-header"><div><div class="page-title">💼 BD Manager</div><div class="page-sub">Find funding · Write winning Expressions of Interest</div></div></div>
+
+  <!-- ══ STEP 1 · FIND FUNDING ══════════════════════════════ -->
+  <div style="display:flex;align-items:center;gap:12px;margin:4px 0 14px">
+    <span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--em);color:#fff;font-size:13px;font-weight:700;flex-shrink:0">1</span>
+    <div>
+      <div style="font-size:16px;font-weight:700;color:var(--txt)">Find funding opportunities</div>
+      <div style="font-size:12px;color:var(--txt3)">Live web search for open grants and contracts that fit your organisation</div>
+    </div>
+  </div>
   <div class="card">
-    <div class="card-title">Find funding opportunities</div>
     <div class="form-grid-2" style="margin-bottom:12px">
       <div class="form-row"><label>Primary delivery area</label><select id="bd-area"><option>London</option><option>Greater Manchester</option><option>Birmingham / West Midlands</option><option>Leeds / West Yorkshire</option><option>Bristol / South West</option><option>National / England-wide</option><option>Other</option></select></div>
       <div class="form-row"><label>Org turnover</label><select id="bd-size"><option value="micro">Under £100k</option><option value="small">£100k–£500k</option><option value="medium">£500k–£2m</option><option value="large">£2m+</option></select></div>
@@ -351,40 +359,62 @@
   <div id="bd-opps-wrap" style="display:none">
     <div class="ai-panel"><div class="ai-panel-title"><span class="ai-icon">🔍</span>Funding opportunities identified</div><div id="bd-opps-result"></div></div>
   </div>
-  <!-- ── ORGANISATION PROFILE ─ the facts an EOI needs that the CRM doesn't hold ── -->
-  <div class="card" style="margin-top:4px">
-    <div class="card-title">Your organisation profile <span style="font-weight:400;color:var(--txt3);font-size:12px">— used in every EOI</span></div>
-    <p style="font-size:13px;color:var(--txt2);margin-bottom:10px">The EOI writer only knows what's in your CRM plus what you put here. Paste your organisation's key facts once — legal &amp; trading name, charity/company number, registered address + postcode, website, social links, lead contact (name, role, email, phone), year founded, boroughs covered, mission, prior contracts &amp; delivery history <em>with real numbers</em>, key partnerships, accreditations. The writer uses these and inserts [INSERT: …] wherever something is still missing.</p>
-    <div class="form-row"><textarea id="eoi-org-profile" style="min-height:170px" placeholder="e.g.
-Legal &amp; trading name: Action West London (charity no. 1234567, company no. 7654321)
-Registered address: 1 High Street, London W3 0AA
-Website: https://actionwestlondon.org.uk
-Socials: facebook.com/…, linkedin.com/company/…, x.com/…
-Lead contact: Jane Doe, Chief Executive — jane@… — 020 0000 0000
-Founded 2005; delivers across Ealing, Hounslow, Brent, Hammersmith &amp; Fulham
-Mission: supporting West London residents into work, skills and wellbeing
-Track record: GLA Good Work programme 2022–24 — 480 participants, 62% into work, 71% sustained at 26 weeks; MoJ HMPPS 2020–23 — 310 participants…
+  <!-- ══ STEP 2 · WRITE AN EOI ══════════════════════════════ -->
+  <div style="display:flex;align-items:center;gap:12px;margin:28px 0 14px">
+    <span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--em);color:#fff;font-size:13px;font-weight:700;flex-shrink:0">2</span>
+    <div>
+      <div style="font-size:16px;font-weight:700;color:var(--txt)">Write an Expression of Interest</div>
+      <div style="font-size:12px;color:var(--txt3)">Every answer is drafted from your organisation profile and real CRM outcomes</div>
+    </div>
+  </div>
+
+  <!-- Shared setup: funder + USPs + organisation profile (used by BOTH methods) -->
+  <div class="card">
+    <div class="card-title">About this bid</div>
+    <div class="form-row">
+      <label>Funder / scheme name</label>
+      <input id="eoi-funder" placeholder="e.g. GLA Grow London Local"/>
+      <div style="font-size:11px;color:var(--txt3);margin-top:4px">Used to research the funder's priorities and as the document title — be specific.</div>
+    </div>
+    <div class="form-row"><label>Your unique selling points (optional)</label><textarea id="eoi-usps" style="min-height:56px" placeholder="e.g. 24 years' West London delivery, bilingual BN(O) advisers, strong probation relationships…"></textarea></div>
+    <details style="margin-top:4px">
+      <summary style="cursor:pointer;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:9px;font-weight:700;font-size:13px;color:var(--txt);user-select:none">🏢 Organisation profile <span style="font-weight:400;color:var(--txt3)">— set once, used in every EOI</span></summary>
+      <div style="padding:12px 2px 2px">
+        <p style="font-size:12px;color:var(--txt2);margin-bottom:10px">The writer only knows what's in your CRM plus what you put here. Paste your key facts once — legal &amp; trading name, charity/company number, registered address, website, socials, lead contact, year founded, boroughs, mission, and prior delivery history <em>with real numbers</em>, partnerships, accreditations. It inserts [INSERT: …] wherever something is missing.</p>
+        <div class="form-row"><textarea id="eoi-org-profile" style="min-height:150px" placeholder="Legal &amp; trading name: Action West London (charity no. 1088999, company no. 04193849)
+Registered address: Kensa House, Central Way, London NW10 7XW
+Website: https://www.actionwestlondon.org.uk
+Socials: linkedin.com/company/…, x.com/…, instagram.com/…
+Lead contact: Amara Okafor, Head of Programmes — amara@… — 020 …
+Founded 2000; delivers across Brent, Ealing, Hounslow, Hammersmith &amp; Fulham, Harrow
+Track record: GLA Good Work 2021–24 — 620 participants, 58% into work, 71% sustained at 26 weeks; MoJ/HMPPS 2019–23 — 340 participants…
 Partnerships: Jobcentre Plus West London, Ealing Council, [named employers]…
 Accreditations: Matrix, Investors in People, Cyber Essentials…"></textarea></div>
-    <button class="btn btn-p btn-sm" onclick="saveOrgProfileFromField()">Save profile</button>
-    <span id="eoi-profile-saved" style="display:none;color:var(--em);font-size:12px;margin-left:8px;font-weight:600">✓ Saved</span>
+        <button class="btn btn-p btn-sm" onclick="saveOrgProfileFromField()">Save profile</button>
+        <span id="eoi-profile-saved" style="display:none;color:var(--em);font-size:12px;margin-left:8px;font-weight:600">✓ Saved</span>
+      </div>
+    </details>
   </div>
 
-  <div class="card" style="margin-top:4px">
-    <div class="card-title">Generate an Expression of Interest</div>
-    <p style="font-size:13px;color:var(--txt2);margin-bottom:14px">Paste a funding brief — Org Brain will write a professional EOI using your organisation profile and real outcomes data.</p>
-    <div class="form-row"><label>Funder / contract name</label><input id="eoi-funder" placeholder="e.g. MoJ HMPPS Employment Support Programme 2025"/></div>
+  <!-- Method A · write from a brief -->
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="font-size:18px">✍️</span><div class="card-title" style="margin-bottom:0">Write from a brief</div></div>
+    <p style="font-size:13px;color:var(--txt2);margin-bottom:12px">Paste a funding brief and get a full EOI narrative in your own words.</p>
     <div class="form-row"><label>Paste the brief or describe what they're looking for</label><textarea id="eoi-brief" style="min-height:100px" placeholder="Paste the funding brief or describe what outcomes they want…"></textarea></div>
-    <div class="form-row"><label>Your unique selling points (optional)</label><textarea id="eoi-usps" style="min-height:60px" placeholder="e.g. 3 years of MoJ delivery, strong probation relationships…"></textarea></div>
-    <button class="btn btn-ai" onclick="runEOIGenerator()">✦ Generate EOI</button>
+    <button class="btn btn-ai" onclick="runEOIGenerator()">✦ Generate EOI from brief</button>
   </div>
 
-  <!-- ── EOI FORM-FILL ─ fill in the funder's OWN form ─────────────────────
-       Reuses #eoi-funder and #eoi-usps from the card above, and renders its
-       output into the shared #eoi-output / #eoi-result block below. -->
-  <div class="card" style="margin-top:4px">
-    <div class="card-title">Or: fill in the funder's own form</div>
-    <p style="font-size:13px;color:var(--txt2);margin-bottom:14px">Upload the funder's blank EOI form (Word or PDF) or paste its questions. Vorlana pulls out each question and drafts an answer from your real outcomes data — respecting every word limit. Set the funder name and USPs above first.</p>
+  <!-- OR divider -->
+  <div style="display:flex;align-items:center;gap:12px;margin:16px 2px">
+    <div style="flex:1;height:1px;background:var(--border)"></div>
+    <div style="font-size:12px;font-weight:700;color:var(--txt3);letter-spacing:1px">OR</div>
+    <div style="flex:1;height:1px;background:var(--border)"></div>
+  </div>
+
+  <!-- Method B · fill the funder's own form -->
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="font-size:18px">📄</span><div class="card-title" style="margin-bottom:0">Fill in the funder's own form</div></div>
+    <p style="font-size:13px;color:var(--txt2);margin-bottom:12px">Upload the funder's blank EOI form (Word or PDF) or paste its questions — Vorlana answers each one, within every word limit.</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
       <input type="file" id="eoi-form-file" accept=".docx,.pdf,.txt" onchange="handleEOIFormUpload(this)" style="font-size:13px"/>
       <span style="font-size:11px;color:var(--txt3)">or paste the questions below</span>
@@ -672,22 +702,22 @@ Accreditations: Matrix, Investors in People, Cyber Essentials…"></textarea></d
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 
 <!-- Foundation: constants and helpers -->
-<script src="js/config.js?v=5"></script>
-<script src="js/utils.js?v=5"></script>
+<script src="js/config.js?v=6"></script>
+<script src="js/utils.js?v=6"></script>
 
 <!-- Data + auth -->
-<script src="js/db.js?v=5"></script>
-<script src="js/auth.js?v=5"></script>
+<script src="js/db.js?v=6"></script>
+<script src="js/auth.js?v=6"></script>
 
 <!-- AI + branding -->
-<script src="js/agents.js?v=5"></script>
-<script src="js/branding.js?v=5"></script>
+<script src="js/agents.js?v=6"></script>
+<script src="js/branding.js?v=6"></script>
 
 <!-- UI logic -->
-<script src="js/render.js?v=5"></script>
-<script src="js/modals.js?v=5"></script>
-<script src="js/demo.js?v=5"></script>
-<script src="js/router.js?v=5"></script>
+<script src="js/render.js?v=6"></script>
+<script src="js/modals.js?v=6"></script>
+<script src="js/demo.js?v=6"></script>
+<script src="js/router.js?v=6"></script>
 
 <!-- Module visibility — added: shows/hides sidebar items per currentOrg.modules -->
 <script>
@@ -706,7 +736,7 @@ function applyModules(mods) {
 </script>
 
 <!-- Entry point -->
-<script src="js/boot.js?v=5"></script>
+<script src="js/boot.js?v=6"></script>
 
 <!-- Auto-fill paperwork (Start & End Form + job evidence) — inlined so it is ONE file -->
 <script>
@@ -1085,11 +1115,11 @@ function applyModules(mods) {
 </script>
 
 <!-- Extensions (run after boot, patch existing functions) -->
-<script src="js/extensions/demographics.js?v=5"></script>
-<script src="js/extensions/csv-import.js?v=5"></script>
-<script src="js/extensions/reporting-periods.js?v=5"></script>
-<script src="js/extensions/opportunities.js?v=5"></script>
-<script src="js/extensions/partner-portal.js?v=5"></script>
+<script src="js/extensions/demographics.js?v=6"></script>
+<script src="js/extensions/csv-import.js?v=6"></script>
+<script src="js/extensions/reporting-periods.js?v=6"></script>
+<script src="js/extensions/opportunities.js?v=6"></script>
+<script src="js/extensions/partner-portal.js?v=6"></script>
 
 <!-- Participant handlers + paperwork persistence (Phase 2) ---------------------
      (1) Match Supabase row ids loosely so Edit / Notes / Delete work when ids
