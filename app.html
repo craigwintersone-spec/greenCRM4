@@ -396,12 +396,17 @@ Accreditations: Matrix, Investors in People, Cyber Essentials…"></textarea></d
     </details>
   </div>
 
-  <!-- Method A · write from a brief -->
+  <!-- Method A (primary) · fill the funder's own form -->
   <div class="card">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="font-size:18px">✍️</span><div class="card-title" style="margin-bottom:0">Write from a brief</div></div>
-    <p style="font-size:13px;color:var(--txt2);margin-bottom:12px">Paste a funding brief and get a full EOI narrative in your own words.</p>
-    <div class="form-row"><label>Paste the brief or describe what they're looking for</label><textarea id="eoi-brief" style="min-height:100px" placeholder="Paste the funding brief or describe what outcomes they want…"></textarea></div>
-    <button class="btn btn-ai" onclick="runEOIGenerator()">✦ Generate EOI from brief</button>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="font-size:18px">📄</span><div class="card-title" style="margin-bottom:0">Fill in the funder's own form</div><span style="font-size:10px;font-weight:700;color:#fff;background:var(--em);border-radius:20px;padding:2px 8px;letter-spacing:.5px">RECOMMENDED</span></div>
+    <p style="font-size:13px;color:var(--txt2);margin-bottom:12px">Upload the funder's blank EOI form (Word or PDF) or paste its questions — Vorlana answers each one, within every word limit. Or use <strong>✍️ Draft EOI for this</strong> on a funding result above to pull the questions in automatically.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      <input type="file" id="eoi-form-file" accept=".docx,.pdf,.txt" onchange="handleEOIFormUpload(this)" style="font-size:13px"/>
+      <span style="font-size:11px;color:var(--txt3)">or paste the questions below</span>
+    </div>
+    <div class="form-row"><textarea id="eoi-form-text" style="min-height:90px" placeholder="Paste the funder's EOI questions here (one per line is fine)…"></textarea></div>
+    <button class="btn btn-ai btn-sm" onclick="parseEOIForm()">① Pull out the questions</button>
+    <div id="eoi-questions" style="display:none;margin-top:14px"></div>
   </div>
 
   <!-- OR divider -->
@@ -411,17 +416,12 @@ Accreditations: Matrix, Investors in People, Cyber Essentials…"></textarea></d
     <div style="flex:1;height:1px;background:var(--border)"></div>
   </div>
 
-  <!-- Method B · fill the funder's own form -->
+  <!-- Method B (fallback) · no form? write from a brief -->
   <div class="card">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="font-size:18px">📄</span><div class="card-title" style="margin-bottom:0">Fill in the funder's own form</div></div>
-    <p style="font-size:13px;color:var(--txt2);margin-bottom:12px">Upload the funder's blank EOI form (Word or PDF) or paste its questions — Vorlana answers each one, within every word limit.</p>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
-      <input type="file" id="eoi-form-file" accept=".docx,.pdf,.txt" onchange="handleEOIFormUpload(this)" style="font-size:13px"/>
-      <span style="font-size:11px;color:var(--txt3)">or paste the questions below</span>
-    </div>
-    <div class="form-row"><textarea id="eoi-form-text" style="min-height:90px" placeholder="Paste the funder's EOI questions here (one per line is fine)…"></textarea></div>
-    <button class="btn btn-ai btn-sm" onclick="parseEOIForm()">① Pull out the questions</button>
-    <div id="eoi-questions" style="display:none;margin-top:14px"></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="font-size:18px">✍️</span><div class="card-title" style="margin-bottom:0">No form? Write from a brief</div></div>
+    <p style="font-size:13px;color:var(--txt2);margin-bottom:12px">For funders who just ask for a free-form expression of interest with no set questions. Paste the brief and get a full EOI narrative.</p>
+    <div class="form-row"><label>Paste the brief or describe what they're looking for</label><textarea id="eoi-brief" style="min-height:100px" placeholder="Paste the funding brief or describe what outcomes they want…"></textarea></div>
+    <button class="btn btn-ai" onclick="runEOIGenerator()">✦ Generate EOI from brief</button>
   </div>
 
   <div id="eoi-output" style="display:none">
@@ -702,22 +702,22 @@ Accreditations: Matrix, Investors in People, Cyber Essentials…"></textarea></d
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 
 <!-- Foundation: constants and helpers -->
-<script src="js/config.js?v=6"></script>
-<script src="js/utils.js?v=6"></script>
+<script src="js/config.js?v=7"></script>
+<script src="js/utils.js?v=7"></script>
 
 <!-- Data + auth -->
-<script src="js/db.js?v=6"></script>
-<script src="js/auth.js?v=6"></script>
+<script src="js/db.js?v=7"></script>
+<script src="js/auth.js?v=7"></script>
 
 <!-- AI + branding -->
-<script src="js/agents.js?v=6"></script>
-<script src="js/branding.js?v=6"></script>
+<script src="js/agents.js?v=7"></script>
+<script src="js/branding.js?v=7"></script>
 
 <!-- UI logic -->
-<script src="js/render.js?v=6"></script>
-<script src="js/modals.js?v=6"></script>
-<script src="js/demo.js?v=6"></script>
-<script src="js/router.js?v=6"></script>
+<script src="js/render.js?v=7"></script>
+<script src="js/modals.js?v=7"></script>
+<script src="js/demo.js?v=7"></script>
+<script src="js/router.js?v=7"></script>
 
 <!-- Module visibility — added: shows/hides sidebar items per currentOrg.modules -->
 <script>
@@ -736,7 +736,7 @@ function applyModules(mods) {
 </script>
 
 <!-- Entry point -->
-<script src="js/boot.js?v=6"></script>
+<script src="js/boot.js?v=7"></script>
 
 <!-- Auto-fill paperwork (Start & End Form + job evidence) — inlined so it is ONE file -->
 <script>
@@ -1115,11 +1115,11 @@ function applyModules(mods) {
 </script>
 
 <!-- Extensions (run after boot, patch existing functions) -->
-<script src="js/extensions/demographics.js?v=6"></script>
-<script src="js/extensions/csv-import.js?v=6"></script>
-<script src="js/extensions/reporting-periods.js?v=6"></script>
-<script src="js/extensions/opportunities.js?v=6"></script>
-<script src="js/extensions/partner-portal.js?v=6"></script>
+<script src="js/extensions/demographics.js?v=7"></script>
+<script src="js/extensions/csv-import.js?v=7"></script>
+<script src="js/extensions/reporting-periods.js?v=7"></script>
+<script src="js/extensions/opportunities.js?v=7"></script>
+<script src="js/extensions/partner-portal.js?v=7"></script>
 
 <!-- Participant handlers + paperwork persistence (Phase 2) ---------------------
      (1) Match Supabase row ids loosely so Edit / Notes / Delete work when ids
