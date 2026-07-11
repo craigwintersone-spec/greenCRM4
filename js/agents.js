@@ -18,8 +18,8 @@
 'use strict';
 
 // Version marker — check your browser console to confirm this file is live.
-// If you DON'T see "Vorlana EOI engine v5", the old cached agents.js is running.
-try { console.info('Vorlana EOI engine v5 loaded'); } catch (e) {}
+// If you DON'T see "Vorlana EOI engine v7", the old cached agents.js is running.
+try { console.info('Vorlana EOI engine v7 loaded'); } catch (e) {}
 
 // ── State ─────────────────────────────────────────────────────
 const _aiQueue = { running: false, queue: [], lastCallAt: 0 };
@@ -35,6 +35,7 @@ let _eoiQuestions = [];        // [{id, question, wordLimit, guidance}]
 let _eoiAnswers   = {};        // { id: answerText }
 let _eoiFunderPriorities = ''; // funder priorities, auto-fetched before drafting
 let _eoiPrioritiesFunder = ''; // which funder name the loaded priorities belong to
+let _bdOpps = {};              // found funding opportunities, keyed for the "Draft EOI" buttons
 
 // ── Plan gate ─────────────────────────────────────────────────
 function checkAIAccess() {
@@ -715,21 +716,88 @@ async function runSocialAgent() {
 async function runBDResearch() {
   const wrap = $('bd-opps-wrap'); const res = $('bd-opps-result');
   wrap.style.display = 'block';
+  const area = $('bd-area').value, size = $('bd-size').value, specific = $('bd-specific').value;
   const steps = [
-    { label: 'Searching live funding sources', meta: $('bd-area').value + ' · ' + $('bd-size').value },
-    { label: 'Quality Supervisor checking each result', meta: 'Verifying deadlines and eligibility' },
+    { label: 'Searching live funding sources', meta: area + ' · ' + size },
+    { label: 'Checking deadlines and eligibility', meta: '' },
     { label: 'Scoring fit', meta: '' },
     { label: 'Ready', meta: '' }
   ];
-  const sys = 'You are a UK funding researcher. Find 5 currently open opportunities. List each with funder, deadline, value, fit reason. Use **bold** for funder names. No hashtags, no markdown headings.';
-  const prompt = 'Area: ' + $('bd-area').value + '\nSize: ' + $('bd-size').value + '\nSpecific: ' + $('bd-specific').value;
+  const sys = 'You are a UK funding researcher. Find up to 5 currently OPEN funding opportunities that fit the organisation. ' +
+    'Return ONLY a valid JSON array — no prose, no markdown, no code fences. ' +
+    'Each item: {"funder":"","programme":"","deadline":"","value":"","fit":"<one sentence on why it fits>","url":"<application or info page if known>"}. ' +
+    'Use empty string "" for anything you are unsure of. Do not invent deadlines or URLs.';
+  const prompt = 'Delivery area: ' + area + '\nOrg turnover band: ' + size + '\nSpecific interests: ' + (specific || 'none');
+
   const raw = await runAgent({
     container: res,
     headerLabel: 'BD Manager Agent',
-    headerSub: 'Live web search · Quality Supervisor verifying results',
-    steps, sys, prompt, maxTok: 900, webSearch: true
+    headerSub: 'Live web search · finding open funding',
+    steps, sys, prompt, maxTok: 1100, webSearch: true
   });
-  if (raw) aiResult(res, raw);
+  if (!raw) return;
+
+  let items = [];
+  try {
+    const clean = raw.replace(/```json|```/gi, '').trim();
+    const m = clean.match(/\[[\s\S]*\]/);
+    if (m) items = JSON.parse(m[0]);
+  } catch (e) { items = []; }
+  items = Array.isArray(items) ? items.filter(o => o && (o.funder || o.programme)) : [];
+
+  if (!items.length) { aiResult(res, raw); return; } // fall back to plain text
+
+  _bdOpps = {};
+  res.innerHTML = items.map((o, i) => {
+    const key = 'opp' + i;
+    _bdOpps[key] = o;
+    const funder = escapeHTML(o.funder || o.programme || 'Opportunity');
+    const programme = o.programme && o.funder ? (' — ' + escapeHTML(o.programme)) : '';
+    const meta = [
+      o.deadline ? ('⏱ ' + escapeHTML(o.deadline)) : '',
+      o.value ? ('💷 ' + escapeHTML(o.value)) : ''
+    ].filter(Boolean).join('&nbsp;&nbsp;&nbsp;');
+    return '<div class="card" style="margin-bottom:10px">' +
+      '<div style="font-weight:700;font-size:14px;color:var(--txt)">' + funder + programme + '</div>' +
+      (meta ? '<div style="font-size:12px;color:var(--txt3);margin:4px 0 6px">' + meta + '</div>' : '') +
+      (o.fit ? '<div style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:10px">' + escapeHTML(o.fit) + '</div>' : '') +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button class="btn btn-ai btn-sm" onclick="startEOIFromOpportunity(\'' + key + '\')">✍️ Draft EOI for this</button>' +
+        (o.url ? ('<a class="btn btn-ghost btn-sm" href="' + escapeHTML(o.url) + '" target="_blank" rel="noopener" style="text-decoration:none">🔗 Funder page</a>') : '') +
+      '</div></div>';
+  }).join('');
+}
+
+// Bridge: from a found opportunity into the form-fill flow — sets the funder,
+// web-searches that programme's application questions, and pulls them out.
+async function startEOIFromOpportunity(key) {
+  const o = _bdOpps[key]; if (!o) return;
+  const name = (o.funder && o.programme) ? (o.funder + ' — ' + o.programme) : (o.programme || o.funder || '');
+  if ($('eoi-funder')) $('eoi-funder').value = name;
+
+  const ta = $('eoi-form-text');
+  if (ta) { ta.value = 'Finding this funder\'s application questions…'; ta.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+
+  const sys = 'You are a UK bid researcher. Find the actual Expression of Interest / application questions an applicant must answer for this specific funding programme. ' +
+    'Return each question on its own line, with any stated word or character limit in brackets. ' +
+    'If you cannot find the exact form, list the key questions or assessment criteria the application is known to require, one per line. ' +
+    'No preamble, no numbered commentary, just the questions.';
+  const prompt = 'Funder / programme: ' + name + (o.url ? ('\nInfo page: ' + o.url) : '');
+
+  try {
+    const raw = await callClaude(sys, prompt, 900, true);
+    const clean = cleanReportText(raw);
+    if (ta) ta.value = clean;
+    await parseEOIForm();               // structure them into the editable list
+    const qWrap = $('eoi-questions');
+    if (qWrap) qWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) {
+    if (ta) ta.value = '';
+    if (e.message !== 'AI_PLAN_GATE') {
+      alert('Could not fetch the questions automatically: ' + (e.message || '') +
+        '\n\nWhen you have the funder\'s blank form, upload or paste it into the box and click "Pull out the questions".');
+    }
+  }
 }
 
 // ═════════════════════════════════════════════════════════════
