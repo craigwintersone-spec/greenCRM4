@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Vorlana</title>
-<link rel="icon" type="image/png" href="logo.png"/>
+<link rel="icon" type="image/png" href="logo-mark.png"/>
 <link rel="stylesheet" href="css/app.css"/>
 </head>
 <body>
@@ -23,23 +23,26 @@
   <div class="nav-section">Overview</div>
   <button class="nav-btn" onclick="go('dashboard')"><span class="icon">📊</span><span>Dashboard</span><span class="ai-dot"></span></button>
   <button class="nav-btn" onclick="go('rag')"><span class="icon">🚦</span><span>RAG Dashboard</span><span class="ai-dot"></span></button>
-  <button class="nav-btn" onclick="go('impact')"><span class="icon">🌿</span><span>Impact Wall</span></button>
+  <button class="nav-btn" data-module="events" onclick="go('impact')"><span class="icon">🌿</span><span>Social Impact</span></button>
 
   <div class="nav-section">People</div>
-  <button class="nav-btn" onclick="go('participants')"><span class="icon">👤</span><span>Participants</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" data-module="participants" onclick="go('participants')"><span class="icon">👤</span><span>Participants</span><span class="ai-dot"></span></button>
   <button class="nav-btn" onclick="go('contacts')"><span class="icon">📋</span><span>Contacts &amp; Donors</span></button>
-  <button class="nav-btn" onclick="go('employers')"><span class="icon">🏢</span><span>Employers</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" data-module="volunteers" onclick="go('volunteers')"><span class="icon">🙋</span><span>Volunteers &amp; Staff</span></button>
+  <button class="nav-btn" data-module="employers" onclick="go('employers')"><span class="icon">🏢</span><span>Employers</span><span class="ai-dot"></span></button>
 
   <div class="nav-section">Delivery</div>
-  <button class="nav-btn" onclick="go('pipeline')"><span class="icon">🔁</span><span>Pipeline</span></button>
-  <button class="nav-btn" onclick="go('referrals')"><span class="icon">📨</span><span>Referrals</span><span class="ai-dot"></span></button>
-  <button class="nav-btn" onclick="go('partnerrefs')"><span class="icon">🤝</span><span>Partner Referrals</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" data-module="participants" onclick="go('pipeline')"><span class="icon">🔁</span><span>Pipeline</span></button>
+  <button class="nav-btn" data-module="participants" onclick="go('referrals')"><span class="icon">📨</span><span>Referrals</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" data-module="participants" onclick="go('partnerrefs')"><span class="icon">🤝</span><span>Partner Referrals</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" data-module="events" onclick="go('events')"><span class="icon">📅</span><span>Events</span></button>
+  <button class="nav-btn" data-module="events" onclick="go('feedback')"><span class="icon">💬</span><span>Feedback</span></button>
 
   <div class="nav-section">Reporting</div>
-  <button class="nav-btn" onclick="go('outcomes')"><span class="icon">🎯</span><span>Outcomes</span><span class="ai-dot"></span></button>
-  <button class="nav-btn" onclick="go('funders')"><span class="icon">🏦</span><span>Funders</span></button>
-  <button class="nav-btn" onclick="go('funding')"><span class="icon">💰</span><span>Contracts</span></button>
-  <button class="nav-btn" onclick="go('reports')"><span class="icon">📄</span><span>Reports</span></button>
+  <button class="nav-btn" data-module="participants" onclick="go('outcomes')"><span class="icon">🎯</span><span>Outcomes</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" data-module="funders" onclick="go('funders')"><span class="icon">🏦</span><span>Funders</span></button>
+  <button class="nav-btn" data-module="funders" onclick="go('funding')"><span class="icon">💰</span><span>Contracts</span></button>
+  <button class="nav-btn" data-module="funders" onclick="go('reports')"><span class="icon">📄</span><span>Reports</span></button>
   <button class="nav-btn" onclick="go('evidence')"><span class="icon">🗂️</span><span>Evidence Hub</span></button>
   <button class="nav-btn" onclick="go('demographics')"><span class="icon">📊</span><span>Demographics</span></button>
 
@@ -95,11 +98,11 @@
   <div id="rag-list"></div>
 </div>
 
-<!-- IMPACT WALL -->
+<!-- SOCIAL IMPACT (was: Impact Wall) -->
 <div id="page-impact" class="page">
-  <div class="page-header"><div><div class="page-title">Impact Wall</div><div class="page-sub">Board-ready · Funder presentations</div></div></div>
+  <div class="page-header"><div><div class="page-title">Social Impact</div><div class="page-sub">Board-ready · Funder presentations</div></div></div>
   <div class="impact-wall">
-    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--em);margin-bottom:6px;font-weight:700"
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--em);margin-bottom:6px;font-weight:700" id="impact-hd">SOCIAL IMPACT</div>
     <div style="font-size:22px;font-weight:700;margin-bottom:24px;color:var(--txt)">Numbers that move funders</div>
     <div class="iw-grid">
       <div><div class="iw-val" id="iw-p">—</div><div class="iw-lbl">Participants supported</div></div>
@@ -142,7 +145,7 @@
   <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody id="c-table"></tbody></table></div>
 </div>
 
-<!-- VOLUNTEERS -->
+<!-- VOLUNTEERS (page container was missing — added) -->
 <div id="page-volunteers" class="page">
   <div class="page-header"><div><div class="page-title">Volunteers &amp; Staff</div><div class="page-sub" id="vol-sub"></div></div><button class="btn btn-p btn-sm" onclick="openAddVol()">+ Add volunteer</button></div>
   <div class="toolbar">
@@ -237,14 +240,6 @@
     <div id="feedback-analyst-result" style="margin-top:12px"></div>
   </div>
   <div id="fb-list"></div>
-</div>
-
-<!-- CIRCULAR ECONOMY -->
-<div id="page-circular" class="page">
-  <div class="page-header"><div><div class="page-title">Circular Economy &amp; Repair</div></div><button class="btn btn-p btn-sm" onclick="openAddItem()">+ Log item</button></div>
-  <div class="stats-grid" id="eco-stats"></div>
-  <div class="card"><div class="card-title">Environmental impact</div><div id="eco-impact" style="display:flex;flex-wrap:wrap;gap:6px"></div></div>
-  <div class="tbl-wrap"><table><thead><tr><th>Item</th><th>Category</th><th>Weight</th><th>Status</th><th>Fixer</th><th>Outcome</th><th></th></tr></thead><tbody id="eco-table"></tbody></table></div>
 </div>
 
 <!-- OUTCOMES -->
@@ -581,8 +576,6 @@
 
 <div class="modal-overlay" id="modal-fb"><div class="modal"><h2 id="fb-modal-title">Add feedback</h2><div class="form-grid-2"><div class="form-row"><label>Event *</label><select id="fbf-ev"><option value="">Select event…</option></select></div><div class="form-row"><label>Participant name</label><input id="fbf-name"/></div></div><div class="form-row"><label>Enjoyment (1–5)</label><div style="display:flex;gap:5px;margin-top:4px" id="fbf-enjoyed-stars"></div></div><div class="form-grid-2"><div class="form-row"><label>Confidence before</label><div style="display:flex;gap:5px;margin-top:4px" id="fbf-cb-stars"></div></div><div class="form-row"><label>Confidence after</label><div style="display:flex;gap:5px;margin-top:4px" id="fbf-ca-stars"></div></div></div><div class="form-row"><label>Outcomes</label><div class="chk-group"><div class="chk-pill"><label><input type="checkbox" id="fbf-learned"/> Learned something new</label></div><div class="chk-pill"><label><input type="checkbox" id="fbf-connected"/> Felt more connected</label></div><div class="chk-pill"><label><input type="checkbox" id="fbf-friend"/> Made a new friend</label></div></div></div><div class="form-row"><label>Quote</label><textarea id="fbf-quote" style="min-height:55px"></textarea></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-fb')">Cancel</button><button class="btn btn-p" id="fb-save-btn" onclick="saveFb()">Save</button></div></div></div>
 
-<div class="modal-overlay" id="modal-item"><div class="modal"><h2 id="item-title">Log item</h2><div class="form-grid-2"><div class="form-row"><label>Item name</label><input id="it-name"/></div><div class="form-row"><label>Category</label><select id="it-cat"><option>Small electrical</option><option>Clothing</option><option>Furniture</option><option>Bike</option><option>Electronics</option></select></div></div><div class="form-grid-2"><div class="form-row"><label>Weight (kg)</label><input type="number" id="it-kg" step="0.1"/></div><div class="form-row"><label>Status</label><select id="it-st"><option>Collected</option><option>In repair</option><option>Repaired</option><option>Resold</option><option>Donated</option><option>Beyond repair</option></select></div></div><div class="form-grid-2"><div class="form-row"><label>Fixer</label><input id="it-fixer"/></div><div class="form-row"><label>Outcome</label><select id="it-outcome"><option value="">Pending</option><option>Resold</option><option>Donated</option><option>Returned to owner</option><option>Scrapped</option></select></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-item')">Cancel</button><button class="btn btn-p" id="item-save-btn" onclick="saveItem()">Save</button></div></div></div>
-
 <div class="modal-overlay" id="modal-con"><div class="modal">
   <h2 id="con-title">Add contract</h2>
   <div style="display:flex;gap:6px;margin-bottom:12px;padding:8px 12px;background:rgba(31,111,109,.05);border:1px solid var(--border);border-radius:8px;align-items:center">
@@ -650,12 +643,28 @@
 <script src="js/demo.js"></script>
 <script src="js/router.js"></script>
 
+<!-- Module visibility — added: shows/hides sidebar items per currentOrg.modules -->
+<script>
+'use strict';
+// Applies the org's module on/off settings to the sidebar.
+// Any nav button tagged data-module="xxx" is hidden when mods[xxx] === false.
+// Buttons with NO data-module attribute are core/always-on and never hidden.
+function applyModules(mods) {
+  mods = mods || {};
+  document.querySelectorAll('#sidebar .nav-btn[data-module]').forEach(function (btn) {
+    var key = btn.getAttribute('data-module');
+    var on = mods[key] !== false; // default ON if not explicitly set to false
+    btn.style.display = on ? '' : 'none';
+  });
+}
+</script>
+
 <!-- Entry point -->
 <script src="js/boot.js"></script>
 
 <!-- Auto-fill paperwork (Start & End Form + job evidence) — inlined so it is ONE file -->
 <script>
-// Civara auto-fill paperwork — Start Form + End Form (inlined into app.html)
+// Vorlana auto-fill paperwork — Start Form + End Form (inlined into app.html)
 // ---------------------------------------------------------------------------
 // window.civaraGenerateStartForm()  -> fills & downloads a Participant Start Form
 // window.civaraGenerateEndForm()    -> fills & downloads a Participant End/Exit Form
