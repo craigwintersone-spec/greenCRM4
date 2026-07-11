@@ -6,6 +6,17 @@
 <title>Vorlana</title>
 <link rel="icon" type="image/png" href="logo-mark.png"/>
 <link rel="stylesheet" href="css/app.css"/>
+
+<!-- EOI form-reading libraries (Word + PDF) — added for the EOI form-fill feature -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  // pdf.js needs its worker pointed at the matching CDN file (set once)
+  if (window.pdfjsLib) {
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+</script>
 </head>
 <body>
 
@@ -348,6 +359,22 @@
     <div class="form-row"><label>Your unique selling points (optional)</label><textarea id="eoi-usps" style="min-height:60px" placeholder="e.g. 3 years of MoJ delivery, strong probation relationships…"></textarea></div>
     <button class="btn btn-ai" onclick="runEOIGenerator()">✦ Generate EOI</button>
   </div>
+
+  <!-- ── EOI FORM-FILL ─ fill in the funder's OWN form ─────────────────────
+       Reuses #eoi-funder and #eoi-usps from the card above, and renders its
+       output into the shared #eoi-output / #eoi-result block below. -->
+  <div class="card" style="margin-top:4px">
+    <div class="card-title">Or: fill in the funder's own form</div>
+    <p style="font-size:13px;color:var(--txt2);margin-bottom:14px">Upload the funder's blank EOI form (Word or PDF) or paste its questions. Vorlana pulls out each question and drafts an answer from your real outcomes data — respecting every word limit. Set the funder name and USPs above first.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      <input type="file" id="eoi-form-file" accept=".docx,.pdf,.txt" onchange="handleEOIFormUpload(this)" style="font-size:13px"/>
+      <span style="font-size:11px;color:var(--txt3)">or paste the questions below</span>
+    </div>
+    <div class="form-row"><textarea id="eoi-form-text" style="min-height:90px" placeholder="Paste the funder's EOI questions here (one per line is fine)…"></textarea></div>
+    <button class="btn btn-ai btn-sm" onclick="parseEOIForm()">① Pull out the questions</button>
+    <div id="eoi-questions" style="display:none;margin-top:14px"></div>
+  </div>
+
   <div id="eoi-output" style="display:none">
     <div class="ai-panel">
       <div class="ai-panel-title"><span class="ai-icon">📄</span>Expression of Interest draft</div>
