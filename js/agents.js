@@ -731,7 +731,22 @@ async function runBDResearch() {
 // EOI ENGINE — form-fill + grounded drafting
 // ═════════════════════════════════════════════════════════════
 
+// ── Organisation profile (the facts an EOI needs that the CRM doesn't hold) ──
+// Stored in the browser (localStorage) per org, so no database change is needed.
+function _orgProfileKey() { return 'vorlana_org_profile_' + ((currentOrg && currentOrg.id) || 'default'); }
+function getOrgProfile() { try { return (localStorage.getItem(_orgProfileKey()) || '').trim(); } catch (e) { return ''; } }
+function populateOrgProfileField() { const el = $('eoi-org-profile'); if (el) el.value = getOrgProfile(); }
+function saveOrgProfileFromField() {
+  try {
+    const el = $('eoi-org-profile'); if (!el) return;
+    localStorage.setItem(_orgProfileKey(), el.value || '');
+    const s = $('eoi-profile-saved'); if (s) { s.style.display = 'inline'; setTimeout(() => { s.style.display = 'none'; }, 2500); }
+  } catch (e) {}
+}
+
 // The single biggest quality lever: real, verifiable numbers from the CRM.
+// IMPORTANT: only emit metrics that are > 0. Broadcasting zeros makes a bid
+// read as "we have done nothing" — which sinks it.
 function buildEOIEvidence() {
   const P = DB.participants || [];
   const E = DB.events || [];
@@ -739,6 +754,10 @@ function buildEOIEvidence() {
   const C = DB.contracts || [];
 
   const total = P.length;
+  if (!total && !E.length && !FB.length && !C.length) {
+    return 'VERIFIED CRM DATA: none recorded in the system yet — rely on the KNOWN ORGANISATION FACTS above and use [INSERT: ...] placeholders for any specific figures. Do not state or imply that figures are zero or that the organisation has no track record.';
+  }
+
   const active = P.filter(p => p.stage !== 'Closed').length;
   const withOutcome = P.filter(p => (p.outcomes || []).length > 0).length;
   const rate = total ? pct(withOutcome, total) : 0;
@@ -778,21 +797,49 @@ function buildEOIEvidence() {
        '; reached stage "' + cs.stage + '"; achieved ' + (cs.outcomes || []).join(', '))
     : null;
 
-  const lines = [
-    'VERIFIED CRM DATA (use ONLY these figures — do not invent numbers):',
-    '- Participants supported: ' + total + ' (' + active + ' currently active)',
-    '- With at least one outcome: ' + withOutcome + ' (' + rate + '%)',
-    '- Into employment: ' + employment + ' | Sustained: ' + sustained,
-    '- Outcome breakdown: ' + OUT_TYPES.map(t => t + ' ' + (outCount[t] || 0)).join(', '),
-    '- Priority-group reach (top barriers in caseload): ' + (topBarriers || 'not recorded'),
-    (avgCB && avgCA) ? ('- Distance travelled (confidence): ' + avgCB + ' -> ' + avgCA + ' /5 across ' + FB.length + ' responses') : '',
-    '- Events/workshops delivered: ' + E.length,
-    contractLines.length ? ('- Contract delivery vs target: ' + contractLines.join(' | ')) : '',
-    costPerOutcome ? ('- Approx cost per outcome (funded contracts): £' + costPerOutcome.toLocaleString()) : '',
-    caseStudy ? ('- Anonymised case-study facts: a participant ' + caseStudy) : ''
-  ].filter(Boolean);
+  const obreak = OUT_TYPES.filter(t => outCount[t] > 0).map(t => t + ' ' + outCount[t]);
+
+  const lines = ['VERIFIED CRM DATA (use ONLY these figures — do not invent numbers):'];
+  if (total) lines.push('- Participants supported: ' + total + (active ? (' (' + active + ' currently active)') : ''));
+  if (withOutcome) lines.push('- With at least one outcome: ' + withOutcome + ' (' + rate + '%)');
+  if (employment) lines.push('- Into employment: ' + employment);
+  if (sustained) lines.push('- Sustained: ' + sustained);
+  if (obreak.length) lines.push('- Outcome breakdown: ' + obreak.join(', '));
+  if (topBarriers) lines.push('- Priority-group reach (top barriers in caseload): ' + topBarriers);
+  if (avgCB && avgCA) lines.push('- Distance travelled (confidence): ' + avgCB + ' -> ' + avgCA + ' /5 across ' + FB.length + ' responses');
+  if (E.length) lines.push('- Events/workshops delivered: ' + E.length);
+  if (contractLines.length) lines.push('- Contract delivery vs target: ' + contractLines.join(' | '));
+  if (costPerOutcome) lines.push('- Approx cost per outcome (funded contracts): £' + costPerOutcome.toLocaleString());
+  if (caseStudy) lines.push('- Anonymised case-study facts: a participant ' + caseStudy);
+  if (lines.length === 1) lines.push('- none recorded yet — rely on the KNOWN ORGANISATION FACTS above; do not state figures are zero.');
 
   return lines.join('\n');
+}
+
+// True for short factual fields (name, number, address, website, etc.) that
+// must NOT be answered with prose.
+function _eoiIsShortField(q) {
+  if (q.wordLimit && q.wordLimit <= 25) return true;
+  const t = (q.question || '').toLowerCase();
+  if ((q.question || '').length > 90) return false;
+  if (/how|why|describe|explain|detail|approach|deliver|ensure|risk|legacy|budget for|knowledge|benefit|work with|measures/.test(t)) return false;
+  return /\b(name|number|address|post ?code|website|url|link|e-?mail|telephone|phone|\bdate\b|title|type)\b/.test(t);
+}
+
+// Strip a self-added heading/label line the model sometimes puts on top
+// (e.g. "Website", "Budget Breakdown for...", "Response to ... Question").
+function _stripLeadingLabel(ans) {
+  if (!ans) return ans;
+  const lines = ans.split('\n');
+  if (lines.length > 2 && lines[0].trim() && lines[1].trim() === '') {
+    const first = lines[0].trim();
+    if (first.length <= 60 && !/[.!?,:;]$/.test(first) && first.split(/\s+/).length <= 8) {
+      lines.shift();
+      while (lines.length && lines[0].trim() === '') lines.shift();
+      return lines.join('\n').trim();
+    }
+  }
+  return ans.trim();
 }
 
 // Read an uploaded form: .docx / .pdf / .txt -> plain text
@@ -936,32 +983,46 @@ async function runEOIFormFill() {
 
   const funder = ($('eoi-funder') && $('eoi-funder').value || '').trim() || 'the funder';
   const usps = ($('eoi-usps') && $('eoi-usps').value || '').trim();
+  const profile = getOrgProfile();
   const evidence = buildEOIEvidence();
   const out = $('eoi-output'); const res = $('eoi-result');
   out.style.display = 'block';
 
   const sys =
-    'You are an expert UK bid writer completing an Expression of Interest for a charity, writing to win the funding. ' +
-    'Answer the ONE question given, in clean formal British English prose. Write to the funder\'s priorities and mirror their language. ' +
-    'Ground every claim in the VERIFIED CRM DATA — never invent statistics, participants, quotes, partners or accreditations. ' +
-    'Where a specific detail would strengthen the answer but is not in the data, insert a clearly marked placeholder in square brackets, ' +
-    'e.g. [INSERT: 26-week sustainment rate] or [INSERT: named delivery partner]. ' +
-    'Respect the word limit strictly. No headings, no hashtags, no bullet lists unless the question explicitly asks for a list. ' +
-    'Return only the answer text.';
+    'You are an expert UK bid writer completing an Expression of Interest to WIN funding. ' +
+    'Everything you write is pasted straight into the funder\'s form as the applicant\'s own words. RULES: ' +
+    '1) Never address the reader, never explain what you cannot do, never comment on data quality, never apologise, never give recommendations — write ONLY the answer. ' +
+    '2) Never add a title, heading or label above the answer; the question is the heading. ' +
+    '3) Ground claims in the KNOWN ORGANISATION FACTS and VERIFIED CRM DATA; never invent statistics, names, numbers, partners or accreditations. ' +
+    '4) Where a specific fact is missing, insert a placeholder like [INSERT: charity number] and keep going — do NOT lecture about the gap. ' +
+    '5) NEVER state or imply the organisation has no experience, no track record, or that figures are zero; rely on the organisation facts and use [INSERT: ...] for specifics. ' +
+    '6) If the question is a SHORT FACTUAL FIELD (name, number, address, postcode, website, email, link, date, title, contact, budget line), reply with ONLY the value or a single [INSERT: ...] placeholder — no prose, no sentences. ' +
+    '7) Otherwise write clean formal British English prose, mirror the funder\'s language and priorities, and respect the word limit.';
+
+  const facts = 'KNOWN ORGANISATION FACTS (provided by the applicant — treat as true):\n' +
+    (profile ? profile.slice(0, 1800) : '(none provided — use [INSERT: ...] placeholders for organisation details such as legal name, charity/company number, address, website, contact)');
 
   _eoiAnswers = {};
 
   for (let i = 0; i < _eoiQuestions.length; i++) {
     const q = _eoiQuestions[i];
     res.innerHTML = _fillProgressHTML(i);
-    const limitLine = q.wordLimit ? ('Word limit: ' + q.wordLimit + ' words — do not exceed.') : 'Aim for roughly 200-300 words.';
-    const maxTok = Math.min(1200, Math.round((q.wordLimit || 300) * 1.7) + 120);
+    const short = _eoiIsShortField(q);
+    let limitLine, maxTok;
+    if (short) {
+      limitLine = 'This is a SHORT FACTUAL FIELD — reply with ONLY the value or a single [INSERT: ...] placeholder. No prose, no explanation.';
+      maxTok = 80;
+    } else {
+      limitLine = q.wordLimit ? ('Word limit: ' + q.wordLimit + ' words — do not exceed.') : 'Aim for roughly 180-260 words.';
+      maxTok = Math.min(1200, Math.round((q.wordLimit || 260) * 1.7) + 120);
+    }
 
     const userPrompt = [
       'FUNDER: ' + funder,
-      _eoiFunderPriorities ? ('FUNDER PRIORITIES:\n' + _eoiFunderPriorities) : '',
-      'ORGANISATION: ' + ((currentOrg && currentOrg.name) || 'our charity'),
+      _eoiFunderPriorities ? ('FUNDER PRIORITIES:\n' + _eoiFunderPriorities.slice(0, 700)) : '',
       usps ? ('OUR STRENGTHS/USPs: ' + usps) : '',
+      '',
+      facts,
       '',
       evidence,
       '',
@@ -971,7 +1032,7 @@ async function runEOIFormFill() {
 
     try {
       const raw = await callClaude(sys, userPrompt, maxTok, false);
-      _eoiAnswers[q.id] = cleanReportText(raw);
+      _eoiAnswers[q.id] = _stripLeadingLabel(cleanReportText(raw));
     } catch (e) {
       if (e.message === 'AI_PLAN_GATE') { res.innerHTML = ''; return; }
       _eoiAnswers[q.id] = '[Could not draft this answer: ' + e.message + ']';
@@ -1073,26 +1134,30 @@ async function runEOIGenerator() {
   if (!funder || !brief) { alert('Please enter funder and brief.'); return; }
   const out = $('eoi-output'); const res = $('eoi-result');
   out.style.display = 'block';
+  const profile = getOrgProfile();
   const evidence = buildEOIEvidence();
 
   const steps = [
     { label: 'Reading the brief', meta: brief.length + ' characters' },
-    { label: 'Pulling your verified outcomes data', meta: DB.participants.length + ' participants' },
+    { label: 'Pulling your organisation facts + CRM data', meta: DB.participants.length + ' participants' },
     { label: 'Writing to the funder\'s priorities', meta: '' },
     { label: 'Quality check — claims and limits', meta: '' },
     { label: 'Ready', meta: '' }
   ];
   const sys =
-    'You are an expert UK bid writer. Write a compelling Expression of Interest to win this funding. ' +
+    'You are an expert UK bid writer. Write a compelling Expression of Interest to WIN this funding — the text is pasted straight into the application as the applicant\'s own words. ' +
     'Structure it around what the brief actually asks for; where the brief is open, use these sections, each starting with ## and its title: ' +
     'Executive summary, The need, Our track record, Our approach, Value for money. ' +
-    'Mirror the funder\'s language and priorities. Ground every claim in the VERIFIED CRM DATA — never invent numbers, quotes or partners; ' +
-    'use [INSERT: ...] placeholders for anything not in the data. 600-800 words. **bold** key statistics. No hashtags except section markers.';
+    'Mirror the funder\'s language and priorities. Never address the reader, never comment on data quality, never apologise, never imply the organisation has no track record or that figures are zero. ' +
+    'Ground every claim in the KNOWN ORGANISATION FACTS and VERIFIED CRM DATA — never invent numbers, quotes, names or partners; ' +
+    'use [INSERT: ...] placeholders for anything missing and keep going. 600-800 words. **bold** key statistics. No hashtags except section markers.';
   const prompt = [
     'FUNDER: ' + funder,
     'BRIEF: ' + brief,
-    'ORGANISATION: ' + ((currentOrg && currentOrg.name) || 'our charity'),
     'OUR STRENGTHS/USPs: ' + ($('eoi-usps').value || 'none'),
+    '',
+    'KNOWN ORGANISATION FACTS (provided by the applicant — treat as true):',
+    (profile ? profile.slice(0, 1800) : '(none provided — use [INSERT: ...] placeholders for organisation details)'),
     '',
     evidence
   ].join('\n');
