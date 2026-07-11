@@ -1,4 +1,4 @@
-# Civara
+# Vorlana
 
 CRM built for UK employability charities, repair cafés, and community organisations. Track participants, generate funder reports (MoJ, GLA, CBF), find live funding opportunities, and prove impact.
 
@@ -20,14 +20,14 @@ CRM built for UK employability charities, repair cafés, and community organisat
 │   ├── config.js          ← Supabase keys, constants  (load order matters →)
 │   ├── utils.js           ← shared helpers
 │   ├── db.js              ← Supabase wrappers + DB cache
-│   ├── auth.js            ← session, RBAC, org switching
+│   ├── auth.js             ← session, RBAC, org switching
 │   ├── agents.js          ← Claude API + AI agents
 │   ├── render.js          ← page render functions
 │   ├── modals.js          ← modal open/save/delete handlers
 │   ├── branding.js        ← logo + colour customisation
 │   ├── demo.js            ← demo data toggle
 │   ├── router.js          ← page navigation
-│   ├── boot.js            ← entry point — runs last
+│   ├── boot.js             ← entry point — runs last
 │   └── extensions/        ← features added after core (independent modules)
 │       ├── demographics.js
 │       ├── csv-import.js
@@ -59,7 +59,7 @@ Push to GitHub. Vercel auto-deploys on every push to `main`.
 - `invite.html` — invitation acceptance
 - `settings.html` — org-level settings
 - `admin.html` — single-org admin
-- `super-admin.html` — Civara staff admin (across all orgs)
+- `super-admin.html` — Vorlana staff admin (across all orgs)
 
 ## Database tables
 
@@ -67,7 +67,7 @@ Key tables in Supabase:
 
 - `organisations` — every org
 - `memberships` — user ↔ org with role (manager / advisor / admin)
-- `super_admins` — Civara staff
+- `super_admins` — Vorlana staff
 - `participants`, `events`, `feedback`, `volunteers`, `contracts`, `funders`, `employers`, `partner_referrals`, `circular_items`, `evidence`, `referrals`, `contacts`, `invitations`, `partner_profiles`
 
 Every table has an `org_id` column and is filtered through Row Level Security.
@@ -152,4 +152,4 @@ Decisions go to sentinel_decisions, briefings to sentinel_briefings.
 - "Run failed" alert → check browser console for the underlying error
 ## License
 
-Proprietary. © Civara.
+Proprietary. © Vorlana.
