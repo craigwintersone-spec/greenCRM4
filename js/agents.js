@@ -18,8 +18,8 @@
 'use strict';
 
 // Version marker — check your browser console to confirm this file is live.
-// If you DON'T see "Vorlana EOI engine v7", the old cached agents.js is running.
-try { console.info('Vorlana EOI engine v7 loaded'); } catch (e) {}
+// If you DON'T see "Vorlana EOI engine v8", the old cached agents.js is running.
+try { console.info('Vorlana EOI engine v8 loaded'); } catch (e) {}
 
 // ── State ─────────────────────────────────────────────────────
 const _aiQueue = { running: false, queue: [], lastCallAt: 0 };
@@ -724,9 +724,7 @@ async function runBDResearch() {
     { label: 'Ready', meta: '' }
   ];
   const sys = 'You are a UK funding researcher. Find up to 5 currently OPEN funding opportunities that fit the organisation. ' +
-    'Return ONLY a valid JSON array — no prose, no markdown, no code fences. ' +
-    'Each item: {"funder":"","programme":"","deadline":"","value":"","fit":"<one sentence on why it fits>","url":"<application or info page if known>"}. ' +
-    'Use empty string "" for anything you are unsure of. Do not invent deadlines or URLs.';
+    'For each, give: funder, programme name, application deadline, grant value, eligibility in brief, one sentence on why it fits, and the application or info URL. Be specific and factual. Do not invent deadlines or URLs.';
   const prompt = 'Delivery area: ' + area + '\nOrg turnover band: ' + size + '\nSpecific interests: ' + (specific || 'none');
 
   const raw = await runAgent({
@@ -737,15 +735,23 @@ async function runBDResearch() {
   });
   if (!raw) return;
 
+  // Structure the prose into JSON (no web search) so we can render interactive
+  // cards. Search-mode replies rarely obey a "return JSON" instruction, so we
+  // do the formatting in a separate call — this is the reliable path.
+  res.innerHTML = '<div class="alert alert-info" style="margin:0">Organising the results…</div>';
   let items = [];
   try {
-    const clean = raw.replace(/```json|```/gi, '').trim();
+    const structSys = 'Convert the funding research below into a JSON array. Return ONLY valid JSON — no prose, no code fences, no citation markers. ' +
+      'Each item: {"funder":"","programme":"","deadline":"","value":"","eligibility":"","fit":"","url":""}. Use "" for anything missing.';
+    const cleanedInput = raw.replace(/<\/?cite[^>]*>/gi, '').slice(0, 3800);
+    const structRaw = await callClaude(structSys, cleanedInput, 1000, false);
+    const clean = (structRaw || '').replace(/```json|```/gi, '').trim();
     const m = clean.match(/\[[\s\S]*\]/);
     if (m) items = JSON.parse(m[0]);
   } catch (e) { items = []; }
   items = Array.isArray(items) ? items.filter(o => o && (o.funder || o.programme)) : [];
 
-  if (!items.length) { aiResult(res, raw); return; } // fall back to plain text
+  if (!items.length) { aiResult(res, raw.replace(/<\/?cite[^>]*>/gi, '')); return; } // graceful text fallback
 
   _bdOpps = {};
   res.innerHTML = items.map((o, i) => {
@@ -760,6 +766,7 @@ async function runBDResearch() {
     return '<div class="card" style="margin-bottom:10px">' +
       '<div style="font-weight:700;font-size:14px;color:var(--txt)">' + funder + programme + '</div>' +
       (meta ? '<div style="font-size:12px;color:var(--txt3);margin:4px 0 6px">' + meta + '</div>' : '') +
+      (o.eligibility ? '<div style="font-size:12px;color:var(--txt3);margin-bottom:6px"><strong>Eligibility:</strong> ' + escapeHTML(o.eligibility) + '</div>' : '') +
       (o.fit ? '<div style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:10px">' + escapeHTML(o.fit) + '</div>' : '') +
       '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
         '<button class="btn btn-ai btn-sm" onclick="startEOIFromOpportunity(\'' + key + '\')">✍️ Draft EOI for this</button>' +
