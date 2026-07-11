@@ -141,11 +141,11 @@
       return;
     }
     const orgName = (typeof currentOrg !== 'undefined' && currentOrg && currentOrg.name)
-      ? currentOrg.name : 'civara';
+      ? currentOrg.name : 'vorlana';
     const slug = orgName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
     const a = document.createElement('a');
     a.href = dataUrl;
-    a.download = 'partner-portal-qr-' + (slug || 'civara') + '.png';
+    a.download = 'partner-portal-qr-' + (slug || 'vorlana') + '.png';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -200,7 +200,7 @@
         '<div class="sub">Scan the QR code or visit the link to register and submit a referral.</div>' +
         (qrSrc ? '<div class="qr"><img src="' + qrSrc + '" width="220" height="220"/></div>' : '') +
         '<div class="url">' + escapeHTML(url) + '</div>' +
-        '<div class="foot">Secure portal · GDPR compliant · Powered by Civara</div>' +
+        '<div class="foot">Secure portal · GDPR compliant · Powered by Vorlana</div>' +
       '</div>' +
       '<script>window.onload=function(){setTimeout(function(){window.print();},250);};<' + '/script>' +
       '</body></html>'
