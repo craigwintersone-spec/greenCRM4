@@ -22,10 +22,10 @@ function getOrgLogoUrl(org) {
 function applyBranding(org) {
   if (!org) return;
   const primary = org.brand_color || '#1F6F6D';
-  const orgName = org.name || 'Civara';
+  const orgName = org.name || 'Vorlana';
 
   document.documentElement.style.setProperty('--em', primary);
-  document.title = orgName + ' · Civara';
+  document.title = orgName + ' · Vorlana';
 
   const logoUrl = getOrgLogoUrl(org);
 
@@ -35,9 +35,9 @@ function applyBranding(org) {
     if (logoUrl) {
       logoEl.innerHTML =
         '<img src="' + escapeHTML(logoUrl) + '" alt="' + escapeHTML(orgName) +
-        '" class="org-logo-sidebar" onerror="this.parentElement.innerHTML=\'<img src=&quot;logo.png&quot; alt=&quot;Civara&quot; style=&quot;height:34px&quot;/>\'"/>';
+        '" class="org-logo-sidebar" onerror="this.parentElement.innerHTML=\'<img src=&quot;logo.png&quot; alt=&quot;Vorlana&quot; style=&quot;height:34px&quot;/>\'"/>';
     } else {
-      logoEl.innerHTML = '<img src="logo.png" alt="Civara" style="height:34px;width:auto;display:block"/>';
+      logoEl.innerHTML = '<img src="logo.png" alt="Vorlana" style="height:34px;width:auto;display:block"/>';
     }
   }
 
