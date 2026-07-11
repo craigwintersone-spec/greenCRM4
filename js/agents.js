@@ -18,8 +18,8 @@
 'use strict';
 
 // Version marker — check your browser console to confirm this file is live.
-// If you DON'T see "Vorlana EOI engine v3", the old cached agents.js is running.
-try { console.info('Vorlana EOI engine v3 loaded'); } catch (e) {}
+// If you DON'T see "Vorlana EOI engine v4", the old cached agents.js is running.
+try { console.info('Vorlana EOI engine v4 loaded'); } catch (e) {}
 
 // ── State ─────────────────────────────────────────────────────
 const _aiQueue = { running: false, queue: [], lastCallAt: 0 };
@@ -33,7 +33,8 @@ let _lastReportTitle = '';
 // EOI form-fill state
 let _eoiQuestions = [];        // [{id, question, wordLimit, guidance}]
 let _eoiAnswers   = {};        // { id: answerText }
-let _eoiFunderPriorities = ''; // filled if "research funder" is used
+let _eoiFunderPriorities = ''; // funder priorities, auto-fetched before drafting
+let _eoiPrioritiesFunder = ''; // which funder name the loaded priorities belong to
 
 // ── Plan gate ─────────────────────────────────────────────────
 function checkAIAccess() {
@@ -948,7 +949,7 @@ function renderEOIQuestions() {
     ).join('') +
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">' +
       '<button class="btn btn-p" onclick="runEOIFormFill()">✦ Draft all answers from my data</button>' +
-      '<button class="btn btn-ghost btn-sm" onclick="researchEOIFunder()">🔎 Research funder first (optional)</button>' +
+      '<button class="btn btn-ghost btn-sm" onclick="researchEOIFunder()">🔎 Re-research funder (optional — runs automatically)</button>' +
     '</div>' +
     (_eoiFunderPriorities ? '<div style="font-size:11px;color:var(--txt3);margin-top:8px">Funder priorities loaded — they\'ll steer the drafting.</div>' : '');
 }
@@ -958,7 +959,25 @@ function _syncEOIQuestion(id) {
   if (q && el) q.question = el.value.trim();
 }
 
-// (Optional) research the funder's priorities via web search
+// Fetch the funder's priorities via web search. Skips work if we already have
+// them for this exact funder. Returns quietly on failure (drafting proceeds
+// without priorities). `force` re-fetches even if cached.
+async function _ensureFunderPriorities(funder, force) {
+  funder = (funder || '').trim();
+  if (!funder) return;
+  if (!force && _eoiFunderPriorities && _eoiPrioritiesFunder === funder) return;
+
+  const sys = 'You are a UK funding researcher. In 4-6 short bullet points, summarise this funder\'s current priorities, the outcomes they fund, and the language they use in guidance. Be factual and specific. No preamble.';
+  try {
+    const raw = await callClaude(sys, 'Funder: ' + funder, 500, true);
+    _eoiFunderPriorities = cleanReportText(raw);
+    _eoiPrioritiesFunder = funder;
+  } catch (e) {
+    // Leave any previous priorities in place; drafting continues without.
+  }
+}
+
+// Manual "Re-research funder" button — forces a fresh fetch and shows status.
 async function researchEOIFunder() {
   const funder = ($('eoi-funder') && $('eoi-funder').value || '').trim();
   if (!funder) { alert('Enter the funder name in the field above first.'); return; }
@@ -968,15 +987,17 @@ async function researchEOIFunder() {
   note.style.margin = '8px 0';
   note.textContent = 'Researching ' + funder + '…';
   wrap.appendChild(note);
-
-  const sys = 'You are a UK funding researcher. In 4-6 short bullet points, summarise this funder\'s current priorities, the outcomes they fund, and the language they use in guidance. Be factual and specific. No preamble.';
   try {
-    const raw = await callClaude(sys, 'Funder: ' + funder, 500, true);
-    _eoiFunderPriorities = cleanReportText(raw);
-    renderEOIQuestions();
+    await _ensureFunderPriorities(funder, true);
+    if (_eoiPrioritiesFunder === funder && _eoiFunderPriorities) {
+      renderEOIQuestions();
+    } else {
+      note.className = 'alert alert-warn';
+      note.textContent = 'Funder research unavailable right now — drafting will still proceed without it.';
+    }
   } catch (e) {
     note.className = 'alert alert-warn';
-    note.textContent = 'Funder research unavailable: ' + e.message + ' — drafting will proceed without it.';
+    note.textContent = 'Funder research unavailable: ' + (e.message || '') + ' — drafting will proceed without it.';
   }
 }
 
@@ -985,12 +1006,24 @@ async function runEOIFormFill() {
   if (!_eoiQuestions.length) { alert('Parse a form first.'); return; }
   _eoiQuestions.forEach(q => _syncEOIQuestion(q.id)); // pull any edits
 
-  const funder = ($('eoi-funder') && $('eoi-funder').value || '').trim() || 'the funder';
+  const funderRaw = ($('eoi-funder') && $('eoi-funder').value || '').trim();
+  const funder = funderRaw || 'the funder';
   const usps = ($('eoi-usps') && $('eoi-usps').value || '').trim();
   const profile = getOrgProfile();
   const evidence = buildEOIEvidence();
   const out = $('eoi-output'); const res = $('eoi-result');
   out.style.display = 'block';
+
+  // Auto-research the funder's priorities first, so every answer speaks their
+  // language. Only runs if a funder name is set and we don't already have them.
+  if (funderRaw && !(_eoiFunderPriorities && _eoiPrioritiesFunder === funderRaw)) {
+    res.innerHTML = '<div class="brain-panel"><div class="brain-header">' +
+      '<div class="brain-icon">🔎</div><div>' +
+      '<div class="brain-title">Researching ' + escapeHTML(funderRaw) + '</div>' +
+      '<div class="brain-sub">Reading the funder\'s priorities so answers match their language</div>' +
+      '</div></div></div>';
+    await _ensureFunderPriorities(funderRaw);
+  }
 
   const sys =
     'You are an expert UK bid writer completing an Expression of Interest to WIN funding. ' +
