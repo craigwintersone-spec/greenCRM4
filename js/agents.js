@@ -18,8 +18,8 @@
 'use strict';
 
 // Version marker — check your browser console to confirm this file is live.
-// If you DON'T see "Vorlana EOI engine v4", the old cached agents.js is running.
-try { console.info('Vorlana EOI engine v4 loaded'); } catch (e) {}
+// If you DON'T see "Vorlana EOI engine v5", the old cached agents.js is running.
+try { console.info('Vorlana EOI engine v5 loaded'); } catch (e) {}
 
 // ── State ─────────────────────────────────────────────────────
 const _aiQueue = { running: false, queue: [], lastCallAt: 0 };
@@ -1137,31 +1137,49 @@ function renderFilledEOI() {
     '<div style="margin-top:20px;padding-top:12px;border-top:1px solid #eee;font-size:11px;color:#999">Drafted with Vorlana · verify all figures before submission</div>';
 }
 
-// Quality Supervisor — optional review pass over the whole draft
+// Quality Supervisor — optional review pass. Reviews FULL answers in batches
+// (they're far too long for one model call), so it never sees truncated text.
 async function runEOIQualitySupervisor() {
   if (!_eoiQuestions.length) return;
   const el = $('eoi-qa-result');
   el.innerHTML = '<div class="alert alert-info" style="margin:16px 0 0">Quality Supervisor reviewing…</div>';
 
   const funder = ($('eoi-funder') && $('eoi-funder').value || '').trim() || 'the funder';
-  const summary = _eoiQuestions.map((q, i) =>
-    'Q' + (i + 1) + ' (' + (q.wordLimit ? q.wordLimit + 'w limit' : 'no limit') + '): ' + q.question +
-    '\nANSWER: ' + (_eoiAnswers[q.id] || '').slice(0, 350)
-  ).join('\n\n').slice(0, 3600);
 
   const sys =
-    'You are a bid-review Quality Supervisor for UK funding EOIs. Given the funder, questions and drafted answers, ' +
-    'return a short bullet list of SPECIFIC issues only: any question not actually answered, any answer that reads as over its word limit, ' +
-    'any claim that sounds unsupported by evidence, and anywhere the funder\'s priorities are not reflected. ' +
-    'If an answer is strong, do not comment on it. Be concise. No preamble, no praise.';
+    'You are a bid-review Quality Supervisor for UK funding EOIs. The answers given to you are COMPLETE — never flag truncation, "cuts off", or that an answer looks short; that is not a fault. ' +
+    'For each question/answer pair, list ONLY specific, real problems: a question not actually answered; an answer clearly over its stated word limit; a claim that should be evidenced or looks unsupported; a headline statistic repeated so often it strains credibility; or where the funder\'s priorities are not reflected. ' +
+    'Reference each issue by its question number (e.g. "Q7: ..."). If an answer is sound, say nothing about it. Be concise. No preamble, no praise. If nothing is wrong in this batch, reply with exactly: OK.';
 
-  try {
-    const raw = await callClaude(sys, 'FUNDER: ' + funder + '\n\n' + summary, 500, false);
-    el.innerHTML = '<div class="ai-panel" style="margin:16px 0 0"><div class="ai-panel-title"><span class="ai-icon">🔍</span>Quality Supervisor</div>' +
-      '<div class="ai-response">' + aiPanelHTML(raw) + '</div></div>';
-  } catch (e) {
-    el.innerHTML = '<div class="alert alert-warn" style="margin:16px 0 0">Supervisor unavailable: ' + escapeHTML(e.message) + '</div>';
+  // Pack FULL answers into batches under the input cap (~3500 chars of body).
+  const CHAR_BUDGET = 3400;
+  const batches = [];
+  let cur = '', curLen = 0;
+  for (let i = 0; i < _eoiQuestions.length; i++) {
+    const q = _eoiQuestions[i];
+    const ans = _eoiAnswers[q.id] || '';
+    const block = 'Q' + (i + 1) + ' (' + (q.wordLimit ? q.wordLimit + 'w limit' : 'no stated limit') + '): ' + q.question +
+      '\nANSWER: ' + ans + '\n\n';
+    if (curLen + block.length > CHAR_BUDGET && cur) { batches.push(cur); cur = ''; curLen = 0; }
+    cur += block; curLen += block.length;
   }
+  if (cur) batches.push(cur);
+
+  const findings = [];
+  for (let b = 0; b < batches.length; b++) {
+    el.innerHTML = '<div class="alert alert-info" style="margin:16px 0 0">Quality Supervisor reviewing… (' + (b + 1) + ' of ' + batches.length + ')</div>';
+    try {
+      const raw = await callClaude(sys, 'FUNDER: ' + funder + '\n\n' + batches[b], 600, false);
+      const clean = cleanReportText(raw).trim();
+      if (clean && !/^ok\.?$/i.test(clean)) findings.push(clean);
+    } catch (e) {
+      findings.push('(Could not review one batch: ' + (e.message || 'error') + ')');
+    }
+  }
+
+  const combined = findings.join('\n').trim();
+  el.innerHTML = '<div class="ai-panel" style="margin:16px 0 0"><div class="ai-panel-title"><span class="ai-icon">🔍</span>Quality Supervisor</div>' +
+    '<div class="ai-response">' + (combined ? aiPanelHTML(combined) : '<p>No issues flagged — the answers read as complete and on-brief. Remember to fill any [INSERT: …] placeholders and verify all figures before submitting.</p>') + '</div></div>';
 }
 
 // Legacy brief-based EOI — now grounded + anti-fabrication
