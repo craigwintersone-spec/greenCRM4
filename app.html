@@ -351,9 +351,28 @@
   <div id="bd-opps-wrap" style="display:none">
     <div class="ai-panel"><div class="ai-panel-title"><span class="ai-icon">🔍</span>Funding opportunities identified</div><div id="bd-opps-result"></div></div>
   </div>
+  <!-- ── ORGANISATION PROFILE ─ the facts an EOI needs that the CRM doesn't hold ── -->
+  <div class="card" style="margin-top:4px">
+    <div class="card-title">Your organisation profile <span style="font-weight:400;color:var(--txt3);font-size:12px">— used in every EOI</span></div>
+    <p style="font-size:13px;color:var(--txt2);margin-bottom:10px">The EOI writer only knows what's in your CRM plus what you put here. Paste your organisation's key facts once — legal &amp; trading name, charity/company number, registered address + postcode, website, social links, lead contact (name, role, email, phone), year founded, boroughs covered, mission, prior contracts &amp; delivery history <em>with real numbers</em>, key partnerships, accreditations. The writer uses these and inserts [INSERT: …] wherever something is still missing.</p>
+    <div class="form-row"><textarea id="eoi-org-profile" style="min-height:170px" placeholder="e.g.
+Legal &amp; trading name: Action West London (charity no. 1234567, company no. 7654321)
+Registered address: 1 High Street, London W3 0AA
+Website: https://actionwestlondon.org.uk
+Socials: facebook.com/…, linkedin.com/company/…, x.com/…
+Lead contact: Jane Doe, Chief Executive — jane@… — 020 0000 0000
+Founded 2005; delivers across Ealing, Hounslow, Brent, Hammersmith &amp; Fulham
+Mission: supporting West London residents into work, skills and wellbeing
+Track record: GLA Good Work programme 2022–24 — 480 participants, 62% into work, 71% sustained at 26 weeks; MoJ HMPPS 2020–23 — 310 participants…
+Partnerships: Jobcentre Plus West London, Ealing Council, [named employers]…
+Accreditations: Matrix, Investors in People, Cyber Essentials…"></textarea></div>
+    <button class="btn btn-p btn-sm" onclick="saveOrgProfileFromField()">Save profile</button>
+    <span id="eoi-profile-saved" style="display:none;color:var(--em);font-size:12px;margin-left:8px;font-weight:600">✓ Saved</span>
+  </div>
+
   <div class="card" style="margin-top:4px">
     <div class="card-title">Generate an Expression of Interest</div>
-    <p style="font-size:13px;color:var(--txt2);margin-bottom:14px">Paste a funding brief — Org Brain will write a professional EOI using your real outcomes data.</p>
+    <p style="font-size:13px;color:var(--txt2);margin-bottom:14px">Paste a funding brief — Org Brain will write a professional EOI using your organisation profile and real outcomes data.</p>
     <div class="form-row"><label>Funder / contract name</label><input id="eoi-funder" placeholder="e.g. MoJ HMPPS Employment Support Programme 2025"/></div>
     <div class="form-row"><label>Paste the brief or describe what they're looking for</label><textarea id="eoi-brief" style="min-height:100px" placeholder="Paste the funding brief or describe what outcomes they want…"></textarea></div>
     <div class="form-row"><label>Your unique selling points (optional)</label><textarea id="eoi-usps" style="min-height:60px" placeholder="e.g. 3 years of MoJ delivery, strong probation relationships…"></textarea></div>
@@ -1052,6 +1071,18 @@ function applyModules(mods) {
 
 </script>
 
+
+<!-- Populate the EOI organisation-profile field once the app has booted -->
+<script>
+(function(){
+  function tryPop(n){
+    if(typeof populateOrgProfileField==='function'){ try{ populateOrgProfileField(); }catch(e){} }
+    if(n>0) setTimeout(function(){ tryPop(n-1); }, 1500);
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', function(){ tryPop(4); });
+  else tryPop(4);
+})();
+</script>
 
 <!-- Extensions (run after boot, patch existing functions) -->
 <script src="js/extensions/demographics.js"></script>
