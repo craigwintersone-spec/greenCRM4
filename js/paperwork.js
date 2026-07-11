@@ -1,9 +1,6 @@
-// js/paperwork.js — Civara auto-fill paperwork (Phase 1: Participant Start Form)
-// ---------------------------------------------------------------------------
-// window.civaraGenerateStartForm() reads the OPEN Add Participant form and
-// downloads a filled Word (.docx) Start Form immediately — no second pop-up.
-// Fill the participant in once, click "📄 Start Form", done.
-// No database changes. No external libraries.
+// js/paperwork.js — Start Form / End Form generation (docx) + job evidence quick-log
+// Depends on: config.js, utils.js
+// Loaded standalone; safe to include on any page that has the participant modal.
 'use strict';
 
 (function () {
@@ -115,7 +112,16 @@
       '<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>' + bold + color + '<w:sz w:val="' + sz + '"/></w:rPr>' +
       valueRuns(text) + '</w:r></w:p>';
   }
+  function docWrap(body) {
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+      body +
+      '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>' +
+      '<w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/>' +
+      '</w:sectPr></w:body></w:document>';
+  }
 
+  /* ---------- form content ---------------------------------------------- */
   function buildStartFormXml(d) {
     const detail = [
       ['Title', d.title], ['Forename', d.forename], ['Surname', d.surname],
@@ -141,9 +147,9 @@
     ];
     const provider = [['Delivery organisation', d.provider], ['Programme / project', d.project]];
 
-    const body =
+    return docWrap(
       para('Participant Start Form', { center: true, bold: true, sz: 32, after: 40 }) +
-      para('Initial registration & assessment — prepared in Civara on ' + d.generatedOn,
+      para('Initial registration & assessment — prepared in Vorlana on ' + d.generatedOn,
         { center: true, sz: 18, color: '808080', after: 160 }) +
       heading('Part 1: Participant Details') + rowsTable(detail) +
       heading('Part 2: Referral & Background') + rowsTable(referral) +
@@ -155,17 +161,40 @@
       heading('Delivery') + rowsTable(provider) +
       para('', { after: 120 }) +
       para('Participant signature: ______________________________    Date: ____________', { sz: 20, after: 120 }) +
-      para('Adviser signature: __________________________________    Date: ____________', { sz: 20 });
-
-    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
-      '<w:body>' + body +
-      '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>' +
-      '<w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/>' +
-      '</w:sectPr></w:body></w:document>';
+      para('Adviser signature: __________________________________    Date: ____________', { sz: 20 })
+    );
   }
 
-  function buildDocxBlob(d) {
+  function buildEndFormXml(d) {
+    const detail = [
+      ['Title', d.title], ['Forename', d.forename], ['Surname', d.surname],
+      ['NI number', d.ni], ['Date of birth', d.dob], ['Telephone', d.phone],
+      ['Email address', d.email], ['Participant ID', d.pid]
+    ];
+    const dates = [['Programme start date', d.startDate], ['Exit / leaving date', d.exitDate]];
+    const outcome = [
+      ['Outcome type', d.outcomeType], ['Job title', d.jobTitle], ['Employer', d.employer],
+      ['Job start date', d.jobStart], ['Hours per week', d.hours], ['Pay', d.pay]
+    ];
+    const provider = [['Delivery organisation', d.provider], ['Programme / project', d.project]];
+
+    return docWrap(
+      para('Participant End / Exit Form', { center: true, bold: true, sz: 32, after: 40 }) +
+      para('Programme exit & outcome — prepared in Vorlana on ' + d.generatedOn,
+        { center: true, sz: 18, color: '808080', after: 160 }) +
+      heading('Part 1: Participant Details') + rowsTable(detail) +
+      heading('Part 2: Programme Dates') + rowsTable(dates) +
+      heading('Part 3: Outcome') + rowsTable(outcome) +
+      para('Reason for leaving', { bold: true, sz: 20, after: 40 }) + fullBox(d.leaveReason) +
+      para('Adviser notes', { bold: true, sz: 20, after: 40 }) + fullBox(d.caseNote) +
+      heading('Delivery') + rowsTable(provider) +
+      para('', { after: 120 }) +
+      para('Participant signature: ______________________________    Date: ____________', { sz: 20, after: 120 }) +
+      para('Adviser signature: __________________________________    Date: ____________', { sz: 20 })
+    );
+  }
+
+  function packDocx(documentXml) {
     const contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
@@ -182,7 +211,7 @@
       { name: '[Content_Types].xml', data: strBytes(contentTypes) },
       { name: '_rels/.rels', data: strBytes(rels) },
       { name: 'word/_rels/document.xml.rels', data: strBytes(docRels) },
-      { name: 'word/document.xml', data: strBytes(buildStartFormXml(d)) }
+      { name: 'word/document.xml', data: strBytes(documentXml) }
     ]);
   }
 
@@ -213,10 +242,11 @@
     });
     return out.filter(Boolean).join(', ');
   }
+  // Delivery org / project persist locally so the user doesn't have to
+  // retype them for every participant. Keys are internal, never shown.
   function ls(key, def) { try { return localStorage.getItem(key) || def || ''; } catch (e) { return def || ''; } }
   function lsSet(key, val) { try { localStorage.setItem(key, val); } catch (e) {} }
 
-  // Read straight from the open Add Participant form (with optional object override).
   function gather(p) {
     p = p || {};
     return {
@@ -253,6 +283,19 @@
       generatedOn: new Date().toLocaleDateString('en-GB')
     };
   }
+  function gatherEnd(p) {
+    p = p || {};
+    const d = gather(p);
+    d.outcomeType = pick(p, 'outcome_type', 'outcomeType') || elVal('mp-outcome-type');
+    d.jobTitle = pick(p, 'job_title', 'jobTitle') || elVal('mp-job-title');
+    d.employer = pick(p, 'employer', 'employer_name') || elVal('mp-employer');
+    d.jobStart = fmtDate(pick(p, 'job_start', 'jobStart') || elVal('mp-job-start'));
+    d.hours = pick(p, 'hours', 'hours_per_week') || elVal('mp-hours');
+    d.pay = pick(p, 'pay', 'salary', 'wage') || elVal('mp-pay');
+    d.exitDate = fmtDate(pick(p, 'exit_date', 'exitDate', 'leaving_date') || elVal('mp-exit-date'));
+    d.leaveReason = pick(p, 'leave_reason', 'leaving_reason', 'reason') || elVal('mp-leave-reason');
+    return d;
+  }
 
   function download(blob, filename) {
     const url = URL.createObjectURL(blob);
@@ -262,20 +305,18 @@
     setTimeout(() => URL.revokeObjectURL(url), 4000);
   }
 
-  // Remember delivery org / project between participants, and prefill the
-  // fields when the form is on screen.
   function prefillDelivery() {
     const pv = document.getElementById('mp-provider'), pj = document.getElementById('mp-project');
     if (pv && !pv.value) pv.value = ls('civara_provider', '');
     if (pj && !pj.value) pj.value = ls('civara_project', '');
   }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', prefillDelivery);
-  } else {
-    prefillDelivery();
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', prefillDelivery);
+  else prefillDelivery();
 
-  /* ---------- public entry point — generate straight away --------------- */
+  /* ---------- public entry points --------------------------------------- */
+  // NOTE: function names below (civaraGenerateStartForm etc.) are internal
+  // JS identifiers only — never shown to users — kept as-is for backwards
+  // compatibility with existing onclick="" handlers in app.html.
   window.civaraGenerateStartForm = function (p) {
     if (p && p.preventDefault) p = null;              // called as onclick handler
     if (!window.TextEncoder) { alert('This browser is too old to generate the form.'); return; }
@@ -283,10 +324,37 @@
     if (!d.forename && !d.surname) { alert('Add the participant\u2019s name first, then click Start Form.'); return; }
     lsSet('civara_provider', d.provider); lsSet('civara_project', d.project);
     let blob;
-    try { blob = buildDocxBlob(d); }
+    try { blob = packDocx(buildStartFormXml(d)); }
     catch (e) { alert('Sorry — could not build the form: ' + e.message); return; }
     const name = ('Start Form - ' + (d.forename || '') + ' ' + (d.surname || '')).trim().replace(/\s+/g, ' ') || 'Start Form';
     download(blob, name + '.docx');
+  };
+
+  window.civaraGenerateEndForm = function (p) {
+    if (p && p.preventDefault) p = null;
+    if (!window.TextEncoder) { alert('This browser is too old to generate the form.'); return; }
+    const d = gatherEnd(p);
+    if (!d.forename && !d.surname) { alert('Add the participant\u2019s name first, then click End Form.'); return; }
+    lsSet('civara_provider', d.provider); lsSet('civara_project', d.project);
+    let blob;
+    try { blob = packDocx(buildEndFormXml(d)); }
+    catch (e) { alert('Sorry — could not build the form: ' + e.message); return; }
+    const name = ('End Form - ' + (d.forename || '') + ' ' + (d.surname || '')).trim().replace(/\s+/g, ' ') || 'End Form';
+    download(blob, name + '.docx');
+  };
+
+  // Quick-log job evidence (payslip, contract…) against this participant by
+  // opening the app's existing Evidence Hub logger, prefilled for a job outcome.
+  window.civaraAddJobEvidence = function () {
+    const name = (elVal('mp-fn') + ' ' + elVal('mp-ln')).trim();
+    try { if (typeof openAddEvid === 'function') openAddEvid(); } catch (e) {}
+    setTimeout(function () {
+      const p = document.getElementById('evid-p'); if (p && name) p.value = name;
+      const t = document.getElementById('evid-type'); if (t) t.value = 'Payslip';
+      const o = document.getElementById('evid-out'); if (o) o.value = 'Employment';
+      const s = document.getElementById('evid-staff'); if (s && !s.value) s.value = elVal('mp-adv');
+      const dt = document.getElementById('evid-date'); if (dt && !dt.value) dt.value = new Date().toISOString().slice(0, 10);
+    }, 0);
   };
 
 })();
