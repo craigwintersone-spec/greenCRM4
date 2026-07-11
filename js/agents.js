@@ -17,6 +17,10 @@
 
 'use strict';
 
+// Version marker — check your browser console to confirm this file is live.
+// If you DON'T see "Vorlana EOI engine v3", the old cached agents.js is running.
+try { console.info('Vorlana EOI engine v3 loaded'); } catch (e) {}
+
 // ── State ─────────────────────────────────────────────────────
 const _aiQueue = { running: false, queue: [], lastCallAt: 0 };
 
