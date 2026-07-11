@@ -152,7 +152,7 @@
   function downloadCsvTemplate() {
     const headers = CSV_FIELDS.map(f => f.label);
     const sample  = ['Aisha', 'Okonkwo', 'aisha@example.com', '07700900001', 'Probation', 'Engaged', 'Sarah T.', 'Medium', '', 'Confidence;Housing', '2025-01-15', 'Initial assessment'];
-    downloadCSV([headers, sample], 'civara-participant-import-template.csv');
+    downloadCSV([headers, sample], 'vorlana-participant-import-template.csv');
   }
 
   function handleCsvFile(file) {
