@@ -9,14 +9,11 @@
 //   • all specific agents: morning briefing, intake, case note,
 //     RAG explainer, feedback analyst, outcomes analyst,
 //     employer matcher, equity, benchmarking, language coach (self-help),
-//     report generator, social media, BD research, EOI generator
+//     report generator, social media, BD research, EOI generator + EOI form-fill
 //
 // NOTE (v5 — surveillance removed):
 //   The staff-stress "Wellbeing Scan" and the manager "flag queue"
-//   have been removed. The language tool is now a SELF-HELP COACH:
-//   it only analyses text the user gives it, shows suggestions to
-//   that user, stores nothing, names no one, and never reports to a
-//   manager. This avoids the employee-monitoring / DPIA exposure.
+//   have been removed. The language tool is now a SELF-HELP COACH.
 
 'use strict';
 
@@ -28,6 +25,11 @@ let _originalNote   = '';
 let _lastEOIText    = '';
 let _lastReportText = '';
 let _lastReportTitle = '';
+
+// EOI form-fill state
+let _eoiQuestions = [];        // [{id, question, wordLimit, guidance}]
+let _eoiAnswers   = {};        // { id: answerText }
+let _eoiFunderPriorities = ''; // filled if "research funder" is used
 
 // ── Plan gate ─────────────────────────────────────────────────
 function checkAIAccess() {
@@ -470,20 +472,7 @@ async function runEmployerMatcher() {
 }
 
 // ── Equality agents (aggregate / anonymised only) ────────────
-//
-// REMOVED in v5: runWellbeingScan (scanned advisors' notes for stress
-// patterns — employee monitoring) and the manager flag-queue
-// (_hrFlags, renderHRFlags, dismissHRFlag, resolveHRFlag) and the
-// strict/advisory/silent manager-alert modes (saveHRMode,
-// saveHRSettings, updateHRModeBanner).
-//
-// The Equity and Benchmarking agents below work on AGGREGATE,
-// ANONYMISED data only — no individual is named, nothing is logged
-// to a manager. They are safe to keep.
 
-// Self-help language coach. Analyses ONLY text the user gives it,
-// shows gentle suggestions to that user, stores nothing, names no
-// one, and never reports to a manager.
 async function runLanguageCoach() {
   const el = $('language-coach-result'); if (!el) return;
   const input = ($('language-coach-input') && $('language-coach-input').value || '').trim();
@@ -684,31 +673,6 @@ function copyReportText() {
   if (btn) { const orig = btn.textContent; btn.textContent = '✓ Copied'; setTimeout(() => btn.textContent = orig, 2000); }
 }
 
-function downloadEOIPDF() {
-  const orig = document.title;
-  const title = 'EOI — ' + ($('eoi-funder').value || 'Untitled');
-  document.title = title.replace(/[^a-z0-9 \-]/gi, '').slice(0, 80);
-  const inner = $('eoi-result').innerHTML;
-  const printWrap = document.createElement('div');
-  printWrap.id = 'report-output';
-  const _eoiLogoUrl = getOrgLogoUrl(currentOrg);
-  const _eoiOrgName = (currentOrg && currentOrg.name) || 'Organisation';
-  const _eoiDateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
-  const _eoiHeader = _eoiLogoUrl
-    ? '<div class="report-header-flex"><div class="report-header-text"><div class="report-meta">Expression of Interest</div><div class="report-title">' + escapeHTML($('eoi-funder').value || 'Funding application') + '</div><div class="report-subtitle">' + escapeHTML(_eoiOrgName) + ' · ' + escapeHTML(_eoiDateStr) + '</div></div><div class="report-header-logo"><img src="' + escapeHTML(_eoiLogoUrl) + '" alt="' + escapeHTML(_eoiOrgName) + '" class="org-logo-report" onerror="this.style.display=\'none\'"/></div></div>'
-    : '<div class="report-header"><div class="report-meta">Expression of Interest</div><div class="report-title">' + escapeHTML($('eoi-funder').value || 'Funding application') + '</div><div class="report-subtitle">' + escapeHTML(_eoiOrgName) + ' · ' + escapeHTML(_eoiDateStr) + '</div></div>';
-  printWrap.innerHTML = '<div class="report-doc">' + _eoiHeader + '<div class="report-body">' + inner + '</div></div>';
-  document.body.appendChild(printWrap);
-  setTimeout(() => {
-    window.print();
-    setTimeout(() => { document.title = orig; printWrap.remove(); }, 1000);
-  }, 100);
-}
-
-function copyEOI() {
-  navigator.clipboard.writeText(_lastEOIText || $('eoi-result').innerText || '');
-}
-
 // ── Social media + BD ────────────────────────────────────────
 async function runSocialAgent() {
   const platform = $('sm-platform').value;
@@ -763,35 +727,412 @@ async function runBDResearch() {
   if (raw) aiResult(res, raw);
 }
 
+// ═════════════════════════════════════════════════════════════
+// EOI ENGINE — form-fill + grounded drafting
+// ═════════════════════════════════════════════════════════════
+
+// The single biggest quality lever: real, verifiable numbers from the CRM.
+function buildEOIEvidence() {
+  const P = DB.participants || [];
+  const E = DB.events || [];
+  const FB = DB.feedback || [];
+  const C = DB.contracts || [];
+
+  const total = P.length;
+  const active = P.filter(p => p.stage !== 'Closed').length;
+  const withOutcome = P.filter(p => (p.outcomes || []).length > 0).length;
+  const rate = total ? pct(withOutcome, total) : 0;
+
+  const outCount = {};
+  OUT_TYPES.forEach(t => { outCount[t] = P.filter(p => (p.outcomes || []).includes(t)).length; });
+  const employment = outCount['Employment'] || 0;
+  const sustained = P.filter(p => p.stage === 'Sustained').length;
+
+  const barrierCount = {};
+  BARRIERS.forEach(b => {
+    const n = P.filter(p => (p.barriers || []).includes(b)).length;
+    if (n) barrierCount[b] = n;
+  });
+  const topBarriers = Object.entries(barrierCount)
+    .sort((a, b) => b[1] - a[1]).slice(0, 5)
+    .map(([b, n]) => b + ' (' + n + ')').join(', ');
+
+  const avgCB = FB.length ? (FB.reduce((a, f) => a + num(f.cb), 0) / FB.length).toFixed(1) : null;
+  const avgCA = FB.length ? (FB.reduce((a, f) => a + num(f.ca), 0) / FB.length).toFixed(1) : null;
+
+  const contractLines = [];
+  let totalValue = 0, totalActualOutcomes = 0;
+  C.forEach(c => {
+    totalValue += num(c.value);
+    totalActualOutcomes += num(c.actual_outcomes);
+    contractLines.push(
+      c.name + ': ' + num(c.actual_starts) + '/' + num(c.target_starts) + ' starts, ' +
+      num(c.actual_outcomes) + '/' + num(c.target_outcomes) + ' outcomes'
+    );
+  });
+  const costPerOutcome = totalActualOutcomes ? Math.round(totalValue / totalActualOutcomes) : null;
+
+  const cs = P.find(p => (p.outcomes || []).length > 0 && (p.barriers || []).length > 0);
+  const caseStudy = cs
+    ? ('joined with barriers ' + (cs.barriers || []).join(', ') +
+       '; reached stage "' + cs.stage + '"; achieved ' + (cs.outcomes || []).join(', '))
+    : null;
+
+  const lines = [
+    'VERIFIED CRM DATA (use ONLY these figures — do not invent numbers):',
+    '- Participants supported: ' + total + ' (' + active + ' currently active)',
+    '- With at least one outcome: ' + withOutcome + ' (' + rate + '%)',
+    '- Into employment: ' + employment + ' | Sustained: ' + sustained,
+    '- Outcome breakdown: ' + OUT_TYPES.map(t => t + ' ' + (outCount[t] || 0)).join(', '),
+    '- Priority-group reach (top barriers in caseload): ' + (topBarriers || 'not recorded'),
+    (avgCB && avgCA) ? ('- Distance travelled (confidence): ' + avgCB + ' -> ' + avgCA + ' /5 across ' + FB.length + ' responses') : '',
+    '- Events/workshops delivered: ' + E.length,
+    contractLines.length ? ('- Contract delivery vs target: ' + contractLines.join(' | ')) : '',
+    costPerOutcome ? ('- Approx cost per outcome (funded contracts): £' + costPerOutcome.toLocaleString()) : '',
+    caseStudy ? ('- Anonymised case-study facts: a participant ' + caseStudy) : ''
+  ].filter(Boolean);
+
+  return lines.join('\n');
+}
+
+// Read an uploaded form: .docx / .pdf / .txt -> plain text
+async function readUploadedFormFile(file) {
+  const name = (file.name || '').toLowerCase();
+  const buf = await file.arrayBuffer();
+
+  if (name.endsWith('.docx')) {
+    if (!window.mammoth) throw new Error('Word-reading library not loaded — see app.html head');
+    const { value } = await window.mammoth.extractRawText({ arrayBuffer: buf });
+    return value || '';
+  }
+  if (name.endsWith('.pdf')) {
+    if (!window.pdfjsLib) throw new Error('PDF-reading library not loaded — see app.html head');
+    const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+    let text = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      text += content.items.map(it => it.str).join(' ') + '\n';
+    }
+    return text;
+  }
+  return new TextDecoder('utf-8').decode(buf);
+}
+
+async function handleEOIFormUpload(inputEl) {
+  const file = inputEl && inputEl.files && inputEl.files[0];
+  if (!file) return;
+  const ta = $('eoi-form-text');
+  try {
+    ta.value = 'Reading ' + file.name + ' …';
+    const text = await readUploadedFormFile(file);
+    if (!text.trim()) { ta.value = ''; alert('Could not read any text from that file. Try pasting the questions instead.'); return; }
+    ta.value = text.trim();
+  } catch (e) {
+    ta.value = '';
+    alert('Could not read that file: ' + e.message + '\nPaste the questions in the box instead.');
+  }
+}
+
+// Parse the form text into structured questions (one AI call)
+async function parseEOIForm() {
+  const text = ($('eoi-form-text') && $('eoi-form-text').value || '').trim();
+  if (!text) { alert('Upload or paste the funder\'s form first.'); return; }
+
+  const wrap = $('eoi-questions');
+  wrap.style.display = 'block';
+  wrap.innerHTML = '<div class="alert alert-info" style="margin:0">Reading the form and pulling out each question…</div>';
+
+  const sys =
+    'You are parsing a UK funding Expression of Interest form. Extract every question or field the applicant must complete, in order. ' +
+    'Return ONLY a valid JSON array — no prose, no markdown, no code fences. ' +
+    'Each item: {"id":"q1","question":"<exact question text>","wordLimit":<number or null>,"guidance":"<any limit/guidance note, else empty string>"}. ' +
+    'Include short mandatory fields too (project title, amount requested, organisation name). ' +
+    'If a word limit is stated use it; if only a character limit is stated, set wordLimit to that number divided by 6 (rounded). ' +
+    'If no limit is stated, wordLimit is null. Return at most 20 items.';
+
+  let raw;
+  try {
+    raw = await callClaude(sys, text.slice(0, 3900), 900, false);
+  } catch (e) {
+    if (e.message === 'AI_PLAN_GATE') { wrap.innerHTML = ''; return; }
+    wrap.innerHTML = '<div class="alert alert-warn" style="margin:0">Could not parse the form: ' + escapeHTML(e.message) + '</div>';
+    return;
+  }
+
+  try {
+    const clean = raw.replace(/```json|```/gi, '').trim();
+    const m = clean.match(/\[[\s\S]*\]/);
+    if (!m) throw new Error('no JSON array found');
+    const arr = JSON.parse(m[0]);
+    if (!Array.isArray(arr) || !arr.length) throw new Error('empty');
+    _eoiQuestions = arr.map((q, i) => ({
+      id: q.id || ('q' + (i + 1)),
+      question: (q.question || '').toString().trim(),
+      wordLimit: (typeof q.wordLimit === 'number' && q.wordLimit > 0) ? Math.round(q.wordLimit) : null,
+      guidance: (q.guidance || '').toString().trim()
+    })).filter(q => q.question);
+    _eoiAnswers = {};
+    renderEOIQuestions();
+  } catch (e) {
+    wrap.innerHTML = '<div class="alert alert-warn" style="margin:0">Couldn\'t read the questions automatically. Paste them one per line and try again.</div>';
+  }
+}
+
+// Editable question list — user can fix any parsing slip before drafting
+function renderEOIQuestions() {
+  const wrap = $('eoi-questions');
+  if (!_eoiQuestions.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  wrap.innerHTML =
+    '<div style="font-weight:700;font-size:13px;margin:4px 0 10px">Found ' + _eoiQuestions.length +
+    ' question(s) — edit if needed, then draft:</div>' +
+    _eoiQuestions.map((q, i) =>
+      '<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px">' +
+        '<div style="font-size:11px;color:var(--txt3);margin-bottom:4px">Q' + (i + 1) +
+          (q.wordLimit ? ' · limit ' + q.wordLimit + ' words' : ' · no stated limit') + '</div>' +
+        '<textarea id="eoiq-' + q.id + '" style="width:100%;min-height:44px;font-size:13px;border:1px solid var(--border);border-radius:6px;padding:6px 8px" ' +
+          'onchange="_syncEOIQuestion(\'' + q.id + '\')">' + escapeHTML(q.question) + '</textarea>' +
+      '</div>'
+    ).join('') +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">' +
+      '<button class="btn btn-p" onclick="runEOIFormFill()">✦ Draft all answers from my data</button>' +
+      '<button class="btn btn-ghost btn-sm" onclick="researchEOIFunder()">🔎 Research funder first (optional)</button>' +
+    '</div>' +
+    (_eoiFunderPriorities ? '<div style="font-size:11px;color:var(--txt3);margin-top:8px">Funder priorities loaded — they\'ll steer the drafting.</div>' : '');
+}
+function _syncEOIQuestion(id) {
+  const q = _eoiQuestions.find(x => x.id === id);
+  const el = $('eoiq-' + id);
+  if (q && el) q.question = el.value.trim();
+}
+
+// (Optional) research the funder's priorities via web search
+async function researchEOIFunder() {
+  const funder = ($('eoi-funder') && $('eoi-funder').value || '').trim();
+  if (!funder) { alert('Enter the funder name in the field above first.'); return; }
+  const wrap = $('eoi-questions');
+  const note = document.createElement('div');
+  note.className = 'alert alert-info';
+  note.style.margin = '8px 0';
+  note.textContent = 'Researching ' + funder + '…';
+  wrap.appendChild(note);
+
+  const sys = 'You are a UK funding researcher. In 4-6 short bullet points, summarise this funder\'s current priorities, the outcomes they fund, and the language they use in guidance. Be factual and specific. No preamble.';
+  try {
+    const raw = await callClaude(sys, 'Funder: ' + funder, 500, true);
+    _eoiFunderPriorities = cleanReportText(raw);
+    renderEOIQuestions();
+  } catch (e) {
+    note.className = 'alert alert-warn';
+    note.textContent = 'Funder research unavailable: ' + e.message + ' — drafting will proceed without it.';
+  }
+}
+
+// Draft — one grounded call per question, respecting word limits
+async function runEOIFormFill() {
+  if (!_eoiQuestions.length) { alert('Parse a form first.'); return; }
+  _eoiQuestions.forEach(q => _syncEOIQuestion(q.id)); // pull any edits
+
+  const funder = ($('eoi-funder') && $('eoi-funder').value || '').trim() || 'the funder';
+  const usps = ($('eoi-usps') && $('eoi-usps').value || '').trim();
+  const evidence = buildEOIEvidence();
+  const out = $('eoi-output'); const res = $('eoi-result');
+  out.style.display = 'block';
+
+  const sys =
+    'You are an expert UK bid writer completing an Expression of Interest for a charity, writing to win the funding. ' +
+    'Answer the ONE question given, in clean formal British English prose. Write to the funder\'s priorities and mirror their language. ' +
+    'Ground every claim in the VERIFIED CRM DATA — never invent statistics, participants, quotes, partners or accreditations. ' +
+    'Where a specific detail would strengthen the answer but is not in the data, insert a clearly marked placeholder in square brackets, ' +
+    'e.g. [INSERT: 26-week sustainment rate] or [INSERT: named delivery partner]. ' +
+    'Respect the word limit strictly. No headings, no hashtags, no bullet lists unless the question explicitly asks for a list. ' +
+    'Return only the answer text.';
+
+  _eoiAnswers = {};
+
+  for (let i = 0; i < _eoiQuestions.length; i++) {
+    const q = _eoiQuestions[i];
+    res.innerHTML = _fillProgressHTML(i);
+    const limitLine = q.wordLimit ? ('Word limit: ' + q.wordLimit + ' words — do not exceed.') : 'Aim for roughly 200-300 words.';
+    const maxTok = Math.min(1200, Math.round((q.wordLimit || 300) * 1.7) + 120);
+
+    const userPrompt = [
+      'FUNDER: ' + funder,
+      _eoiFunderPriorities ? ('FUNDER PRIORITIES:\n' + _eoiFunderPriorities) : '',
+      'ORGANISATION: ' + ((currentOrg && currentOrg.name) || 'our charity'),
+      usps ? ('OUR STRENGTHS/USPs: ' + usps) : '',
+      '',
+      evidence,
+      '',
+      'QUESTION TO ANSWER: ' + q.question,
+      limitLine
+    ].filter(Boolean).join('\n');
+
+    try {
+      const raw = await callClaude(sys, userPrompt, maxTok, false);
+      _eoiAnswers[q.id] = cleanReportText(raw);
+    } catch (e) {
+      if (e.message === 'AI_PLAN_GATE') { res.innerHTML = ''; return; }
+      _eoiAnswers[q.id] = '[Could not draft this answer: ' + e.message + ']';
+    }
+  }
+
+  renderFilledEOI();
+}
+
+function _fillProgressHTML(activeIdx) {
+  return '<div class="brain-panel"><div class="brain-header">' +
+    '<div class="brain-icon">🧠</div><div>' +
+    '<div class="brain-title">EOI Engine — drafting from your data</div>' +
+    '<div class="brain-sub">Answering question ' + (activeIdx + 1) + ' of ' + _eoiQuestions.length + ', grounded in real outcomes</div>' +
+    '</div></div><div class="brain-steps">' +
+    _eoiQuestions.map((q, i) => {
+      const state = i < activeIdx ? 'done' : i === activeIdx ? 'active' : '';
+      const icon = state === 'done' ? '<div class="bs-check">✓</div>'
+        : state === 'active' ? '<div class="bs-spinner"></div>'
+        : '<div class="bs-num">' + (i + 1) + '</div>';
+      return '<div class="brain-step ' + state + '"><div class="bs-icon-wrap">' + icon + '</div>' +
+        '<div class="bs-text"><div class="bs-label">' + escapeHTML(q.question.slice(0, 70)) + (q.question.length > 70 ? '…' : '') + '</div></div></div>';
+    }).join('') + '</div></div>';
+}
+
+function _wordCount(s) { return (s || '').trim() ? (s.trim().split(/\s+/).length) : 0; }
+
+// Assemble — render the completed form, flag limits + placeholders
+function renderFilledEOI() {
+  const res = $('eoi-result');
+  let placeholderCount = 0;
+  const parts = _eoiQuestions.map((q, i) => {
+    const ans = _eoiAnswers[q.id] || '';
+    const wc = _wordCount(ans);
+    const over = q.wordLimit && wc > q.wordLimit;
+    (ans.match(/\[INSERT:[^\]]*\]/gi) || []).forEach(() => placeholderCount++);
+    const meta = (q.wordLimit ? (wc + '/' + q.wordLimit + ' words') : (wc + ' words')) + (over ? ' · OVER LIMIT' : '');
+    const html = boldify(escapeHTML(ans))
+      .replace(/\[INSERT:([^\]]*)\]/gi, '<mark style="background:#ffe9a8">[INSERT:$1]</mark>')
+      .replace(/\n/g, '<br/>');
+    return '<div style="margin-bottom:22px">' +
+      '<div style="font-weight:700;font-size:14px;margin-bottom:2px">Q' + (i + 1) + '. ' + escapeHTML(q.question) + '</div>' +
+      '<div style="font-size:11px;color:' + (over ? '#b91c1c' : '#888') + ';margin-bottom:6px">' + meta + '</div>' +
+      '<div style="font-size:14px;line-height:1.7">' + html + '</div></div>';
+  });
+
+  const flagBar = placeholderCount
+    ? '<div class="alert alert-warn" style="margin:0 0 16px">⚠ ' + placeholderCount +
+      ' placeholder(s) need your real figures before you submit — highlighted below.</div>'
+    : '';
+
+  _lastEOIText = _eoiQuestions.map((q, i) => 'Q' + (i + 1) + '. ' + q.question + '\n\n' + (_eoiAnswers[q.id] || '')).join('\n\n');
+
+  $('eoi-output').style.display = 'block';
+  res.style.cssText = 'background:#fff;color:#1a1a1a;border-radius:var(--radiuslg);padding:30px 36px';
+  res.innerHTML =
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">' +
+      '<button class="btn btn-p" onclick="downloadEOIPDF()">⬇ Download as PDF</button>' +
+      '<button class="btn btn-ghost btn-sm" onclick="copyEOI()">📋 Copy all</button>' +
+      '<button class="btn btn-ghost btn-sm" onclick="runEOIQualitySupervisor()">🔍 Run Quality Supervisor</button>' +
+    '</div>' +
+    flagBar +
+    '<div id="eoi-fill-body" style="font-family:Georgia,serif">' + parts.join('') + '</div>' +
+    '<div id="eoi-qa-result"></div>' +
+    '<div style="margin-top:20px;padding-top:12px;border-top:1px solid #eee;font-size:11px;color:#999">Drafted with Vorlana · verify all figures before submission</div>';
+}
+
+// Quality Supervisor — optional review pass over the whole draft
+async function runEOIQualitySupervisor() {
+  if (!_eoiQuestions.length) return;
+  const el = $('eoi-qa-result');
+  el.innerHTML = '<div class="alert alert-info" style="margin:16px 0 0">Quality Supervisor reviewing…</div>';
+
+  const funder = ($('eoi-funder') && $('eoi-funder').value || '').trim() || 'the funder';
+  const summary = _eoiQuestions.map((q, i) =>
+    'Q' + (i + 1) + ' (' + (q.wordLimit ? q.wordLimit + 'w limit' : 'no limit') + '): ' + q.question +
+    '\nANSWER: ' + (_eoiAnswers[q.id] || '').slice(0, 350)
+  ).join('\n\n').slice(0, 3600);
+
+  const sys =
+    'You are a bid-review Quality Supervisor for UK funding EOIs. Given the funder, questions and drafted answers, ' +
+    'return a short bullet list of SPECIFIC issues only: any question not actually answered, any answer that reads as over its word limit, ' +
+    'any claim that sounds unsupported by evidence, and anywhere the funder\'s priorities are not reflected. ' +
+    'If an answer is strong, do not comment on it. Be concise. No preamble, no praise.';
+
+  try {
+    const raw = await callClaude(sys, 'FUNDER: ' + funder + '\n\n' + summary, 500, false);
+    el.innerHTML = '<div class="ai-panel" style="margin:16px 0 0"><div class="ai-panel-title"><span class="ai-icon">🔍</span>Quality Supervisor</div>' +
+      '<div class="ai-response">' + aiPanelHTML(raw) + '</div></div>';
+  } catch (e) {
+    el.innerHTML = '<div class="alert alert-warn" style="margin:16px 0 0">Supervisor unavailable: ' + escapeHTML(e.message) + '</div>';
+  }
+}
+
+// Legacy brief-based EOI — now grounded + anti-fabrication
 async function runEOIGenerator() {
   const funder = $('eoi-funder').value.trim();
   const brief = $('eoi-brief').value.trim();
   if (!funder || !brief) { alert('Please enter funder and brief.'); return; }
   const out = $('eoi-output'); const res = $('eoi-result');
   out.style.display = 'block';
+  const evidence = buildEOIEvidence();
+
   const steps = [
     { label: 'Reading the brief', meta: brief.length + ' characters' },
-    { label: 'Pulling your real outcomes data', meta: DB.participants.length + ' participants · ' + DB.events.length + ' events' },
-    { label: 'Writing the EOI', meta: '' },
-    { label: 'Quality Supervisor check', meta: 'Tone, structure, claims' },
+    { label: 'Pulling your verified outcomes data', meta: DB.participants.length + ' participants' },
+    { label: 'Writing to the funder\'s priorities', meta: '' },
+    { label: 'Quality check — claims and limits', meta: '' },
     { label: 'Ready', meta: '' }
   ];
-  const sys = 'You are a UK bid writer. Write a compelling EOI. Begin each section with ## and the section title (Executive summary, Organisation overview, Track record, Approach). 600-800 words. **bold** stats. No hashtags except section markers, no horizontal rules.';
-  const prompt = 'FUNDER: ' + funder +
-    '\nBRIEF: ' + brief +
-    '\nOrg: ' + ((currentOrg && currentOrg.name) || 'org') +
-    '\nUSPs: ' + ($('eoi-usps').value || 'none') +
-    '\nOutcomes data: ' + DB.participants.length + ' participants, ' + DB.participants.filter(p => p.outcomes.length > 0).length + ' with outcomes';
+  const sys =
+    'You are an expert UK bid writer. Write a compelling Expression of Interest to win this funding. ' +
+    'Structure it around what the brief actually asks for; where the brief is open, use these sections, each starting with ## and its title: ' +
+    'Executive summary, The need, Our track record, Our approach, Value for money. ' +
+    'Mirror the funder\'s language and priorities. Ground every claim in the VERIFIED CRM DATA — never invent numbers, quotes or partners; ' +
+    'use [INSERT: ...] placeholders for anything not in the data. 600-800 words. **bold** key statistics. No hashtags except section markers.';
+  const prompt = [
+    'FUNDER: ' + funder,
+    'BRIEF: ' + brief,
+    'ORGANISATION: ' + ((currentOrg && currentOrg.name) || 'our charity'),
+    'OUR STRENGTHS/USPs: ' + ($('eoi-usps').value || 'none'),
+    '',
+    evidence
+  ].join('\n');
+
   const raw = await runAgent({
     container: res,
     headerLabel: 'EOI Generator Agent',
-    headerSub: 'Writing your application using real outcomes',
+    headerSub: 'Writing your application using verified outcomes',
     steps, sys, prompt, maxTok: 1300
   });
   if (raw) {
     const cleaned = cleanReportText(raw);
     _lastEOIText = cleaned;
-    res.innerHTML = reportTextToHTML(cleaned, raw);
+    const html = reportTextToHTML(cleaned, raw)
+      .replace(/\[INSERT:([^\]]*)\]/gi, '<mark style="background:#ffe9a8">[INSERT:$1]</mark>');
+    res.innerHTML = html +
+      '<div style="margin-top:20px;padding-top:12px;border-top:1px solid #eee;font-size:11px;color:#999">Drafted with Vorlana · verify all figures before submission</div>';
     res.style.cssText = 'background:#fff;color:#1a1a1a;border-radius:var(--radiuslg);padding:30px 36px;font-family:Georgia,serif;line-height:1.7';
   }
+}
+
+// EOI export helpers
+function downloadEOIPDF() {
+  const orig = document.title;
+  const title = 'EOI — ' + (($('eoi-funder') && $('eoi-funder').value) || 'Untitled');
+  document.title = title.replace(/[^a-z0-9 \-]/gi, '').slice(0, 80);
+  const inner = $('eoi-result').innerHTML;
+  const printWrap = document.createElement('div');
+  printWrap.id = 'report-output';
+  const _logo = getOrgLogoUrl(currentOrg);
+  const _org = (currentOrg && currentOrg.name) || 'Organisation';
+  const _date = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+  const _header = _logo
+    ? '<div class="report-header-flex"><div class="report-header-text"><div class="report-meta">Expression of Interest</div><div class="report-title">' + escapeHTML(($('eoi-funder') && $('eoi-funder').value) || 'Funding application') + '</div><div class="report-subtitle">' + escapeHTML(_org) + ' · ' + escapeHTML(_date) + '</div></div><div class="report-header-logo"><img src="' + escapeHTML(_logo) + '" alt="' + escapeHTML(_org) + '" class="org-logo-report" onerror="this.style.display=\'none\'"/></div></div>'
+    : '<div class="report-header"><div class="report-meta">Expression of Interest</div><div class="report-title">' + escapeHTML(($('eoi-funder') && $('eoi-funder').value) || 'Funding application') + '</div><div class="report-subtitle">' + escapeHTML(_org) + ' · ' + escapeHTML(_date) + '</div></div>';
+  printWrap.innerHTML = '<div class="report-doc">' + _header + '<div class="report-body">' + inner + '</div><div class="report-footer">Generated by Vorlana · ' + escapeHTML(_date) + '</div></div>';
+  document.body.appendChild(printWrap);
+  setTimeout(() => { window.print(); setTimeout(() => { document.title = orig; printWrap.remove(); }, 1000); }, 100);
+}
+
+function copyEOI() {
+  navigator.clipboard.writeText(_lastEOIText || ($('eoi-result') && $('eoi-result').innerText) || '');
 }
