@@ -292,9 +292,7 @@ function saveHours() {
   })
     .then(refreshHours)
     .then(function () {
-      var v = byId(DB.volunteers, _hoursVolId);
-      if (v) renderHoursHistory(v);
-      sv('vh-hours', ''); sv('vh-activity', '');
+      closeModal('modal-vhours');
       renderVolunteers();
       var evPage = $('page-events');
       if (evPage && evPage.classList.contains('active') && typeof renderEvents === 'function') renderEvents();
