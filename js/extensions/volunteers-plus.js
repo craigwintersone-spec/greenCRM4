@@ -1,4 +1,4 @@
-// js/extensions/volunteers-plus.js
+// js/extensions/volunteers-plus.js  — v1.2
 // Vorlana — volunteers upgrade (part 1 of 2)
 //
 //   1. FIX: Edit / Delete volunteer buttons. Supabase ids are numbers, the
@@ -16,6 +16,8 @@
 
 (function () {
 'use strict';
+
+var VERSION = 'v1.2';
 
 // ── wait for the app to be booted ──────────────────────────
 function whenReady(fn) {
@@ -47,6 +49,10 @@ function n(v) { return isNaN(+v) ? 0 : +v; }
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 function fmt(d) {
   return d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : '—';
+}
+function hideModal(id) {
+  var m = $(id);
+  if (m) m.classList.remove('open');
 }
 
 var EQ_FIELDS = ['age', 'ethnicity', 'gender', 'disability'];
@@ -86,7 +92,7 @@ function wireHoursTable() {
 
 function refreshHours() {
   if (typeof refreshTable !== 'function') return Promise.resolve();
-  return refreshTable('volunteer_hours').catch(function () {});
+  return Promise.resolve(refreshTable('volunteer_hours')).catch(function () {});
 }
 
 // totals
@@ -98,6 +104,15 @@ function totalHours(v) {
 }
 function sessionsForEvent(evId) {
   return (DB.volunteer_hours || []).filter(function (s) { return s.event_id && String(s.event_id) === String(evId); });
+}
+
+// repaint whichever pages are affected by hours changes
+function repaintHours() {
+  try { renderVolunteers(); } catch (e) {}
+  var evPage = $('page-events');
+  if (evPage && evPage.classList.contains('active') && typeof renderEvents === 'function') { try { renderEvents(); } catch (e) {} }
+  var imPage = $('page-impact');
+  if (imPage && imPage.classList.contains('active') && typeof renderImpact === 'function') { try { renderImpact(); } catch (e) {} }
 }
 
 // ── 1. FIX: loose-id wrappers ───────────────────────────────
@@ -198,8 +213,8 @@ function saveVolPlus() {
       }
       throw e;
     })
-    .then(function () { return refreshTable('volunteers'); })
-    .then(function () { closeModal('modal-vol'); renderVolunteers(); })
+    .then(function () { hideModal('modal-vol'); return refreshTable('volunteers'); })
+    .then(function () { repaintHours(); })
     .catch(function (e) { alert('Save failed: ' + e.message); })
     .finally(function () { btn.textContent = 'Save volunteer'; btn.disabled = false; });
 }
@@ -222,13 +237,14 @@ function injectHoursModal() {
       '<div class="form-row"><label>Event (optional)</label><select id="vh-event"><option value="">— Not linked to an event —</option></select></div>' +
       '<div class="form-row"><label>What they did (optional)</label><input id="vh-activity" placeholder="e.g. Ran the CV workshop"/></div>' +
       '<div class="modal-footer">' +
-        '<button class="btn btn-ghost" onclick="closeModal(\'modal-vhours\')">Cancel</button>' +
+        '<button class="btn btn-ghost" id="vh-cancel-btn">Cancel</button>' +
         '<button class="btn btn-p" id="vh-save-btn">Save hours</button>' +
       '</div>' +
       '<div id="vh-history" style="margin-top:16px"></div>' +
     '</div>';
   document.body.appendChild(m);
   $('vh-save-btn').addEventListener('click', saveHours);
+  $('vh-cancel-btn').addEventListener('click', function () { hideModal('modal-vhours'); });
 }
 
 window.openLogHours = function (volId) {
@@ -282,21 +298,34 @@ function saveHours() {
   var btn = $('vh-save-btn');
   btn.textContent = 'Saving…'; btn.disabled = true;
 
-  sbInsert('volunteer_hours', {
+  var row = {
     volunteer_id: String(_hoursVolId),
     event_id: gv('vh-event') || null,
     session_date: gv('vh-date') || todayISO(),
     hours: hrs,
     activity: gv('vh-activity') || null,
     source: 'staff'
-  })
-    .then(refreshHours)
-    .then(function () {
-      closeModal('modal-vhours');
-      renderVolunteers();
-      var evPage = $('page-events');
-      if (evPage && evPage.classList.contains('active') && typeof renderEvents === 'function') renderEvents();
+  };
+
+  sbInsert('volunteer_hours', row)
+    .then(function (saved) {
+      // Close + show the result immediately (optimistic), then re-sync in the background.
+      hideModal('modal-vhours');
+      DB.volunteer_hours = DB.volunteer_hours || [];
+      DB.volunteer_hours.push({
+        id: saved && saved.id != null ? saved.id : ('tmp-' + Date.now()),
+        volunteer_id: row.volunteer_id,
+        event_id: row.event_id,
+        date: row.session_date,
+        hours: n(row.hours),
+        activity: row.activity || '',
+        source: 'staff',
+        created_at: new Date().toISOString()
+      });
+      repaintHours();
+      return refreshHours();
     })
+    .then(function () { repaintHours(); })
     .catch(function (e) {
       alert('Could not save hours: ' + e.message + '\n\nHas the volunteer_hours table been created in Supabase?');
     })
@@ -305,12 +334,18 @@ function saveHours() {
 
 window.deleteHours = function (id) {
   if (!confirm('Remove this session?')) return;
-  sbDelete('volunteer_hours', id)
-    .then(refreshHours)
+  Promise.resolve(sbDelete('volunteer_hours', id))
+    .then(function () {
+      DB.volunteer_hours = (DB.volunteer_hours || []).filter(function (s) { return String(s.id) !== String(id); });
+      var v = byId(DB.volunteers, _hoursVolId);
+      if (v) renderHoursHistory(v);
+      repaintHours();
+      return refreshHours();
+    })
     .then(function () {
       var v = byId(DB.volunteers, _hoursVolId);
       if (v) renderHoursHistory(v);
-      renderVolunteers();
+      repaintHours();
     });
 };
 
@@ -474,15 +509,9 @@ function init() {
   // pull sessions + re-read volunteers (so equality_data is in the cache), then repaint
   refreshHours()
     .then(function () { return refreshTable('volunteers'); })
-    .then(function () {
-      var active = document.querySelector('.page.active');
-      if (!active) return;
-      if (active.id === 'page-volunteers') renderVolunteers();
-      if (active.id === 'page-events' && typeof renderEvents === 'function') renderEvents();
-      if (active.id === 'page-impact' && typeof renderImpact === 'function') renderImpact();
-    });
+    .then(function () { repaintHours(); });
 
-  console.log('[volunteers-plus] ready');
+  console.log('[volunteers-plus ' + VERSION + '] ready');
 }
 
 })();
