@@ -1,4 +1,4 @@
-// js/extensions/volunteers-plus.js  — v1.3
+// js/extensions/volunteers-plus.js  — v1.4
 // Vorlana — volunteers upgrade (part 1 of 2)
 //
 //   1. FIX: Edit / Delete volunteer buttons (Supabase ids are numbers, the
@@ -9,24 +9,30 @@
 //      field is kept as an "opening balance" so nothing is lost.
 //   4. Events page shows volunteers + hours per event.
 //
-// v1.3 FIX: hours didn't appear until you reopened the app. Cause — this file
-// was calling refreshTable('volunteer_hours'), but db.js's refresh only knows
-// its own built-in tables, so it returned nothing and wiped the freshly added
-// row out of the cache. We now read volunteer_hours straight from Supabase and
-// never depend on db.js's mapper registry.
+// v1.4 FIX: logged hours vanished on refresh. Cause — this file started before
+// boot.js had resolved orgId, so the first read was refused
+// ("[sbQ] Refusing to query volunteer_hours without orgId") and the cache
+// stayed empty. We now WAIT for orgId (and re-check for a while afterwards)
+// before loading, and read volunteer_hours straight from Supabase rather than
+// through db.js's refreshTable, which only knows its own built-in tables.
 
 (function () {
 'use strict';
 
-var VERSION = 'v1.3';
+var VERSION = 'v1.4';
 
+// ── boot gate: wait for the app AND for orgId ──────────────
+function appReady() {
+  return typeof DB !== 'undefined' &&
+         typeof sb !== 'undefined' && sb &&
+         typeof renderVolunteers === 'function' &&
+         document.getElementById('modal-vol');
+}
+function haveOrg() {
+  return typeof orgId !== 'undefined' && !!orgId;
+}
 function whenReady(fn) {
-  if (typeof DB !== 'undefined' &&
-      typeof sb !== 'undefined' &&
-      typeof renderVolunteers === 'function' &&
-      document.getElementById('modal-vol')) {
-    return setTimeout(fn, 300);
-  }
+  if (appReady()) return setTimeout(fn, 250);
   setTimeout(function () { whenReady(fn); }, 150);
 }
 whenReady(init);
@@ -55,8 +61,6 @@ function hideModal(id) { var m = $(id); if (m) m.classList.remove('open'); }
 var EQ_FIELDS = ['age', 'ethnicity', 'gender', 'disability'];
 
 // ── volunteer_hours: read straight from Supabase ───────────
-// (db.js's refreshTable only knows its own tables — using it here
-//  silently emptied the array and hid newly added sessions.)
 function mapHours(r) {
   return {
     id: r.id,
@@ -69,16 +73,34 @@ function mapHours(r) {
   };
 }
 
+// Loads the sessions. Returns a promise that resolves either way.
 function loadHours() {
   if (typeof sb === 'undefined' || !sb) return Promise.resolve();
-  var q = sb.from('volunteer_hours').select('*');
-  if (typeof orgId !== 'undefined' && orgId) q = q.eq('org_id', orgId);
-  return q.then(function (res) {
-    if (res && res.error) throw res.error;
-    DB.volunteer_hours = ((res && res.data) || []).map(mapHours);
-  }).catch(function (e) {
-    console.warn('[volunteers-plus] could not load volunteer_hours:', (e && e.message) || e);
-    if (!DB.volunteer_hours) DB.volunteer_hours = [];
+  if (!haveOrg()) return Promise.resolve();   // caller retries — see waitForOrgThenLoad
+  return sb.from('volunteer_hours').select('*').eq('org_id', orgId)
+    .then(function (res) {
+      if (res && res.error) throw res.error;
+      DB.volunteer_hours = ((res && res.data) || []).map(mapHours);
+    })
+    .catch(function (e) {
+      console.warn('[volunteers-plus] could not load volunteer_hours:', (e && e.message) || e);
+      if (!DB.volunteer_hours) DB.volunteer_hours = [];
+    });
+}
+
+// orgId is set during boot, which may finish AFTER this file runs.
+// Poll for it (up to ~20s), then load and repaint.
+function waitForOrgThenLoad(tries) {
+  tries = (tries == null) ? 80 : tries;
+  if (haveOrg()) {
+    return loadHours().then(function () { repaint(); });
+  }
+  if (tries <= 0) {
+    console.warn('[volunteers-plus] orgId never arrived — hours not loaded.');
+    return Promise.resolve();
+  }
+  return new Promise(function (resolve) {
+    setTimeout(function () { resolve(waitForOrgThenLoad(tries - 1)); }, 250);
   });
 }
 
@@ -262,6 +284,11 @@ window.openLogHours = function (volId) {
 
   renderHoursHistory(v);
   $('modal-vhours').classList.add('open');
+
+  // if the cache is empty (e.g. boot raced us), pull it now
+  if (!(DB.volunteer_hours || []).length) {
+    loadHours().then(function () { renderHoursHistory(v); repaint(); });
+  }
 };
 
 function renderHoursHistory(v) {
@@ -305,7 +332,6 @@ function saveHours() {
 
   sbInsert('volunteer_hours', row)
     .then(function (saved) {
-      // show it straight away…
       DB.volunteer_hours = DB.volunteer_hours || [];
       DB.volunteer_hours.push(mapHours({
         id: (saved && saved.id != null) ? saved.id : ('tmp-' + Date.now()),
@@ -318,7 +344,6 @@ function saveHours() {
       }));
       hideModal('modal-vhours');
       repaint();
-      // …then re-sync from the database (direct query, not refreshTable)
       return loadHours();
     })
     .then(function () { repaint(); })
@@ -502,10 +527,23 @@ function init() {
   wrapRenderEvents();
   wrapRenderImpact();
 
-  loadHours()
-    .then(function () { return refreshTable('volunteers'); })
-    .then(function () { repaint(); })
-    .catch(function () { repaint(); });
+  // Also refresh whenever the user navigates to a page that shows hours —
+  // covers any remaining boot-order surprises.
+  var origGo = window.go;
+  if (typeof origGo === 'function' && !origGo._volPlus) {
+    window.go = function (page) {
+      var r = origGo.apply(this, arguments);
+      if (page === 'volunteers' || page === 'events' || page === 'impact') {
+        if (!(DB.volunteer_hours || []).length && haveOrg()) {
+          loadHours().then(repaint);
+        }
+      }
+      return r;
+    };
+    window.go._volPlus = true;
+  }
+
+  waitForOrgThenLoad();
 
   console.log('[volunteers-plus ' + VERSION + '] ready');
 }
