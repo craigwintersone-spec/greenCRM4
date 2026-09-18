@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Vorlana — Event</title>
+<link rel="icon" type="image/png" href="logo-mark.png"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#F5F1EA;--surface:#FFFFFF;--border:#E0DAD0;
+  --em:#1F6F6D;--em2:#175655;--em3:#2A9D8F;
+  --txt:#22312E;--txt2:#4A5552;--txt3:#7A847F;
+  --amber:#C98A2B;--red:#C84545;--r:14px;
+}
+body{background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,sans-serif;font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 16px 48px}
+.wrap{width:100%;max-width:440px}
+.brand{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:6px}
+.brand img{height:34px;width:auto}
+.brand .wordmark{font-size:22px;font-weight:800;color:var(--em2);letter-spacing:-.5px}
+.ev-head{text-align:center;margin-bottom:22px}
+.ev-name{font-size:22px;font-weight:800;color:var(--em2);letter-spacing:-.3px;margin-top:10px}
+.ev-meta{font-size:14px;color:var(--txt3);margin-top:2px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:22px;margin-bottom:14px;box-shadow:0 1px 2px rgba(31,111,109,.05)}
+.card h2{font-size:17px;font-weight:700;color:var(--em2);margin-bottom:4px}
+.card p.sub{font-size:14px;color:var(--txt3);margin-bottom:16px}
+label{display:block;font-size:12px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+input,textarea,select{width:100%;font-family:inherit;font-size:16px;background:var(--surface);border:1px solid var(--border);color:var(--txt);border-radius:10px;padding:13px 14px;outline:none;transition:border-color .15s,box-shadow .15s}
+input:focus,textarea:focus,select:focus{border-color:var(--em);box-shadow:0 0 0 3px rgba(31,111,109,.13)}
+textarea{min-height:88px;resize:vertical}
+.field{margin-bottom:14px}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:15px;border:none;border-radius:11px;font-family:inherit;font-size:16px;font-weight:700;cursor:pointer;transition:background .15s,transform .1s}
+.btn-p{background:var(--em);color:#fff}
+.btn-p:active{transform:scale(.99)}
+.btn-p:disabled{opacity:.55;cursor:not-allowed}
+.btn-ghost{background:transparent;color:var(--em2);border:1px solid var(--border)}
+.tabs{display:flex;gap:6px;background:var(--surface);border:1px solid var(--border);padding:5px;border-radius:12px;margin-bottom:14px}
+.tab{flex:1;padding:11px;border:none;background:transparent;font-family:inherit;font-size:15px;font-weight:700;color:var(--txt3);border-radius:8px;cursor:pointer}
+.tab.active{background:var(--em);color:#fff}
+.pane{display:none}.pane.active{display:block}
+.stars{display:flex;gap:8px}
+.star{flex:1;aspect-ratio:1;max-height:52px;border:1px solid var(--border);background:var(--surface);border-radius:10px;font-size:17px;font-weight:700;color:var(--txt3);cursor:pointer;font-family:inherit}
+.star.on{background:var(--em);border-color:var(--em);color:#fff}
+.chips{display:flex;flex-direction:column;gap:9px}
+.chip{display:flex;align-items:center;gap:11px;padding:13px 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface);cursor:pointer;font-size:15px;color:var(--txt2)}
+.chip.on{border-color:var(--em);background:rgba(31,111,109,.06);color:var(--em2);font-weight:600}
+.chip .box{width:20px;height:20px;border-radius:5px;border:2px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff}
+.chip.on .box{background:var(--em);border-color:var(--em)}
+.msg{padding:13px 15px;border-radius:10px;font-size:15px;margin-bottom:14px;display:none;line-height:1.5}
+.msg.show{display:block}
+.msg.err{background:#FDECEA;border:1px solid #F3C9C4;color:#9A3535}
+.msg.ok{background:#F0F7F5;border:1px solid #D6E8E4;color:var(--em2)}
+.done{text-align:center;padding:26px 10px}
+.done .tick{width:66px;height:66px;border-radius:50%;background:var(--em);color:#fff;font-size:33px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
+.done h2{font-size:21px;font-weight:800;color:var(--em2);margin-bottom:6px}
+.done p{font-size:15px;color:var(--txt2)}
+.note{font-size:13px;color:var(--txt3);text-align:center;line-height:1.6;margin-top:18px}
+.spin{width:17px;height:17px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;display:none}
+.btn-p.loading .spin{display:inline-block}
+@keyframes sp{to{transform:rotate(360deg)}}
+.center{text-align:center;padding:50px 20px;color:var(--txt3)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="brand">
+    <img src="logo-mark.png" alt="" onerror="this.remove()"/>
+    <span class="wordmark">Vorlana</span>
+  </div>
+
+  <!-- LOADING -->
+  <div id="s-loading" class="center">Loading…</div>
+
+  <!-- INVALID -->
+  <div id="s-invalid" class="card" style="display:none">
+    <div class="done">
+      <div class="tick" style="background:var(--amber)">!</div>
+      <h2>Link not recognised</h2>
+      <p id="invalid-msg">This event link isn't valid or has expired. Please ask a member of staff for the current QR code.</p>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div id="s-main" style="display:none">
+    <div class="ev-head">
+      <div class="ev-name" id="ev-name">—</div>
+      <div class="ev-meta" id="ev-meta"></div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" id="tab-fb" type="button">Give feedback</button>
+      <button class="tab" id="tab-vol" type="button">Volunteer</button>
+    </div>
+
+    <!-- FEEDBACK -->
+    <div class="pane active" id="pane-fb">
+      <div class="card">
+        <h2>How was today?</h2>
+        <p class="sub">Two minutes, completely anonymous unless you add your name. It helps us keep doing this.</p>
+
+        <div class="msg err" id="fb-err"></div>
+
+        <div class="field">
+          <label>How much did you enjoy it?</label>
+          <div class="stars" id="st-enjoyed"></div>
+        </div>
+        <div class="field">
+          <label>How confident did you feel <em>before</em>?</label>
+          <div class="stars" id="st-cb"></div>
+        </div>
+        <div class="field">
+          <label>And how confident do you feel <em>now</em>?</label>
+          <div class="stars" id="st-ca"></div>
+        </div>
+
+        <div class="field">
+          <label>Did any of these happen?</label>
+          <div class="chips">
+            <div class="chip" data-flag="learned"><span class="box">✓</span> I learned something new</div>
+            <div class="chip" data-flag="connected"><span class="box">✓</span> I felt more connected to people</div>
+            <div class="chip" data-flag="friend"><span class="box">✓</span> I made a new friend</div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Anything you'd like to say? (optional)</label>
+          <textarea id="fb-quote" placeholder="What was good, what could be better…"></textarea>
+        </div>
+
+        <div class="field">
+          <label>Your name (optional)</label>
+          <input id="fb-name" placeholder="Leave blank to stay anonymous" autocomplete="name"/>
+        </div>
+
+        <button class="btn btn-p" id="fb-submit" type="button"><span class="spin"></span><span>Send feedback</span></button>
+      </div>
+      <div class="note">We only use this to show funders the difference this work makes. We never publish your name without asking.</div>
+    </div>
+
+    <!-- VOLUNTEER -->
+    <div class="pane" id="pane-vol">
+      <div class="card">
+        <h2>Volunteer check-in</h2>
+        <p class="sub">Enter the email you're registered with. Check in when you arrive, check out when you leave — your hours are worked out for you.</p>
+
+        <div class="msg err" id="vol-err"></div>
+        <div class="msg ok" id="vol-ok"></div>
+
+        <div class="field">
+          <label>Your email</label>
+          <input id="vol-email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" spellcheck="false"/>
+        </div>
+
+        <button class="btn btn-p" id="vol-in" type="button" style="margin-bottom:10px"><span class="spin"></span><span>Check in</span></button>
+        <button class="btn btn-ghost" id="vol-out" type="button">Check out</button>
+      </div>
+      <div class="note">Not registered yet? Ask a member of staff to add you first.</div>
+    </div>
+  </div>
+
+  <!-- DONE -->
+  <div id="s-done" class="card" style="display:none">
+    <div class="done">
+      <div class="tick">✓</div>
+      <h2 id="done-title">Thank you</h2>
+      <p id="done-msg">Your feedback has been sent.</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+'use strict';
+
+var API = '/api/event-checkin';
+var params = new URLSearchParams(location.search);
+var TOKEN = params.get('t') || '';
+var EVENT = null;
+
+var $ = function (id) { return document.getElementById(id); };
+function show(id) { ['s-loading','s-invalid','s-main','s-done'].forEach(function (x) { $(x).style.display = x === id ? 'block' : 'none'; }); }
+function msg(id, text, cls) { var e = $(id); e.textContent = text; e.className = 'msg ' + cls + ' show'; }
+function clearMsg(id) { var e = $(id); e.className = 'msg ' + (e.classList.contains('ok') ? 'ok' : 'err'); }
+function busy(btn, on) { btn.classList.toggle('loading', on); btn.disabled = on; }
+
+// ── stars ──────────────────────────────────────────────────
+var scores = { enjoyed: 0, cb: 0, ca: 0 };
+function buildStars(containerId, key) {
+  var c = $(containerId);
+  c.innerHTML = '';
+  for (var i = 1; i <= 5; i++) {
+    (function (nStar) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'star';
+      b.textContent = nStar;
+      b.addEventListener('click', function () {
+        scores[key] = nStar;
+        Array.prototype.forEach.call(c.children, function (el, idx) { el.classList.toggle('on', idx < nStar); });
+      });
+      c.appendChild(b);
+    })(i);
+  }
+}
+
+// ── chips ──────────────────────────────────────────────────
+var flags = { learned: false, connected: false, friend: false };
+document.querySelectorAll('.chip').forEach(function (chip) {
+  chip.addEventListener('click', function () {
+    var k = chip.getAttribute('data-flag');
+    flags[k] = !flags[k];
+    chip.classList.toggle('on', flags[k]);
+  });
+});
+
+// ── tabs ───────────────────────────────────────────────────
+$('tab-fb').addEventListener('click', function () {
+  $('tab-fb').classList.add('active'); $('tab-vol').classList.remove('active');
+  $('pane-fb').classList.add('active'); $('pane-vol').classList.remove('active');
+});
+$('tab-vol').addEventListener('click', function () {
+  $('tab-vol').classList.add('active'); $('tab-fb').classList.remove('active');
+  $('pane-vol').classList.add('active'); $('pane-fb').classList.remove('active');
+});
+
+// ── api ────────────────────────────────────────────────────
+function call(action, payload) {
+  return fetch(API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ action: action, token: TOKEN }, payload || {}))
+  }).then(function (r) {
+    return r.json().catch(function () { throw new Error('Something went wrong. Please try again.'); })
+      .then(function (j) {
+        if (!r.ok || j.ok === false) throw new Error(j.error || 'Something went wrong. Please try again.');
+        return j;
+      });
+  });
+}
+
+// ── boot ───────────────────────────────────────────────────
+function boot() {
+  if (!TOKEN) { show('s-invalid'); return; }
+  call('info')
+    .then(function (j) {
+      EVENT = j.event;
+      $('ev-name').textContent = EVENT.name || 'Event';
+      var bits = [];
+      if (EVENT.date) bits.push(new Date(EVENT.date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }));
+      if (EVENT.location) bits.push(EVENT.location);
+      if (EVENT.org_name) bits.push(EVENT.org_name);
+      $('ev-meta').textContent = bits.join(' · ');
+      document.title = (EVENT.name || 'Event') + ' — Vorlana';
+      buildStars('st-enjoyed', 'enjoyed');
+      buildStars('st-cb', 'cb');
+      buildStars('st-ca', 'ca');
+      show('s-main');
+    })
+    .catch(function (e) {
+      $('invalid-msg').textContent = e.message || 'This event link isn\u2019t valid. Please ask a member of staff for the current QR code.';
+      show('s-invalid');
+    });
+}
+
+// ── feedback submit ────────────────────────────────────────
+$('fb-submit').addEventListener('click', function () {
+  var btn = $('fb-submit');
+  clearMsg('fb-err');
+  if (!scores.enjoyed) { msg('fb-err', 'Please tap a number for how much you enjoyed it.', 'err'); return; }
+  busy(btn, true);
+  call('feedback', {
+    name: $('fb-name').value.trim(),
+    enjoyed: scores.enjoyed,
+    cb: scores.cb || 3,
+    ca: scores.ca || 3,
+    learned: flags.learned,
+    connected: flags.connected,
+    friend: flags.friend,
+    quote: $('fb-quote').value.trim()
+  })
+    .then(function () {
+      $('done-title').textContent = 'Thank you';
+      $('done-msg').textContent = 'Your feedback has been sent. It genuinely helps.';
+      show('s-done');
+    })
+    .catch(function (e) { msg('fb-err', e.message, 'err'); })
+    .finally(function () { busy(btn, false); });
+});
+
+// ── volunteer check in / out ───────────────────────────────
+function volAction(action, btn) {
+  var email = $('vol-email').value.trim();
+  clearMsg('vol-err'); $('vol-ok').className = 'msg ok';
+  if (!email || email.indexOf('@') < 0) { msg('vol-err', 'Please enter the email you\u2019re registered with.', 'err'); return; }
+  busy(btn, true);
+  call(action, { email: email })
+    .then(function (j) {
+      if (action === 'checkin') {
+        $('done-title').textContent = 'Checked in';
+        $('done-msg').textContent = 'You\u2019re checked in at ' + j.at + '. Come back and check out when you leave.';
+      } else {
+        $('done-title').textContent = 'Checked out';
+        $('done-msg').textContent = j.hours
+          ? 'Thanks — ' + j.hours + ' hours logged. That\u2019s genuinely appreciated.'
+          : 'Thanks — you\u2019re checked out.';
+      }
+      show('s-done');
+    })
+    .catch(function (e) { msg('vol-err', e.message, 'err'); })
+    .finally(function () { busy(btn, false); });
+}
+$('vol-in').addEventListener('click', function () { volAction('checkin', $('vol-in')); });
+$('vol-out').addEventListener('click', function () { volAction('checkout', $('vol-out')); });
+
+boot();
+</script>
+</body>
+</html>
