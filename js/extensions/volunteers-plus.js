@@ -1,25 +1,25 @@
-// js/extensions/volunteers-plus.js  — v1.2
+// js/extensions/volunteers-plus.js  — v1.3
 // Vorlana — volunteers upgrade (part 1 of 2)
 //
-//   1. FIX: Edit / Delete volunteer buttons. Supabase ids are numbers, the
-//      buttons pass strings, and modals.js used strict === so nothing matched.
-//   2. Volunteer demographics — voluntary equality_data on the volunteers row,
-//      same pattern as participants.
-//   3. Hours SESSIONS LOG — new `volunteer_hours` table. Each entry = volunteer,
-//      date, hours, optional event, activity. Totals roll up per volunteer,
-//      per event, and into Social Impact. The old single `hours` field is kept
-//      as an "opening balance" (hours before Vorlana) so nothing is lost.
+//   1. FIX: Edit / Delete volunteer buttons (Supabase ids are numbers, the
+//      buttons pass strings, modals.js used strict === so nothing matched).
+//   2. Volunteer demographics — voluntary equality_data on the volunteers row.
+//   3. Hours SESSIONS LOG — `volunteer_hours` table. Totals roll up per
+//      volunteer, per event, and into Social Impact. The old single `hours`
+//      field is kept as an "opening balance" so nothing is lost.
 //   4. Events page shows volunteers + hours per event.
 //
-// Load AFTER boot.js and the other extensions (last <script> in app.html).
-// Requires the one-off SQL (volunteers.equality_data + volunteer_hours table).
+// v1.3 FIX: hours didn't appear until you reopened the app. Cause — this file
+// was calling refreshTable('volunteer_hours'), but db.js's refresh only knows
+// its own built-in tables, so it returned nothing and wiped the freshly added
+// row out of the cache. We now read volunteer_hours straight from Supabase and
+// never depend on db.js's mapper registry.
 
 (function () {
 'use strict';
 
-var VERSION = 'v1.2';
+var VERSION = 'v1.3';
 
-// ── wait for the app to be booted ──────────────────────────
 function whenReady(fn) {
   if (typeof DB !== 'undefined' &&
       typeof sb !== 'undefined' &&
@@ -50,52 +50,51 @@ function todayISO() { return new Date().toISOString().slice(0, 10); }
 function fmt(d) {
   return d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : '—';
 }
-function hideModal(id) {
-  var m = $(id);
-  if (m) m.classList.remove('open');
-}
+function hideModal(id) { var m = $(id); if (m) m.classList.remove('open'); }
 
 var EQ_FIELDS = ['age', 'ethnicity', 'gender', 'disability'];
 
-// ── 0. wire the volunteer_hours table into the DB cache ────
-function wireHoursTable() {
-  if (!DB.volunteer_hours) DB.volunteer_hours = [];
-
-  if (typeof MAPPERS !== 'undefined' && !MAPPERS.volunteer_hours) {
-    MAPPERS.volunteer_hours = function (r) {
-      return {
-        id: r.id,
-        volunteer_id: r.volunteer_id,
-        event_id: r.event_id || null,
-        date: r.session_date || '',
-        hours: n(r.hours),
-        activity: r.activity || '',
-        source: r.source || 'staff',
-        created_at: r.created_at || ''
-      };
-    };
-  }
-  if (typeof TABLE_TO_DB_KEY !== 'undefined') TABLE_TO_DB_KEY.volunteer_hours = 'volunteer_hours';
-  if (typeof DB_KEY_TO_MAPPER !== 'undefined') DB_KEY_TO_MAPPER.volunteer_hours = 'volunteer_hours';
-
-  // carry equality_data through the volunteer mapper (db.js drops unknown columns)
-  if (typeof MAPPERS !== 'undefined' && MAPPERS.volunteers && !MAPPERS._volEqPatched) {
-    var origMap = MAPPERS.volunteers;
-    MAPPERS.volunteers = function (r) {
-      var o = origMap(r);
-      o.equality_data = r.equality_data || {};
-      return o;
-    };
-    MAPPERS._volEqPatched = true;
-  }
+// ── volunteer_hours: read straight from Supabase ───────────
+// (db.js's refreshTable only knows its own tables — using it here
+//  silently emptied the array and hid newly added sessions.)
+function mapHours(r) {
+  return {
+    id: r.id,
+    volunteer_id: r.volunteer_id,
+    event_id: r.event_id || null,
+    date: r.session_date || '',
+    hours: n(r.hours),
+    activity: r.activity || '',
+    source: r.source || 'staff'
+  };
 }
 
-function refreshHours() {
-  if (typeof refreshTable !== 'function') return Promise.resolve();
-  return Promise.resolve(refreshTable('volunteer_hours')).catch(function () {});
+function loadHours() {
+  if (typeof sb === 'undefined' || !sb) return Promise.resolve();
+  var q = sb.from('volunteer_hours').select('*');
+  if (typeof orgId !== 'undefined' && orgId) q = q.eq('org_id', orgId);
+  return q.then(function (res) {
+    if (res && res.error) throw res.error;
+    DB.volunteer_hours = ((res && res.data) || []).map(mapHours);
+  }).catch(function (e) {
+    console.warn('[volunteers-plus] could not load volunteer_hours:', (e && e.message) || e);
+    if (!DB.volunteer_hours) DB.volunteer_hours = [];
+  });
 }
 
-// totals
+// carry equality_data through the volunteer mapper (db.js drops unknown columns)
+function patchVolunteerMapper() {
+  if (typeof MAPPERS === 'undefined' || !MAPPERS.volunteers || MAPPERS._volEqPatched) return;
+  var origMap = MAPPERS.volunteers;
+  MAPPERS.volunteers = function (r) {
+    var o = origMap(r);
+    o.equality_data = r.equality_data || {};
+    return o;
+  };
+  MAPPERS._volEqPatched = true;
+}
+
+// ── totals ─────────────────────────────────────────────────
 function sessionsFor(volId) {
   return (DB.volunteer_hours || []).filter(function (s) { return String(s.volunteer_id) === String(volId); });
 }
@@ -106,13 +105,12 @@ function sessionsForEvent(evId) {
   return (DB.volunteer_hours || []).filter(function (s) { return s.event_id && String(s.event_id) === String(evId); });
 }
 
-// repaint whichever pages are affected by hours changes
-function repaintHours() {
+function repaint() {
   try { renderVolunteers(); } catch (e) {}
-  var evPage = $('page-events');
-  if (evPage && evPage.classList.contains('active') && typeof renderEvents === 'function') { try { renderEvents(); } catch (e) {} }
-  var imPage = $('page-impact');
-  if (imPage && imPage.classList.contains('active') && typeof renderImpact === 'function') { try { renderImpact(); } catch (e) {} }
+  var ev = $('page-events');
+  if (ev && ev.classList.contains('active') && typeof renderEvents === 'function') { try { renderEvents(); } catch (e) {} }
+  var im = $('page-impact');
+  if (im && im.classList.contains('active') && typeof renderImpact === 'function') { try { renderImpact(); } catch (e) {} }
 }
 
 // ── 1. FIX: loose-id wrappers ───────────────────────────────
@@ -128,14 +126,13 @@ function wrapLoose(name, after) {
   };
 }
 
-// ── 2. demographics section in the volunteer modal ─────────
+// ── 2. demographics in the volunteer modal ─────────────────
 function injectVolDemographics() {
   var modal = $('modal-vol');
   if (!modal || modal.querySelector('[data-vol-demo]')) return;
   var footer = modal.querySelector('.modal-footer');
   if (!footer) return;
 
-  // The legacy single hours field now means "opening balance"
   modal.querySelectorAll('label').forEach(function (l) {
     if (/hours logged/i.test(l.textContent)) l.textContent = 'Opening balance (hours before Vorlana)';
   });
@@ -169,7 +166,7 @@ function fillVolEq(v) {
   EQ_FIELDS.forEach(function (k) { sv('vf-eq-' + k, ed[k] || ''); });
 }
 
-// ── saveVol re-implemented: adds equality_data (graceful if column missing) ──
+// ── saveVol with equality_data (graceful if column missing) ─
 function saveVolPlus() {
   var fullName = gv('vf-name').trim();
   var email = gv('vf-email').trim();
@@ -214,7 +211,7 @@ function saveVolPlus() {
       throw e;
     })
     .then(function () { hideModal('modal-vol'); return refreshTable('volunteers'); })
-    .then(function () { repaintHours(); })
+    .then(function () { repaint(); })
     .catch(function (e) { alert('Save failed: ' + e.message); })
     .finally(function () { btn.textContent = 'Save volunteer'; btn.disabled = false; });
 }
@@ -271,10 +268,9 @@ function renderHoursHistory(v) {
   var el = $('vh-history');
   if (!el) return;
   var s = sessionsFor(v.id).slice().sort(function (a, b) { return (b.date || '').localeCompare(a.date || ''); });
-  var total = totalHours(v);
   el.innerHTML =
     '<div style="font-size:12px;color:var(--txt3);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">' +
-      'History · <span style="color:var(--em)">' + total + 'h total</span>' +
+      'History · <span style="color:var(--em)">' + totalHours(v) + 'h total</span>' +
       (n(v.hours) ? ' <span style="font-weight:400;text-transform:none">(incl. ' + n(v.hours) + 'h opening balance)</span>' : '') +
     '</div>' +
     (s.length
@@ -309,23 +305,23 @@ function saveHours() {
 
   sbInsert('volunteer_hours', row)
     .then(function (saved) {
-      // Close + show the result immediately (optimistic), then re-sync in the background.
-      hideModal('modal-vhours');
+      // show it straight away…
       DB.volunteer_hours = DB.volunteer_hours || [];
-      DB.volunteer_hours.push({
-        id: saved && saved.id != null ? saved.id : ('tmp-' + Date.now()),
+      DB.volunteer_hours.push(mapHours({
+        id: (saved && saved.id != null) ? saved.id : ('tmp-' + Date.now()),
         volunteer_id: row.volunteer_id,
         event_id: row.event_id,
-        date: row.session_date,
-        hours: n(row.hours),
-        activity: row.activity || '',
-        source: 'staff',
-        created_at: new Date().toISOString()
-      });
-      repaintHours();
-      return refreshHours();
+        session_date: row.session_date,
+        hours: row.hours,
+        activity: row.activity,
+        source: 'staff'
+      }));
+      hideModal('modal-vhours');
+      repaint();
+      // …then re-sync from the database (direct query, not refreshTable)
+      return loadHours();
     })
-    .then(function () { repaintHours(); })
+    .then(function () { repaint(); })
     .catch(function (e) {
       alert('Could not save hours: ' + e.message + '\n\nHas the volunteer_hours table been created in Supabase?');
     })
@@ -339,17 +335,18 @@ window.deleteHours = function (id) {
       DB.volunteer_hours = (DB.volunteer_hours || []).filter(function (s) { return String(s.id) !== String(id); });
       var v = byId(DB.volunteers, _hoursVolId);
       if (v) renderHoursHistory(v);
-      repaintHours();
-      return refreshHours();
+      repaint();
+      return loadHours();
     })
     .then(function () {
       var v = byId(DB.volunteers, _hoursVolId);
       if (v) renderHoursHistory(v);
-      repaintHours();
-    });
+      repaint();
+    })
+    .catch(function (e) { alert('Could not remove that: ' + ((e && e.message) || e)); });
 };
 
-// ── volunteers table: totals + "+ Hours" button ────────────
+// ── volunteers table ───────────────────────────────────────
 function renderVolunteersPlus() {
   var el = $('vol-list');
   if (!el) return;
@@ -488,11 +485,11 @@ function wrapRenderImpact() {
 
 // ── init ───────────────────────────────────────────────────
 function init() {
-  wireHoursTable();
+  if (!DB.volunteer_hours) DB.volunteer_hours = [];
+  patchVolunteerMapper();
   injectVolDemographics();
   injectHoursModal();
 
-  // 1. fixes (loose id matching)
   wrapLoose('openEditVol', fillVolEq);
   wrapLoose('deleteVol');
   var origAdd = window.openAddVol;
@@ -500,16 +497,15 @@ function init() {
     window.openAddVol = function () { var r = origAdd.apply(this, arguments); fillVolEq(null); return r; };
   }
 
-  // 2/3/4. save + renders
   window.saveVol = saveVolPlus;
   window.renderVolunteers = renderVolunteersPlus;
   wrapRenderEvents();
   wrapRenderImpact();
 
-  // pull sessions + re-read volunteers (so equality_data is in the cache), then repaint
-  refreshHours()
+  loadHours()
     .then(function () { return refreshTable('volunteers'); })
-    .then(function () { repaintHours(); });
+    .then(function () { repaint(); })
+    .catch(function () { repaint(); });
 
   console.log('[volunteers-plus ' + VERSION + '] ready');
 }
