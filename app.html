@@ -109,7 +109,7 @@
   <div id="rag-list"></div>
 </div>
 
-<!-- SOCIAL IMPACT (was: Impact Wall) -->
+<!-- SOCIAL IMPACT -->
 <div id="page-impact" class="page">
   <div class="page-header"><div><div class="page-title">Social Impact</div><div class="page-sub">Board-ready · Funder presentations</div></div></div>
   <div class="impact-wall">
@@ -156,7 +156,7 @@
   <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody id="c-table"></tbody></table></div>
 </div>
 
-<!-- VOLUNTEERS (page container was missing — added) -->
+<!-- VOLUNTEERS -->
 <div id="page-volunteers" class="page">
   <div class="page-header"><div><div class="page-title">Volunteers &amp; Staff</div><div class="page-sub" id="vol-sub"></div></div><button class="btn btn-p btn-sm" onclick="openAddVol()">+ Add volunteer</button></div>
   <div class="toolbar">
@@ -234,6 +234,7 @@
 <!-- EVENTS -->
 <div id="page-events" class="page">
   <div class="page-header"><div><div class="page-title">Events &amp; Workshops</div><div class="page-sub" id="ev-sub"></div></div><button class="btn btn-p btn-sm" onclick="openAddEv()">+ Create event</button></div>
+  <div class="alert alert-info" style="margin-bottom:14px">📱 Each event has its own QR code — click <strong>QR</strong> on any event to print a poster. Attendees scan it to leave feedback; volunteers check in and out, and their hours log themselves.</div>
   <div class="toolbar"><select id="ev-filter-type" onchange="renderEvents()"><option value="">All types</option><option>Green Skills</option><option>Wellbeing</option><option>Community Event</option><option>Frailty</option><option>Other</option></select></div>
   <div class="stats-grid" id="ev-stats"></div>
   <div id="ev-list"></div>
@@ -368,7 +369,6 @@
     </div>
   </div>
 
-  <!-- Shared setup: funder + USPs + organisation profile (used by BOTH methods) -->
   <div class="card">
     <div class="card-title">About this bid</div>
     <div class="form-row">
@@ -396,7 +396,6 @@ Accreditations: Matrix, Investors in People, Cyber Essentials…"></textarea></d
     </details>
   </div>
 
-  <!-- Method A (primary) · fill the funder's own form -->
   <div class="card">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="font-size:18px">📄</span><div class="card-title" style="margin-bottom:0">Fill in the funder's own form</div><span style="font-size:10px;font-weight:700;color:#fff;background:var(--em);border-radius:20px;padding:2px 8px;letter-spacing:.5px">RECOMMENDED</span></div>
     <p style="font-size:13px;color:var(--txt2);margin-bottom:12px">Upload the funder's blank EOI form (Word or PDF) or paste its questions — Vorlana answers each one, within every word limit. Or use <strong>✍️ Draft EOI for this</strong> on a funding result above to pull the questions in automatically.</p>
@@ -409,14 +408,12 @@ Accreditations: Matrix, Investors in People, Cyber Essentials…"></textarea></d
     <div id="eoi-questions" style="display:none;margin-top:14px"></div>
   </div>
 
-  <!-- OR divider -->
   <div style="display:flex;align-items:center;gap:12px;margin:16px 2px">
     <div style="flex:1;height:1px;background:var(--border)"></div>
     <div style="font-size:12px;font-weight:700;color:var(--txt3);letter-spacing:1px">OR</div>
     <div style="flex:1;height:1px;background:var(--border)"></div>
   </div>
 
-  <!-- Method B (fallback) · no form? write from a brief -->
   <div class="card">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="font-size:18px">✍️</span><div class="card-title" style="margin-bottom:0">No form? Write from a brief</div></div>
     <p style="font-size:13px;color:var(--txt2);margin-bottom:12px">For funders who just ask for a free-form expression of interest with no set questions. Paste the brief and get a full EOI narrative.</p>
@@ -437,7 +434,7 @@ Accreditations: Matrix, Investors in People, Cyber Essentials…"></textarea></d
   </div>
 </div>
 
-<!-- HR & EQUALITY -->
+<!-- EQUALITY & INCLUSION -->
 <div id="page-hr" class="page">
   <div class="page-header">
     <div><div class="page-title">🛡️ Equality &amp; Inclusion</div><div class="page-sub">Equality Act 2010 · GDPR · Aggregate &amp; anonymised</div></div>
@@ -454,7 +451,6 @@ Accreditations: Matrix, Investors in People, Cyber Essentials…"></textarea></d
     <button class="vtab-btn" onclick="switchHRTab('benchmark',this)">🏆 Benchmarking</button>
   </div>
 
-  <!-- LANGUAGE COACH (self-help) -->
   <div id="hr-tab-coach">
     <div class="ai-panel" style="margin-bottom:16px">
       <div class="ai-panel-title"><span class="ai-icon">💬</span>Positive Language Coach · Self-help</div>
@@ -470,7 +466,6 @@ Accreditations: Matrix, Investors in People, Cyber Essentials…"></textarea></d
     </div>
   </div>
 
-  <!-- OUTCOME EQUITY -->
   <div id="hr-tab-equity" style="display:none">
     <div class="ai-panel">
       <div class="ai-panel-title"><span class="ai-icon">📊</span>Outcome Equity Analysis</div>
@@ -480,7 +475,6 @@ Accreditations: Matrix, Investors in People, Cyber Essentials…"></textarea></d
     <div id="equity-result"></div>
   </div>
 
-  <!-- EQUALITY MONITORING -->
   <div id="hr-tab-monitoring" style="display:none">
     <div class="card" style="margin-bottom:16px">
       <div class="card-title">About equality monitoring</div>
@@ -495,7 +489,6 @@ Accreditations: Matrix, Investors in People, Cyber Essentials…"></textarea></d
     </div>
   </div>
 
-  <!-- BENCHMARKING -->
   <div id="hr-tab-benchmark" style="display:none">
     <div class="ai-panel">
       <div class="ai-panel-title"><span class="ai-icon">🏆</span>Anonymised Benchmarking</div>
@@ -702,29 +695,26 @@ Accreditations: Matrix, Investors in People, Cyber Essentials…"></textarea></d
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 
 <!-- Foundation: constants and helpers -->
-<script src="js/config.js?v=10"></script>
-<script src="js/utils.js?v=10"></script>
+<script src="js/config.js?v=11"></script>
+<script src="js/utils.js?v=11"></script>
 
 <!-- Data + auth -->
-<script src="js/db.js?v=10"></script>
-<script src="js/auth.js?v=10"></script>
+<script src="js/db.js?v=11"></script>
+<script src="js/auth.js?v=11"></script>
 
 <!-- AI + branding -->
-<script src="js/agents.js?v=10"></script>
-<script src="js/branding.js?v=10"></script>
+<script src="js/agents.js?v=11"></script>
+<script src="js/branding.js?v=11"></script>
 
 <!-- UI logic -->
-<script src="js/render.js?v=10"></script>
-<script src="js/modals.js?v=10"></script>
-<script src="js/demo.js?v=10"></script>
-<script src="js/router.js?v=10"></script>
+<script src="js/render.js?v=11"></script>
+<script src="js/modals.js?v=11"></script>
+<script src="js/demo.js?v=11"></script>
+<script src="js/router.js?v=11"></script>
 
-<!-- Module visibility — added: shows/hides sidebar items per currentOrg.modules -->
+<!-- Module visibility — shows/hides sidebar items per currentOrg.modules -->
 <script>
 'use strict';
-// Applies the org's module on/off settings to the sidebar.
-// Any nav button tagged data-module="xxx" is hidden when mods[xxx] === false.
-// Buttons with NO data-module attribute are core/always-on and never hidden.
 function applyModules(mods) {
   mods = mods || {};
   document.querySelectorAll('#sidebar .nav-btn[data-module]').forEach(function (btn) {
@@ -736,15 +726,10 @@ function applyModules(mods) {
 </script>
 
 <!-- Entry point -->
-<script src="js/boot.js?v=10"></script>
+<script src="js/boot.js?v=11"></script>
 
-<!-- Auto-fill paperwork (Start & End Form + job evidence) — inlined so it is ONE file -->
+<!-- Auto-fill paperwork (Start & End Form + job evidence) -->
 <script>
-// Vorlana auto-fill paperwork — Start Form + End Form (inlined into app.html)
-// ---------------------------------------------------------------------------
-// window.civaraGenerateStartForm()  -> fills & downloads a Participant Start Form
-// window.civaraGenerateEndForm()    -> fills & downloads a Participant End/Exit Form
-// Both read the OPEN Add Participant form. No pop-up, no DB changes, no libraries.
 'use strict';
 
 (function () {
@@ -958,7 +943,6 @@ function applyModules(mods) {
       { name: 'word/document.xml', data: strBytes(documentXml) }
     ]);
   }
-  function buildDocxBlob(d) { return packDocx(buildStartFormXml(d)); } // (kept name for tests)
 
   /* ---------- data helpers ---------------------------------------------- */
   function fmtDate(v) {
@@ -1083,8 +1067,6 @@ function applyModules(mods) {
     download(blob, name + '.docx');
   };
 
-  // Quick-log job evidence (payslip, contract…) against this participant by
-  // opening the app's existing Evidence Hub logger, prefilled for a job outcome.
   window.civaraAddJobEvidence = function () {
     const name = (elVal('mp-fn') + ' ' + elVal('mp-ln')).trim();
     try { if (typeof openAddEvid === 'function') openAddEvid(); } catch (e) {}
@@ -1098,9 +1080,7 @@ function applyModules(mods) {
   };
 
 })();
-
 </script>
-
 
 <!-- Populate the EOI organisation-profile field once the app has booted -->
 <script>
@@ -1115,20 +1095,15 @@ function applyModules(mods) {
 </script>
 
 <!-- Extensions (run after boot, patch existing functions) -->
-<script src="js/extensions/demographics.js?v=10"></script>
-<script src="js/extensions/csv-import.js?v=10"></script>
-<script src="js/extensions/reporting-periods.js?v=10"></script>
-<script src="js/extensions/opportunities.js?v=10"></script>
-<script src="js/extensions/partner-portal.js?v=10"></script>
-<script src="js/extensions/volunteers-plus.js?v=10"></script>
+<script src="js/extensions/demographics.js?v=11"></script>
+<script src="js/extensions/csv-import.js?v=11"></script>
+<script src="js/extensions/reporting-periods.js?v=11"></script>
+<script src="js/extensions/opportunities.js?v=11"></script>
+<script src="js/extensions/partner-portal.js?v=11"></script>
+<script src="js/extensions/volunteers-plus.js?v=11"></script>
+<script src="js/extensions/event-qr.js?v=11"></script>
 
-<!-- Participant handlers + paperwork persistence (Phase 2) ---------------------
-     (1) Match Supabase row ids loosely so Edit / Notes / Delete work when ids
-         are stored as numbers.
-     (2) Save the extra Start/End-form fields into one `paperwork` JSON column,
-         and refill them when a participant is re-opened. If that column does
-         not exist yet, saving still works (paperwork is skipped) — so you can
-         deploy this before or after running add-paperwork-column.sql. -->
+<!-- Participant handlers + paperwork persistence -->
 <script>
 (function () {
   if (typeof DB === 'undefined') return;
@@ -1137,10 +1112,6 @@ function applyModules(mods) {
   function gv(id){ var el=document.getElementById(id); return el ? (el.value||'') : ''; }
   function sv(id, v){ var el=document.getElementById(id); if(el) el.value=(v==null?'':v); }
 
-  // db.js's participant mapper predates the `paperwork` column and lists fields
-  // explicitly, so it drops paperwork on every reload — which is why saved job/
-  // personal info vanished on reopen. Extend the mapper to carry it through,
-  // then refresh so already-loaded rows pick it up.
   if (typeof MAPPERS !== 'undefined' && MAPPERS.participants && !MAPPERS._pwPatched) {
     var _origPMap = MAPPERS.participants;
     MAPPERS.participants = function(r){ var o=_origPMap(r); o.paperwork = r.paperwork || {}; return o; };
@@ -1180,7 +1151,6 @@ function applyModules(mods) {
     if(pw.project) sv('mp-project',pw.project);
   }
 
-  // ---- loose-id wrappers ----
   function wrap(name, listName, after){
     var orig=window[name]; if(typeof orig!=='function') return;
     window[name]=function(id){
@@ -1192,8 +1162,6 @@ function applyModules(mods) {
   }
   wrap('openEditP','participants', function(item){
     fillPaperwork(item);
-    // Also pull paperwork straight from Supabase, so it loads even if the
-    // in-memory cache/mapper dropped the column.
     if (typeof sb !== 'undefined' && sb) {
       try {
         sb.from('participants').select('paperwork').eq('id', item.id).single().then(function(res){
@@ -1213,7 +1181,6 @@ function applyModules(mods) {
     window.openAddP=function(){ var r=_origAddP.apply(this, arguments); clearPaperwork(); return r; };
   }
 
-  // ---- save with paperwork (graceful fallback if the column is missing) ----
   function saveParticipantRow(payload, editId){
     function attempt(pl){ return editId ? sbUpdate('participants', pl, editId) : sbInsert('participants', pl); }
     return attempt(payload).catch(function(e){
@@ -1282,11 +1249,7 @@ function applyModules(mods) {
 })();
 </script>
 
-<!-- Evidence file attachments (Phase 2) ---------------------------------------
-     Stores the attached file on the evidence record (base64 in file_data), so
-     it inherits the evidence table's org security — no storage bucket needed.
-     Adds a ⬇ download button in the Evidence Hub. If the file_data/file_name
-     columns don't exist yet, saving still works (the file is just skipped). -->
+<!-- Evidence file attachments -->
 <script>
 (function () {
   if (typeof DB === 'undefined') return;
@@ -1304,13 +1267,12 @@ function applyModules(mods) {
       var msg=String((e&&e.message)||'').toLowerCase();
       if(msg.indexOf('file_data')!==-1 || msg.indexOf('file_name')!==-1){
         var r2=Object.assign({}, rec); delete r2.file_data; delete r2.file_name;
-        return sbInsert('evidence', r2);   // column not added yet — save without the file
+        return sbInsert('evidence', r2);
       }
       throw e;
     });
   }
 
-  // Save evidence, attaching the picked file if there is one.
   window.saveEvid = async function(){
     var btn=document.getElementById('evid-save-btn'); btn.textContent='Saving…'; btn.disabled=true;
     try{
@@ -1338,13 +1300,11 @@ function applyModules(mods) {
     finally { btn.textContent='Save'; btn.disabled=false; }
   };
 
-  // Clear the file picker each time the modal is opened.
   var _origOpenAddEvid=window.openAddEvid;
   if(typeof _origOpenAddEvid==='function'){
     window.openAddEvid=function(){ var r=_origOpenAddEvid.apply(this, arguments); var fi=document.getElementById('evid-file'); if(fi) fi.value=''; return r; };
   }
 
-  // After the Evidence Hub renders, add a ⬇ button to rows that have a file.
   function augmentDownloads(){
     if(typeof sb==='undefined' || !sb) return;
     sb.from('evidence').select('id,file_name').not('file_data','is',null).then(function(res){
@@ -1371,7 +1331,6 @@ function applyModules(mods) {
     window.renderEvidence=function(){ var r=_origRenderEvidence.apply(this, arguments); try{ augmentDownloads(); }catch(e){} return r; };
   }
 
-  // Fetch the file for one evidence row and download it.
   window.civaraDownloadEvidence=function(id){
     if(typeof sb==='undefined' || !sb) return;
     sb.from('evidence').select('file_data,file_name').eq('id', id).single().then(function(res){
@@ -1388,13 +1347,7 @@ function applyModules(mods) {
 })();
 </script>
 
-
-<!-- Funder form filling (Phase 2) ---------------------------------------------
-     Upload each contract's own blank funder .docx, then fill it with a
-     participant's details via the Vercel /api/fill-form function.
-     FIXED: the response is JSON containing filledBase64 — decode it byte-safely
-     into a real .docx. (The old code saved the JSON itself as a .docx, which is
-     why Word could not open the downloads.) -->
+<!-- Funder form filling -->
 <script>
 (function () {
   if (typeof DB === 'undefined') return;
@@ -1405,8 +1358,6 @@ function applyModules(mods) {
   function gv(id){ var el=document.getElementById(id); return el?(el.value||''):''; }
   function dl(blob,name){ var url=URL.createObjectURL(blob); var a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){URL.revokeObjectURL(url);},4000); }
 
-  // Byte-safe: turn a base64 string into a real .docx Blob.
-  // Without the Uint8Array loop the binary gets mangled and Word rejects it.
   function docxBlobFromBase64(b64str){
     var clean = b64str.indexOf('base64,') > -1 ? b64str.split('base64,')[1] : b64str;
     var bin = atob(clean);
@@ -1415,7 +1366,6 @@ function applyModules(mods) {
     return new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
   }
 
-  // ---- Upload a blank funder form onto a contract ----
   window.civaraUploadContractTemplate = function(contractId){
     var input=document.createElement('input'); input.type='file'; input.accept='.docx';
     input.onchange=function(){
@@ -1439,7 +1389,6 @@ function applyModules(mods) {
     input.click();
   };
 
-  // Add an upload button to each contract card after the Funding page renders.
   function augmentContractCards(){
     var el=document.getElementById('fund-list'); if(!el) return;
     var idToBtn={};
@@ -1456,7 +1405,6 @@ function applyModules(mods) {
       row.insertBefore(document.createTextNode(' '), edit);
       idToBtn[id]=b;
     });
-    // Best-effort: mark contracts that already have a template. Never blocks the button.
     if(typeof sb!=='undefined' && sb){
       try {
         sb.from('contracts').select('id,template_name').not('template_data','is',null).then(function(res){
@@ -1472,10 +1420,8 @@ function applyModules(mods) {
   if(typeof _origRenderFunding==='function'){
     window.renderFunding=function(){ var r=_origRenderFunding.apply(this,arguments); try{augmentContractCards();}catch(e){} return r; };
   }
-  // Safety net: if the contracts page is already on screen, add the buttons now.
   setTimeout(function(){ try{ augmentContractCards(); }catch(e){} }, 1500);
 
-  // ---- Fill a funder form for the participant currently open ----
   function gatherData(){
     return {
       forename: gv('mp-fn'), surname: gv('mp-ln'), title: gv('mp-ptitle'),
@@ -1515,7 +1461,7 @@ function applyModules(mods) {
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
-          docxBase64: chosen.template_data,   // the raw funder form saved on the contract
+          docxBase64: chosen.template_data,
           filename: fname,
           orgId: (typeof orgId!=='undefined' && orgId) ? orgId : 'default',
           data: data
@@ -1531,11 +1477,9 @@ function applyModules(mods) {
           if(!json || json.ok !== true || !json.filledBase64){
             throw new Error((json && json.error) ? json.error : ('HTTP '+res2.status));
           }
-          // THE FIX: decode filledBase64 into real bytes, then download.
           var blob = docxBlobFromBase64(json.filledBase64);
           dl(blob, json.filename || (fname + '.docx'));
 
-          // Tell the user about any fields the AI had no data for.
           if(json.missing && json.missing.length){
             var lines = json.missing.slice(0,8).map(function(m){ return '\u2022 ' + m.text; }).join('\n');
             alert('Form filled and downloaded.\n\n' + json.missing.length + ' field(s) had no data and were left blank:\n\n' + lines + (json.missing.length > 8 ? '\n\u2026' : ''));
