@@ -268,15 +268,15 @@ function injectUI() {
     if (t === 'quarter') $('dr-quarter-wrap').style.display = 'block';
     if (t === 'month') $('dr-month-wrap').style.display = 'block';
     if (t === 'custom') { $('dr-from-wrap').style.display = 'block'; $('dr-to-wrap').style.display = 'block'; }
-    renderPreview();
+    (window._drRenderPreview || renderPreview)();
   });
   ['dr-year', 'dr-quarter', 'dr-month', 'dr-from', 'dr-to', 'dr-rate'].forEach(function (id) {
-    var el = $(id); if (el) el.addEventListener('change', renderPreview);
+    var el = $(id); if (el) el.addEventListener('change', function () { (window._drRenderPreview || renderPreview)(); });
   });
-  $('dr-generate').addEventListener('click', generate);
-  $('dr-refresh').addEventListener('click', renderPreview);
+  $('dr-generate').addEventListener('click', function () { (window._drGenerate || generate)(); });
+  $('dr-refresh').addEventListener('click', function () { (window._drRenderPreview || renderPreview)(); });
 
-  renderPreview();
+  (window._drRenderPreview || renderPreview)();
 }
 
 // ── live preview of the computed figures ───────────────────
@@ -520,7 +520,7 @@ function renderDoc(raw, s, orgName, todayStr) {
     '</div>';
 
   var rg = $('dr-regen');
-  if (rg) rg.addEventListener('click', generate);
+  if (rg) rg.addEventListener('click', function () { (window._drGenerate || generate)(); });
 
   outEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -536,12 +536,16 @@ function whenReady(fn) {
 }
 
 whenReady(function () {
+  // Expose these so event-contracts.js can wrap them with a funder filter.
+  window._drRenderPreview = renderPreview;
+  window._drGenerate = generate;
+
   // The Reports page builds its list on render; add our panel after it.
   var orig = window.renderReports;
   if (typeof orig === 'function' && !orig._dr) {
     window.renderReports = function () {
       var r = orig.apply(this, arguments);
-      try { injectUI(); renderPreview(); } catch (e) {}
+      try { injectUI(); window._drRenderPreview(); } catch (e) {}
       return r;
     };
     window.renderReports._dr = true;
