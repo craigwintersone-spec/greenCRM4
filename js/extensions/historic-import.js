@@ -105,7 +105,8 @@ var SCHEMAS = {
     { key: 'type',      label: 'Type',         match: ['type', 'category', 'event type', 'kind', 'strand'] },
     { key: 'location',  label: 'Location',     match: ['location', 'venue', 'where', 'site', 'place'] },
     { key: 'attendees', label: 'Attendees',    match: ['attendees', 'attendance', 'participants', 'numbers', 'people', 'headcount', 'no. attended'] },
-    { key: 'capacity',  label: 'Capacity',     match: ['capacity', 'places', 'max', 'spaces'] }
+    { key: 'capacity',  label: 'Capacity',     match: ['capacity', 'places', 'max', 'spaces'] },
+    { key: 'contract',  label: 'Funder / contract', match: ['funder', 'contract', 'funded by', 'grant', 'programme', 'project', 'paid for by'] }
   ],
   hours: [
     { key: 'volunteer', label: 'Volunteer name', required: true, match: ['volunteer', 'name', 'volunteer name', 'person', 'full name', 'who'] },
@@ -198,6 +199,12 @@ function injectModal() {
 
       '<div id="hi-hint" style="font-size:12px;color:var(--txt3);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:12px"></div>' +
 
+      '<div id="hi-bulk-wrap" class="form-row" style="display:none;margin-bottom:12px">' +
+        '<label>Link these events to a funder / contract</label>' +
+        '<select id="hi-bulk-contract"><option value="">— leave unlinked —</option></select>' +
+        '<div style="font-size:11px;color:var(--txt3);margin-top:4px">Applies to every event in the file. A funder column in your CSV takes priority over this.</div>' +
+      '</div>' +
+
       '<div id="hi-drop" style="border:2px dashed var(--border);border-radius:12px;padding:26px;text-align:center;cursor:pointer;transition:border-color .15s">' +
         '<div style="font-size:30px;margin-bottom:6px">📄</div>' +
         '<div style="font-size:14px;font-weight:700;color:var(--txt)">Drop a CSV here, or click to choose</div>' +
@@ -243,10 +250,28 @@ function injectModal() {
 }
 
 var HINTS = {
-  events: 'Needs at least: <strong>event name</strong> and <strong>date</strong>. Also reads type, location, attendees, capacity.',
+  events: 'Needs at least: <strong>event name</strong> and <strong>date</strong>. Also reads type, location, attendees, capacity, and a funder/contract column if you have one.',
   hours: 'Needs at least: <strong>volunteer name</strong>, <strong>date</strong> and <strong>hours</strong>. Volunteers not already on your list will be created. If a row names an event, we match it to your events.',
   feedback: 'Needs at least: <strong>event</strong>. Also reads enjoyment, confidence before/after, learned, connected, and any comment. Rows whose event cannot be matched are skipped.'
 };
+
+function paintBulkContracts() {
+  var wrap = $('hi-bulk-wrap');
+  var sel = $('hi-bulk-contract');
+  if (!wrap || !sel) return;
+  var list = DB.contracts || [];
+  if (S.kind !== 'events' || !list.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  sel.innerHTML = '<option value="">— leave unlinked —</option>' +
+    list.map(function (c) {
+      var f = (DB.funders || []).filter(function (x) { return String(x.id) === String(c.funder_id); })[0];
+      return '<option value="' + esc(String(c.id)) + '">' + esc(c.name + (f ? ' · ' + f.name : '')) + '</option>';
+    }).join('');
+  if (!sel._hiBound) {
+    sel.addEventListener('change', function () { if (S.rows.length) buildPlan(); });
+    sel._hiBound = true;
+  }
+}
 
 function reset() {
   S.headers = []; S.rows = []; S.map = {}; S.plan = null;
@@ -257,6 +282,7 @@ function reset() {
   $('hi-run').disabled = true;
   $('hi-file').value = '';
   $('hi-hint').innerHTML = HINTS[S.kind];
+  paintBulkContracts();
 }
 
 window.openHistoricImport = function (kind) {
@@ -364,11 +390,38 @@ function buildPlan() {
 }
 
 // ── plan: events ───────────────────────────────────────────
+// Contracts are MATCHED, never created — a contract carries money,
+// dates and targets, and half-filled ones from a spreadsheet cell
+// would skew the RAG dashboard. Unmatched names are reported.
+function findContract(name) {
+  if (!name) return null;
+  var want = norm(name);
+  var list = DB.contracts || [];
+  // exact contract name
+  for (var i = 0; i < list.length; i++) if (norm(list[i].name) === want) return list[i];
+  // funder name
+  var funders = DB.funders || [];
+  for (var f = 0; f < funders.length; f++) {
+    if (norm(funders[f].name) === want) {
+      for (var j = 0; j < list.length; j++) if (String(list[j].funder_id) === String(funders[f].id)) return list[j];
+    }
+  }
+  // partial, either side
+  for (var k = 0; k < list.length; k++) {
+    var cn = norm(list[k].name);
+    if (cn.indexOf(want) !== -1 || want.indexOf(cn) !== -1) return list[k];
+  }
+  return null;
+}
+
 function planEvents() {
   var create = [], skipped = [];
   var existing = {};
   (DB.events || []).forEach(function (e) { existing[norm(e.name) + '|' + (e.date || '')] = e; });
   var seen = {};
+
+  var bulkId = ($('hi-bulk-contract') && $('hi-bulk-contract').value) || '';
+  var linked = 0, unmatched = {};
 
   S.rows.forEach(function (r, idx) {
     var name = cell(r, 'name');
@@ -378,6 +431,17 @@ function planEvents() {
     var key = norm(name) + '|' + date;
     if (existing[key] || seen[key]) { skipped.push({ row: idx + 2, why: 'already in Vorlana' }); return; }
     seen[key] = 1;
+
+    // column first, then the bulk dropdown as a fallback
+    var conIds = [];
+    var conName = cell(r, 'contract');
+    if (conName) {
+      var c = findContract(conName);
+      if (c) { conIds = [String(c.id)]; linked++; }
+      else unmatched[conName] = (unmatched[conName] || 0) + 1;
+    }
+    if (!conIds.length && bulkId) { conIds = [bulkId]; linked++; }
+
     create.push({
       org_id: orgId,
       name: name,
@@ -386,15 +450,25 @@ function planEvents() {
       location: cell(r, 'location') || null,
       attendees: n(cell(r, 'attendees')),
       capacity: n(cell(r, 'capacity')) || null,
-      contract_ids: []
+      contract_ids: conIds
     });
   });
 
   S.plan = { kind: 'events', create: create, skipped: skipped };
+
+  var unmatchedNames = Object.keys(unmatched);
+  var note = '';
+  if (unmatchedNames.length) {
+    note = 'No contract found for: ' + unmatchedNames.slice(0, 5).join(', ') +
+           (unmatchedNames.length > 5 ? ' and ' + (unmatchedNames.length - 5) + ' more' : '') +
+           '. Those events will import unlinked — create the contract under Contracts first, or pick one above to apply to the whole file.';
+  }
+
   renderPlan([
     ['Events to create', create.length],
+    ['Linked to a funder', linked],
     ['Rows skipped', skipped.length]
-  ], skipped, create.length > 0);
+  ], skipped, create.length > 0, note);
 }
 
 // ── plan: volunteers + hours ───────────────────────────────
