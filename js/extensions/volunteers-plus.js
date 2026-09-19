@@ -517,6 +517,9 @@ function init() {
   injectVolDemographics();
   injectHoursModal();
 
+  // let other extensions (e.g. historic-import) refresh the hours cache
+  window._reloadVolunteerHours = loadHours;
+
   wrapLoose('openEditVol', fillVolEq);
   wrapLoose('deleteVol');
   var origAdd = window.openAddVol;
