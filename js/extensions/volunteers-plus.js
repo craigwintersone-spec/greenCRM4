@@ -73,7 +73,7 @@ function mapHours(r) {
   };
 }
 
-// Loads the sessions. Returns a promise that resolves either way.
+// Loads the sessions. Resolves either way — never throws at the caller.
 function loadHours() {
   if (typeof sb === 'undefined' || !sb) return Promise.resolve();
   if (!haveOrg()) return Promise.resolve();   // caller retries — see waitForOrgThenLoad
@@ -332,6 +332,7 @@ function saveHours() {
 
   sbInsert('volunteer_hours', row)
     .then(function (saved) {
+      // show it straight away…
       DB.volunteer_hours = DB.volunteer_hours || [];
       DB.volunteer_hours.push(mapHours({
         id: (saved && saved.id != null) ? saved.id : ('tmp-' + Date.now()),
@@ -344,6 +345,7 @@ function saveHours() {
       }));
       hideModal('modal-vhours');
       repaint();
+      // …then re-sync from the database
       return loadHours();
     })
     .then(function () { repaint(); })
