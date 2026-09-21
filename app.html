@@ -33,12 +33,12 @@
 
   <div class="nav-section">Overview</div>
   <button class="nav-btn" onclick="go('dashboard')"><span class="icon">📊</span><span>Dashboard</span><span class="ai-dot"></span></button>
-  <button class="nav-btn" onclick="go('rag')"><span class="icon">🚦</span><span>RAG Dashboard</span><span class="ai-dot"></span></button>
-  <button class="nav-btn" data-module="events" onclick="go('impact')"><span class="icon">🌿</span><span>Social Impact</span></button>
+  <button class="nav-btn" data-module="funders" onclick="go('rag')"><span class="icon">🚦</span><span>RAG Dashboard</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" data-module="impact" onclick="go('impact')"><span class="icon">🌿</span><span>Social Impact</span><span class="ai-dot"></span></button>
 
   <div class="nav-section">People</div>
   <button class="nav-btn" data-module="participants" onclick="go('participants')"><span class="icon">👤</span><span>Participants</span><span class="ai-dot"></span></button>
-  <button class="nav-btn" onclick="go('contacts')"><span class="icon">📋</span><span>Contacts &amp; Donors</span></button>
+  <button class="nav-btn" data-module="contacts" onclick="go('contacts')"><span class="icon">📋</span><span>Contacts &amp; Donors</span></button>
   <button class="nav-btn" data-module="volunteers" onclick="go('volunteers')"><span class="icon">🙋</span><span>Volunteers &amp; Staff</span></button>
   <button class="nav-btn" data-module="employers" onclick="go('employers')"><span class="icon">🏢</span><span>Employers</span><span class="ai-dot"></span></button>
 
@@ -54,15 +54,15 @@
   <button class="nav-btn" data-module="funders" onclick="go('funders')"><span class="icon">🏦</span><span>Funders</span></button>
   <button class="nav-btn" data-module="funders" onclick="go('funding')"><span class="icon">💰</span><span>Contracts</span></button>
   <button class="nav-btn" data-module="funders" onclick="go('reports')"><span class="icon">📄</span><span>Reports</span></button>
-  <button class="nav-btn" onclick="go('evidence')"><span class="icon">🗂️</span><span>Evidence Hub</span></button>
-  <button class="nav-btn" onclick="go('demographics')"><span class="icon">📊</span><span>Demographics</span></button>
+  <button class="nav-btn" data-module="evidence" onclick="go('evidence')"><span class="icon">🗂️</span><span>Evidence Hub</span></button>
+  <button class="nav-btn" data-module="demographics" onclick="go('demographics')"><span class="icon">📊</span><span>Demographics</span></button>
 
   <div class="nav-section">Growth</div>
-  <button class="nav-btn" onclick="go('social')"><span class="icon">📣</span><span>Social Media</span><span class="ai-dot"></span></button>
-  <button class="nav-btn" onclick="go('bd')"><span class="icon">💼</span><span>BD Manager</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" data-module="social" onclick="go('social')"><span class="icon">📣</span><span>Social Media</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" data-module="bd" onclick="go('bd')"><span class="icon">💼</span><span>BD Manager</span><span class="ai-dot"></span></button>
 
   <div class="nav-section">Settings</div>
-  <button class="nav-btn" onclick="go('safeguarding')"><span class="icon">🔐</span><span>Safeguarding</span></button>
+  <button class="nav-btn" data-module="participants" onclick="go('safeguarding')"><span class="icon">🔐</span><span>Safeguarding</span></button>
   <button class="nav-btn" onclick="go('settings')"><span class="icon">⚙️</span><span>Settings</span></button>
 
   <div class="sidebar-bottom">
@@ -111,7 +111,19 @@
 
 <!-- SOCIAL IMPACT -->
 <div id="page-impact" class="page">
-  <div class="page-header"><div><div class="page-title">Social Impact</div><div class="page-sub">Board-ready · Funder presentations</div></div></div>
+  <div class="page-header">
+    <div><div class="page-title">Social Impact</div><div class="page-sub">Board-ready · Funder presentations</div></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <select id="ir-period" style="width:auto">
+        <option value="all">All time</option>
+        <option value="12m">Last 12 months</option>
+        <option value="year">This year</option>
+        <option value="quarter">Last quarter</option>
+      </select>
+      <button class="btn btn-ai btn-sm" onclick="generateImpactReport()">✦ Generate impact report</button>
+    </div>
+  </div>
+  <div id="ir-out"></div>
   <div class="impact-wall">
     <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--em);margin-bottom:6px;font-weight:700" id="impact-hd">SOCIAL IMPACT</div>
     <div style="font-size:22px;font-weight:700;margin-bottom:24px;color:var(--txt)">Numbers that move funders</div>
@@ -695,22 +707,22 @@ Accreditations: Matrix, Investors in People, Cyber Essentials…"></textarea></d
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 
 <!-- Foundation: constants and helpers -->
-<script src="js/config.js?v=15"></script>
-<script src="js/utils.js?v=15"></script>
+<script src="js/config.js?v=19"></script>
+<script src="js/utils.js?v=19"></script>
 
 <!-- Data + auth -->
-<script src="js/db.js?v=15"></script>
-<script src="js/auth.js?v=15"></script>
+<script src="js/db.js?v=19"></script>
+<script src="js/auth.js?v=19"></script>
 
 <!-- AI + branding -->
-<script src="js/agents.js?v=15"></script>
-<script src="js/branding.js?v=15"></script>
+<script src="js/agents.js?v=19"></script>
+<script src="js/branding.js?v=19"></script>
 
 <!-- UI logic -->
-<script src="js/render.js?v=15"></script>
-<script src="js/modals.js?v=15"></script>
-<script src="js/demo.js?v=15"></script>
-<script src="js/router.js?v=15"></script>
+<script src="js/render.js?v=19"></script>
+<script src="js/modals.js?v=19"></script>
+<script src="js/demo.js?v=19"></script>
+<script src="js/router.js?v=19"></script>
 
 <!-- Module visibility — shows/hides sidebar items per currentOrg.modules -->
 <script>
@@ -726,7 +738,7 @@ function applyModules(mods) {
 </script>
 
 <!-- Entry point -->
-<script src="js/boot.js?v=15"></script>
+<script src="js/boot.js?v=19"></script>
 
 <!-- Auto-fill paperwork (Start & End Form + job evidence) -->
 <script>
