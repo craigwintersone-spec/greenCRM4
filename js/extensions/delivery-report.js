@@ -1,30 +1,30 @@
-// js/extensions/delivery-report.js  — v1.0
+// js/extensions/delivery-report.js  — v1.1
 // ─────────────────────────────────────────────────────────────
 // DELIVERY REPORT — events, volunteers, hours and feedback.
 //
-// The existing Reports page generates a FUNDER report from
-// participants + contracts. This adds a second kind: a delivery
-// and impact report built from events, volunteer hours and
-// attendee feedback. For orgs whose work is workshops and
-// volunteering rather than caseloads.
+// Sits on the Reports page alongside the contract-based funder
+// report. Built from events, volunteer hours and attendee feedback.
 //
 // PRINCIPLE: the code computes every number. The AI only writes
 // the prose around them. LLMs miscount; a wrong volunteer-hours
 // total in a funder report is a real problem.
 //
-// Also reports DATA COMPLETENESS ("12 of 40 volunteers have
-// demographics recorded") — funders trust a report more when it
-// is honest about its own gaps.
+// Declares its own DATA GAPS ("12 of 40 volunteers have
+// demographics recorded") — funders trust that more than silence.
+//
+// v1.1 — the funder/contract filter now lives HERE, inside
+// buildStats(). Previously event-contracts.js tried to wrap this
+// file's functions at startup, which silently failed whenever this
+// file finished loading second — so choosing a funder changed
+// nothing. No cross-file wrapping any more.
 //
 // Depends on: db.js (DB, sb, orgId), agents.js (runAgent,
-//   cleanReportText, reportTextToHTML, getOrgLogoUrl),
-//   utils.js ($, escapeHTML)
-// Load AFTER boot.js and the other extensions.
+//   cleanReportText, reportTextToHTML, getOrgLogoUrl)
 'use strict';
 
 (function () {
 
-var VERSION = 'v1.0';
+var VERSION = 'v1.1';
 
 // UK Living Wage (Living Wage Foundation, 2024/25). Shown in the
 // report and editable — never present a made-up rate to a funder.
@@ -42,6 +42,29 @@ function pct(a, b) { return b ? Math.round(a / b * 100) : 0; }
 function gv(id) { var e = $(id); return e ? (e.value || '') : ''; }
 function money(v) { return '£' + Math.round(v).toLocaleString('en-GB'); }
 function round1(v) { return Math.round(v * 10) / 10; }
+function toArrSafe(v) {
+  if (Array.isArray(v)) return v;
+  if (typeof v === 'string' && v.indexOf('[') === 0) { try { return JSON.parse(v); } catch (e) { return []; } }
+  return [];
+}
+function byIdIn(list, id) {
+  list = list || [];
+  for (var i = 0; i < list.length; i++) if (String(list[i].id) === String(id)) return list[i];
+  return null;
+}
+
+// ── contracts ──────────────────────────────────────────────
+function funderFor(c) {
+  return (c && c.funder_id) ? byIdIn(DB.funders || [], c.funder_id) : null;
+}
+function contractLabel(c) {
+  var f = funderFor(c);
+  return (c.name || 'Unnamed contract') + (f ? ' · ' + f.name : '');
+}
+function selectedContract() {
+  var id = gv('dr-contract');
+  return id ? byIdIn(DB.contracts || [], id) : null;
+}
 
 // ── period ─────────────────────────────────────────────────
 function quarterRange(y, q) {
@@ -86,20 +109,35 @@ function inPeriod(dateStr, p) {
 
 // ── stats: ALL computed here, never by the AI ──────────────
 function buildStats(p) {
-  var EV = (DB.events || []).filter(function (e) { return inPeriod(e.date, p); });
-  var evIds = {}; EV.forEach(function (e) { evIds[String(e.id)] = e; });
+  var con = selectedContract();
+  var conId = con ? String(con.id) : '';
 
-  var HRS = (DB.volunteer_hours || []).filter(function (h) { return inPeriod(h.date, p); });
+  // events in period, and in the chosen contract if one is picked
+  var EV = (DB.events || []).filter(function (e) {
+    if (!inPeriod(e.date, p)) return false;
+    if (!conId) return true;
+    return toArrSafe(e.contract_ids).map(String).indexOf(conId) !== -1;
+  });
+  var evIds = {};
+  EV.forEach(function (e) { evIds[String(e.id)] = 1; });
 
-  // Feedback is dated by its event
+  // hours: in period; if filtering by contract, only hours on those events
+  var HRS = (DB.volunteer_hours || []).filter(function (h) {
+    if (!inPeriod(h.date, p)) return false;
+    if (!conId) return true;
+    return h.event_id && evIds[String(h.event_id)];
+  });
+
+  // feedback: dated by its event; if filtering, only on those events
   var FB = (DB.feedback || []).filter(function (f) {
-    var ev = (DB.events || []).filter(function (e) { return String(e.id) === String(f.eventId || f.event_id); })[0];
-    return ev ? inPeriod(ev.date, p) : (!p.from);
+    var eid = String(f.eventId || f.event_id || '');
+    if (conId) return !!evIds[eid];
+    var ev = byIdIn(DB.events || [], eid);
+    return ev ? inPeriod(ev.date, p) : !p.from;
   });
 
   var V = DB.volunteers || [];
 
-  // volunteers active in period
   var activeIds = {};
   HRS.forEach(function (h) { activeIds[String(h.volunteer_id)] = 1; });
   var activeVols = V.filter(function (v) { return activeIds[String(v.id)]; });
@@ -107,14 +145,12 @@ function buildStats(p) {
   var totalHours = HRS.reduce(function (a, h) { return a + n(h.hours); }, 0);
   var rate = parseFloat(gv('dr-rate')) || DEFAULT_RATE;
 
-  // hours by month
   var byMonth = {};
   HRS.forEach(function (h) {
     var k = (h.date || '').slice(0, 7);
     if (k) byMonth[k] = (byMonth[k] || 0) + n(h.hours);
   });
 
-  // hours by event
   var byEvent = {};
   HRS.forEach(function (h) {
     if (!h.event_id) return;
@@ -122,16 +158,14 @@ function buildStats(p) {
     byEvent[k] = (byEvent[k] || 0) + n(h.hours);
   });
 
-  // volunteer vs staff roles
   var STAFF_ROLES = { 'Advisor': 1, 'Manager': 1, 'Admin': 1, 'Staff': 1 };
   var volHours = 0, staffHours = 0;
   HRS.forEach(function (h) {
-    var v = V.filter(function (x) { return String(x.id) === String(h.volunteer_id); })[0];
+    var v = byIdIn(V, h.volunteer_id);
     if (v && STAFF_ROLES[v.role]) staffHours += n(h.hours);
     else volHours += n(h.hours);
   });
 
-  // events by type + attendance
   var byType = {};
   var attendees = 0, capacity = 0;
   EV.forEach(function (e) {
@@ -141,11 +175,8 @@ function buildStats(p) {
     capacity += n(e.capacity);
   });
 
-  // feedback
   var fbCount = FB.length;
-  var avgEnjoyed = fbCount ? FB.reduce(function (a, f) { return a + n(f.enjoyed); }, 0) / fbCount : 0;
-  var avgCB = fbCount ? FB.reduce(function (a, f) { return a + n(f.cb); }, 0) / fbCount : 0;
-  var avgCA = fbCount ? FB.reduce(function (a, f) { return a + n(f.ca); }, 0) / fbCount : 0;
+  function avg(key) { return fbCount ? FB.reduce(function (a, f) { return a + n(f[key]); }, 0) / fbCount : 0; }
   var learned = FB.filter(function (f) { return f.learned; }).length;
   var connected = FB.filter(function (f) { return f.connected; }).length;
   var friend = FB.filter(function (f) { return f.friend; }).length;
@@ -153,7 +184,6 @@ function buildStats(p) {
   var quotes = FB.filter(function (f) { return f.quote && String(f.quote).trim().length > 15; })
                  .map(function (f) { return String(f.quote).trim(); });
 
-  // demographics of ACTIVE volunteers (aggregate only)
   var withEq = activeVols.filter(function (v) { return v.equality_data && Object.keys(v.equality_data).length; });
   function tally(key) {
     var out = {};
@@ -164,8 +194,15 @@ function buildStats(p) {
     return out;
   }
 
+  // hours with no event can't be attributed to a funder — say so
+  var unlinkedHours = conId ? 0 : (DB.volunteer_hours || []).filter(function (h) {
+    return inPeriod(h.date, p) && !h.event_id;
+  }).reduce(function (a, h) { return a + n(h.hours); }, 0);
+
   return {
     period: p,
+    contract: con,
+    funder: con ? funderFor(con) : null,
     rate: rate,
     events: EV,
     eventCount: EV.length,
@@ -177,6 +214,7 @@ function buildStats(p) {
     totalHours: round1(totalHours),
     volHours: round1(volHours),
     staffHours: round1(staffHours),
+    unlinkedHours: round1(unlinkedHours),
     sessionCount: HRS.length,
     byMonth: byMonth,
     byEvent: byEvent,
@@ -185,10 +223,10 @@ function buildStats(p) {
     value: totalHours * rate,
     avgPerVolunteer: activeVols.length ? round1(totalHours / activeVols.length) : 0,
     fbCount: fbCount,
-    avgEnjoyed: round1(avgEnjoyed),
-    avgCB: round1(avgCB),
-    avgCA: round1(avgCA),
-    confGain: round1(avgCA - avgCB),
+    avgEnjoyed: round1(avg('enjoyed')),
+    avgCB: round1(avg('cb')),
+    avgCA: round1(avg('ca')),
+    confGain: round1(avg('ca') - avg('cb')),
     improvedPct: fbCount ? pct(improved, fbCount) : 0,
     learnedPct: fbCount ? pct(learned, fbCount) : 0,
     connectedPct: fbCount ? pct(connected, fbCount) : 0,
@@ -202,7 +240,19 @@ function buildStats(p) {
   };
 }
 
-// ── UI: inject the picker onto the Reports page ────────────
+function gapsFor(s) {
+  var gaps = [];
+  if (s.activeVolunteers && s.eqCount < s.activeVolunteers) {
+    gaps.push('Demographic data is held for ' + s.eqCount + ' of ' + s.activeVolunteers + ' active volunteers (' + pct(s.eqCount, s.activeVolunteers) + '%); completion is voluntary.');
+  }
+  if (s.eventCount && !s.fbCount) gaps.push('No feedback responses were collected in this period.');
+  if (s.eventCount && !s.capacity) gaps.push('Capacity was not recorded for these events, so an attendance rate is not given.');
+  if (s.contract && !s.eventCount) gaps.push('No events are linked to this contract in this period.');
+  if (s.unlinkedHours) gaps.push(s.unlinkedHours + ' volunteer hours in this period are not linked to an event.');
+  return gaps;
+}
+
+// ── UI ─────────────────────────────────────────────────────
 function yearOptions() {
   var y = new Date().getFullYear(), out = '';
   for (var i = y; i >= y - 4; i--) out += '<option value="' + i + '">' + i + '</option>';
@@ -220,6 +270,17 @@ function quarterOptions() {
   return out;
 }
 
+function paintContractOptions() {
+  var sel = $('dr-contract');
+  if (!sel) return;
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">All activity (no funder filter)</option>' +
+    (DB.contracts || []).map(function (c) {
+      return '<option value="' + esc(String(c.id)) + '">' + esc(contractLabel(c)) + '</option>';
+    }).join('');
+  if (cur) sel.value = cur;
+}
+
 function injectUI() {
   var host = $('reports-contract-list');
   if (!host || $('dr-panel')) return;
@@ -230,10 +291,13 @@ function injectUI() {
   panel.innerHTML =
     '<div class="card-title">📅 Delivery report — events, volunteers &amp; feedback</div>' +
     '<p style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:14px">' +
-      'For workshops, volunteering and community delivery — no contract needed. Every figure is calculated from your records; ' +
+      'For workshops, volunteering and community delivery. Every figure is calculated from your records; ' +
       'the Org Brain writes the narrative around them. The report states what data is missing, so nothing is overclaimed.' +
     '</p>' +
     '<div class="form-grid-3">' +
+      '<div class="form-row"><label>Funder / contract</label>' +
+        '<select id="dr-contract"><option value="">All activity (no funder filter)</option></select>' +
+      '</div>' +
       '<div class="form-row"><label>Reporting period</label>' +
         '<select id="dr-period-type">' +
           '<option value="all">All activity to date</option>' +
@@ -258,6 +322,7 @@ function injectUI() {
     '</div>';
 
   host.parentNode.insertBefore(panel, host);
+  paintContractOptions();
 
   $('dr-period-type').addEventListener('change', function () {
     var t = this.value;
@@ -268,31 +333,26 @@ function injectUI() {
     if (t === 'quarter') $('dr-quarter-wrap').style.display = 'block';
     if (t === 'month') $('dr-month-wrap').style.display = 'block';
     if (t === 'custom') { $('dr-from-wrap').style.display = 'block'; $('dr-to-wrap').style.display = 'block'; }
-    (window._drRenderPreview || renderPreview)();
+    renderPreview();
   });
-  ['dr-year', 'dr-quarter', 'dr-month', 'dr-from', 'dr-to', 'dr-rate'].forEach(function (id) {
-    var el = $(id); if (el) el.addEventListener('change', function () { (window._drRenderPreview || renderPreview)(); });
+  ['dr-contract', 'dr-year', 'dr-quarter', 'dr-month', 'dr-from', 'dr-to', 'dr-rate'].forEach(function (id) {
+    var el = $(id); if (el) el.addEventListener('change', renderPreview);
   });
-  $('dr-generate').addEventListener('click', function () { (window._drGenerate || generate)(); });
-  $('dr-refresh').addEventListener('click', function () { (window._drRenderPreview || renderPreview)(); });
+  $('dr-generate').addEventListener('click', generate);
+  $('dr-refresh').addEventListener('click', renderPreview);
 
-  (window._drRenderPreview || renderPreview)();
+  renderPreview();
 }
 
-// ── live preview of the computed figures ───────────────────
 function renderPreview() {
   var el = $('dr-preview'); if (!el) return;
   var s = buildStats(currentPeriod());
-
-  var gaps = [];
-  if (s.activeVolunteers && s.eqCount < s.activeVolunteers) {
-    gaps.push(s.eqCount + ' of ' + s.activeVolunteers + ' active volunteers have demographics recorded');
-  }
-  if (s.eventCount && !s.fbCount) gaps.push('no feedback responses in this period');
-  if (s.eventCount && !s.capacity) gaps.push('event capacity not recorded, so attendance rate cannot be shown');
-  if (!s.hoursRows.length) gaps.push('no volunteer hours logged in this period');
+  var gaps = gapsFor(s);
 
   el.innerHTML =
+    (s.contract
+      ? '<div style="font-size:12px;color:var(--em);font-weight:700;margin-bottom:8px">Filtered to: ' + esc(contractLabel(s.contract)) + '</div>'
+      : '') +
     '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:10px">' +
       stat('Events', s.eventCount) +
       stat('Attendees', s.attendees) +
@@ -312,11 +372,11 @@ function stat(label, val) {
   '</div>';
 }
 
-// ── tables for the finished document ───────────────────────
-function tableFrom(obj, label, totalOverride) {
+// ── document tables ────────────────────────────────────────
+function tableFrom(obj, label, total) {
   var keys = Object.keys(obj);
   if (!keys.length) return '';
-  var total = totalOverride || keys.reduce(function (a, k) { return a + obj[k]; }, 0);
+  total = total || keys.reduce(function (a, k) { return a + obj[k]; }, 0);
   keys.sort(function (a, b) { return obj[b] - obj[a]; });
   return '<table class="dr-tbl"><thead><tr><th>' + esc(label) + '</th><th>Count</th><th>%</th></tr></thead><tbody>' +
     keys.map(function (k) {
@@ -324,7 +384,6 @@ function tableFrom(obj, label, totalOverride) {
     }).join('') +
     '</tbody></table>';
 }
-
 function monthTable(byMonth) {
   var keys = Object.keys(byMonth).sort();
   if (!keys.length) return '';
@@ -335,7 +394,6 @@ function monthTable(byMonth) {
     }).join('') +
     '</tbody></table>';
 }
-
 function eventTable(s) {
   if (!s.events.length) return '';
   var rows = s.events.slice().sort(function (a, b) { return (a.date || '').localeCompare(b.date || ''); });
@@ -359,7 +417,8 @@ function generate() {
   var s = buildStats(p);
 
   if (!s.eventCount && !s.hoursRows.length && !s.fbCount) {
-    outEl.innerHTML = '<div class="alert alert-warn">There is no event, volunteer-hour or feedback data in this period. Choose a wider period, or log some activity first.</div>';
+    outEl.innerHTML = '<div class="alert alert-warn">There is no event, volunteer-hour or feedback data for this ' +
+      (s.contract ? 'funder in this period.' : 'period.') + ' Choose a wider period, or link events to this contract.</div>';
     return;
   }
 
@@ -368,18 +427,13 @@ function generate() {
 
   var orgName = (typeof currentOrg !== 'undefined' && currentOrg && currentOrg.name) || 'Organisation';
   var todayStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
-
-  var gaps = [];
-  if (s.activeVolunteers && s.eqCount < s.activeVolunteers) {
-    gaps.push('Demographic data is held for ' + s.eqCount + ' of ' + s.activeVolunteers + ' active volunteers (' + pct(s.eqCount, s.activeVolunteers) + '%); completion is voluntary.');
-  }
-  if (s.eventCount && !s.fbCount) gaps.push('No feedback responses were collected in this period.');
-  if (s.eventCount && !s.capacity) gaps.push('Capacity was not recorded for these events, so an attendance rate is not given.');
+  var gaps = gapsFor(s);
+  var funderName = s.funder ? s.funder.name : (s.contract ? s.contract.name : '');
 
   var steps = [
-    { label: 'Calculating figures', meta: s.eventCount + ' events · ' + s.sessionCount + ' hour entries · ' + s.fbCount + ' feedback responses' },
+    { label: 'Calculating figures', meta: s.eventCount + ' events · ' + s.sessionCount + ' hour entries · ' + s.fbCount + ' feedback' },
     { label: 'Checking data completeness', meta: gaps.length ? gaps.length + ' gap(s) to declare' : 'complete' },
-    { label: 'Writing the narrative', meta: 'Org Brain composing from your verified numbers' },
+    { label: 'Writing the narrative', meta: 'Org Brain composing from verified numbers' },
     { label: 'Quality check', meta: 'Tone, claims and structure' },
     { label: 'Ready', meta: 'Review and download below' }
   ];
@@ -390,11 +444,13 @@ function generate() {
     'CRITICAL: use ONLY the figures supplied. Never invent, estimate, extrapolate or recalculate any number — ' +
     'every statistic has already been computed from the database. Do not add totals of your own. ' +
     'Quote the supplied numbers exactly as given. Use **bold** sparingly for headline figures. 600-800 words. ' +
+    'If a funder is named, write the report as delivered under that funder\'s programme. ' +
     'In Data Quality, state the listed gaps plainly and without defensiveness. ' +
     'Do not use hashtags except as section markers, no horizontal rules, no emoji.';
 
   var lines = [
     'Organisation: ' + orgName,
+    funderName ? 'Funder / programme: ' + funderName + (s.contract ? ' (' + s.contract.name + ')' : '') : 'Scope: all activity, not limited to one funder',
     'Report date: ' + todayStr,
     'Reporting period: ' + p.label + (p.from ? ' (' + p.from + ' to ' + p.to + ')' : ''),
     '',
@@ -405,7 +461,7 @@ function generate() {
     'Events by type: ' + (Object.keys(s.byType).map(function (k) { return k + ' ' + s.byType[k]; }).join(', ') || 'none'),
     '',
     'VOLUNTEERING',
-    'Volunteers active in period: ' + s.activeVolunteers + ' (of ' + s.totalVolunteers + ' registered)',
+    'Volunteers active: ' + s.activeVolunteers + ' (of ' + s.totalVolunteers + ' registered)',
     'Total hours contributed: ' + s.totalHours,
     'Volunteer hours: ' + s.volHours + ' · staff hours: ' + s.staffHours,
     'Average hours per active volunteer: ' + s.avgPerVolunteer,
@@ -421,7 +477,7 @@ function generate() {
     s.fbCount ? 'Made a new friend: ' + s.friendPct + '%' : '',
     s.quotes.length ? 'Participant quotes you may use verbatim (do not alter):\n' + s.quotes.slice(0, 4).map(function (q) { return '- "' + q + '"'; }).join('\n') : '',
     '',
-    'DATA QUALITY NOTES' ,
+    'DATA QUALITY NOTES',
     gaps.length ? gaps.map(function (g) { return '- ' + g; }).join('\n') : '- No significant data gaps in this period.'
   ].filter(Boolean).join('\n');
 
@@ -433,41 +489,39 @@ function generate() {
   runAgent({
     container: progressEl,
     headerLabel: 'Org Brain — Delivery Report',
-    headerSub: 'Figures calculated from your records; the Brain writes the narrative',
+    headerSub: funderName ? 'For ' + funderName : 'Figures calculated from your records',
     steps: steps,
     sys: sys,
     prompt: lines,
     maxTok: 1400
   }).then(function (raw) {
     if (!raw) return;
-    renderDoc(raw, s, orgName, todayStr);
+    renderDoc(raw, s, orgName, todayStr, funderName);
   });
 }
 
-function renderDoc(raw, s, orgName, todayStr) {
+function renderDoc(raw, s, orgName, todayStr, funderName) {
   var outEl = $('report-output');
   var cleaned = (typeof cleanReportText === 'function') ? cleanReportText(raw) : raw;
   var bodyHTML = (typeof reportTextToHTML === 'function') ? reportTextToHTML(cleaned, raw) : '<pre>' + esc(cleaned) + '</pre>';
 
-  if (typeof window !== 'undefined') {
-    window._lastReportText = cleaned;
-    window._lastReportTitle = orgName + ' — Delivery Report (' + s.period.label + ')';
-  }
+  window._lastReportText = cleaned;
+  window._lastReportTitle = orgName + ' — Delivery Report' + (funderName ? ' — ' + funderName : '') + ' (' + s.period.label + ')';
 
+  var meta = 'Delivery &amp; Impact Report' + (funderName ? ' · ' + esc(funderName) : '') + ' · ' + esc(s.period.label);
   var logo = (typeof getOrgLogoUrl === 'function') ? getOrgLogoUrl(typeof currentOrg !== 'undefined' ? currentOrg : null) : '';
   var header = logo
     ? '<div class="report-header-flex"><div class="report-header-text">' +
-        '<div class="report-meta">Delivery &amp; Impact Report · ' + esc(s.period.label) + '</div>' +
+        '<div class="report-meta">' + meta + '</div>' +
         '<div class="report-title">Events, Volunteering &amp; Participant Experience</div>' +
         '<div class="report-subtitle">' + esc(orgName) + ' · ' + esc(todayStr) + '</div>' +
       '</div><div class="report-header-logo"><img src="' + esc(logo) + '" alt="' + esc(orgName) + '" class="org-logo-report" onerror="this.style.display=\'none\'"/></div></div>'
     : '<div class="report-header">' +
-        '<div class="report-meta">Delivery &amp; Impact Report · ' + esc(s.period.label) + '</div>' +
+        '<div class="report-meta">' + meta + '</div>' +
         '<div class="report-title">Events, Volunteering &amp; Participant Experience</div>' +
         '<div class="report-subtitle">' + esc(orgName) + ' · ' + esc(todayStr) + '</div>' +
       '</div>';
 
-  // headline figures block — the numbers, plainly
   var headline =
     '<div class="dr-figs">' +
       fig('Events delivered', s.eventCount) +
@@ -495,7 +549,7 @@ function renderDoc(raw, s, orgName, todayStr) {
     (Object.keys(s.byType).length ? '<h3>Appendix C — Events by type</h3>' + tableFrom(s.byType, 'Type', s.eventCount) : '') +
     demographics +
     '<p style="font-size:11px;color:#777;margin-top:18px">Volunteer time valued at £' + s.rate.toFixed(2) + ' per hour — ' + esc(RATE_LABEL) + '. ' +
-      'All figures calculated directly from records held in Vorlana for the period stated.</p>';
+      'All figures calculated directly from records held in Vorlana for the period stated' + (funderName ? ', limited to events linked to ' + esc(funderName) : '') + '.</p>';
 
   outEl.innerHTML =
     '<style>' +
@@ -506,7 +560,7 @@ function renderDoc(raw, s, orgName, todayStr) {
       '.dr-tbl{width:100%;border-collapse:collapse;margin:10px 0 18px;font-size:13px}' +
       '.dr-tbl th{text-align:left;border-bottom:2px solid #ccc;padding:6px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#555}' +
       '.dr-tbl td{border-bottom:1px solid #eee;padding:6px 8px}' +
-      '@media print{.dr-figs{grid-template-columns:repeat(3,1fr)}.dr-tbl{page-break-inside:avoid}}' +
+      '@media print{.dr-tbl{page-break-inside:avoid}}' +
     '</style>' +
     '<div class="report-actions">' +
       '<button class="btn btn-p" onclick="downloadReportPDF()">⬇ Download as PDF</button>' +
@@ -520,7 +574,7 @@ function renderDoc(raw, s, orgName, todayStr) {
     '</div>';
 
   var rg = $('dr-regen');
-  if (rg) rg.addEventListener('click', function () { (window._drGenerate || generate)(); });
+  if (rg) rg.addEventListener('click', generate);
 
   outEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -536,16 +590,11 @@ function whenReady(fn) {
 }
 
 whenReady(function () {
-  // Expose these so event-contracts.js can wrap them with a funder filter.
-  window._drRenderPreview = renderPreview;
-  window._drGenerate = generate;
-
-  // The Reports page builds its list on render; add our panel after it.
   var orig = window.renderReports;
   if (typeof orig === 'function' && !orig._dr) {
     window.renderReports = function () {
       var r = orig.apply(this, arguments);
-      try { injectUI(); window._drRenderPreview(); } catch (e) {}
+      try { injectUI(); paintContractOptions(); renderPreview(); } catch (e) {}
       return r;
     };
     window.renderReports._dr = true;
