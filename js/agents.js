@@ -9,17 +9,24 @@
 //   • all specific agents: morning briefing, intake, case note,
 //     RAG explainer, feedback analyst, outcomes analyst,
 //     employer matcher, equity, benchmarking, language coach (self-help),
-//     report generator, social media, BD research, EOI generator + EOI form-fill
+//     report generator, social impact report, social media, BD research,
+//     EOI generator + EOI form-fill
 //
 // NOTE (v5 — surveillance removed):
 //   The staff-stress "Wellbeing Scan" and the manager "flag queue"
 //   have been removed. The language tool is now a SELF-HELP COACH.
+//
+// NOTE (v9):
+//   • Morning Briefing now reads events, feedback and volunteer hours,
+//     not just participants — flags sessions with no feedback, sessions
+//     with no volunteer hours logged, and what's on this week.
+//   • New Social Impact report (generateImpactReport) — button on the
+//     Social Impact tab. Code computes every figure; the AI writes prose.
 
 'use strict';
 
 // Version marker — check your browser console to confirm this file is live.
-// If you DON'T see "Vorlana EOI engine v8", the old cached agents.js is running.
-try { console.info('Vorlana EOI engine v8 loaded'); } catch (e) {}
+try { console.info('Vorlana agents v9 loaded (briefing + impact report + EOI engine v8)'); } catch (e) {}
 
 // ── State ─────────────────────────────────────────────────────
 const _aiQueue = { running: false, queue: [], lastCallAt: 0 };
@@ -29,6 +36,7 @@ let _originalNote   = '';
 let _lastEOIText    = '';
 let _lastReportText = '';
 let _lastReportTitle = '';
+let _lastImpact = null;        // last Social Impact report { html, text, title }
 
 // EOI form-fill state
 let _eoiQuestions = [];        // [{id, question, wordLimit, guidance}]
@@ -36,6 +44,9 @@ let _eoiAnswers   = {};        // { id: answerText }
 let _eoiFunderPriorities = ''; // funder priorities, auto-fetched before drafting
 let _eoiPrioritiesFunder = ''; // which funder name the loaded priorities belong to
 let _bdOpps = {};              // found funding opportunities, keyed for the "Draft EOI" buttons
+
+// UK Living Wage (Living Wage Foundation, 2024/25) — used to value volunteer time.
+const VOL_HOUR_RATE = 12.60;
 
 // ── Plan gate ─────────────────────────────────────────────────
 function checkAIAccess() {
@@ -280,29 +291,117 @@ async function runAgent(opts) {
   return raw;
 }
 
+// ── Small shared helpers for event-aware agents ──────────────
+function _isoDay(d) { return d.toISOString().slice(0, 10); }
+function _r1(v) { return Math.round(v * 10) / 10; }
+function _fbEventId(f) { return String(f.eventId || f.event_id || ''); }
+function _inRange(dateStr, from, to) {
+  if (!from) return true;
+  if (!dateStr) return false;
+  const d = String(dateStr).slice(0, 10);
+  return d >= from && d <= to;
+}
+
 // ── Specific agents ──────────────────────────────────────────
 
+// Morning briefing — reads caseload AND events, feedback, volunteer hours.
+// Every fact is computed here; the AI only turns it into a briefing.
 async function runMorningBriefing() {
   const el = $('mb-body'); if (!el) return;
-  const P = DB.participants, E = DB.events, C = DB.contracts;
-  const atRisk = P.filter(p => p.risk === 'High' || days(p.last_contact) > 21);
+
+  const P  = DB.participants || [];
+  const E  = DB.events || [];
+  const FB = DB.feedback || [];
+  const H  = DB.volunteer_hours || [];
+  const C  = DB.contracts || [];
+
+  const now = new Date();
+  const today = _isoDay(now);
+  const in7 = new Date(now); in7.setDate(in7.getDate() + 7);
+  const ago30 = new Date(now); ago30.setDate(ago30.getDate() - 30);
+  const from30 = _isoDay(ago30);
+
+  // caseload
+  const active = P.filter(p => p.stage !== 'Closed');
+  const atRisk = active.filter(p => p.risk === 'High' || days(p.last_contact) > 21);
+  const jobReady = P.filter(p => p.stage === 'Job Ready');
+
+  // events
+  const upcoming = E.filter(e => e.date && e.date >= today && e.date <= _isoDay(in7))
+                    .sort((a, b) => a.date.localeCompare(b.date));
+  const recent = E.filter(e => e.date && e.date >= from30 && e.date <= today);
+  const recentAtt = recent.reduce((a, e) => a + num(e.attendees), 0);
+
+  const fbByEvent = {};
+  FB.forEach(f => { const k = _fbEventId(f); fbByEvent[k] = (fbByEvent[k] || 0) + 1; });
+  const hoursByEvent = {};
+  H.forEach(h => { if (h.event_id) hoursByEvent[String(h.event_id)] = 1; });
+
+  const noFeedback = recent.filter(e => !fbByEvent[String(e.id)]);
+  const noHours = recent.filter(e => !hoursByEvent[String(e.id)]);
+
+  // feedback from recent events
+  const recentIds = {};
+  recent.forEach(e => { recentIds[String(e.id)] = 1; });
+  const recentFb = FB.filter(f => recentIds[_fbEventId(f)]);
+  const fbN = recentFb.length;
+  const cb = fbN ? _r1(recentFb.reduce((a, f) => a + num(f.cb), 0) / fbN) : 0;
+  const ca = fbN ? _r1(recentFb.reduce((a, f) => a + num(f.ca), 0) / fbN) : 0;
+
+  // volunteer hours, last 30 days
+  const recentHours = H.filter(h => _inRange(h.date, from30, today));
+  const hrs30 = _r1(recentHours.reduce((a, h) => a + num(h.hours), 0));
+  const perVol = {};
+  recentHours.forEach(h => { const k = String(h.volunteer_id); perVol[k] = (perVol[k] || 0) + num(h.hours); });
+  const topId = Object.keys(perVol).sort((a, b) => perVol[b] - perVol[a])[0];
+  const topVol = topId ? (DB.volunteers || []).find(v => String(v.id) === topId) : null;
+
+  const fmtDay = d => new Date(d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  const names = arr => arr.map(p => p.first_name + ' ' + p.last_name).join(', ') || 'none';
+
   const steps = [
-    { label: 'Reading caseload', meta: P.length + ' participants · ' + E.length + ' events' },
-    { label: "Spotting today's priorities", meta: atRisk.length + ' at-risk to chase' },
-    { label: 'Composing your briefing', meta: 'Org Brain writing in your voice' },
+    { label: 'Reading caseload', meta: active.length + ' active participants' },
+    { label: 'Reading events & feedback', meta: recent.length + ' events in last 30 days · ' + upcoming.length + ' this week' },
+    { label: "Spotting today's priorities", meta: (atRisk.length + noFeedback.length) + ' things to chase' },
     { label: 'Ready', meta: '' }
   ];
-  const sys = 'Generate a warm professional morning briefing for a UK charity manager. Use **bold** for emphasis. Three short sections: Priority actions, Wins to celebrate, One strategic observation. Max 200 words. Do not use ## headings or hashtags.';
-  const prompt = 'Today: ' + new Date().toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long' }) +
-    '\nActive participants: ' + P.filter(p => p.stage !== 'Closed').length +
-    '\nAt-risk: ' + (atRisk.map(p => p.first_name + ' ' + p.last_name).join(', ') || 'none') +
-    '\nJob ready: ' + (P.filter(p => p.stage === 'Job Ready').map(p => p.first_name + ' ' + p.last_name).join(', ') || 'none') +
-    '\nContracts: ' + (C.map(c => c.name).join(', ') || 'none');
+
+  const sys = 'Generate a warm, practical morning briefing for a UK charity manager. Use **bold** for names and figures. ' +
+    'Three short sections: Priority actions today, Wins to celebrate, One observation. ' +
+    'Priority actions must be concrete and doable today — chase named at-risk people, collect feedback for named sessions, ' +
+    'log volunteer hours for named sessions, prepare for named upcoming events. ' +
+    'Use ONLY the facts given; never invent people, events or numbers. If a list says none, do not mention it. ' +
+    'Max 220 words. Do not use ## headings or hashtags.';
+
+  const prompt = [
+    'Today: ' + now.toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long' }),
+    '',
+    'CASELOAD',
+    'Active participants: ' + active.length,
+    'At risk (high risk or no contact 21+ days): ' + names(atRisk),
+    'Job ready: ' + names(jobReady),
+    '',
+    'EVENTS',
+    'Coming up in the next 7 days: ' + (upcoming.map(e => e.name + ' (' + fmtDay(e.date) + ')').join(', ') || 'none'),
+    'Delivered in the last 30 days: ' + recent.length + ' events, ' + recentAtt + ' attendances',
+    'Recent sessions with NO feedback collected: ' + (noFeedback.map(e => e.name).join(', ') || 'none'),
+    'Recent sessions with NO volunteer hours logged: ' + (noHours.map(e => e.name).join(', ') || 'none'),
+    '',
+    'FEEDBACK (last 30 days)',
+    fbN ? (fbN + ' responses; confidence ' + cb + ' → ' + ca + ' out of 5') : 'No feedback in the last 30 days',
+    '',
+    'VOLUNTEERS (last 30 days)',
+    hrs30 ? (hrs30 + ' hours from ' + Object.keys(perVol).length + ' volunteers') : 'No volunteer hours logged',
+    topVol ? ('Most hours: ' + topVol.name + ' (' + _r1(perVol[topId]) + 'h)') : '',
+    '',
+    'Contracts: ' + (C.map(c => c.name).join(', ') || 'none')
+  ].filter(Boolean).join('\n');
+
   const raw = await runAgent({
     container: el,
     headerLabel: 'Org Brain — Morning Briefing',
-    headerSub: "Reading your caseload to surface today's priorities",
-    steps, sys, prompt, maxTok: 300
+    headerSub: 'Reading caseload, events, feedback and volunteer hours',
+    steps, sys, prompt, maxTok: 380
   });
   if (raw) aiResult(el, raw);
 }
@@ -566,6 +665,8 @@ async function runBenchmarking() {
 }
 
 // ── Report generator ─────────────────────────────────────────
+// NOTE: js/extensions/reporting-periods.js replaces this at startup with a
+// period-aware, contract-scoped version. This is the fallback.
 async function generateAIReport(type, contractId) {
   const progressEl = $('brain-progress');
   const reportEl = $('report-output');
@@ -577,7 +678,12 @@ async function generateAIReport(type, contractId) {
   const funder = contract && contract.funder_id
     ? (DB.funders || []).find(f => String(f.id) === String(contract.funder_id))
     : null;
-  const P = DB.participants, E = DB.events, FB = DB.feedback;
+  const P = DB.participants;
+  // Only events (and their feedback) linked to this contract
+  const E = (DB.events || []).filter(e => toArr(e.contract_ids).map(String).includes(String(contractId)));
+  const evIds = {};
+  E.forEach(e => { evIds[String(e.id)] = 1; });
+  const FB = (DB.feedback || []).filter(f => evIds[_fbEventId(f)]);
   const orgName = (currentOrg && currentOrg.name) || 'Organisation';
   const todayStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
   const linked = P.filter(p => toArr(p.contract_ids).includes(String(contractId)));
@@ -609,7 +715,7 @@ async function generateAIReport(type, contractId) {
     'Actual outcomes: ' + linkedOutcomes,
     'Employment outcomes: ' + jobs,
     'Sustained outcomes: ' + sustained,
-    'Total events delivered: ' + E.length,
+    'Events delivered under this contract: ' + E.length,
     avgCB ? 'Average confidence before: ' + avgCB + ' / 5' : '',
     avgCA ? 'Average confidence after: ' + avgCA + ' / 5' : '',
     'Feedback responses: ' + FB.length
@@ -659,12 +765,12 @@ async function generateAIReport(type, contractId) {
 }
 
 function downloadReportPDF() {
-  if (!_lastReportText) {
+  if (!_lastReportText && !window._lastReportText) {
     alert('Generate a report first before downloading.');
     return;
   }
   const orig = document.title;
-  document.title = (_lastReportTitle || 'Vorlana Report').replace(/[^a-z0-9 \-]/gi, '').slice(0, 80);
+  document.title = (_lastReportTitle || window._lastReportTitle || 'Vorlana Report').replace(/[^a-z0-9 \-]/gi, '').slice(0, 80);
   setTimeout(() => {
     window.print();
     setTimeout(() => { document.title = orig; }, 1000);
@@ -677,6 +783,222 @@ function copyReportText() {
   navigator.clipboard.writeText(el.innerText);
   const btn = $('copy-report-btn');
   if (btn) { const orig = btn.textContent; btn.textContent = '✓ Copied'; setTimeout(() => btn.textContent = orig, 2000); }
+}
+
+// ── Social Impact report ─────────────────────────────────────
+// Button on the Social Impact tab. The whole organisation's impact:
+// people & outcomes, events & attendance, volunteers & hours, feedback,
+// participant quotes. Code computes every figure; the AI writes prose.
+
+function _impactRange(key) {
+  const now = new Date();
+  if (key === '12m') {
+    const a = new Date(now); a.setFullYear(a.getFullYear() - 1);
+    return { from: _isoDay(a), to: _isoDay(now), label: 'the last 12 months' };
+  }
+  if (key === 'year') {
+    return { from: now.getFullYear() + '-01-01', to: _isoDay(now), label: now.getFullYear() + ' to date' };
+  }
+  if (key === 'quarter') {
+    const q = Math.floor(now.getMonth() / 3); // current quarter index 0-3
+    let y = now.getFullYear(), pq = q - 1;
+    if (pq < 0) { pq = 3; y -= 1; }
+    const s = new Date(y, pq * 3, 1);
+    const e = new Date(y, pq * 3 + 3, 0);
+    return { from: _isoDay(s), to: _isoDay(e), label: 'Q' + (pq + 1) + ' ' + y };
+  }
+  return { from: null, to: null, label: 'all activity to date' };
+}
+
+function _impactStats(r) {
+  const P = (DB.participants || []).filter(p => !r.from || _inRange(p.last_contact || p.created_at, r.from, r.to));
+  const E = (DB.events || []).filter(e => _inRange(e.date, r.from, r.to));
+  const evIds = {};
+  E.forEach(e => { evIds[String(e.id)] = 1; });
+  const FB = (DB.feedback || []).filter(f => !r.from || evIds[_fbEventId(f)]);
+  const H = (DB.volunteer_hours || []).filter(h => _inRange(h.date, r.from, r.to));
+
+  const withOutcome = P.filter(p => toArr(p.outcomes).length > 0).length;
+  const att = E.reduce((a, e) => a + num(e.attendees), 0);
+  const cap = E.reduce((a, e) => a + num(e.capacity), 0);
+  const byType = {};
+  E.forEach(e => { const t = e.type || 'Other'; byType[t] = (byType[t] || 0) + 1; });
+
+  const volIds = {};
+  H.forEach(h => { volIds[String(h.volunteer_id)] = 1; });
+  const hours = H.reduce((a, h) => a + num(h.hours), 0);
+
+  const fbN = FB.length;
+  const avg = k => fbN ? _r1(FB.reduce((a, f) => a + num(f[k]), 0) / fbN) : 0;
+  const share = test => fbN ? pct(FB.filter(test).length, fbN) : 0;
+
+  return {
+    range: r,
+    participants: P.length,
+    withOutcome: withOutcome,
+    outcomeRate: pct(withOutcome, P.length),
+    jobs: P.filter(p => toArr(p.outcomes).includes('Employment')).length,
+    sustained: P.filter(p => p.stage === 'Sustained').length,
+    events: E.length,
+    attendances: att,
+    fill: cap ? pct(att, cap) : null,
+    byType: byType,
+    volunteers: Object.keys(volIds).length,
+    hours: _r1(hours),
+    value: hours * VOL_HOUR_RATE,
+    fbN: fbN,
+    enjoyed: avg('enjoyed'),
+    cb: avg('cb'),
+    ca: avg('ca'),
+    improved: share(f => num(f.ca) > num(f.cb)),
+    learned: share(f => f.learned),
+    connected: share(f => f.connected),
+    friend: share(f => f.friend),
+    quotes: FB.filter(f => f.quote && String(f.quote).trim().length > 15).map(f => String(f.quote).trim())
+  };
+}
+
+async function generateImpactReport() {
+  const out = $('ir-out'); if (!out) return;
+  const key = ($('ir-period') && $('ir-period').value) || 'all';
+  const s = _impactStats(_impactRange(key));
+
+  if (!s.participants && !s.events && !s.fbN && !s.hours) {
+    out.innerHTML = '<div class="alert alert-warn">No activity recorded for this period yet.</div>';
+    return;
+  }
+
+  const orgName = (currentOrg && currentOrg.name) || 'Organisation';
+  const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+  const money = v => '£' + Math.round(v).toLocaleString('en-GB');
+
+  const gaps = [];
+  if (s.events && !s.fbN) gaps.push('No feedback was collected at events in this period.');
+  if (s.events && s.fill == null) gaps.push('Event capacity was not recorded, so an attendance rate is not given.');
+  if (s.events && !s.hours) gaps.push('No volunteer hours were logged in this period.');
+
+  const steps = [
+    { label: 'Calculating your impact', meta: s.participants + ' participants · ' + s.events + ' events · ' + s.fbN + ' feedback' },
+    { label: 'Checking data completeness', meta: gaps.length ? gaps.length + ' gap(s)' : 'complete' },
+    { label: 'Writing the story', meta: 'Org Brain composing from verified numbers' },
+    { label: 'Ready', meta: '' }
+  ];
+
+  const sys = 'You are a UK charity impact writer producing a Social Impact report for a board, funders and supporters. ' +
+    'Warm but professional British English. Sections, each beginning with ## and the title: ' +
+    'Our Impact at a Glance, People We Supported, Community & Events, Our Volunteers, What People Told Us, Looking Ahead. ' +
+    'CRITICAL: use ONLY the figures given — never invent, estimate or recalculate a number. ' +
+    'Use the quotes supplied verbatim; never invent quotes. Omit any section with no data rather than padding it. ' +
+    'If data gaps are listed, mention them briefly at the end. ' +
+    '500-700 words. **bold** for headline figures. No hashtags except section markers, no emoji.';
+
+  const prompt = [
+    'Organisation: ' + orgName,
+    'Period: ' + s.range.label + (s.range.from ? ' (' + s.range.from + ' to ' + s.range.to + ')' : ''),
+    '',
+    'PEOPLE',
+    'Participants supported: ' + s.participants,
+    s.participants ? 'Participants with an outcome: ' + s.withOutcome + ' (' + s.outcomeRate + '%)' : '',
+    s.participants ? 'Into employment: ' + s.jobs + ' · sustained: ' + s.sustained : '',
+    '',
+    'EVENTS',
+    'Events delivered: ' + s.events,
+    s.events ? 'Total attendances: ' + s.attendances : '',
+    s.fill != null ? 'Attendance against capacity: ' + s.fill + '%' : '',
+    s.events ? 'By type: ' + Object.keys(s.byType).map(k => k + ' ' + s.byType[k]).join(', ') : '',
+    '',
+    'VOLUNTEERS',
+    'Active volunteers: ' + s.volunteers,
+    'Hours given: ' + s.hours,
+    s.hours ? 'Value of volunteer time: ' + money(s.value) + ' (at £' + VOL_HOUR_RATE.toFixed(2) + '/hour, UK Living Wage)' : '',
+    '',
+    'FEEDBACK',
+    'Responses: ' + s.fbN,
+    s.fbN ? 'Average enjoyment: ' + s.enjoyed + ' / 5' : '',
+    s.fbN ? 'Confidence before ' + s.cb + ' → after ' + s.ca + ' (out of 5)' : '',
+    s.fbN ? 'Felt more confident: ' + s.improved + '% · learned something new: ' + s.learned + '% · felt more connected: ' + s.connected + '% · made a friend: ' + s.friend + '%' : '',
+    s.quotes.length ? 'Quotes (use verbatim):\n' + s.quotes.slice(0, 4).map(q => '- "' + q + '"').join('\n') : '',
+    '',
+    gaps.length ? 'DATA GAPS:\n' + gaps.map(g => '- ' + g).join('\n') : ''
+  ].filter(Boolean).join('\n');
+
+  const raw = await runAgent({
+    container: out,
+    headerLabel: 'Org Brain — Social Impact Report',
+    headerSub: s.range.label,
+    steps, sys, prompt, maxTok: 1300
+  });
+  if (!raw) return;
+
+  const cleaned = cleanReportText(raw);
+  const body = reportTextToHTML(cleaned, raw);
+  const logo = getOrgLogoUrl(currentOrg);
+
+  const figs = [
+    s.participants ? ['Participants', s.participants] : null,
+    s.withOutcome ? ['Outcomes', s.withOutcome] : null,
+    s.events ? ['Events', s.events] : null,
+    s.attendances ? ['Attendances', s.attendances] : null,
+    s.volunteers ? ['Volunteers', s.volunteers] : null,
+    s.hours ? ['Volunteer hours', s.hours] : null,
+    s.hours ? ['Value of time', money(s.value)] : null,
+    s.fbN ? ['Feedback', s.fbN] : null
+  ].filter(Boolean);
+
+  const docHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:20px;border-bottom:3px solid #1F6F6D;padding-bottom:14px;margin-bottom:18px">' +
+      '<div>' +
+        '<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#1F6F6D;font-weight:700">Social Impact Report · ' + escapeHTML(s.range.label) + '</div>' +
+        '<div style="font-size:26px;font-weight:800;color:#175655;margin-top:4px">' + escapeHTML(orgName) + '</div>' +
+        '<div style="font-size:12px;color:#777">' + escapeHTML(today) + '</div>' +
+      '</div>' +
+      (logo ? '<img src="' + escapeHTML(logo) + '" alt="" style="max-height:60px;max-width:160px" onerror="this.remove()"/>' : '') +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">' +
+      figs.map(f =>
+        '<div style="border:1px solid #ddd;border-radius:8px;padding:10px;text-align:center">' +
+          '<div style="font-size:22px;font-weight:800;color:#1F6F6D">' + escapeHTML(String(f[1])) + '</div>' +
+          '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#777;font-weight:700">' + escapeHTML(f[0]) + '</div></div>'
+      ).join('') +
+    '</div>' +
+    body +
+    '<p style="font-size:11px;color:#888;margin-top:20px;border-top:1px solid #eee;padding-top:10px">' +
+      'All figures calculated directly from records held in Vorlana. Volunteer time valued at £' + VOL_HOUR_RATE.toFixed(2) +
+      ' per hour (UK Living Wage). Generated by Vorlana · ' + escapeHTML(today) + '</p>';
+
+  _lastImpact = { html: docHTML, text: cleaned, title: orgName + ' — Social Impact Report (' + s.range.label + ')' };
+
+  out.innerHTML =
+    '<div style="display:flex;gap:8px;margin:14px 0;flex-wrap:wrap">' +
+      '<button class="btn btn-p btn-sm" onclick="printImpactReport()">⬇ Download as PDF</button>' +
+      '<button class="btn btn-ghost btn-sm" id="ir-copy" onclick="copyImpactReport()">📋 Copy text</button>' +
+      '<button class="btn btn-ghost btn-sm" onclick="generateImpactReport()">↻ Regenerate</button>' +
+    '</div>' +
+    '<div class="card" style="background:#fff;color:#222;font-family:Georgia,serif;line-height:1.7;padding:32px">' + docHTML + '</div>';
+
+  out.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function printImpactReport() {
+  if (!_lastImpact) { alert('Generate the impact report first.'); return; }
+  const w = window.open('', '_blank', 'width=900,height=1100');
+  if (!w) { alert('Pop-up blocked — please allow pop-ups to download the PDF.'); return; }
+  w.document.write(
+    '<!doctype html><html><head><title>' + escapeHTML(_lastImpact.title) + '</title>' +
+    '<style>@page{size:A4;margin:16mm}body{font-family:Georgia,serif;color:#222;line-height:1.7;margin:0}' +
+    'h3{color:#175655;margin-top:22px}strong{color:#175655}</style></head><body>' +
+    _lastImpact.html +
+    '<scr' + 'ipt>window.onload=function(){setTimeout(function(){window.print();},300);};</scr' + 'ipt>' +
+    '</body></html>'
+  );
+  w.document.close();
+}
+
+function copyImpactReport() {
+  if (!_lastImpact) return;
+  navigator.clipboard.writeText(_lastImpact.text);
+  const btn = $('ir-copy');
+  if (btn) { const o = btn.textContent; btn.textContent = '✓ Copied'; setTimeout(() => btn.textContent = o, 2000); }
 }
 
 // ── Social media + BD ────────────────────────────────────────
