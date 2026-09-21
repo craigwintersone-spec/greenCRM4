@@ -58,7 +58,7 @@
   <button class="nav-btn" data-module="demographics" onclick="go('demographics')"><span class="icon">📊</span><span>Demographics</span></button>
 
   <div class="nav-section">Growth</div>
-  <button class="nav-btn" data-module="social" onclick="go('social')"><span class="icon">📣</span><span>Social Media</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" data-module="social" onclick="go('social');renderSocial()"><span class="icon">📣</span><span>Social Media</span><span class="ai-dot"></span></button>
   <button class="nav-btn" data-module="bd" onclick="go('bd')"><span class="icon">💼</span><span>BD Manager</span><span class="ai-dot"></span></button>
 
   <div class="nav-section">Settings</div>
@@ -327,25 +327,98 @@
   </div>
 </div>
 
-<!-- SOCIAL MEDIA -->
+<!-- SOCIAL MEDIA STUDIO -->
 <div id="page-social" class="page">
-  <div class="page-header"><div><div class="page-title">📣 Social Media Manager</div><div class="page-sub">AI-generated posts using your real impact data</div></div></div>
+  <div class="page-header"><div><div class="page-title">📣 Social Media Studio</div><div class="page-sub">Posts written from your real events, feedback and impact — every platform at once</div></div></div>
+
   <div class="card">
-    <div class="card-title">Generate a post</div>
-    <div class="form-grid-3" style="margin-bottom:14px">
-      <div class="form-row"><label>Platform</label><select id="sm-platform"><option value="linkedin">LinkedIn</option><option value="twitter">X / Twitter</option><option value="instagram">Instagram</option><option value="facebook">Facebook</option></select></div>
-      <div class="form-row"><label>Post type</label><select id="sm-type"><option value="impact">Impact story</option><option value="milestone">Milestone</option><option value="event">Upcoming event</option><option value="volunteer">Volunteer spotlight</option><option value="funding">Funding success</option><option value="tip">Sector tip</option><option value="awareness">Awareness day</option><option value="hiring">We're hiring</option></select></div>
-      <div class="form-row"><label>Tone</label><select id="sm-tone"><option value="warm">Warm &amp; human</option><option value="professional">Professional</option><option value="inspiring">Inspiring</option><option value="urgent">Urgent / CTA</option><option value="celebratory">Celebratory</option></select></div>
+    <div class="card-title">① What's this post about?</div>
+    <div class="form-grid-3">
+      <div class="form-row"><label>Post about</label>
+        <select id="sm-about" onchange="socialAboutChanged()">
+          <option value="event">An event we ran</option>
+          <option value="upcoming">An upcoming event (promote it)</option>
+          <option value="impact">Our impact</option>
+          <option value="volunteer">Thanking a volunteer</option>
+          <option value="custom">Something else</option>
+        </select>
+      </div>
+      <div class="form-row" id="sm-event-wrap"><label>Event</label><select id="sm-event" onchange="socialRefreshFacts()"></select></div>
+      <div class="form-row" id="sm-period-wrap" style="display:none"><label>Period</label>
+        <select id="sm-period" onchange="socialRefreshFacts()">
+          <option value="12m">Last 12 months</option>
+          <option value="year">This year</option>
+          <option value="quarter">Last quarter</option>
+          <option value="all">All time</option>
+        </select>
+      </div>
+      <div class="form-row" id="sm-vol-wrap" style="display:none"><label>Volunteer</label><select id="sm-vol" onchange="socialRefreshFacts()"></select></div>
     </div>
-    <div class="form-row"><label>Extra context (optional)</label><input id="sm-context" placeholder="e.g. We just hit 50 employment outcomes…"/></div>
-    <button class="btn btn-ai" onclick="runSocialAgent()">✦ Generate post</button>
+    <div id="sm-facts"></div>
+    <div class="form-row" style="margin-bottom:0"><label>Anything to add? (optional)</label><input id="sm-context" placeholder="e.g. Our first session in the new polytunnel, thanks to PECT funding"/></div>
   </div>
-  <div id="sm-output" style="display:none">
-    <div class="ai-panel">
-      <div class="ai-panel-title"><span class="ai-icon">📣</span>Generated post</div>
-      <div id="sm-result"></div>
-      <div class="ai-action-row" id="sm-actions"></div>
+
+  <div class="card">
+    <div class="card-title">② Participant quotes</div>
+    <div style="font-size:12px;color:var(--txt3);margin-bottom:10px">Tick only the quotes you have permission to share. They're always posted anonymously.</div>
+    <div id="sm-quotes"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">③ Photo, platforms &amp; tone</div>
+    <div class="form-grid-2">
+      <div class="form-row">
+        <label>Your photo (optional)</label>
+        <input type="file" id="sm-photo" accept="image/*" onchange="handleSocialPhoto(this)" style="font-size:13px"/>
+        <div id="sm-photo-preview" style="margin-top:8px"></div>
+        <div id="sm-consent-wrap" style="display:none;margin-top:8px">
+          <label style="display:flex;gap:8px;align-items:flex-start;text-transform:none;letter-spacing:0;font-weight:500;font-size:12px;color:var(--txt2);cursor:pointer">
+            <input type="checkbox" id="sm-consent" style="width:auto;margin-top:2px"/>
+            Everyone identifiable in this photo has agreed to it being shared (and a parent or guardian for any child)
+          </label>
+        </div>
+        <div style="font-size:11px;color:var(--txt3);margin-top:6px">🔒 Photos stay on this device — they're never uploaded or stored.</div>
+      </div>
+      <div>
+        <div class="form-row"><label>Platforms</label>
+          <div class="chk-group">
+            <div class="chk-pill"><label><input type="checkbox" class="sm-plat" value="linkedin" checked/> 💼 LinkedIn</label></div>
+            <div class="chk-pill"><label><input type="checkbox" class="sm-plat" value="instagram" checked/> 📸 Instagram</label></div>
+            <div class="chk-pill"><label><input type="checkbox" class="sm-plat" value="facebook" checked/> 👍 Facebook</label></div>
+            <div class="chk-pill"><label><input type="checkbox" class="sm-plat" value="x"/> ✖️ X</label></div>
+          </div>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-row"><label>Tone</label>
+            <select id="sm-tone">
+              <option value="warm and human">Warm &amp; human</option>
+              <option value="celebratory">Celebratory</option>
+              <option value="professional">Professional</option>
+              <option value="inspiring">Inspiring</option>
+              <option value="urgent, with a clear ask">Urgent / call to action</option>
+            </select>
+          </div>
+          <div class="form-row"><label>Call to action (optional)</label><input id="sm-cta" placeholder="e.g. Book your place — link in bio"/></div>
+        </div>
+        <label style="display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font-weight:500;font-size:13px;color:var(--txt2);cursor:pointer">
+          <input type="checkbox" id="sm-hashtags" checked style="width:auto"/> Include hashtags
+        </label>
+      </div>
     </div>
+    <button class="btn btn-ai" style="margin-top:14px" onclick="generateSocial()">✦ Write my posts</button>
+  </div>
+
+  <div id="sm-output" style="display:none;margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div style="font-size:15px;font-weight:700;color:var(--txt)">Your posts</div>
+      <div style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--txt3)">Plan for <input type="date" id="sm-plan-date" style="width:auto"/></div>
+    </div>
+    <div id="sm-result"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🗓️ Content plan</div>
+    <div id="sm-plan"></div>
   </div>
 </div>
 
@@ -715,7 +788,7 @@ Accreditations: Matrix, Investors in People, Cyber Essentials…"></textarea></d
 <script src="js/auth.js?v=19"></script>
 
 <!-- AI + branding -->
-<script src="js/agents.js?v=19"></script>
+<script src="js/agents.js?v=20"></script>
 <script src="js/branding.js?v=19"></script>
 
 <!-- UI logic -->
