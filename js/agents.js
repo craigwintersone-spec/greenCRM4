@@ -26,7 +26,7 @@
 'use strict';
 
 // Version marker — check your browser console to confirm this file is live.
-try { console.info('Vorlana agents v9 loaded (briefing + impact report + EOI engine v8)'); } catch (e) {}
+try { console.info('Vorlana agents v10 loaded (social studio + briefing + impact report + EOI engine v8)'); } catch (e) {}
 
 // ── State ─────────────────────────────────────────────────────
 const _aiQueue = { running: false, queue: [], lastCallAt: 0 };
@@ -1001,38 +1001,452 @@ function copyImpactReport() {
   if (btn) { const o = btn.textContent; btn.textContent = '✓ Copied'; setTimeout(() => btn.textContent = o, 2000); }
 }
 
-// ── Social media + BD ────────────────────────────────────────
-async function runSocialAgent() {
-  const platform = $('sm-platform').value;
-  const type = $('sm-type').value;
-  const tone = $('sm-tone').value;
-  const context = $('sm-context').value;
-  const out = $('sm-output');
-  const res = $('sm-result');
+// ── Social Media Studio ──────────────────────────────────────
+// Posts written from REAL data: a specific event (attendance, volunteer
+// hours, feedback, quotes), the org's impact for a period, a volunteer
+// thank-you, or an upcoming event to promote. All platforms drafted at once.
+//
+// Rules baked in:
+//   • Numbers are computed here; the AI never invents or recalculates them.
+//   • Quotes are opt-in (unticked by default) and always anonymous.
+//   • Participants are never named.
+//   • Photos stay in the browser — never uploaded or stored.
+
+const SOCIAL_PLATFORMS = {
+  linkedin:  { label: 'LinkedIn',  icon: '💼', limit: 3000, guide: 'professional and warm; 120-220 words; short paragraphs with line breaks; up to 4 hashtags at the very end' },
+  instagram: { label: 'Instagram', icon: '📸', limit: 2200, guide: 'warm and visual; 60-140 words; short lines; a few emoji at most; up to 10 hashtags on their own at the end' },
+  facebook:  { label: 'Facebook',  icon: '👍', limit: 2000, guide: 'friendly community tone; 50-120 words; a clear call to action; hashtags optional, max 2' },
+  x:         { label: 'X',         icon: '✖️', limit: 280,  guide: 'one punchy post, UNDER 260 characters in total including any hashtags; max 2 hashtags' }
+};
+
+let _socialPhoto = null;   // data URL of the user's own photo (browser only)
+let _socialPosts = {};     // { platform: text }
+let _socialEventId = null; // event the current posts relate to
+let _socialDrafts = [];
+
+function _socialToday() { return _isoDay(new Date()); }
+
+// Called when the Social Media page opens (from the sidebar button).
+function renderSocial() {
+  const evSel = $('sm-event');
+  if (evSel) {
+    const cur = evSel.value;
+    const today = _socialToday();
+    const E = (DB.events || []).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    evSel.innerHTML = E.length
+      ? E.map(e => '<option value="' + escapeHTML(String(e.id)) + '">' +
+          escapeHTML(e.name) + ' · ' + escapeHTML(fmtD(e.date)) + (e.date && e.date > today ? ' (upcoming)' : '') +
+        '</option>').join('')
+      : '<option value="">No events yet</option>';
+    if (cur) evSel.value = cur;
+  }
+  const volSel = $('sm-vol');
+  if (volSel) {
+    const cur = volSel.value;
+    const V = (DB.volunteers || []).filter(v => (v.status || 'Active') === 'Active');
+    volSel.innerHTML = V.length
+      ? V.map(v => '<option value="' + escapeHTML(String(v.id)) + '">' + escapeHTML(v.name || 'Volunteer') + '</option>').join('')
+      : '<option value="">No active volunteers</option>';
+    if (cur) volSel.value = cur;
+  }
+  if ($('sm-plan-date') && !$('sm-plan-date').value) $('sm-plan-date').value = _socialToday();
+  socialAboutChanged();
+  loadSocialDrafts();
+}
+
+function socialAboutChanged() {
+  const about = ($('sm-about') && $('sm-about').value) || 'event';
+  const show = (id, on) => { const el = $(id); if (el) el.style.display = on ? '' : 'none'; };
+  show('sm-event-wrap', about === 'event' || about === 'upcoming');
+  show('sm-period-wrap', about === 'impact');
+  show('sm-vol-wrap', about === 'volunteer');
+  socialRefreshFacts();
+}
+
+// Everything the post may say — computed from the database.
+function _socialFacts() {
+  const about = ($('sm-about') && $('sm-about').value) || 'event';
+  const out = { about: about, lines: [], quotes: [], chips: [], eventId: null };
+  const FB = DB.feedback || [];
+  const H = DB.volunteer_hours || [];
+
+  if (about === 'event' || about === 'upcoming') {
+    const ev = (DB.events || []).find(e => String(e.id) === String($('sm-event') && $('sm-event').value));
+    if (!ev) return out;
+    out.eventId = String(ev.id);
+    const when = ev.date ? new Date(ev.date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
+    out.lines.push('Event: ' + ev.name);
+    if (ev.type) out.lines.push('Type: ' + ev.type);
+    if (when) out.lines.push('Date: ' + when);
+    if (ev.location) out.lines.push('Location: ' + ev.location);
+
+    if (about === 'upcoming') {
+      out.lines.push('This event has NOT happened yet — the post should invite people to come.');
+      if (num(ev.capacity)) out.lines.push('Places available: ' + Math.max(0, num(ev.capacity) - num(ev.attendees)) + ' of ' + num(ev.capacity));
+      out.chips = [['📅', when || 'Date TBC'], ['📍', ev.location || 'Location TBC']];
+      if (num(ev.capacity)) out.chips.push(['🎟️', num(ev.capacity) + ' places']);
+      return out;
+    }
+
+    const hrs = H.filter(h => String(h.event_id) === out.eventId);
+    const vols = {};
+    hrs.forEach(h => { vols[String(h.volunteer_id)] = 1; });
+    const hours = _r1(hrs.reduce((a, h) => a + num(h.hours), 0));
+    const fb = FB.filter(f => _fbEventId(f) === out.eventId);
+    const n = fb.length;
+
+    if (num(ev.attendees)) out.lines.push('People who attended: ' + num(ev.attendees));
+    if (Object.keys(vols).length) out.lines.push('Volunteers who helped: ' + Object.keys(vols).length + ', giving ' + hours + ' hours');
+    if (n) {
+      const avg = k => _r1(fb.reduce((a, f) => a + num(f[k]), 0) / n);
+      out.lines.push('Feedback responses: ' + n);
+      out.lines.push('Average enjoyment: ' + avg('enjoyed') + ' out of 5');
+      out.lines.push('Confidence before ' + avg('cb') + ' → after ' + avg('ca') + ' (out of 5)');
+      const l = pct(fb.filter(f => f.learned).length, n);
+      const c = pct(fb.filter(f => f.connected).length, n);
+      const fr = pct(fb.filter(f => f.friend).length, n);
+      if (l) out.lines.push(l + '% learned something new');
+      if (c) out.lines.push(c + '% felt more connected');
+      if (fr) out.lines.push(fr + '% made a new friend');
+      out.chips.push(['⭐', avg('enjoyed') + '/5 enjoyed']);
+      out.chips.push(['📈', 'confidence ' + avg('cb') + ' → ' + avg('ca')]);
+    }
+    if (num(ev.attendees)) out.chips.unshift(['👥', num(ev.attendees) + ' attended']);
+    if (hours) out.chips.push(['🙋', hours + 'h volunteered']);
+    out.quotes = fb.filter(f => f.quote && String(f.quote).trim().length > 10).map(f => String(f.quote).trim());
+    return out;
+  }
+
+  if (about === 'impact') {
+    const s = _impactStats(_impactRange(($('sm-period') && $('sm-period').value) || '12m'));
+    out.lines.push('Period: ' + s.range.label);
+    if (s.participants) out.lines.push('People supported: ' + s.participants);
+    if (s.withOutcome) out.lines.push('People achieving an outcome: ' + s.withOutcome);
+    if (s.jobs) out.lines.push('Into employment: ' + s.jobs);
+    if (s.events) out.lines.push('Events delivered: ' + s.events + ' with ' + s.attendances + ' attendances');
+    if (s.volunteers) out.lines.push('Volunteers: ' + s.volunteers + ' giving ' + s.hours + ' hours');
+    if (s.fbN) out.lines.push('Confidence before ' + s.cb + ' → after ' + s.ca + ' across ' + s.fbN + ' responses');
+    if (s.connected) out.lines.push(s.connected + '% felt more connected');
+    out.chips = [
+      s.participants ? ['👥', s.participants + ' supported'] : null,
+      s.events ? ['📅', s.events + ' events'] : null,
+      s.hours ? ['🙋', s.hours + 'h volunteered'] : null,
+      s.fbN ? ['📈', 'confidence ' + s.cb + ' → ' + s.ca] : null
+    ].filter(Boolean);
+    out.quotes = s.quotes;
+    return out;
+  }
+
+  if (about === 'volunteer') {
+    const v = (DB.volunteers || []).find(x => String(x.id) === String($('sm-vol') && $('sm-vol').value));
+    if (!v) return out;
+    const first = String(v.name || 'our volunteer').split(' ')[0];
+    const hrs = H.filter(h => String(h.volunteer_id) === String(v.id));
+    const hours = _r1(num(v.hours) + hrs.reduce((a, h) => a + num(h.hours), 0));
+    const evIds = {};
+    hrs.forEach(h => { if (h.event_id) evIds[String(h.event_id)] = 1; });
+    const evNames = (DB.events || []).filter(e => evIds[String(e.id)]).map(e => e.name);
+    out.lines.push('Volunteer first name (use first name only): ' + first);
+    if (v.role) out.lines.push('Role: ' + v.role);
+    if (hours) out.lines.push('Total hours given: ' + hours);
+    if (evNames.length) out.lines.push('Helped at: ' + evNames.slice(0, 5).join(', '));
+    if (toArr(v.skills).length) out.lines.push('Skills: ' + toArr(v.skills).join(', '));
+    out.chips = [['🙋', first], hours ? ['⏱️', hours + ' hours'] : null, evNames.length ? ['📅', evNames.length + ' events'] : null].filter(Boolean);
+    out.quotes = FB.filter(f => evIds[_fbEventId(f)] && f.quote && String(f.quote).trim().length > 10).map(f => String(f.quote).trim());
+    out.lines.push('Make sure ' + first + ' is happy to be thanked publicly before posting.');
+    return out;
+  }
+
+  // custom
+  out.lines.push('Organisation totals — people supported: ' + (DB.participants || []).length + ', events: ' + (DB.events || []).length);
+  out.quotes = FB.filter(f => f.quote && String(f.quote).trim().length > 10).map(f => String(f.quote).trim());
+  return out;
+}
+
+function socialRefreshFacts() {
+  const f = _socialFacts();
+  const box = $('sm-facts');
+  if (box) {
+    box.innerHTML = f.chips.length
+      ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 12px">' +
+          f.chips.map(c => '<span style="font-size:12px;font-weight:600;padding:6px 12px;border-radius:20px;background:var(--bg);border:1px solid var(--border);color:var(--txt2)">' +
+            c[0] + ' ' + escapeHTML(String(c[1])) + '</span>').join('') +
+        '</div>'
+      : '';
+  }
+  const qEl = $('sm-quotes');
+  if (qEl) {
+    const qs = f.quotes.slice(0, 8);
+    qEl.innerHTML = qs.length
+      ? qs.map((q, i) =>
+          '<label style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--border);border-radius:9px;margin-bottom:8px;cursor:pointer;font-size:13px;color:var(--txt2);line-height:1.5;text-transform:none;letter-spacing:0;font-weight:400">' +
+            '<input type="checkbox" class="sm-q" data-q="' + i + '" style="width:auto;margin-top:3px"/>' +
+            '<span style="font-style:italic">"' + escapeHTML(q) + '"</span>' +
+          '</label>'
+        ).join('')
+      : '<div style="font-size:13px;color:var(--txt3)">No feedback quotes for this yet.</div>';
+    qEl._quotes = qs;
+  }
+}
+
+function handleSocialPhoto(input) {
+  const file = input && input.files && input.files[0];
+  if (!file) return;
+  if (file.size > 8 * 1024 * 1024) { alert('That photo is over 8MB — please choose a smaller one.'); input.value = ''; return; }
+  const r = new FileReader();
+  r.onload = e => {
+    _socialPhoto = e.target.result;
+    const pv = $('sm-photo-preview');
+    if (pv) pv.innerHTML = '<img src="' + _socialPhoto + '" style="max-height:120px;max-width:100%;border-radius:8px;border:1px solid var(--border)"/>' +
+      '<div><button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="clearSocialPhoto()">Remove photo</button></div>';
+    const cw = $('sm-consent-wrap'); if (cw) cw.style.display = 'block';
+  };
+  r.readAsDataURL(file);
+}
+
+function clearSocialPhoto() {
+  _socialPhoto = null;
+  if ($('sm-photo')) $('sm-photo').value = '';
+  if ($('sm-photo-preview')) $('sm-photo-preview').innerHTML = '';
+  if ($('sm-consent-wrap')) $('sm-consent-wrap').style.display = 'none';
+  if ($('sm-consent')) $('sm-consent').checked = false;
+  if (Object.keys(_socialPosts).length) renderSocialCards();
+}
+
+async function generateSocial() {
+  const platforms = Array.prototype.slice.call(document.querySelectorAll('.sm-plat:checked')).map(c => c.value);
+  if (!platforms.length) { alert('Pick at least one platform.'); return; }
+  if (_socialPhoto && !($('sm-consent') && $('sm-consent').checked)) {
+    alert('Please confirm everyone identifiable in the photo has agreed to it being shared — or remove the photo.');
+    return;
+  }
+
+  const f = _socialFacts();
+  const qEl = $('sm-quotes');
+  const allQ = (qEl && qEl._quotes) || [];
+  const picked = Array.prototype.slice.call(document.querySelectorAll('.sm-q:checked'))
+    .map(cb => allQ[parseInt(cb.getAttribute('data-q'), 10)]).filter(Boolean);
+
+  const tone = ($('sm-tone') && $('sm-tone').value) || 'warm';
+  const cta = ($('sm-cta') && $('sm-cta').value.trim()) || '';
+  const ctx = ($('sm-context') && $('sm-context').value.trim()) || '';
+  const tags = $('sm-hashtags') ? $('sm-hashtags').checked : true;
+
+  const out = $('sm-output'); const res = $('sm-result');
   out.style.display = 'block';
 
+  const sys = 'You are the social media manager for a UK charity. Write ready-to-post social media posts in British English. ' +
+    'Return ONLY a JSON object — no prose, no code fences — whose keys are exactly the requested platforms and whose values are the post text. ' +
+    'RULES: use ONLY the facts given; never invent numbers, people, places or quotes, and never recalculate figures. ' +
+    'Never name participants. Quotes may be used only if supplied, word for word, attributed as "one participant" or "a participant". ' +
+    'Follow each platform\'s guide exactly. No markdown, no asterisks. ' +
+    (tags ? 'Include relevant hashtags as each guide allows.' : 'Do not use any hashtags.');
+
+  const prompt = [
+    'Organisation: ' + ((currentOrg && currentOrg.name) || 'our charity'),
+    'Tone: ' + tone,
+    'Post type: ' + f.about,
+    '',
+    'FACTS:',
+    f.lines.length ? f.lines.map(l => '- ' + l).join('\n') : '- (no specific facts — keep it general and do not invent any)',
+    '',
+    picked.length ? 'QUOTES YOU MAY USE (verbatim):\n' + picked.map(q => '- "' + q + '"').join('\n') : 'QUOTES: none — do not use or invent any quotes.',
+    ctx ? '\nEXTRA CONTEXT FROM STAFF: ' + ctx : '',
+    cta ? '\nCALL TO ACTION: ' + cta : '',
+    _socialPhoto ? '\nA photo from the day will accompany the post.' : '',
+    '',
+    'PLATFORMS AND GUIDES:',
+    platforms.map(p => '- ' + p + ': ' + SOCIAL_PLATFORMS[p].guide).join('\n')
+  ].filter(s => s !== '').join('\n');
+
   const steps = [
-    { label: 'Reading your latest impact data', meta: DB.participants.length + ' participants · ' + DB.events.length + ' events' },
-    { label: 'Tuning to ' + platform + ' tone', meta: tone + ' · ' + type },
-    { label: 'Drafting the post', meta: '' },
+    { label: 'Reading your data', meta: f.lines.length + ' facts · ' + picked.length + ' approved quote(s)' },
+    { label: 'Writing for each platform', meta: platforms.map(p => SOCIAL_PLATFORMS[p].label).join(' · ') },
     { label: 'Ready', meta: '' }
   ];
-  const sys = 'You are a UK charity social media manager. Platform: ' + platform + '. Tone: ' + tone + '. Write the main post in clean prose. No hashtags inline (offer them separately if requested). No markdown headings.';
-  const prompt = 'Org: ' + ((currentOrg && currentOrg.name) || 'org') +
-    '\nContext: ' + (context || 'none') +
-    '\nPost type: ' + type +
-    '\nParticipants supported: ' + DB.participants.length +
-    '\nEvents delivered: ' + DB.events.length;
+
   const raw = await runAgent({
     container: res,
-    headerLabel: 'Social Media Agent',
-    headerSub: 'Drafting a post in your voice',
-    steps, sys, prompt, maxTok: 500
+    headerLabel: 'Social Media Studio',
+    headerSub: 'Writing from your real data',
+    steps, sys, prompt, maxTok: 1100
   });
-  if (raw) {
-    const clean = cleanReportText(raw);
-    res.innerHTML = '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px;font-size:14px;color:var(--txt2);line-height:1.8;white-space:pre-wrap">' + escapeHTML(clean) + '</div>';
+  if (!raw) return;
+
+  let posts = {};
+  try {
+    const clean = raw.replace(/```json|```/gi, '').trim();
+    const m = clean.match(/\{[\s\S]*\}/);
+    posts = JSON.parse(m ? m[0] : clean);
+  } catch (e) {
+    posts = {};
+    posts[platforms[0]] = cleanReportText(raw);
   }
+  _socialPosts = {};
+  platforms.forEach(p => { if (posts[p]) _socialPosts[p] = String(posts[p]).trim(); });
+  _socialEventId = f.eventId;
+  renderSocialCards();
+}
+
+// Keep the old name working (older buttons / links).
+function runSocialAgent() { return generateSocial(); }
+
+function renderSocialCards() {
+  const res = $('sm-result'); if (!res) return;
+  const keys = Object.keys(_socialPosts);
+  if (!keys.length) { res.innerHTML = '<div class="alert alert-warn">No posts came back — try again.</div>'; return; }
+
+  res.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px">' +
+    keys.map(p => {
+      const pl = SOCIAL_PLATFORMS[p] || { label: p, icon: '📝', limit: 3000 };
+      const openLabel = p === 'linkedin' ? 'Open in LinkedIn' : p === 'x' ? 'Open in X' : p === 'facebook' ? 'Copy & open Facebook' : 'Copy for Instagram';
+      return '<div class="card" style="margin:0;display:flex;flex-direction:column">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
+          '<div style="font-weight:700;font-size:14px;color:var(--txt)">' + pl.icon + ' ' + escapeHTML(pl.label) + '</div>' +
+          '<div id="sm-count-' + p + '" style="font-size:11px;font-weight:700"></div>' +
+        '</div>' +
+        (_socialPhoto ? '<img src="' + _socialPhoto + '" style="width:100%;max-height:180px;object-fit:cover;border-radius:8px;margin-bottom:10px"/>' : '') +
+        '<textarea id="sm-txt-' + p + '" oninput="socialCount(\'' + p + '\')" style="flex:1;min-height:170px;font-size:13px;line-height:1.6">' + escapeHTML(_socialPosts[p]) + '</textarea>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">' +
+          '<button class="btn btn-p btn-sm" onclick="openSocial(\'' + p + '\')">' + openLabel + '</button>' +
+          '<button class="btn btn-ghost btn-sm" id="sm-copy-' + p + '" onclick="copySocial(\'' + p + '\')">📋 Copy</button>' +
+          (_socialPhoto && p !== 'x' ? '<button class="btn btn-ghost btn-sm" onclick="downloadSocialPhoto()">⬇ Photo</button>' : '') +
+          '<button class="btn btn-ghost btn-sm" onclick="saveSocialDraft(\'' + p + '\')">🗓️ Add to plan</button>' +
+        '</div>' +
+      '</div>';
+    }).join('') + '</div>';
+  keys.forEach(socialCount);
+}
+
+function socialCount(p) {
+  const t = $('sm-txt-' + p), c = $('sm-count-' + p);
+  if (!t || !c) return;
+  const lim = (SOCIAL_PLATFORMS[p] || {}).limit || 3000;
+  const len = t.value.length;
+  _socialPosts[p] = t.value;
+  c.textContent = len + ' / ' + lim;
+  c.style.color = len > lim ? 'var(--red)' : 'var(--txt3)';
+}
+
+function _socialText(p) { const t = $('sm-txt-' + p); return t ? t.value : (_socialPosts[p] || ''); }
+
+function _socialClip(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text);
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta);
+  return Promise.resolve();
+}
+
+function copySocial(p) {
+  _socialClip(_socialText(p)).then(() => {
+    const b = $('sm-copy-' + p);
+    if (b) { const o = b.textContent; b.textContent = '✓ Copied'; setTimeout(() => b.textContent = o, 1800); }
+  });
+}
+
+function openSocial(p) {
+  const text = _socialText(p);
+  const enc = encodeURIComponent(text);
+  if (p === 'linkedin') { window.open('https://www.linkedin.com/feed/?shareActive=true&text=' + enc, '_blank'); return; }
+  if (p === 'x') { window.open('https://x.com/intent/post?text=' + enc, '_blank'); return; }
+  _socialClip(text).then(() => {
+    if (p === 'facebook') {
+      window.open('https://www.facebook.com/', '_blank');
+      alert('Post copied. Facebook doesn\u2019t allow pre-filled text, so just paste it into a new post' + (_socialPhoto ? ' and add your photo (use \u2b07 Photo to save it).' : '.'));
+    } else {
+      alert('Post copied. Instagram posts are made in the app — paste the caption there' + (_socialPhoto ? ' and add your photo (use \u2b07 Photo to save it to this device).' : '.'));
+    }
+  });
+}
+
+function downloadSocialPhoto() {
+  if (!_socialPhoto) return;
+  const a = document.createElement('a');
+  a.href = _socialPhoto;
+  a.download = 'social-photo.jpg';
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+// ── Content plan (social_posts table) ──
+async function loadSocialDrafts() {
+  const el = $('sm-plan'); if (!el) return;
+  if (typeof sb === 'undefined' || !sb || !orgId) { el.innerHTML = renderEmpty('Content plan loads once you\u2019re signed in.'); return; }
+  try {
+    const { data, error } = await sb.from('social_posts').select('*').eq('org_id', orgId).order('planned_date', { ascending: true });
+    if (error) throw error;
+    _socialDrafts = data || [];
+  } catch (e) {
+    el.innerHTML = '<div class="alert alert-warn" style="margin:0">Content plan unavailable — has the <code>social_posts</code> table been created in Supabase?</div>';
+    return;
+  }
+  renderSocialPlan();
+}
+
+function renderSocialPlan() {
+  const el = $('sm-plan'); if (!el) return;
+  const today = _socialToday();
+  const planned = _socialDrafts.filter(d => d.status !== 'posted');
+  const posted = _socialDrafts.filter(d => d.status === 'posted').slice(-5).reverse();
+  if (!planned.length && !posted.length) {
+    el.innerHTML = renderEmpty('Nothing planned yet. Write a post and click \u201cAdd to plan\u201d.');
+    return;
+  }
+  const row = (d, done) => {
+    const pl = SOCIAL_PLATFORMS[d.platform] || { icon: '📝', label: d.platform };
+    const late = !done && d.planned_date && d.planned_date < today;
+    return '<div style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border);' + (done ? 'opacity:.55' : '') + '">' +
+      '<div style="font-size:20px">' + pl.icon + '</div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-size:12px;font-weight:700;color:' + (late ? 'var(--red)' : 'var(--txt)') + '">' +
+          escapeHTML(pl.label) + ' · ' + escapeHTML(d.planned_date ? fmtD(d.planned_date) : 'no date') + (late ? ' · overdue' : '') + (done ? ' · posted' : '') +
+        '</div>' +
+        '<div style="font-size:12px;color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHTML(d.body) + '</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:4px;flex-shrink:0">' +
+        '<button class="btn btn-ghost btn-sm" onclick="copySocialDraft(\'' + escapeHTML(String(d.id)) + '\')">📋</button>' +
+        (done ? '' : '<button class="btn btn-ghost btn-sm" onclick="markSocialPosted(\'' + escapeHTML(String(d.id)) + '\')">✓ Posted</button>') +
+        '<button class="btn btn-ghost btn-sm" onclick="deleteSocialDraft(\'' + escapeHTML(String(d.id)) + '\')">×</button>' +
+      '</div></div>';
+  };
+  el.innerHTML = planned.map(d => row(d, false)).join('') +
+    (posted.length ? '<div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin:14px 0 4px">Recently posted</div>' + posted.map(d => row(d, true)).join('') : '');
+}
+
+async function saveSocialDraft(p) {
+  const body = _socialText(p).trim();
+  if (!body) return;
+  const date = ($('sm-plan-date') && $('sm-plan-date').value) || _socialToday();
+  try {
+    await sbInsert('social_posts', { platform: p, body: body, planned_date: date, event_id: _socialEventId, status: 'draft' });
+    await loadSocialDrafts();
+  } catch (e) {
+    alert('Could not save to the plan: ' + e.message + '\n\nHas the social_posts table been created in Supabase?');
+  }
+}
+
+function copySocialDraft(id) {
+  const d = _socialDrafts.find(x => String(x.id) === String(id));
+  if (d) _socialClip(d.body);
+}
+
+async function markSocialPosted(id) {
+  try {
+    const { error } = await sb.from('social_posts').update({ status: 'posted' }).eq('id', id);
+    if (error) throw error;
+    await loadSocialDrafts();
+  } catch (e) { alert('Could not update: ' + e.message); }
+}
+
+async function deleteSocialDraft(id) {
+  if (!confirm('Remove this post from the plan?')) return;
+  try {
+    const { error } = await sb.from('social_posts').delete().eq('id', id);
+    if (error) throw error;
+    await loadSocialDrafts();
+  } catch (e) { alert('Could not remove: ' + e.message); }
 }
 
 async function runBDResearch() {
