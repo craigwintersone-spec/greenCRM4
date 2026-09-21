@@ -1,12 +1,31 @@
-// js/extensions/reporting-periods.js — period-aware funder reports
+// js/extensions/reporting-periods.js — v2.0 — period-aware funder reports
 // Depends on: utils.js, db.js, agents.js, branding.js
 //
 // Adds a "Reporting period" picker above the contracts list on the
 // Reports page. Replaces generateAIReport() with a version that
 // filters participants/events/feedback to the selected period.
+//
+// v2.0 FIXES
+//   • Events, feedback and volunteer hours are now scoped to the
+//     CONTRACT, not just the period. Previously every event and every
+//     feedback response in the organisation went into every funder's
+//     report — so one funder's report could quote another funder's
+//     participants. Now only events linked to the contract
+//     (events.contract_ids) count.
+//   • Participant quotes are now passed to the writer. The report has
+//     a "Participant Voice" section but was never given any quotes,
+//     and is told never to invent them — so that section was empty.
+//   • Adds enjoyment, learned/connected, and volunteer hours on the
+//     contract's events.
+//   • Footer says Vorlana, not Civara.
+//
+// This makes js/extensions/report-contract-scope.js redundant —
+// delete it and remove its <script> line from app.html.
 
 (function () {
   'use strict';
+
+  var VERSION = 'v2.0';
 
   function whenReady(fn, attempts) {
     if (attempts == null) attempts = 0;
@@ -25,7 +44,7 @@
     picker.id = 'civara-period-picker';
     picker.className = 'card';
     picker.innerHTML = `
-      <div class="card-title">Reporting period</div>
+      <div class="card-title">Reporting period — contract funder reports</div>
       <div class="period-pick-row">
         <div class="form-row">
           <label>Period type</label>
@@ -53,20 +72,21 @@
           <input type="date" id="civara-period-to"/>
         </div>
       </div>
-      <div id="civara-period-summary" style="margin-top:10px;font-size:12px;color:var(--txt3)">Reports use cumulative all-time data.</div>
+      <div id="civara-period-summary" style="margin-top:10px;font-size:12px;color:var(--txt3)">Reports use cumulative all-time data. Events and feedback are limited to those linked to the chosen contract.</div>
     `;
     el.parentNode.insertBefore(picker, el);
 
     $('civara-period-type').addEventListener('change', onPeriodTypeChange);
     ['civara-period-month', 'civara-period-quarter', 'civara-period-from', 'civara-period-to'].forEach(id => {
-      const el = $(id);
-      if (el) el.addEventListener('change', updatePeriodSummary);
+      const x = $(id);
+      if (x) x.addEventListener('change', updatePeriodSummary);
     });
 
     if (typeof window.generateAIReport === 'function' && !window._civaraReportPatched) {
       window._civaraReportPatched = true;
       window.generateAIReport = patchedGenerateAIReport;
     }
+    console.log('[reporting-periods ' + VERSION + '] ready');
   }
 
   function quarterOptions() {
@@ -94,7 +114,7 @@
   function onPeriodTypeChange() {
     const t = $('civara-period-type').value;
     ['month', 'quarter', 'from', 'to'].forEach(k => {
-      const el = $('civara-period-' + k + '-wrap'); if (el) el.style.display = 'none';
+      const x = $('civara-period-' + k + '-wrap'); if (x) x.style.display = 'none';
     });
     if (t === 'month') $('civara-period-month-wrap').style.display = 'block';
     else if (t === 'quarter') $('civara-period-quarter-wrap').style.display = 'block';
@@ -133,8 +153,9 @@
   function updatePeriodSummary() {
     const p = getCurrentPeriod();
     const s = $('civara-period-summary'); if (!s) return;
-    if (p.type === 'cumulative') s.textContent = 'Reports use cumulative all-time data.';
-    else s.textContent = 'Reports will be filtered to ' + p.label + ' (' + p.from + ' → ' + p.to + ').';
+    const scope = ' Events and feedback are limited to those linked to the chosen contract.';
+    if (p.type === 'cumulative') s.textContent = 'Reports use cumulative all-time data.' + scope;
+    else s.textContent = 'Reports will be filtered to ' + p.label + ' (' + p.from + ' → ' + p.to + ').' + scope;
   }
 
   function inPeriod(dateStr, period) {
@@ -142,6 +163,10 @@
     if (!dateStr) return false;
     const d = String(dateStr).slice(0, 10);
     return d >= period.from && d <= period.to;
+  }
+
+  function linkedToContract(ev, contractId) {
+    return toArr(ev && ev.contract_ids).map(String).includes(String(contractId));
   }
 
   async function patchedGenerateAIReport(type, contractId) {
@@ -157,29 +182,61 @@
       : null;
     const orgName = (currentOrg && currentOrg.name) || 'Organisation';
     const todayStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+
+    // ── participants on this contract ─────────────────────────
     const linked = DB.participants.filter(p => toArr(p.contract_ids).includes(String(contractId)));
     const linkedInPeriod = linked.filter(p => inPeriod(p.last_contact || p.created_at, period));
     const linkedOutcomes = linkedInPeriod.filter(p => p.outcomes && p.outcomes.length > 0).length;
     const jobs = linkedInPeriod.filter(p => p.outcomes && p.outcomes.includes('Employment')).length;
     const sustained = linkedInPeriod.filter(p => p.stage === 'Sustained').length;
-    const eventsInPeriod = DB.events.filter(e => inPeriod(e.date, period));
-    const fbInPeriod = DB.feedback.filter(f => {
-      const ev = DB.events.find(e => String(e.id) === String(f.eventId));
-      return ev ? inPeriod(ev.date, period) : period.type === 'cumulative';
-    });
-    const avgCB = fbInPeriod.length ? (fbInPeriod.reduce((a, f) => a + num(f.cb), 0) / fbInPeriod.length).toFixed(1) : null;
-    const avgCA = fbInPeriod.length ? (fbInPeriod.reduce((a, f) => a + num(f.ca), 0) / fbInPeriod.length).toFixed(1) : null;
+
+    // ── events on this contract, in period ────────────────────
+    const eventsInPeriod = (DB.events || []).filter(e => linkedToContract(e, contractId) && inPeriod(e.date, period));
+    const evIds = {};
+    eventsInPeriod.forEach(e => { evIds[String(e.id)] = 1; });
+    const attendances = eventsInPeriod.reduce((a, e) => a + num(e.attendees), 0);
+
+    // ── feedback on those events only ─────────────────────────
+    const fbInPeriod = (DB.feedback || []).filter(f => evIds[String(f.eventId || f.event_id || '')]);
+    const fbN = fbInPeriod.length;
+    const avg = key => fbN ? (fbInPeriod.reduce((a, f) => a + num(f[key]), 0) / fbN).toFixed(1) : null;
+    const avgEnjoyed = avg('enjoyed');
+    const avgCB = avg('cb');
+    const avgCA = avg('ca');
+    const pctOf = test => fbN ? Math.round(fbInPeriod.filter(test).length / fbN * 100) : 0;
+    const improvedPct  = pctOf(f => num(f.ca) > num(f.cb));
+    const learnedPct   = pctOf(f => f.learned);
+    const connectedPct = pctOf(f => f.connected);
+    const quotes = fbInPeriod
+      .filter(f => f.quote && String(f.quote).trim().length > 15)
+      .map(f => String(f.quote).trim())
+      .slice(0, 4);
+
+    // ── volunteer hours on those events ───────────────────────
+    const hoursRows = (DB.volunteer_hours || []).filter(h => h.event_id && evIds[String(h.event_id)]);
+    const volHours = Math.round(hoursRows.reduce((a, h) => a + num(h.hours), 0) * 10) / 10;
+    const volPeople = {};
+    hoursRows.forEach(h => { volPeople[String(h.volunteer_id)] = 1; });
+    const volCount = Object.keys(volPeople).length;
+
     const periodLabel = period.type === 'cumulative' ? 'cumulative (all activity to date)' : period.label;
 
     const steps = [
-      { label: 'Filtering to ' + periodLabel, meta: linkedInPeriod.length + ' participants in scope · ' + eventsInPeriod.length + ' events' },
+      { label: 'Filtering to ' + periodLabel, meta: linkedInPeriod.length + ' participants · ' + eventsInPeriod.length + ' events on this contract' },
       { label: 'Cross-checking funder requirements', meta: 'Mapping data against ' + ((funder && funder.name) || 'funder') + ' framework' },
       { label: 'Writing the report', meta: 'Org Brain composing narrative with your live numbers' },
       { label: 'Quality Supervisor check', meta: 'Verifying tone, claims and structure' },
       { label: 'Ready', meta: 'Report delivered — review and download below' }
     ];
 
-    const sys = 'You are a professional UK bid writer producing a funder report. Write in clean formal British English. Structure with these sections in order, each beginning with ## and the section title: Executive Summary, Delivery Overview, Participant Outcomes, Distance Travelled and Wellbeing, Participant Voice, Forward Plan. Use **bold** sparingly for key statistics. 600-800 words. Use only data provided — never invent participants, outcomes or quotes. State the reporting period clearly in the Executive Summary. If a data point is not provided, omit gracefully. Do not use hashtags (#) anywhere except as section heading markers. Do not use horizontal rules or emoji.';
+    const sys = 'You are a professional UK bid writer producing a funder report. Write in clean formal British English. ' +
+      'Structure with these sections in order, each beginning with ## and the section title: Executive Summary, Delivery Overview, ' +
+      'Participant Outcomes, Distance Travelled and Wellbeing, Participant Voice, Forward Plan. Use **bold** sparingly for key statistics. ' +
+      '600-800 words. Use only data provided — never invent participants, outcomes, figures or quotes, and never recalculate a number. ' +
+      'All events, feedback and volunteer figures given relate ONLY to activity delivered under this contract. ' +
+      'In Participant Voice, use only the quotes supplied, verbatim; if none are supplied, say feedback quotes were not collected for this period. ' +
+      'State the reporting period clearly in the Executive Summary. If a data point is not provided, omit gracefully. ' +
+      'Do not use hashtags (#) anywhere except as section heading markers. Do not use horizontal rules or emoji.';
 
     const prompt = [
       'Organisation: ' + orgName,
@@ -188,16 +245,30 @@
       'Contract: ' + ((contract && contract.name) || 'Unnamed contract'),
       'Funder: ' + ((funder && funder.name) || 'Funder'),
       'Contract value: £' + num(contract && contract.value).toLocaleString(),
+      '',
+      'PARTICIPANTS ON THIS CONTRACT',
       'Target starts: ' + ((contract && contract.target_starts) || 0),
       'Actual starts in period: ' + linkedInPeriod.length,
       'Target outcomes: ' + ((contract && contract.target_outcomes) || 0),
       'Actual outcomes in period: ' + linkedOutcomes,
       'Employment outcomes in period: ' + jobs,
       'Sustained outcomes in period: ' + sustained,
+      '',
+      'EVENTS DELIVERED UNDER THIS CONTRACT',
       'Events delivered in period: ' + eventsInPeriod.length,
-      avgCB ? 'Average confidence before (period): ' + avgCB + ' / 5' : '',
-      avgCA ? 'Average confidence after (period): ' + avgCA + ' / 5' : '',
-      'Feedback responses in period: ' + fbInPeriod.length
+      eventsInPeriod.length ? 'Total attendances: ' + attendances : '',
+      eventsInPeriod.length ? 'Sessions: ' + eventsInPeriod.map(e => e.name).join('; ') : '',
+      volHours ? 'Volunteers involved: ' + volCount + ' · volunteer hours: ' + volHours : '',
+      '',
+      'FEEDBACK FROM THESE EVENTS',
+      'Feedback responses: ' + fbN,
+      avgEnjoyed ? 'Average enjoyment: ' + avgEnjoyed + ' / 5' : '',
+      avgCB ? 'Average confidence before: ' + avgCB + ' / 5' : '',
+      avgCA ? 'Average confidence after: ' + avgCA + ' / 5' : '',
+      fbN ? 'Reported increased confidence: ' + improvedPct + '%' : '',
+      fbN ? 'Learned something new: ' + learnedPct + '%' : '',
+      fbN ? 'Felt more connected: ' + connectedPct + '%' : '',
+      quotes.length ? 'Participant quotes (use verbatim, do not alter):\n' + quotes.map(q => '- "' + q + '"').join('\n') : 'Participant quotes: none collected for this period'
     ].filter(Boolean).join('\n');
 
     if (typeof window.runAgent !== 'function') {
@@ -241,7 +312,7 @@
       '<div class="report-doc">' +
         _headerHTML +
         '<div class="report-body">' + bodyHTML + '</div>' +
-        '<div class="report-footer">Generated by Civara · Org Brain · ' + escapeHTML(todayStr) + ' · Period: ' + escapeHTML(periodLabel) + '</div>' +
+        '<div class="report-footer">Generated by Vorlana · Org Brain · ' + escapeHTML(todayStr) + ' · Period: ' + escapeHTML(periodLabel) + '</div>' +
       '</div>';
 
     $('civara-rep-pdf').addEventListener('click', () => window.downloadReportPDF && window.downloadReportPDF());
