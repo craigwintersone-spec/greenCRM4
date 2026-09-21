@@ -1,25 +1,23 @@
-// js/extensions/event-contracts.js  — v1.0
+// js/extensions/event-contracts.js  — v1.1
 // ─────────────────────────────────────────────────────────────
-// Links EVENTS to CONTRACTS, then lets you report by funder.
+// Links EVENTS to CONTRACTS.
 //
-//   1. Contract tick-boxes on the Create/Edit event modal, saved
-//      to events.contract_ids (jsonb) — same pattern as participants.
-//   2. A funder/contract filter on the Delivery Report, so you can
-//      produce "PECT nature workshops, Q2" rather than everything.
-//   3. A per-event report: one workshop, its volunteers, hours,
-//      attendance and feedback — for funders who want the detail.
+//   1. Contract tick-boxes on the Create/Edit event modal, saved to
+//      events.contract_ids (jsonb) — same pattern as participants.
+//   2. A Funder column and a 📄 Report button on the Events page.
+//   3. A per-event session report for funders who want the detail.
 //
-// Events without a contract still appear in the unfiltered report,
-// so nothing is lost by not linking them.
+// v1.1 — the funder filter for the Delivery Report has MOVED into
+// delivery-report.js. This file used to wrap that file's functions
+// at startup, which silently failed whenever this file ran first.
 //
 // Depends on: db.js, agents.js (runAgent, cleanReportText,
-//   reportTextToHTML, getOrgLogoUrl), delivery-report.js
-// Load AFTER delivery-report.js.
+//   reportTextToHTML, getOrgLogoUrl)
 'use strict';
 
 (function () {
 
-var VERSION = 'v1.0';
+var VERSION = 'v1.1';
 
 function $(id) { return document.getElementById(id); }
 function esc(s) {
@@ -30,9 +28,6 @@ function esc(s) {
 function n(v) { return isNaN(+v) ? 0 : +v; }
 function pct(a, b) { return b ? Math.round(a / b * 100) : 0; }
 function round1(v) { return Math.round(v * 10) / 10; }
-function fmtD(d) {
-  return d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : '—';
-}
 function toArrSafe(v) {
   if (Array.isArray(v)) return v;
   if (typeof v === 'string' && v.indexOf('[') === 0) { try { return JSON.parse(v); } catch (e) { return []; } }
@@ -46,19 +41,14 @@ function byIdIn(list, id) {
 
 // ── contract helpers ───────────────────────────────────────
 function contractsList() { return DB.contracts || []; }
-function funderFor(contract) {
-  if (!contract || !contract.funder_id) return null;
-  return byIdIn(DB.funders || [], contract.funder_id);
+function funderFor(c) {
+  return (c && c.funder_id) ? byIdIn(DB.funders || [], c.funder_id) : null;
 }
 function contractLabel(c) {
   var f = funderFor(c);
   return (c.name || 'Unnamed contract') + (f ? ' · ' + f.name : '');
 }
 function eventContracts(ev) { return toArrSafe(ev && ev.contract_ids); }
-function eventHasContract(ev, contractId) {
-  if (!contractId) return true;
-  return eventContracts(ev).map(String).indexOf(String(contractId)) !== -1;
-}
 
 // ── 1. contract tick-boxes on the event modal ──────────────
 function injectEventContractPicker() {
@@ -99,7 +89,6 @@ function readEventContracts() {
   return out;
 }
 
-// wrap the event modal open/save handlers
 function wrapEventModal() {
   var origAdd = window.openAddEv;
   if (typeof origAdd === 'function' && !origAdd._evCon) {
@@ -159,88 +148,6 @@ function patchEventMapper() {
   MAPPERS._evConPatched = true;
 }
 
-// ── 2. contract filter on the Delivery Report ──────────────
-function injectReportFilter() {
-  var panel = $('dr-panel');
-  if (!panel || $('dr-contract-wrap')) return;
-  var grid = panel.querySelector('.form-grid-3');
-  if (!grid) return;
-
-  var row = document.createElement('div');
-  row.className = 'form-row';
-  row.id = 'dr-contract-wrap';
-  row.innerHTML =
-    '<label>Funder / contract</label>' +
-    '<select id="dr-contract"><option value="">All activity (no filter)</option></select>' +
-    '<div style="font-size:11px;color:var(--txt3);margin-top:4px">Reports only on events linked to this contract.</div>';
-  grid.appendChild(row);
-
-  paintContractOptions();
-  $('dr-contract').addEventListener('change', function () {
-    if (typeof window._drRenderPreview === 'function') window._drRenderPreview();
-  });
-}
-
-function paintContractOptions() {
-  var sel = $('dr-contract');
-  if (!sel) return;
-  var cur = sel.value;
-  sel.innerHTML = '<option value="">All activity (no filter)</option>' +
-    contractsList().map(function (c) {
-      return '<option value="' + esc(String(c.id)) + '">' + esc(contractLabel(c)) + '</option>';
-    }).join('');
-  if (cur) sel.value = cur;
-}
-
-// Filter DB.events down to one contract while the report runs,
-// then put it back. Keeps delivery-report.js untouched.
-function withContractFilter(fn) {
-  var sel = $('dr-contract');
-  var cid = sel ? sel.value : '';
-  if (!cid) return fn();
-
-  var all = DB.events || [];
-  var kept = all.filter(function (e) { return eventHasContract(e, cid); });
-  var keptIds = {};
-  kept.forEach(function (e) { keptIds[String(e.id)] = 1; });
-
-  var allHours = DB.volunteer_hours || [];
-  var allFb = DB.feedback || [];
-
-  DB.events = kept;
-  DB.volunteer_hours = allHours.filter(function (h) { return h.event_id && keptIds[String(h.event_id)]; });
-  DB.feedback = allFb.filter(function (f) { return keptIds[String(f.eventId || f.event_id)]; });
-
-  try {
-    return fn();
-  } finally {
-    DB.events = all;
-    DB.volunteer_hours = allHours;
-    DB.feedback = allFb;
-  }
-}
-
-function wrapDeliveryReport() {
-  // preview
-  var origPrev = window._drRenderPreview;
-  if (typeof origPrev === 'function' && !origPrev._evCon) {
-    window._drRenderPreview = function () {
-      var self = this, args = arguments;
-      return withContractFilter(function () { return origPrev.apply(self, args); });
-    };
-    window._drRenderPreview._evCon = true;
-  }
-  // generate
-  var origGen = window._drGenerate;
-  if (typeof origGen === 'function' && !origGen._evCon) {
-    window._drGenerate = function () {
-      var self = this, args = arguments;
-      return withContractFilter(function () { return origGen.apply(self, args); });
-    };
-    window._drGenerate._evCon = true;
-  }
-}
-
 // ── 3. per-event report ────────────────────────────────────
 function eventStats(ev) {
   var hours = (DB.volunteer_hours || []).filter(function (h) { return String(h.event_id) === String(ev.id); });
@@ -250,9 +157,12 @@ function eventStats(ev) {
   var fb = (DB.feedback || []).filter(function (f) { return String(f.eventId || f.event_id) === String(ev.id); });
 
   var totalHours = hours.reduce(function (a, h) { return a + n(h.hours); }, 0);
-  var rate = parseFloat($('dr-rate') && $('dr-rate').value) || 12.60;
+  var rateEl = $('dr-rate');
+  var rate = (rateEl && parseFloat(rateEl.value)) || 12.60;
 
   var cons = eventContracts(ev).map(function (id) { return byIdIn(contractsList(), id); }).filter(Boolean);
+
+  function avg(key) { return fb.length ? round1(fb.reduce(function (a, f) { return a + n(f[key]); }, 0) / fb.length) : 0; }
 
   return {
     ev: ev,
@@ -267,9 +177,9 @@ function eventStats(ev) {
     fill: n(ev.capacity) ? pct(n(ev.attendees), n(ev.capacity)) : null,
     fb: fb,
     fbCount: fb.length,
-    avgEnjoyed: fb.length ? round1(fb.reduce(function (a, f) { return a + n(f.enjoyed); }, 0) / fb.length) : 0,
-    avgCB: fb.length ? round1(fb.reduce(function (a, f) { return a + n(f.cb); }, 0) / fb.length) : 0,
-    avgCA: fb.length ? round1(fb.reduce(function (a, f) { return a + n(f.ca); }, 0) / fb.length) : 0,
+    avgEnjoyed: avg('enjoyed'),
+    avgCB: avg('cb'),
+    avgCA: avg('ca'),
     learnedPct: fb.length ? pct(fb.filter(function (f) { return f.learned; }).length, fb.length) : 0,
     connectedPct: fb.length ? pct(fb.filter(function (f) { return f.connected; }).length, fb.length) : 0,
     quotes: fb.filter(function (f) { return f.quote && String(f.quote).trim().length > 15; })
@@ -328,7 +238,7 @@ function runEventReport(ev) {
     'Volunteer hours: ' + s.totalHours,
     'Notional value of volunteer time: £' + Math.round(s.value).toLocaleString('en-GB') + ' (at £' + s.rate.toFixed(2) + '/hour)',
     '',
-    s.fbCount ? 'Feedback responses: ' + s.fbCount : 'Feedback responses: none',
+    'Feedback responses: ' + (s.fbCount || 'none'),
     s.fbCount ? 'Average enjoyment: ' + s.avgEnjoyed + ' out of 5' : '',
     s.fbCount ? 'Confidence before: ' + s.avgCB + ' → after: ' + s.avgCA : '',
     s.fbCount ? 'Learned something new: ' + s.learnedPct + '%' : '',
@@ -363,15 +273,16 @@ function renderEventDoc(raw, s, orgName, todayStr, funderNames) {
   window._lastReportText = cleaned;
   window._lastReportTitle = (s.ev.name || 'Session') + ' — ' + orgName;
 
+  var meta = 'Session Report' + (funderNames ? ' · ' + esc(funderNames) : '');
   var logo = (typeof getOrgLogoUrl === 'function') ? getOrgLogoUrl(typeof currentOrg !== 'undefined' ? currentOrg : null) : '';
   var header = logo
     ? '<div class="report-header-flex"><div class="report-header-text">' +
-        '<div class="report-meta">Session Report' + (funderNames ? ' · ' + esc(funderNames) : '') + '</div>' +
+        '<div class="report-meta">' + meta + '</div>' +
         '<div class="report-title">' + esc(s.ev.name || 'Session') + '</div>' +
         '<div class="report-subtitle">' + esc(orgName) + ' · ' + esc(todayStr) + '</div>' +
       '</div><div class="report-header-logo"><img src="' + esc(logo) + '" alt="" class="org-logo-report" onerror="this.style.display=\'none\'"/></div></div>'
     : '<div class="report-header">' +
-        '<div class="report-meta">Session Report' + (funderNames ? ' · ' + esc(funderNames) : '') + '</div>' +
+        '<div class="report-meta">' + meta + '</div>' +
         '<div class="report-title">' + esc(s.ev.name || 'Session') + '</div>' +
         '<div class="report-subtitle">' + esc(orgName) + ' · ' + esc(todayStr) + '</div>' +
       '</div>';
@@ -429,7 +340,7 @@ function f(label, val) {
   return '<div class="dr-fig"><div class="dr-fig-v">' + esc(String(val)) + '</div><div class="dr-fig-l">' + esc(label) + '</div></div>';
 }
 
-// ── report button + funder column on the Events page ───────
+// ── 2. Funder column + Report button on the Events page ────
 function wrapRenderEvents() {
   var orig = window.renderEvents;
   if (typeof orig !== 'function' || orig._evCon) return;
@@ -492,18 +403,6 @@ whenReady(function () {
   patchEventMapper();
   wrapEventModal();
   wrapRenderEvents();
-  wrapDeliveryReport();
-
-  // add the filter when the Reports page renders
-  var origRep = window.renderReports;
-  if (typeof origRep === 'function' && !origRep._evCon) {
-    window.renderReports = function () {
-      var r = origRep.apply(this, arguments);
-      try { injectReportFilter(); paintContractOptions(); } catch (e) {}
-      return r;
-    };
-    window.renderReports._evCon = true;
-  }
 
   if (typeof refreshTable === 'function') {
     try {
@@ -513,9 +412,6 @@ whenReady(function () {
       });
     } catch (e) {}
   }
-
-  var rp = $('page-reports');
-  if (rp && rp.classList.contains('active')) { try { injectReportFilter(); } catch (e) {} }
 
   console.log('[event-contracts ' + VERSION + '] ready');
 });
