@@ -240,7 +240,7 @@ label{display:block;font-size:12px;font-weight:600;color:var(--txt2);margin-bott
   <div id="tab-modules" class="tab-pane active">
     <div class="card">
       <div class="card-title">Active modules</div>
-      <div class="card-sub">Turn sections on or off for everyone in your organisation. Hidden modules disappear from the sidebar.</div>
+      <div class="card-sub">Turn sections on or off for everyone in your organisation. Hidden modules disappear from the sidebar. Dashboard and Settings are always on.</div>
       <div class="mod-grid" id="mod-grid"></div>
     </div>
   </div>
@@ -344,14 +344,21 @@ label{display:block;font-size:12px;font-weight:600;color:var(--txt2);margin-bott
 const SB_URL='https://nznfrxzgvcjhfsdaphyp.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw';
 
-// Mirror config.js — these need to match the main app
+// Mirror js/config.js SET_MODULES — these MUST match the main app.
+// Each key matches a data-module="…" on a sidebar button in app.html.
 const SET_MODULES=[
   {k:'participants',n:'Participants & Caseload',d:'Pipeline, referrals, outcomes, safeguarding'},
   {k:'volunteers',  n:'Volunteers & Staff',     d:'Registration, onboarding, hours tracking'},
-  {k:'events',      n:'Events & Feedback',      d:'Workshops, feedback surveys, impact wall'},
+  {k:'events',      n:'Events & Feedback',      d:'Workshops, QR check-in, feedback surveys'},
+  {k:'impact',      n:'Social Impact',          d:'Board-ready impact numbers and impact report'},
+  {k:'contacts',    n:'Contacts & Donors',      d:'Donors, partners, trustees'},
   {k:'employers',   n:'Employers',              d:'Employer CRM, vacancies, placements'},
-  {k:'circular',    n:'Circular Economy',       d:'Repair café, item logging, CO2 tracking'},
-  {k:'funders',     n:'Funders & Reporting',    d:'Contracts, RAG dashboard, funder reports'}
+  {k:'funders',     n:'Funders & Reporting',    d:'Contracts, RAG dashboard, funder reports'},
+  {k:'evidence',    n:'Evidence Hub',           d:'Payslips, certificates, consent forms'},
+  {k:'demographics',n:'Demographics',           d:'Anonymised equality reporting'},
+  {k:'social',      n:'Social Media',           d:'AI-drafted posts from your impact data'},
+  {k:'bd',          n:'BD Manager',             d:'Funding search and EOI writer'},
+  {k:'circular',    n:'Circular Economy',       d:'Repair café, item logging, CO2 tracking'}
 ];
 
 const BRAND_COLOURS=[
@@ -447,7 +454,7 @@ function populate(){
     ORG.plan==='network'?'Network':
     ORG.plan==='starter'?'Starter':'Free';
 
-  // Modules
+  // Modules — any module not yet saved on the org defaults to ON
   const m=ORG.modules||{};
   SET_MODULES.forEach(mod=>modState[mod.k]=m[mod.k]!=null?m[mod.k]:true);
   renderModules();
@@ -484,6 +491,7 @@ function toggleMod(key){
   const item=$('mod-item-'+key);
   tog.classList.toggle('on',modState[key]);
   item.classList.toggle('on',modState[key]);
+  renderPreview();
 }
 
 // ── Colour swatches ─────────────────────────────────────────
@@ -550,7 +558,8 @@ function renderPreview(logoDataUrl){
       ?`<img src="${escapeHTML(logoSrc)}" class="preview-logo-img" alt="Logo"/>`
       :`<div class="preview-logo-text" style="color:${selectedColour}">${escapeHTML(ORG&&ORG.name||'Vorlana')}</div>`)+
     `<div class="preview-nav active" style="color:${selectedColour};background:${selectedColour}14">📊 Dashboard</div>`+
-    navItems.map(m=>`<div class="preview-nav">${escapeHTML(m.n)}</div>`).join('');
+    navItems.map(m=>`<div class="preview-nav">${escapeHTML(m.n)}</div>`).join('')+
+    `<div class="preview-nav">⚙️ Settings</div>`;
   $('preview-sidebar').innerHTML=html;
 }
 
@@ -582,7 +591,9 @@ async function saveAll(){
       logoUrl=urlData.publicUrl;
     }
 
-    const modules={};
+    // Keep any module keys the org already has that aren't in this list,
+    // so nothing saved elsewhere is lost.
+    const modules=Object.assign({},ORG.modules||{});
     SET_MODULES.forEach(m=>modules[m.k]=!!modState[m.k]);
 
     const newSettings=Object.assign({},ORG.settings||{},{branding_completed:true});
