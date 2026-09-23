@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Vorlana — Prove your outcomes to funders. Skip the admin.</title>
 <link rel="icon" type="image/png" href="logo-mark.png"/>
-<meta name="description" content="The AI CRM for UK employability teams. Track your caseload, prove your impact, and generate funder reports — in minutes."/>
+<meta name="description" content="Impact software for UK charities and community organisations. Track participants, events, volunteers and feedback — then generate funder-ready reports and paperwork in minutes."/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
@@ -54,7 +54,6 @@
   .btn-g{background:transparent;color:var(--em2);border-color:var(--border)}
   .btn-g:hover{border-color:var(--em);background:#fff}
   .nav-links .btn{padding:9px 18px}
-  .menu-btn{display:none}
 
   /* ── Hero ────────────────────────────────────────── */
   .hero{padding:74px 0 40px}
@@ -64,7 +63,7 @@
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(42,157,143,.45)}70%{box-shadow:0 0 0 8px rgba(42,157,143,0)}100%{box-shadow:0 0 0 0 rgba(42,157,143,0)}}
   h1{font-family:var(--display);font-weight:600;font-size:clamp(40px,5.4vw,62px);line-height:1.04;letter-spacing:-.025em;color:var(--em2)}
   h1 em{font-style:italic;color:var(--em);font-weight:500}
-  .sub{font-size:19px;color:var(--txt2);margin:22px 0 30px;max-width:30ch}
+  .sub{font-size:19px;color:var(--txt2);margin:22px 0 30px;max-width:34ch}
   .hero-cta{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
   .micro{font-size:14px;color:var(--txt3);margin-top:18px;display:flex;align-items:center;gap:8px}
   .micro svg{flex-shrink:0}
@@ -94,12 +93,12 @@
   /* ── Section scaffolding ─────────────────────────── */
   section{padding:64px 0}
   .sec-eyebrow{font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--em3)}
-  .sec-title{font-family:var(--display);font-weight:600;font-size:clamp(28px,3.4vw,40px);line-height:1.1;letter-spacing:-.02em;color:var(--em2);margin:12px 0 0;max-width:22ch}
-  .sec-lead{font-size:18px;color:var(--txt2);margin-top:14px;max-width:56ch}
+  .sec-title{font-family:var(--display);font-weight:600;font-size:clamp(28px,3.4vw,40px);line-height:1.1;letter-spacing:-.02em;color:var(--em2);margin:12px 0 0;max-width:24ch}
+  .sec-lead{font-size:18px;color:var(--txt2);margin-top:14px;max-width:58ch}
 
   /* Problem strip */
   .problem{background:var(--em2);color:#EAF3F1;border-radius:24px;padding:48px 44px;text-align:center}
-  .problem p{font-family:var(--display);font-weight:400;font-size:clamp(22px,2.9vw,30px);line-height:1.34;letter-spacing:-.01em;max-width:24ch;margin:0 auto}
+  .problem p{font-family:var(--display);font-weight:400;font-size:clamp(22px,2.9vw,30px);line-height:1.34;letter-spacing:-.01em;max-width:26ch;margin:0 auto}
   .problem p b{color:#fff;font-weight:600}
 
   /* Pillars */
@@ -119,17 +118,25 @@
   .step h4{font-family:var(--display);font-weight:600;font-size:19px;color:var(--em2);margin:10px 0 8px}
   .step p{font-size:14.5px;color:var(--txt2)}
 
+  /* Also does — compact list */
+  .also{display:grid;grid-template-columns:repeat(2,1fr);gap:14px 32px;margin-top:36px}
+  .also-item{display:flex;gap:13px;align-items:flex-start}
+  .also-item .tick{flex-shrink:0;margin-top:3px}
+  .also-item b{display:block;font-size:15.5px;font-weight:600;color:var(--em2)}
+  .also-item span{font-size:14.5px;color:var(--txt2)}
+
   /* Trust */
   .trust{text-align:center}
   .trust .sec-title{margin-left:auto;margin-right:auto}
   .chips{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin-top:30px}
   .chip{font-size:14px;font-weight:500;color:var(--txt2);background:var(--surface);border:1px solid var(--border);padding:10px 18px;border-radius:100px}
   .chip span{color:var(--em);margin-right:7px}
+  .data-note{font-size:14px;color:var(--txt3);margin-top:26px;max-width:58ch;margin-left:auto;margin-right:auto;line-height:1.6}
 
   /* Closing CTA */
   .cta-band{background:linear-gradient(135deg,var(--em),var(--em2));border-radius:26px;padding:60px 44px;text-align:center;color:#fff}
   .cta-band h2{font-family:var(--display);font-weight:600;font-size:clamp(28px,3.6vw,40px);line-height:1.1;letter-spacing:-.02em;max-width:20ch;margin:0 auto}
-  .cta-band p{color:#D6EAE7;font-size:18px;margin:16px auto 28px;max-width:44ch}
+  .cta-band p{color:#D6EAE7;font-size:18px;margin:16px auto 28px;max-width:46ch}
   .cta-band .btn-p{background:#fff;color:var(--em2)}
   .cta-band .btn-p:hover{background:#F3FAF9;box-shadow:0 8px 24px rgba(0,0,0,.18)}
   .cta-band .btn-g{color:#fff;border-color:rgba(255,255,255,.5)}
@@ -189,7 +196,7 @@
   @media(max-width:900px){
     .hero-grid{grid-template-columns:1fr;gap:40px}
     .sub{max-width:none}
-    .pillars,.steps{grid-template-columns:1fr}
+    .pillars,.steps,.also{grid-template-columns:1fr}
     .step{border-right:none;border-bottom:1px solid var(--border)}
     .step:last-child{border-bottom:none}
     .nav-links a:not(.btn):not(.signin){display:none}
@@ -214,7 +221,7 @@
   <div class="wrap nav-inner">
     <a href="index.html" class="brand"><img src="logo-mark.png" alt="Vorlana"/>Vorlana</a>
     <nav class="nav-links">
-      <a href="#product">Product</a>
+      <a href="#product">What it does</a>
       <a href="#how">How it works</a>
       <a href="login.html" class="signin">Sign in</a>
       <a href="#" class="btn btn-p" data-demo>Request a demo</a>
@@ -227,36 +234,36 @@
   <section class="hero">
     <div class="wrap hero-grid">
       <div class="hero-copy">
-        <span class="eyebrow"><span class="pulse"></span>For UK employability teams</span>
+        <span class="eyebrow"><span class="pulse"></span>For UK charities &amp; community organisations</span>
         <h1>Prove your outcomes to funders. <em>Skip the admin.</em></h1>
-        <p class="sub">Vorlana tracks your caseload, turns it into funder-ready reports, and finds the funding you're missing — so your time goes to people, not paperwork.</p>
+        <p class="sub">Vorlana captures the work you already do — participants, events, volunteers and feedback — and turns it into funder-ready reports, forms and bids. So your time goes to people, not paperwork.</p>
         <div class="hero-cta">
           <a href="#" class="btn btn-p" data-demo>Request a demo</a>
           <a href="#how" class="btn btn-g">See how it works</a>
         </div>
         <div class="micro">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-          Works with any funder you report to
+          Works with any funder you report to — and your own survey questions
         </div>
       </div>
 
-      <!-- Signature: a report assembling itself from live caseload -->
+      <!-- Signature: a report assembling itself from live data -->
       <div class="report-card" aria-hidden="true">
         <div class="rc-head">
-          <span class="rc-title">Q2 outcomes · MoJ contract</span>
+          <span class="rc-title">Q2 impact · Lottery contract</span>
           <span class="rc-tag">Live</span>
         </div>
+        <div class="rc-row"><span class="av">GW</span><span class="nm">Growing workshop · Orton</span><span class="st out">24 attended</span></div>
         <div class="rc-row"><span class="av">AR</span><span class="nm">Amara R.</span><span class="st out">Into work</span></div>
-        <div class="rc-row"><span class="av">JB</span><span class="nm">Jordan B.</span><span class="st out">Qualification</span></div>
-        <div class="rc-row"><span class="av">SF</span><span class="nm">Sara F.</span><span class="st prog">Job ready</span></div>
+        <div class="rc-row"><span class="av">JB</span><span class="nm">Jordan B.</span><span class="st prog">Job ready</span></div>
         <div class="rc-gen">
           <div class="lbl">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1F6F6D" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>
             Report draft
           </div>
-          <p>This quarter, <strong>14 participants</strong> engaged, with <strong>6 progressing into employment</strong> and 3 gaining qualifications — a <strong>64% positive outcome rate</strong> against contract target.</p>
+          <p>Across <strong>7 sessions</strong>, <strong>96% agreed</strong> the workshops were well run, and confidence rose from <strong>2.6 to 4.3</strong>. Volunteers gave <strong>57 hours</strong> — worth <strong>£718</strong> at the Living Wage.</p>
         </div>
-        <div class="rc-foot"><span class="mini">Export for MoJ →</span></div>
+        <div class="rc-foot"><span class="mini">Download report →</span></div>
       </div>
     </div>
   </section>
@@ -265,7 +272,7 @@
   <section>
     <div class="wrap">
       <div class="problem">
-        <p>Your funders want <b>evidence of outcomes</b>. Getting it out of spreadsheets, forms and email threads eats the weekend that should have been yours.</p>
+        <p>Your funders want <b>evidence of outcomes</b>. Getting it out of spreadsheets, sign-in sheets, Google Forms and email threads eats the weekend that should have been yours.</p>
       </div>
     </div>
   </section>
@@ -273,33 +280,64 @@
   <!-- PILLARS -->
   <section id="product">
     <div class="wrap">
-      <span class="sec-eyebrow">One product, three jobs</span>
-      <h2 class="sec-title">Everything that proves your impact — and nothing that doesn't.</h2>
+      <span class="sec-eyebrow">What it does</span>
+      <h2 class="sec-title">One place for the work — and the proof it happened.</h2>
       <div class="pillars">
+
         <div class="pillar">
           <div class="ic">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           </div>
-          <h3>Employability</h3>
-          <div class="kicker">Your whole caseload in one place</div>
-          <p>Track referrals, stages, barriers and outcomes for every participant — from first contact through to sustained employment. Safeguarding flags where they matter.</p>
+          <h3>People &amp; caseload</h3>
+          <div class="kicker">Every journey, start to sustained</div>
+          <p>Referrals, stages, barriers and outcomes for each participant — with safeguarding flags, case notes and a pipeline showing who needs chasing today.</p>
         </div>
+
+        <div class="pillar">
+          <div class="ic">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          </div>
+          <h3>Events &amp; feedback</h3>
+          <div class="kicker">A QR code does the paperwork</div>
+          <p>Print one code per session. People scan to leave feedback, volunteers check in and out. Your own survey questions, kept word for word — no app, no login.</p>
+        </div>
+
+        <div class="pillar">
+          <div class="ic">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-4.6-7-10a7 7 0 0 1 14 0c0 5.4-7 10-7 10Z"/><circle cx="12" cy="11" r="2.4"/></svg>
+          </div>
+          <h3>Volunteers &amp; hours</h3>
+          <div class="kicker">Hours that count for something</div>
+          <p>Log sessions against people and events, then show the total contribution — and its value at the Living Wage. The line that makes a board sit up.</p>
+        </div>
+
         <div class="pillar">
           <div class="ic">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15l2 2 4-4"/></svg>
           </div>
-          <h3>Funder Reporting</h3>
+          <h3>Funder reporting</h3>
           <div class="kicker">The report writes itself</div>
-          <p>Turn live case data into a funder-ready report in minutes, not weekends — in any funder's format, from national contracts to the smallest local trust. Ready to send.</p>
+          <p>Pick a funder and a period. Every figure is calculated from your records — the writing is drafted around them, with the gaps in your data stated plainly, not papered over.</p>
         </div>
+
+        <div class="pillar">
+          <div class="ic">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          </div>
+          <h3>Forms &amp; paperwork</h3>
+          <div class="kicker">Their form, filled in</div>
+          <p>Start and end forms generated as Word documents. Upload a funder's own blank form and it comes back completed from the participant's record — ready for your check.</p>
+        </div>
+
         <div class="pillar">
           <div class="ic">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.3-4.3M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/><path d="M11 8v6M8 11h6"/></svg>
           </div>
-          <h3>BD Manager</h3>
-          <div class="kicker">Never miss funding you're owed</div>
-          <p>Your BD Manager scans for live opportunities that fit your work and drafts the outreach — so your pipeline keeps moving while you focus on delivery.</p>
+          <h3>Finding funding</h3>
+          <div class="kicker">And writing the bid</div>
+          <p>Search live opportunities that fit your work, then draft the expression of interest — answering the funder's actual questions, within their word limits, from your real outcomes.</p>
         </div>
+
       </div>
     </div>
   </section>
@@ -308,22 +346,64 @@
   <section id="how">
     <div class="wrap">
       <span class="sec-eyebrow">How it works</span>
-      <h2 class="sec-title">Three steps from casework to a report you can send.</h2>
+      <h2 class="sec-title">Three steps from a session to a report you can send.</h2>
       <div class="steps">
         <div class="step">
           <div class="no">Step 01</div>
-          <h4>Track</h4>
-          <p>Log participants, referrals and outcomes as you work — quick to enter, on any device, during the session.</p>
+          <h4>Capture</h4>
+          <p>A QR code at the session, a few taps on a phone, or bring in the years you already have in spreadsheets and Google Forms.</p>
         </div>
         <div class="step">
           <div class="no">Step 02</div>
           <h4>Prove</h4>
-          <p>Barriers, stages and outcomes roll up into a live impact picture, so you always know where every contract stands.</p>
+          <p>Attendance, hours, outcomes and feedback add themselves up — so you always know where every funder stands, without asking anyone.</p>
         </div>
         <div class="step">
           <div class="no">Step 03</div>
           <h4>Report</h4>
-          <p>Generate the report in your funder's format, drafted from real data and ready to review and send.</p>
+          <p>Generate the report, the funder's form, or the next bid. Drafted from real figures, ready for you to check and send.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ALSO DOES -->
+  <section>
+    <div class="wrap">
+      <span class="sec-eyebrow">Also included</span>
+      <h2 class="sec-title">The rest of the week, handled.</h2>
+      <div class="also">
+        <div class="also-item">
+          <svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          <div><b>Social impact report</b><span>Board-ready numbers and the story around them, for any period you choose.</span></div>
+        </div>
+        <div class="also-item">
+          <svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          <div><b>Social media studio</b><span>Posts drafted from a real session — every platform at once, with a content plan.</span></div>
+        </div>
+        <div class="also-item">
+          <svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          <div><b>Partner referral portal</b><span>Give probation, Jobcentre Plus or a housing team their own link to refer in and track progress.</span></div>
+        </div>
+        <div class="also-item">
+          <svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          <div><b>Equality monitoring</b><span>Voluntary, anonymised, and reported in aggregate — so you can see gaps in who you reach.</span></div>
+        </div>
+        <div class="also-item">
+          <svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          <div><b>Evidence hub</b><span>Payslips, certificates and consent forms kept against the outcome they prove.</span></div>
+        </div>
+        <div class="also-item">
+          <svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          <div><b>Contract dashboard</b><span>Live red-amber-green against each funder's targets, so nothing creeps up on you.</span></div>
+        </div>
+        <div class="also-item">
+          <svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          <div><b>Employers &amp; vacancies</b><span>Who's hiring, who's placed, and which job-ready people fit the roles that are open.</span></div>
+        </div>
+        <div class="also-item">
+          <svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          <div><b>Your team, your way</b><span>Managers, advisors and admin each see what they should. Turn off the parts you don't use.</span></div>
         </div>
       </div>
     </div>
@@ -344,6 +424,7 @@
         <span class="chip"><span>💼</span>DWP</span>
         <span class="chip"><span>➕</span>Any funder you name</span>
       </div>
+      <p class="data-note">Your data stays yours. Hosted in the EU/EEA, aligned to UK GDPR, with role-based access so staff only see what they need. Equality data is voluntary and reported only in aggregate.</p>
     </div>
   </section>
 
@@ -352,7 +433,7 @@
     <div class="wrap">
       <div class="cta-band">
         <h2>Spend your week on people, not paperwork.</h2>
-        <p>See how Vorlana turns your caseload into funder-ready proof — book a 20-minute demo with your own data in mind.</p>
+        <p>See how Vorlana turns the work you already do into funder-ready proof — book a 20-minute demo with your own data in mind.</p>
         <div class="hero-cta" style="justify-content:center">
           <a href="#" class="btn btn-p" data-demo>Request a demo</a>
           <a href="login.html" class="btn btn-g">Sign in</a>
@@ -367,7 +448,7 @@
     <div class="foot-inner">
       <a href="index.html" class="brand"><img src="logo-mark.png" alt="Vorlana"/>Vorlana</a>
       <nav class="foot-links">
-        <a href="#product">Product</a>
+        <a href="#product">What it does</a>
         <a href="#how">How it works</a>
         <a href="#">Privacy</a>
         <a href="mailto:hello@vorlana.com">Contact</a>
@@ -404,8 +485,8 @@
         <input id="d-org" type="text" autocomplete="organization" placeholder="Your charity or organisation"/>
       </div>
       <div class="m-field">
-        <label for="d-message">Anything you'd like us to know? <span style="color:var(--txt3);font-weight:400">(optional)</span></label>
-        <textarea id="d-message" placeholder="e.g. we report to the MoJ and GLA and want to cut our reporting time"></textarea>
+        <label for="d-message">What would you want it to fix first? <span style="color:var(--txt3);font-weight:400">(optional)</span></label>
+        <textarea id="d-message" placeholder="e.g. we run community workshops and spend weekends pulling the annual impact report together"></textarea>
       </div>
 
       <!-- honeypot: hidden from humans, catches bots -->
