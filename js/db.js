@@ -10,6 +10,10 @@
 // Critical safety: every query/insert REQUIRES orgId. Refuses to run
 // without one — this prevents the cross-org data leak the original
 // codebase had with feedback and partner_referrals.
+//
+// v3 (historic import): feedback rows carry `answers` (the org's own
+// questions, word-for-word) and `import_batch`. Missing scores stay
+// null — they are never filled in with 3.
 
 'use strict';
 
@@ -35,7 +39,8 @@ const DB = {
   circular:           [],
   contracts:          [],
   evidence:           [],
-  funders:            []
+  funders:            [],
+  survey_measures:    []
 };
 
 // ── Init ──────────────────────────────────────────────────────
@@ -97,6 +102,13 @@ async function sbDelete(table, id) {
   await sb.from(table).delete().eq('id', id);
 }
 
+// A score that may be absent: null stays null (never invented).
+function numOrNull(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const x = Number(v);
+  return isNaN(x) ? null : x;
+}
+
 // ── Row mappers ───────────────────────────────────────────────
 // These shape the raw Postgres rows into the format render.js expects.
 // One mapper per table — keeps refreshTable() clean.
@@ -139,19 +151,24 @@ const MAPPERS = {
     date: r.event_date || r.date || '',
     attendees: num(r.attendees),
     capacity: num(r.capacity) || 20,
-    location: r.location || ''
+    location: r.location || '',
+    contract_ids: toArr(r.contract_ids),
+    import_batch: r.import_batch || null
   }),
   feedback: r => ({
     id: r.id,
     eventId: r.event_id || r.eventId,
     name: r.name || '',
-    enjoyed: num(r.enjoyed) || 3,
-    cb: num(r.cb) || 3,
-    ca: num(r.ca) || 3,
+    enjoyed: numOrNull(r.enjoyed),
+    cb: numOrNull(r.cb),
+    ca: numOrNull(r.ca),
     learned: !!r.learned,
     connected: !!r.connected,
     friend: !!r.friend,
-    quote: r.quote || ''
+    quote: r.quote || '',
+    answers: (r.answers && typeof r.answers === 'object') ? r.answers : {},
+    import_batch: r.import_batch || null,
+    created_at: r.created_at || ''
   }),
   contacts: r => ({
     id: r.id,
@@ -235,6 +252,13 @@ const MAPPERS = {
     contact_name: r.contact_name || '',
     contact_email: r.contact_email || '',
     notes: r.notes || ''
+  }),
+  survey_measures: r => ({
+    id: r.id,
+    question: r.question || '',
+    kind: r.kind || 'text',
+    maps_to: r.maps_to || null,
+    label: r.label || (r.question || '').slice(0, 60)
   })
 };
 
@@ -251,7 +275,8 @@ const TABLE_TO_DB_KEY = {
   evidence:          'evidence',
   referrals:         'referrals',
   partner_referrals: 'partner_referrals',
-  funders:           'funders'
+  funders:           'funders',
+  survey_measures:   'survey_measures'
 };
 
 // Maps DB cache keys back to mapper names (mostly identity, except circular)
@@ -267,18 +292,22 @@ const DB_KEY_TO_MAPPER = {
   evidence:          'evidence',
   referrals:         'referrals',
   partner_referrals: 'partner_referrals',
-  funders:           'funders'
+  funders:           'funders',
+  survey_measures:   'survey_measures'
 };
 
 // ── Sync ──────────────────────────────────────────────────────
 
 // Pull every table at once. Used on boot and full refresh.
+// survey_measures is optional — if the table doesn't exist yet (SQL not
+// run), sbQ logs the error and returns [] and nothing else breaks.
 async function syncAll() {
   if (!sb) return;
   const tables = [
     'participants', 'volunteers', 'events', 'feedback',
     'contacts', 'employers', 'circular_items', 'contracts',
-    'evidence', 'referrals', 'partner_referrals', 'funders'
+    'evidence', 'referrals', 'partner_referrals', 'funders',
+    'survey_measures'
   ];
   const results = await Promise.all(tables.map(t => sbQ(t)));
   tables.forEach((tbl, i) => {
@@ -298,3 +327,6 @@ async function refreshTable(table) {
   const mapper = MAPPERS[DB_KEY_TO_MAPPER[dbKey] || dbKey];
   if (mapper) DB[dbKey] = fresh.map(mapper);
 }
+
+// Reload measures after the import saves them.
+window.addEventListener('vorlana:measures-saved', () => { refreshTable('survey_measures'); });
