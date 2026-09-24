@@ -413,6 +413,60 @@ async function deleteRef(id) {
 }
 
 // ── Events ──────────────────────────────────────────────────
+// v3: each event picks which of the org's feedback questions to ask.
+// events.question_ids = array of survey_measures ids, or null = all.
+function _evQuestionBox() {
+  let box = $('evf-questions-wrap');
+  if (box) return box;
+  const modal = document.querySelector('#modal-ev .modal'); if (!modal) return null;
+  const footer = modal.querySelector('.modal-footer');
+  box = document.createElement('div');
+  box.id = 'evf-questions-wrap';
+  box.className = 'form-row';
+  modal.insertBefore(box, footer);
+  return box;
+}
+function renderEvQuestions(selectedIds) {
+  const box = _evQuestionBox(); if (!box) return;
+  const M = (typeof activeMeasures === 'function') ? activeMeasures() : [];
+  const all = selectedIds == null;
+  box.innerHTML =
+    '<label>Feedback questions for this event</label>' +
+    (M.length
+      ? '<div class="chk-group" id="evf-questions">' +
+          M.map(m => '<div class="chk-pill"><label title="' + escapeHTML(m.question) + '"><input type="checkbox" value="' + escapeHTML(String(m.id)) + '"' + ((all || selectedIds.map(String).includes(String(m.id))) ? ' checked' : '') + '/> ' + escapeHTML((m.label || m.question).length > 48 ? (m.label || m.question).slice(0, 48) + '…' : (m.label || m.question)) + '</label></div>').join('') +
+        '</div>'
+      : '<div style="font-size:12px;color:var(--txt3);margin:4px 0 8px">No questions set up yet — add one below or under Settings → Feedback questions.</div>') +
+    '<div style="display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap">' +
+      '<input id="evf-newq" placeholder="Add a new question, e.g. Would you come again?" style="flex:1;min-width:220px;font-size:13px"/>' +
+      '<select id="evf-newq-kind" style="width:auto"><option value="yesno">Yes / no</option><option value="score">Score 1–5</option><option value="choice">Choice</option><option value="text">Comment</option></select>' +
+      '<button type="button" class="btn btn-ghost btn-sm" onclick="evAddQuestion()">+ Add</button>' +
+    '</div>';
+}
+function getEvQuestionIds() {
+  const boxes = [].slice.call(document.querySelectorAll('#evf-questions input[type=checkbox]'));
+  if (!boxes.length) return null;
+  const on = boxes.filter(b => b.checked).map(b => b.value);
+  return on.length === boxes.length ? null : on;   // all ticked = "every active question"
+}
+async function evAddQuestion() {
+  const q = ($('evf-newq').value || '').trim();
+  if (!q) return;
+  const kind = $('evf-newq-kind').value;
+  const btn = document.querySelector('#evf-questions-wrap button'); if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const sel = getEvQuestionIds();
+    const r = await sb.from('survey_measures').upsert({ org_id: orgId, question: q, kind, maps_to: null, label: q.slice(0, 60), active: true, sort: (DB.survey_measures || []).length }, { onConflict: 'org_id,question' }).select();
+    if (r.error) throw r.error;
+    await refreshTable('survey_measures');
+    const added = (DB.survey_measures || []).find(m => m.question === q);
+    renderEvQuestions(sel == null ? null : sel.concat(added ? [String(added.id)] : []));
+  } catch (e) {
+    alert('Could not add question: ' + (e.message || e) + (/survey_measures|active|sort/i.test(e.message || '') ? '\n\nRun sql/import-v3.sql in Supabase first.' : ''));
+    if (btn) { btn.disabled = false; btn.textContent = '+ Add'; }
+  }
+}
+
 function openAddEv() {
   _editEvId = null;
   $('ev-modal-title').textContent = 'Create event';
@@ -421,6 +475,7 @@ function openAddEv() {
   $('evf-date').value = today();
   $('evf-att').value = '';
   $('evf-cap').value = '20';
+  renderEvQuestions(null);
   $('modal-ev').classList.add('open');
 }
 function openEditEv(id) {
@@ -433,6 +488,7 @@ function openEditEv(id) {
   $('evf-att').value  = ev.attendees;
   $('evf-cap').value  = ev.capacity;
   $('evf-loc').value  = ev.location;
+  renderEvQuestions(ev.question_ids || null);
   $('modal-ev').classList.add('open');
 }
 async function saveEv() {
@@ -445,10 +501,15 @@ async function saveEv() {
       event_date: $('evf-date').value,
       attendees: parseInt($('evf-att').value) || 0,
       capacity:  parseInt($('evf-cap').value) || 20,
-      location:  $('evf-loc').value
+      location:  $('evf-loc').value,
+      question_ids: getEvQuestionIds()
     };
-    if (_editEvId) await sbUpdate('events', d, _editEvId);
-    else await sbInsert('events', d);
+    const write = (payload) => _editEvId ? sbUpdate('events', payload, _editEvId) : sbInsert('events', payload);
+    try { await write(d); }
+    catch (e) {
+      if (/question_ids/i.test(e.message || '')) { const d2 = Object.assign({}, d); delete d2.question_ids; await write(d2); alert('Saved, but the per-event question choice was not stored — run sql/import-v3.sql in Supabase.'); }
+      else throw e;
+    }
     await refreshTable('events');
     closeModal('modal-ev');
     renderEvents();
@@ -463,6 +524,11 @@ async function deleteEv(id) {
 }
 
 // ── Feedback ────────────────────────────────────────────────
+// v3: the form asks the org's OWN questions (DB.survey_measures).
+// Answers are stored word-for-word in feedback.answers; the fixed
+// fields (enjoyed, cb, ca, learned, connected, friend, quote) are
+// filled from whichever question maps to them. With no questions
+// set up yet, the original fixed form is shown.
 function makeStars(cid, key, val) {
   const c = $(cid); if (!c) return;
   c.innerHTML = [1, 2, 3, 4, 5].map(n =>
@@ -474,18 +540,68 @@ function setFbScore(key, val, cid) {
   [].slice.call($(cid).children).forEach((s, i) => s.classList.toggle('sel', i + 1 <= val));
 }
 
+function _fbMeasures(eventId) {
+  const M = (typeof activeMeasures === 'function') ? activeMeasures() : [];
+  if (!eventId) return M;
+  const ev = (DB.events || []).find(e => String(e.id) === String(eventId));
+  if (!ev || !ev.question_ids) return M;
+  const ids = ev.question_ids.map(String);
+  const sub = M.filter(m => ids.includes(String(m.id)));
+  return sub.length ? sub : M;
+}
+// Questions for the event chosen in the form.
+function eventQuestionsFor(eventId) { return _fbMeasures(eventId); }
+
 function openAddFb() {
   _editFbId = null;
-  _fbScores = { enjoyed: 5, cb: 3, ca: 5 };
-  $('fb-modal-title').textContent = 'Add feedback';
-  $('fbf-name').value  = '';
-  $('fbf-quote').value = '';
-  ['fbf-learned', 'fbf-connected', 'fbf-friend'].forEach(id => $(id).checked = false);
+  _fbScores = {};
+  const M = _fbMeasures();
+  const box = document.querySelector('#modal-fb .modal');
+  if (!box) return;
+
+  if (!M.length) {
+    _fbScores = { enjoyed: 5, cb: 3, ca: 5 };
+    box.innerHTML =
+      '<h2 id="fb-modal-title">Add feedback</h2>' +
+      '<div class="form-grid-2"><div class="form-row"><label>Event *</label><select id="fbf-ev"><option value="">Select event…</option></select></div><div class="form-row"><label>Participant name</label><input id="fbf-name"/></div></div>' +
+      '<div class="form-row"><label>Enjoyment (1–5)</label><div style="display:flex;gap:5px;margin-top:4px" id="fbf-enjoyed-stars"></div></div>' +
+      '<div class="form-grid-2"><div class="form-row"><label>Confidence before</label><div style="display:flex;gap:5px;margin-top:4px" id="fbf-cb-stars"></div></div><div class="form-row"><label>Confidence after</label><div style="display:flex;gap:5px;margin-top:4px" id="fbf-ca-stars"></div></div></div>' +
+      '<div class="form-row"><label>Outcomes</label><div class="chk-group"><div class="chk-pill"><label><input type="checkbox" id="fbf-learned"/> Learned something new</label></div><div class="chk-pill"><label><input type="checkbox" id="fbf-connected"/> Felt more connected</label></div><div class="chk-pill"><label><input type="checkbox" id="fbf-friend"/> Made a new friend</label></div></div></div>' +
+      '<div class="form-row"><label>Quote</label><textarea id="fbf-quote" style="min-height:55px"></textarea></div>' +
+      '<div style="font-size:12px;color:var(--txt3);margin-top:4px">These are Vorlana\'s standard questions. Set your own under Settings → Feedback questions.</div>' +
+      '<div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal(\'modal-fb\')">Cancel</button><button class="btn btn-p" id="fb-save-btn" onclick="saveFb()">Save</button></div>';
+    populateFbEvSelect();
+    makeStars('fbf-enjoyed-stars', 'enjoyed', 5);
+    makeStars('fbf-cb-stars', 'cb', 3);
+    makeStars('fbf-ca-stars', 'ca', 5);
+    $('modal-fb').classList.add('open');
+    return;
+  }
+
+  box.innerHTML =
+    '<h2 id="fb-modal-title">Add feedback</h2>' +
+    '<div class="form-grid-2"><div class="form-row"><label>Event *</label><select id="fbf-ev" onchange="renderFbQuestions()"><option value="">Select event…</option></select></div><div class="form-row"><label>Participant name (optional)</label><input id="fbf-name"/></div></div>' +
+    '<div id="fbf-qs"></div>' +
+    '<div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal(\'modal-fb\')">Cancel</button><button class="btn btn-p" id="fb-save-btn" onclick="saveFb()">Save</button></div>';
   populateFbEvSelect();
-  makeStars('fbf-enjoyed-stars', 'enjoyed', 5);
-  makeStars('fbf-cb-stars', 'cb', 3);
-  makeStars('fbf-ca-stars', 'ca', 5);
+  renderFbQuestions();
   $('modal-fb').classList.add('open');
+}
+
+let _fbQs = [];
+function renderFbQuestions() {
+  const wrap = $('fbf-qs'); if (!wrap) return;
+  const M = _fbMeasures($('fbf-ev') ? $('fbf-ev').value : '');
+  _fbQs = M; _fbScores = {};
+  wrap.innerHTML =
+    M.map((m, i) => {
+      const lbl = '<label title="' + escapeHTML(m.question) + '">' + escapeHTML(m.question) + '</label>';
+      if (m.kind === 'score') return '<div class="form-row">' + lbl + '<div style="display:flex;gap:5px;margin-top:4px" id="fbq-' + i + '"></div></div>';
+      if (m.kind === 'yesno') return '<div class="form-row">' + lbl + '<select id="fbq-' + i + '"><option value="">—</option><option>Yes</option><option>No</option></select></div>';
+      if (m.kind === 'text')  return '<div class="form-row">' + lbl + '<textarea id="fbq-' + i + '" style="min-height:55px"></textarea></div>';
+      return '<div class="form-row">' + lbl + '<input id="fbq-' + i + '"/></div>';
+    }).join('');
+  M.forEach((m, i) => { if (m.kind === 'score') makeStars('fbq-' + i, 'q' + i, 0); });
 }
 
 async function saveFb() {
@@ -493,22 +609,49 @@ async function saveFb() {
   if (!evId) { alert('Please select an event'); return; }
   const btn = $('fb-save-btn'); btn.textContent = 'Saving…'; btn.disabled = true;
   try {
-    const d = {
-      event_id:  evId,
-      name:      $('fbf-name').value,
-      enjoyed:   _fbScores.enjoyed,
-      cb:        _fbScores.cb,
-      ca:        _fbScores.ca,
-      learned:   $('fbf-learned').checked,
-      connected: $('fbf-connected').checked,
-      friend:    $('fbf-friend').checked,
-      quote:     $('fbf-quote').value
-    };
+    const M = (typeof activeMeasures === 'function' && activeMeasures().length) ? _fbQs : [];
+    let d;
+    if (!M.length) {
+      d = {
+        event_id:  evId,
+        name:      $('fbf-name').value,
+        enjoyed:   _fbScores.enjoyed,
+        cb:        _fbScores.cb,
+        ca:        _fbScores.ca,
+        learned:   $('fbf-learned').checked,
+        connected: $('fbf-connected').checked,
+        friend:    $('fbf-friend').checked,
+        quote:     $('fbf-quote').value,
+        answers:   {}
+      };
+    } else {
+      const answers = {};
+      const std = { enjoyed: null, cb: null, ca: null, learned: false, connected: false, friend: false, quote: '' };
+      M.forEach((m, i) => {
+        let v;
+        if (m.kind === 'score') v = _fbScores['q' + i] || null;
+        else { const el = $('fbq-' + i); v = el ? el.value.trim() : ''; }
+        if (v == null || v === '') return;
+        answers[m.question] = v;
+        if (!m.maps_to) return;
+        if (m.maps_to === 'quote') { if (!std.quote) std.quote = String(v); return; }
+        if (m.maps_to === 'enjoyed' || m.maps_to === 'cb' || m.maps_to === 'ca') {
+          let sc = scoreOf(v);
+          if (sc == null) { const y = yesOf(v); if (y === true) sc = 5; else if (y === false) sc = 1; }
+          if (sc != null) std[m.maps_to] = Math.min(5, Math.max(1, Math.round(sc)));
+          return;
+        }
+        std[m.maps_to] = yesOf(v) === true;
+      });
+      d = Object.assign({ event_id: evId, name: $('fbf-name').value, answers }, std);
+    }
     await sbInsert('feedback', d);
     await refreshTable('feedback');
     closeModal('modal-fb');
     renderFeedback();
-  } catch (e) { alert('Save failed: ' + e.message); }
+  } catch (e) {
+    alert('Save failed: ' + e.message + (/answers/i.test(e.message || '') ? '\n\nRun sql/import-v3.sql in Supabase to add the answers column.' : ''));
+  }
   finally { btn.textContent = 'Save'; btn.disabled = false; }
 }
 async function deleteFb(id) {
