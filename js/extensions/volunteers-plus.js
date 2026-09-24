@@ -157,6 +157,7 @@ function injectVolDemographics() {
 
   modal.querySelectorAll('label').forEach(function (l) {
     if (/hours logged/i.test(l.textContent)) l.textContent = 'Opening balance (hours before Vorlana)';
+    if (/^\s*(email|phone)\s*\*\s*$/i.test(l.textContent)) l.textContent = l.textContent.replace('*', '').trim();
   });
 
   var wrap = document.createElement('div');
@@ -194,8 +195,7 @@ function saveVolPlus() {
   var email = gv('vf-email').trim();
   var phone = gv('vf-phone').trim();
   if (!fullName) { alert('Full name is required.'); return; }
-  if (!email)    { alert('Email is required.'); return; }
-  if (!phone)    { alert('Phone is required.'); return; }
+  // email and phone are optional — imported sign-in sheets often don't collect them
 
   var btn = $('vol-save-btn');
   btn.textContent = 'Saving…'; btn.disabled = true;
@@ -205,8 +205,8 @@ function saveVolPlus() {
     first_name: parts[0],
     last_name: parts.slice(1).join(' '),
     name: fullName,
-    email: email,
-    phone: phone,
+    email: email || null,
+    phone: phone || null,
     role: gv('vf-role'),
     hours: parseFloat(gv('vf-hours')) || 0,
     status: gv('vf-status'),
