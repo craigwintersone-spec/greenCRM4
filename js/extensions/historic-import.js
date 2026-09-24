@@ -1,4 +1,4 @@
-// js/extensions/historic-import.js  — v3.0
+// js/extensions/historic-import.js  — v3.1
 // ─────────────────────────────────────────────────────────────
 // HISTORIC DATA IMPORT — events, volunteer hours, feedback.
 //
@@ -30,7 +30,7 @@
 
 (function () {
 
-var VERSION = 'v3.0';
+var VERSION = 'v3.2';
 var BATCH = 500;
 var MAX_ROWS = 10000;
 
@@ -911,7 +911,10 @@ function runFeedback() {
           var a = r.answers[q];
           if (m.maps_to === 'quote') { if (!std.quote && String(a).length > 3) std.quote = String(a); return; }
           if (m.maps_to === 'enjoyed' || m.maps_to === 'cb' || m.maps_to === 'ca') {
-            var sc = toScore(a); if (sc != null) std[m.maps_to] = Math.min(5, Math.max(1, Math.round(sc)));
+            var sc = toScore(a);
+            if (sc == null && isYes(a)) sc = 5;      // yes/no question feeding a score field
+            else if (sc == null && isNo(a)) sc = 1;
+            if (sc != null) std[m.maps_to] = Math.min(5, Math.max(1, Math.round(sc)));
             return;
           }
           std[m.maps_to] = truthy(a);
@@ -1021,16 +1024,17 @@ function renderAfter(A) {
     var rows = A.measures.map(function (m, mi) {
       var kind = el.querySelector('select[data-mk="' + mi + '"]').value;
       var maps = el.querySelector('select[data-mm="' + mi + '"]').value || null;
-      return { org_id: orgId, question: m.question, kind: kind, maps_to: maps, label: m.question.slice(0, 60) };
+      return { org_id: orgId, question: m.question, kind: kind, maps_to: maps, label: m.question.slice(0, 60), active: kind !== 'ignore', sort: mi };
     });
     var msg = $('hi-measures-msg');
     msg.textContent = 'Saving…';
     sb.from('survey_measures').upsert(rows, { onConflict: 'org_id,question' })
       .then(function (r) {
         if (r && r.error) throw r.error;
-        msg.textContent = '✓ Saved. Reports can now read these questions.';
-        window.dispatchEvent(new CustomEvent('vorlana:measures-saved'));
+        msg.textContent = '✓ Saved. Your Feedback page and reports now use these questions.';
+        return (typeof refreshTable === 'function') ? refreshTable('survey_measures') : null;
       })
+      .then(function () { repaintAll(); })
       .catch(function (e) { msg.textContent = 'Could not save: ' + (e.message || e) + (/survey_measures/i.test(e.message || '') ? ' — run sql/import-v3.sql first.' : ''); });
   });
 }
