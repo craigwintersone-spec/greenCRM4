@@ -280,6 +280,40 @@ async function deleteC(id) {
 }
 
 // ── Volunteers ──────────────────────────────────────────────
+// Skills offered = Vorlana's standard list + every skill already used in
+// this org (e.g. from an imported sign-in sheet) + this volunteer's own.
+function volSkillOptions(sel) {
+  const seen = {}, out = [];
+  const add = s => { s = String(s || '').trim(); if (s && !seen[s.toLowerCase()]) { seen[s.toLowerCase()] = 1; out.push(s); } };
+  (sel || []).forEach(add);
+  (DB.volunteers || []).forEach(v => toArr(v.skills).forEach(add));
+  (typeof VOL_SKILLS !== 'undefined' ? VOL_SKILLS : []).forEach(add);
+  return out;
+}
+function renderVolSkills(sel) {
+  sel = sel || [];
+  mkChkGroup('vf-skills', volSkillOptions(sel), sel);
+  const grp = $('vf-skills'); if (!grp) return;
+  let row = $('vf-skill-add-row');
+  if (!row) {
+    row = document.createElement('div');
+    row.id = 'vf-skill-add-row';
+    row.style.cssText = 'display:flex;gap:6px;margin-top:8px';
+    row.innerHTML = '<input id="vf-skill-new" placeholder="Add a skill…" style="flex:1;font-size:13px"/>' +
+      '<button type="button" class="btn btn-ghost btn-sm" onclick="addVolSkill()">+ Add</button>';
+    grp.parentNode.insertBefore(row, grp.nextSibling);
+    $('vf-skill-new').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addVolSkill(); } });
+  }
+  $('vf-skill-new').value = '';
+}
+function addVolSkill() {
+  const v = ($('vf-skill-new').value || '').trim();
+  if (!v) return;
+  const sel = getChkArr('vf-skills');
+  if (!sel.some(x => x.toLowerCase() === v.toLowerCase())) sel.push(v);
+  renderVolSkills(sel);
+}
+
 function openAddVol() {
   _editVolId = null;
   $('vol-modal-title').textContent = 'Add volunteer';
@@ -287,7 +321,7 @@ function openAddVol() {
   $('vf-hours').value  = '0';
   $('vf-role').value   = 'Volunteer';
   $('vf-status').value = 'Active';
-  mkChkGroup('vf-skills', VOL_SKILLS);
+  renderVolSkills([]);
   $('modal-vol').classList.add('open');
 }
 function openEditVol(id) {
@@ -295,12 +329,12 @@ function openEditVol(id) {
   _editVolId = id;
   $('vol-modal-title').textContent = 'Edit volunteer';
   $('vf-name').value   = v.name;
-  $('vf-email').value  = v.email;
+  $('vf-email').value  = v.email || '';
   $('vf-phone').value  = v.phone || '';
   $('vf-hours').value  = v.hours;
   $('vf-role').value   = v.role || 'Volunteer';
   $('vf-status').value = v.status;
-  mkChkGroup('vf-skills', VOL_SKILLS, toArr(v.skills));
+  renderVolSkills(toArr(v.skills));
   $('modal-vol').classList.add('open');
 }
 async function saveVol() {
@@ -309,15 +343,13 @@ async function saveVol() {
   const phone = $('vf-phone').value.trim();
   const role = $('vf-role').value;
   if (!fullName) { alert('Full name is required.'); return; }
-  if (!email)    { alert('Email is required.'); return; }
-  if (!phone)    { alert('Phone is required.'); return; }
   const btn = $('vol-save-btn'); btn.textContent = 'Saving…'; btn.disabled = true;
   try {
     const parts = fullName.split(' ');
     const payload = {
       first_name: parts[0],
       last_name:  parts.slice(1).join(' '),
-      name:       fullName, email, phone, role,
+      name:       fullName, email: email || null, phone: phone || null, role,
       hours: parseInt($('vf-hours').value) || 0,
       status: $('vf-status').value,
       skills: JSON.stringify(getChkArr('vf-skills'))
