@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Vorlana — Event</title>
+<title>Vorlana</title>
 <link rel="icon" type="image/png" href="logo-mark.png"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -59,11 +59,15 @@ textarea{min-height:88px;resize:vertical}
 .btn-p.loading .spin{display:inline-block}
 @keyframes sp{to{transform:rotate(360deg)}}
 .center{text-align:center;padding:50px 20px;color:var(--txt3)}
+.yn{display:flex;gap:8px}
+.yn button{flex:1;padding:13px;border:1px solid var(--border);background:var(--surface);border-radius:10px;font-family:inherit;font-size:15px;font-weight:700;color:var(--txt2);cursor:pointer}
+.yn button.on{background:var(--em);border-color:var(--em);color:#fff}
+.divider{border-top:1px solid var(--border);margin:18px 0 14px}
+.faces .star{font-size:22px}
 </style>
 </head>
 <body>
 <div class="wrap">
-
   <div class="brand">
     <img src="logo-mark.png" alt="" onerror="this.remove()"/>
     <span class="wordmark">Vorlana</span>
@@ -77,7 +81,7 @@ textarea{min-height:88px;resize:vertical}
     <div class="done">
       <div class="tick" style="background:var(--amber)">!</div>
       <h2>Link not recognised</h2>
-      <p id="invalid-msg">This event link isn't valid or has expired. Please ask a member of staff for the current QR code.</p>
+      <p id="invalid-msg">This link isn't valid or has been turned off. Please ask a member of staff for the current QR code.</p>
     </div>
   </div>
 
@@ -88,51 +92,22 @@ textarea{min-height:88px;resize:vertical}
       <div class="ev-meta" id="ev-meta"></div>
     </div>
 
-    <div class="tabs">
+    <div class="tabs" id="tabs">
       <button class="tab active" id="tab-fb" type="button">Give feedback</button>
       <button class="tab" id="tab-vol" type="button">Volunteer</button>
     </div>
 
-    <!-- FEEDBACK -->
+    <!-- FEEDBACK (events only) -->
     <div class="pane active" id="pane-fb">
       <div class="card">
         <h2>How was today?</h2>
         <p class="sub">Two minutes, completely anonymous unless you add your name. It helps us keep doing this.</p>
-
         <div class="msg err" id="fb-err"></div>
-
-        <div class="field">
-          <label>How much did you enjoy it?</label>
-          <div class="stars" id="st-enjoyed"></div>
-        </div>
-        <div class="field">
-          <label>How confident did you feel <em>before</em>?</label>
-          <div class="stars" id="st-cb"></div>
-        </div>
-        <div class="field">
-          <label>And how confident do you feel <em>now</em>?</label>
-          <div class="stars" id="st-ca"></div>
-        </div>
-
-        <div class="field">
-          <label>Did any of these happen?</label>
-          <div class="chips">
-            <div class="chip" data-flag="learned"><span class="box">✓</span> I learned something new</div>
-            <div class="chip" data-flag="connected"><span class="box">✓</span> I felt more connected to people</div>
-            <div class="chip" data-flag="friend"><span class="box">✓</span> I made a new friend</div>
-          </div>
-        </div>
-
-        <div class="field">
-          <label>Anything you'd like to say? (optional)</label>
-          <textarea id="fb-quote" placeholder="What was good, what could be better…"></textarea>
-        </div>
-
+        <div id="fb-questions"></div>
         <div class="field">
           <label>Your name (optional)</label>
           <input id="fb-name" placeholder="Leave blank to stay anonymous" autocomplete="name"/>
         </div>
-
         <button class="btn btn-p" id="fb-submit" type="button"><span class="spin"></span><span>Send feedback</span></button>
       </div>
       <div class="note">We only use this to show funders the difference this work makes. We never publish your name without asking.</div>
@@ -141,21 +116,41 @@ textarea{min-height:88px;resize:vertical}
     <!-- VOLUNTEER -->
     <div class="pane" id="pane-vol">
       <div class="card">
-        <h2>Volunteer check-in</h2>
-        <p class="sub">Enter the email you're registered with. Check in when you arrive, check out when you leave — your hours are worked out for you.</p>
-
+        <h2 id="vol-title">Volunteer check-in</h2>
+        <p class="sub">Check in when you arrive, check out when you leave — your hours are worked out for you.</p>
         <div class="msg err" id="vol-err"></div>
-        <div class="msg ok" id="vol-ok"></div>
-
         <div class="field">
-          <label>Your email</label>
-          <input id="vol-email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" spellcheck="false"/>
+          <label>Your full name or email</label>
+          <input id="vol-who" autocomplete="name" placeholder="e.g. Sam Smith" spellcheck="false"/>
         </div>
 
-        <button class="btn btn-p" id="vol-in" type="button" style="margin-bottom:10px"><span class="spin"></span><span>Check in</span></button>
-        <button class="btn btn-ghost" id="vol-out" type="button">Check out</button>
+        <!-- first-timer sign-up, shown only when the name isn't known -->
+        <div id="vol-new" style="display:none">
+          <div class="msg ok show">New here? Welcome! Check your full name above is right and we'll add you.</div>
+          <div class="field">
+            <label>Email (optional)</label>
+            <input id="vol-new-email" type="email" inputmode="email" autocomplete="email" placeholder="So we can tell you about future sessions" spellcheck="false"/>
+          </div>
+          <button class="btn btn-p" id="vol-new-go" type="button" style="margin-bottom:10px"><span class="spin"></span><span>Sign me up &amp; check in</span></button>
+          <button class="btn btn-ghost" id="vol-new-cancel" type="button">That's not right — go back</button>
+        </div>
+
+        <div id="vol-actions">
+          <button class="btn btn-p" id="vol-in" type="button"><span class="spin"></span><span>Check in</span></button>
+
+          <div class="divider"></div>
+          <label style="margin-bottom:10px">Leaving? (both optional)</label>
+          <div class="field">
+            <input id="vol-activity" placeholder="What did you help with today?"/>
+          </div>
+          <div class="field">
+            <label style="text-transform:none;letter-spacing:0;font-size:14px;font-weight:600">How do you feel today?</label>
+            <div class="stars faces" id="st-wb"></div>
+          </div>
+          <button class="btn btn-ghost" id="vol-out" type="button"><span class="spin"></span><span>Check out</span></button>
+        </div>
       </div>
-      <div class="note">Not registered yet? Ask a member of staff to add you first.</div>
+      <div class="note">Your hours count towards what this project shows its funders. Thank you.</div>
     </div>
   </div>
 
@@ -165,9 +160,9 @@ textarea{min-height:88px;resize:vertical}
       <div class="tick">✓</div>
       <h2 id="done-title">Thank you</h2>
       <p id="done-msg">Your feedback has been sent.</p>
+      <button class="btn btn-ghost" id="done-again" type="button" style="margin-top:18px;display:none">Back</button>
     </div>
   </div>
-
 </div>
 
 <script>
@@ -176,53 +171,92 @@ textarea{min-height:88px;resize:vertical}
 var API = '/api/event-checkin';
 var params = new URLSearchParams(location.search);
 var TOKEN = params.get('t') || '';
-var EVENT = null;
-
+var QUESTIONS = [];
+var FACES = ['😞', '🙁', '😐', '🙂', '😄'];
 var $ = function (id) { return document.getElementById(id); };
-function show(id) { ['s-loading','s-invalid','s-main','s-done'].forEach(function (x) { $(x).style.display = x === id ? 'block' : 'none'; }); }
+
+function show(id) { ['s-loading', 's-invalid', 's-main', 's-done'].forEach(function (x) { $(x).style.display = x === id ? 'block' : 'none'; }); }
 function msg(id, text, cls) { var e = $(id); e.textContent = text; e.className = 'msg ' + cls + ' show'; }
 function clearMsg(id) { var e = $(id); e.className = 'msg ' + (e.classList.contains('ok') ? 'ok' : 'err'); }
 function busy(btn, on) { btn.classList.toggle('loading', on); btn.disabled = on; }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 
-// ── stars ──────────────────────────────────────────────────
-var scores = { enjoyed: 0, cb: 0, ca: 0 };
-function buildStars(containerId, key) {
-  var c = $(containerId);
+// ── 1–5 buttons and yes/no ─────────────────────────────────
+var scores = {};
+function buildStars(c, key, labels) {
   c.innerHTML = '';
   for (var i = 1; i <= 5; i++) {
-    (function (nStar) {
+    (function (n) {
       var b = document.createElement('button');
       b.type = 'button';
       b.className = 'star';
-      b.textContent = nStar;
+      b.textContent = labels ? labels[n - 1] : n;
+      b.setAttribute('aria-label', String(n));
       b.addEventListener('click', function () {
-        scores[key] = nStar;
-        Array.prototype.forEach.call(c.children, function (el, idx) { el.classList.toggle('on', idx < nStar); });
+        scores[key] = n;
+        Array.prototype.forEach.call(c.children, function (el, idx) {
+          el.classList.toggle('on', labels ? idx === n - 1 : idx < n);
+        });
       });
       c.appendChild(b);
     })(i);
   }
 }
-
-// ── chips ──────────────────────────────────────────────────
-var flags = { learned: false, connected: false, friend: false };
-document.querySelectorAll('.chip').forEach(function (chip) {
-  chip.addEventListener('click', function () {
-    var k = chip.getAttribute('data-flag');
-    flags[k] = !flags[k];
-    chip.classList.toggle('on', flags[k]);
+function buildYesNo(c, key) {
+  c.innerHTML = '<button type="button" data-v="Yes">Yes</button><button type="button" data-v="No">No</button>';
+  Array.prototype.forEach.call(c.children, function (b) {
+    b.addEventListener('click', function () {
+      scores[key] = b.getAttribute('data-v');
+      Array.prototype.forEach.call(c.children, function (x) { x.classList.toggle('on', x === b); });
+    });
   });
-});
+}
+
+// ── feedback form: the org's own questions, else Vorlana's standard ones ─
+var STANDARD = [
+  { question: 'How much did you enjoy it?', kind: 'score', key: 'enjoyed' },
+  { question: 'How confident did you feel before?', kind: 'score', key: 'cb' },
+  { question: 'And how confident do you feel now?', kind: 'score', key: 'ca' },
+  { question: 'Did you learn something new?', kind: 'yesno', key: 'learned' },
+  { question: 'Do you feel more connected to people?', kind: 'yesno', key: 'connected' },
+  { question: 'Did you make a new friend?', kind: 'yesno', key: 'friend' },
+  { question: "Anything you'd like to say?", kind: 'text', key: 'quote' }
+];
+function formQuestions() { return QUESTIONS.length ? QUESTIONS : STANDARD; }
+function renderFeedbackForm() {
+  var list = formQuestions();
+  $('fb-questions').innerHTML = list.map(function (q, i) {
+    var id = 'fq-' + i;
+    var lbl = '<label style="text-transform:none;letter-spacing:0;font-size:15px;font-weight:600;color:var(--txt)">' + esc(q.question) + '</label>';
+    if (q.kind === 'score') return '<div class="field">' + lbl + '<div class="stars" id="' + id + '"></div></div>';
+    if (q.kind === 'yesno') return '<div class="field">' + lbl + '<div class="yn" id="' + id + '"></div></div>';
+    if (q.kind === 'text')  return '<div class="field">' + lbl + '<textarea id="' + id + '" placeholder="Optional"></textarea></div>';
+    return '<div class="field">' + lbl + '<input id="' + id + '" placeholder="Optional"/></div>';
+  }).join('');
+  list.forEach(function (q, i) {
+    if (q.kind === 'score') buildStars($('fq-' + i), 'fq-' + i);
+    if (q.kind === 'yesno') buildYesNo($('fq-' + i), 'fq-' + i);
+  });
+}
+function readFeedback() {
+  var out = {}, count = 0, own = QUESTIONS.length > 0;
+  formQuestions().forEach(function (q, i) {
+    var v = (q.kind === 'score' || q.kind === 'yesno') ? scores['fq-' + i] : ($('fq-' + i).value || '').trim();
+    if (v == null || v === '') return;
+    out[own ? q.question : q.key] = v;
+    count++;
+  });
+  return { values: out, count: count };
+}
 
 // ── tabs ───────────────────────────────────────────────────
-$('tab-fb').addEventListener('click', function () {
-  $('tab-fb').classList.add('active'); $('tab-vol').classList.remove('active');
-  $('pane-fb').classList.add('active'); $('pane-vol').classList.remove('active');
-});
-$('tab-vol').addEventListener('click', function () {
-  $('tab-vol').classList.add('active'); $('tab-fb').classList.remove('active');
-  $('pane-vol').classList.add('active'); $('pane-fb').classList.remove('active');
-});
+function openTab(which) {
+  var fb = which === 'fb';
+  $('tab-fb').classList.toggle('active', fb); $('tab-vol').classList.toggle('active', !fb);
+  $('pane-fb').classList.toggle('active', fb); $('pane-vol').classList.toggle('active', !fb);
+}
+$('tab-fb').addEventListener('click', function () { openTab('fb'); });
+$('tab-vol').addEventListener('click', function () { openTab('vol'); });
 
 // ── api ────────────────────────────────────────────────────
 function call(action, payload) {
@@ -233,7 +267,7 @@ function call(action, payload) {
   }).then(function (r) {
     return r.json().catch(function () { throw new Error('Something went wrong. Please try again.'); })
       .then(function (j) {
-        if (!r.ok || j.ok === false) throw new Error(j.error || 'Something went wrong. Please try again.');
+        if (!r.ok || j.ok === false) { var e = new Error(j.error || 'Something went wrong. Please try again.'); e.unknown = !!j.unknown; throw e; }
         return j;
       });
   });
@@ -244,74 +278,128 @@ function boot() {
   if (!TOKEN) { show('s-invalid'); return; }
   call('info')
     .then(function (j) {
-      EVENT = j.event;
-      $('ev-name').textContent = EVENT.name || 'Event';
+      QUESTIONS = j.questions || [];
+      var ev = j.event || {};
+      var site = j.mode === 'site';
+      $('ev-name').textContent = site ? (ev.org_name || 'Volunteer sign-in') : (ev.name || 'Event');
       var bits = [];
-      if (EVENT.date) bits.push(new Date(EVENT.date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }));
-      if (EVENT.location) bits.push(EVENT.location);
-      if (EVENT.org_name) bits.push(EVENT.org_name);
+      if (site) bits.push(ev.name || 'Volunteer sign-in');
+      if (ev.date) bits.push(new Date(ev.date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }));
+      if (ev.location) bits.push(ev.location);
+      if (!site && ev.org_name) bits.push(ev.org_name);
       $('ev-meta').textContent = bits.join(' · ');
-      document.title = (EVENT.name || 'Event') + ' — Vorlana';
-      buildStars('st-enjoyed', 'enjoyed');
-      buildStars('st-cb', 'cb');
-      buildStars('st-ca', 'ca');
+      document.title = (site ? 'Volunteer sign-in' : (ev.name || 'Event')) + ' — Vorlana';
+
+      buildStars($('st-wb'), 'wb', FACES);
+      if (site) {
+        // Site QR — volunteers only, no feedback form
+        $('tabs').style.display = 'none';
+        $('pane-fb').style.display = 'none';
+        openTab('vol');
+        $('vol-title').textContent = 'Here to help today?';
+      } else {
+        renderFeedbackForm();
+      }
+      try { var saved = localStorage.getItem('vorlana-who'); if (saved) $('vol-who').value = saved; } catch (e) {}
       show('s-main');
     })
     .catch(function (e) {
-      $('invalid-msg').textContent = e.message || 'This event link isn\u2019t valid. Please ask a member of staff for the current QR code.';
+      $('invalid-msg').textContent = e.message || 'This link isn\u2019t valid. Please ask a member of staff for the current QR code.';
       show('s-invalid');
     });
 }
+
+function doneScreen(title, text, back) {
+  $('done-title').textContent = title;
+  $('done-msg').textContent = text;
+  $('done-again').style.display = back ? 'flex' : 'none';
+  show('s-done');
+}
+$('done-again').addEventListener('click', function () { show('s-main'); });
 
 // ── feedback submit ────────────────────────────────────────
 $('fb-submit').addEventListener('click', function () {
   var btn = $('fb-submit');
   clearMsg('fb-err');
-  if (!scores.enjoyed) { msg('fb-err', 'Please tap a number for how much you enjoyed it.', 'err'); return; }
+  var r = readFeedback();
+  if (!r.count) { msg('fb-err', 'Please answer at least one question.', 'err'); return; }
   busy(btn, true);
-  call('feedback', {
-    name: $('fb-name').value.trim(),
-    enjoyed: scores.enjoyed,
-    cb: scores.cb || 3,
-    ca: scores.ca || 3,
-    learned: flags.learned,
-    connected: flags.connected,
-    friend: flags.friend,
-    quote: $('fb-quote').value.trim()
-  })
-    .then(function () {
-      $('done-title').textContent = 'Thank you';
-      $('done-msg').textContent = 'Your feedback has been sent. It genuinely helps.';
-      show('s-done');
-    })
+  var name = $('fb-name').value.trim();
+  var payload = QUESTIONS.length
+    ? { answers: r.values, name: name }
+    : { name: name, enjoyed: r.values.enjoyed, cb: r.values.cb, ca: r.values.ca, quote: r.values.quote || '',
+        learned: r.values.learned === 'Yes', connected: r.values.connected === 'Yes', friend: r.values.friend === 'Yes' };
+  call('feedback', payload)
+    .then(function () { doneScreen('Thank you', 'Your feedback has been sent. It genuinely helps.'); })
     .catch(function (e) { msg('fb-err', e.message, 'err'); })
     .finally(function () { busy(btn, false); });
 });
 
 // ── volunteer check in / out ───────────────────────────────
-function volAction(action, btn) {
-  var email = $('vol-email').value.trim();
-  clearMsg('vol-err'); $('vol-ok').className = 'msg ok';
-  if (!email || email.indexOf('@') < 0) { msg('vol-err', 'Please enter the email you\u2019re registered with.', 'err'); return; }
+function who() { return $('vol-who').value.trim().replace(/\s+/g, ' '); }
+function remember(w) { try { localStorage.setItem('vorlana-who', w); } catch (e) {} }
+function resetVol() {
+  $('vol-new').style.display = 'none';
+  $('vol-actions').style.display = 'block';
+  $('vol-who').disabled = false;
+}
+function afterCheckin(j) {
+  remember(who());
+  resetVol();
+  var first = j.name ? ', ' + j.name.split(' ')[0] : '';
+  if (j.already) doneScreen('Already checked in', 'You checked in at ' + j.at + first + '. Scan again and tap “Check out” when you leave.', true);
+  else doneScreen(j.created ? 'Welcome' + first + '!' : 'Checked in' + first, 'Checked in at ' + j.at + '. Scan again and tap “Check out” when you leave.', true);
+}
+
+$('vol-in').addEventListener('click', function () {
+  var btn = $('vol-in');
+  clearMsg('vol-err');
+  if (who().length < 3) { msg('vol-err', 'Please enter your full name or email.', 'err'); return; }
   busy(btn, true);
-  call(action, { email: email })
-    .then(function (j) {
-      if (action === 'checkin') {
-        $('done-title').textContent = 'Checked in';
-        $('done-msg').textContent = 'You\u2019re checked in at ' + j.at + '. Come back and check out when you leave.';
-      } else {
-        $('done-title').textContent = 'Checked out';
-        $('done-msg').textContent = j.hours
-          ? 'Thanks — ' + j.hours + ' hours logged. That\u2019s genuinely appreciated.'
-          : 'Thanks — you\u2019re checked out.';
+  call('checkin', { who: who() })
+    .then(afterCheckin)
+    .catch(function (e) {
+      if (e.unknown && who().indexOf('@') < 0) {
+        // Name not known yet — offer to sign up
+        $('vol-actions').style.display = 'none';
+        $('vol-new').style.display = 'block';
+        $('vol-who').disabled = true;
+        return;
       }
-      show('s-done');
+      msg('vol-err', e.message, 'err');
+    })
+    .finally(function () { busy(btn, false); });
+});
+
+$('vol-new-go').addEventListener('click', function () {
+  var btn = $('vol-new-go');
+  clearMsg('vol-err');
+  if (who().indexOf(' ') < 0) { resetVol(); msg('vol-err', 'Please use your full name (first and last), then tap Check in again.', 'err'); return; }
+  busy(btn, true);
+  call('checkin', { who: who(), newVolunteer: true, email: $('vol-new-email').value.trim() })
+    .then(afterCheckin)
+    .catch(function (e) { msg('vol-err', e.message, 'err'); })
+    .finally(function () { busy(btn, false); });
+});
+$('vol-new-cancel').addEventListener('click', function () { resetVol(); $('vol-who').focus(); });
+
+$('vol-out').addEventListener('click', function () {
+  var btn = $('vol-out');
+  clearMsg('vol-err');
+  if (who().length < 3) { msg('vol-err', 'Please enter your full name or email.', 'err'); return; }
+  busy(btn, true);
+  call('checkout', { who: who(), activity: $('vol-activity').value.trim(), wellbeing: scores.wb || null })
+    .then(function (j) {
+      remember(who());
+      $('vol-activity').value = '';
+      scores.wb = null;
+      buildStars($('st-wb'), 'wb', FACES);
+      if (j.flagged) doneScreen('Checked out', 'You checked in on another day or a long time ago, so a member of staff will confirm your hours. Thank you!', true);
+      else doneScreen('Thank you!', j.hours + ' hour' + (j.hours === 1 ? '' : 's') + ' logged. That makes a real difference.', true);
     })
     .catch(function (e) { msg('vol-err', e.message, 'err'); })
     .finally(function () { busy(btn, false); });
-}
-$('vol-in').addEventListener('click', function () { volAction('checkin', $('vol-in')); });
-$('vol-out').addEventListener('click', function () { volAction('checkout', $('vol-out')); });
+});
 
 boot();
 </script>
