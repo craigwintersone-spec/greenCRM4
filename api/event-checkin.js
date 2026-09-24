@@ -1,26 +1,31 @@
 // /api/event-checkin.js
 // Public endpoint behind event.html — the QR target.
 //
-// Handles four actions, all keyed off a per-event token:
-//   info      → event name / date / location / org name (nothing sensitive)
-//   feedback  → anonymous attendee feedback for that event
-//   checkin   → volunteer arrives (matched by their registered email)
-//   checkout  → volunteer leaves; hours = gap, written to volunteer_hours
+// A token belongs EITHER to an event (events.public_token) OR to a site
+// (volunteer_sites.public_token — "the garden", "the shop"): a permanent
+// QR for volunteers who come in to help on a normal day, not an event.
+//
+// Actions:
+//   info      → name / date / location / org name, mode ('event' | 'site'),
+//               and for events the org's own feedback questions
+//   feedback  → anonymous attendee feedback (events only)
+//   checkin   → volunteer arrives (name OR email; first-timers can sign up)
+//   checkout  → volunteer leaves; hours = gap, written to volunteer_hours,
+//               plus optional "what did you do" and "how do you feel" (1–5)
 //
 // SECURITY NOTES — this is a PUBLIC endpoint, so:
 //   • The browser never receives a Supabase key and can never read rows.
-//   • Volunteers are matched by email WITHIN the token's org only. We never
-//     return a list of volunteers, and a wrong email gets a generic answer —
-//     so the endpoint cannot be used to enumerate who volunteers for you.
-//   • Rate limited per IP to blunt spam.
-//   • Tokens are per-event and can be rotated from the app.
+//   • Volunteers are matched WITHIN the token's org only; no list is ever
+//     returned. Matching by name means someone could learn whether a named
+//     person volunteers here — accepted trade-off so volunteers without an
+//     email on file (e.g. imported from a sign-in sheet) can use it.
+//   • Rate limited per IP. Tokens can be turned off from the app.
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// Volunteers who forget to check out are auto-closed at this many hours.
-const MAX_SESSION_HOURS = 8;
-// Simple in-memory rate limit (per warm lambda). Not bulletproof, but stops floods.
+// A session longer than this is treated as a forgotten check-out.
+const MAX_SESSION_HOURS = 10;
 const RATE = { windowMs: 60 * 1000, max: 20, hits: new Map() };
 
 function setCors(req, res) {
@@ -64,196 +69,299 @@ async function sb(path, opts = {}) {
   return body;
 }
 
-function bad(res, message, code = 400) {
-  return res.status(code).json({ ok: false, error: message });
+function bad(res, message, code = 400, extra) {
+  return res.status(code).json(Object.assign({ ok: false, error: message }, extra || {}));
 }
+const trim = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
 
-// Look up the event this token belongs to. Tokens live on the events row.
-async function getEventByToken(token) {
+// ── context: event or site ─────────────────────────────────
+async function getContext(token) {
   if (!token || typeof token !== 'string' || token.length < 12) return null;
-  const rows = await sb(
-    `events?public_token=eq.${encodeURIComponent(token)}&select=id,org_id,name,event_date,location,public_enabled&limit=1`
-  );
-  if (!Array.isArray(rows) || !rows.length) return null;
-  const ev = rows[0];
-  if (ev.public_enabled === false) return null;
-  return ev;
+  const t = encodeURIComponent(token);
+  let evs;
+  try {
+    evs = await sb(`events?public_token=eq.${t}&select=id,org_id,name,event_date,location,public_enabled,question_ids&limit=1`);
+  } catch (e) {
+    // question_ids column not added yet
+    evs = await sb(`events?public_token=eq.${t}&select=id,org_id,name,event_date,location,public_enabled&limit=1`);
+  }
+  if (Array.isArray(evs) && evs.length) {
+    const ev = evs[0];
+    if (ev.public_enabled === false) return null;
+    return { mode: 'event', orgId: ev.org_id, eventId: String(ev.id), siteId: null, name: ev.name || 'Event',
+             date: ev.event_date || null, location: ev.location || '', questionIds: ev.question_ids || null };
+  }
+  let sites = [];
+  try { sites = await sb(`volunteer_sites?public_token=eq.${t}&select=id,org_id,name,public_enabled&limit=1`); }
+  catch (e) { sites = []; }   // table not created yet
+  if (Array.isArray(sites) && sites.length) {
+    const s = sites[0];
+    if (s.public_enabled === false) return null;
+    return { mode: 'site', orgId: s.org_id, eventId: null, siteId: String(s.id), name: s.name || 'Volunteer sign-in',
+             date: null, location: '', questionIds: null };
+  }
+  return null;
 }
 
 async function getOrgName(orgId) {
   try {
     const rows = await sb(`organisations?id=eq.${orgId}&select=name&limit=1`);
     return (Array.isArray(rows) && rows[0] && rows[0].name) || '';
-  } catch (e) {
-    return '';
+  } catch (e) { return ''; }
+}
+
+// The org's own feedback questions for this event (null question_ids = all active).
+async function getQuestions(ctx) {
+  let rows = [];
+  try {
+    rows = await sb(`survey_measures?org_id=eq.${ctx.orgId}&select=id,question,kind,maps_to,active,sort&order=sort.asc`);
+  } catch (e) { return []; }
+  rows = (rows || []).filter(r => r.active !== false && r.kind !== 'ignore');
+  if (Array.isArray(ctx.questionIds) && ctx.questionIds.length) {
+    const ids = ctx.questionIds.map(String);
+    const sub = rows.filter(r => ids.includes(String(r.id)));
+    if (sub.length) rows = sub;
   }
+  return rows.map(r => ({ id: r.id, question: r.question, kind: r.kind, maps_to: r.maps_to || null }));
 }
 
-// Match a volunteer by email, scoped to this event's org. Never returns a list.
-async function findVolunteer(orgId, email) {
-  const clean = String(email || '').trim().toLowerCase();
-  if (!clean || clean.indexOf('@') < 0 || clean.length > 254) return null;
-  const rows = await sb(
-    `volunteers?org_id=eq.${orgId}&email=ilike.${encodeURIComponent(clean)}&select=id,name,status&limit=1`
-  );
-  if (!Array.isArray(rows) || !rows.length) return null;
-  const v = rows[0];
-  if (v.status && v.status !== 'Active') return null;
-  return v;
+// ── scoring (same rules as the app) ────────────────────────
+const LIKERT = { 'strongly disagree': 1, 'disagree': 2, 'neutral': 3, 'agree': 4, 'strongly agree': 5 };
+function scoreOf(v) {
+  if (v == null || v === '') return null;
+  const s = String(v).trim().toLowerCase();
+  if (LIKERT[s] != null) return LIKERT[s];
+  if (/^\d+(\.\d+)?$/.test(s)) { const x = +s; return x >= 0 && x <= 10 ? x : null; }
+  if (/^(y|yes)\b/.test(s)) return 5;
+  if (/^(n|no)\b/.test(s)) return 1;
+  return null;
+}
+function yesOf(v) {
+  const s = String(v == null ? '' : v).trim().toLowerCase();
+  if (/^(y|yes)\b/.test(s)) return true;
+  const sc = scoreOf(v);
+  return sc != null && sc >= 4;
 }
 
-// An open session = checked in, not yet checked out, for this event + volunteer.
-async function openSession(orgId, eventId, volunteerId) {
+// ── volunteers: match by email or full name, within the org ─
+function likeSafe(s) { return s.replace(/[%_*,()]/g, ' ').replace(/\s+/g, ' ').trim(); }
+
+async function findVolunteers(orgId, who) {
+  const clean = String(who || '').trim();
+  if (!clean || clean.length > 254) return [];
+  if (clean.indexOf('@') > 0) {
+    return (await sb(`volunteers?org_id=eq.${orgId}&email=ilike.${encodeURIComponent(likeSafe(clean.toLowerCase()))}&select=id,name,status&limit=2`)) || [];
+  }
+  const name = likeSafe(clean);
+  if (name.length < 2) return [];
+  return (await sb(`volunteers?org_id=eq.${orgId}&name=ilike.${encodeURIComponent(name)}&select=id,name,status&limit=2`)) || [];
+}
+
+async function resolveVolunteer(ctx, body, allowCreate) {
+  const who = trim(body.who || body.email, 254);
+  if (!who) return { error: 'Please enter your name or email.' };
+  const found = (await findVolunteers(ctx.orgId, who)).filter(v => !v.status || v.status === 'Active');
+  if (found.length > 1) return { error: 'More than one volunteer has that name. Please use your email instead.', code: 409 };
+  if (found.length === 1) return { v: found[0] };
+
+  if (!allowCreate || !body.newVolunteer) {
+    return {
+      error: allowCreate
+        ? 'We don\u2019t know that name yet.'
+        : 'We don\u2019t know that name or email. Check the spelling, or check in first.',
+      code: 404, unknown: allowCreate
+    };
+  }
+  // First-timer signs themselves up
+  const isEmail = who.indexOf('@') > 0;
+  const name = likeSafe(isEmail ? trim(body.name, 120) : who).slice(0, 120);
+  const email = isEmail ? who.toLowerCase() : (trim(body.email, 254).toLowerCase() || null);
+  if (!name || name.indexOf(' ') < 0) return { error: 'Please add your full name (first and last).' };
+  if (email && email.indexOf('@') < 1) return { error: 'That email doesn\u2019t look right.' };
+  const parts = name.split(' ');
+  const rows = await sb('volunteers', {
+    method: 'POST',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify([{
+      org_id: ctx.orgId, name, first_name: parts[0], last_name: parts.slice(1).join(' '),
+      email, phone: null, role: 'Volunteer', status: 'Active', hours: 0, skills: '[]'
+    }])
+  });
+  return { v: rows && rows[0], created: true };
+}
+
+// Open session for this volunteer at this event / site.
+async function openSession(ctx, volunteerId) {
+  const place = ctx.eventId ? `event_id=eq.${encodeURIComponent(ctx.eventId)}`
+                            : `event_id=is.null&site_id=eq.${encodeURIComponent(ctx.siteId)}`;
   const rows = await sb(
-    `volunteer_checkins?org_id=eq.${orgId}&event_id=eq.${encodeURIComponent(eventId)}` +
+    `volunteer_checkins?org_id=eq.${ctx.orgId}&${place}` +
     `&volunteer_id=eq.${encodeURIComponent(volunteerId)}&checked_out_at=is.null` +
     `&select=id,checked_in_at&order=checked_in_at.desc&limit=1`
   );
   return (Array.isArray(rows) && rows[0]) || null;
 }
 
+async function patchCheckin(id, patch) {
+  try {
+    await sb(`volunteer_checkins?id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
+  } catch (e) {
+    if (!/flagged/i.test(e.message || '')) throw e;
+    const p2 = Object.assign({}, patch); delete p2.flagged;
+    await sb(`volunteer_checkins?id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(p2) });
+  }
+}
+
 function hhmm(iso) {
   return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' });
+}
+function londonDay(iso) {
+  return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/London' });   // YYYY-MM-DD
+}
+
+// Write hours; drop optional columns if the SQL hasn't been run yet.
+async function insertHours(row) {
+  try {
+    await sb('volunteer_hours', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([row]) });
+  } catch (e) {
+    if (/wellbeing|site_id/i.test(e.message || '')) {
+      const r2 = Object.assign({}, row); delete r2.wellbeing; delete r2.site_id;
+      await sb('volunteer_hours', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([r2]) });
+    } else throw e;
+  }
 }
 
 module.exports = async function handler(req, res) {
   setCors(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return bad(res, 'Method not allowed', 405);
-
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return bad(res, 'Server not configured.', 500);
-  }
-  if (rateLimited(req)) {
-    return bad(res, 'Too many attempts. Please wait a minute and try again.', 429);
-  }
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return bad(res, 'Server not configured.', 500);
+  if (rateLimited(req)) return bad(res, 'Too many attempts. Please wait a minute and try again.', 429);
 
   const body = req.body || {};
   const action = body.action;
-  const token = body.token;
 
-  let ev;
-  try {
-    ev = await getEventByToken(token);
-  } catch (e) {
+  let ctx;
+  try { ctx = await getContext(body.token); }
+  catch (e) {
     console.error('[event-checkin] token lookup failed:', e.message);
     return bad(res, 'Could not check that link. Please try again.', 500);
   }
-  if (!ev) {
-    return bad(res, 'This event link isn\u2019t valid or has been turned off. Please ask a member of staff for the current QR code.', 404);
-  }
+  if (!ctx) return bad(res, 'This link isn\u2019t valid or has been turned off. Please ask a member of staff for the current QR code.', 404);
 
   try {
     // ── info ────────────────────────────────────────────────
     if (action === 'info') {
-      const orgName = await getOrgName(ev.org_id);
+      const orgName = await getOrgName(ctx.orgId);
+      const questions = ctx.mode === 'event' ? await getQuestions(ctx) : [];
       return res.status(200).json({
         ok: true,
-        event: {
-          name: ev.name || 'Event',
-          date: ev.event_date || null,
-          location: ev.location || '',
-          org_name: orgName
-        }
+        mode: ctx.mode,
+        event: { name: ctx.name, date: ctx.date, location: ctx.location, org_name: orgName },
+        questions
       });
     }
 
-    // ── feedback ────────────────────────────────────────────
+    // ── feedback (events only) ──────────────────────────────
     if (action === 'feedback') {
-      const clamp = (v) => {
-        const x = parseInt(v, 10);
-        return isNaN(x) ? 3 : Math.min(5, Math.max(1, x));
-      };
-      const trim = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
+      if (ctx.mode !== 'event') return bad(res, 'Feedback is only for events.');
+      const questions = await getQuestions(ctx);
+      let row;
 
-      await sb('feedback', {
-        method: 'POST',
-        headers: { Prefer: 'return=minimal' },
-        body: JSON.stringify([{
-          org_id: ev.org_id,
-          event_id: ev.id,
-          name: trim(body.name, 120),
-          enjoyed: clamp(body.enjoyed),
-          cb: clamp(body.cb),
-          ca: clamp(body.ca),
-          learned: !!body.learned,
-          connected: !!body.connected,
-          friend: !!body.friend,
+      if (questions.length && body.answers && typeof body.answers === 'object') {
+        // The org's own questions: answers kept word-for-word; Vorlana's standard fields filled from the ones that map
+        const answers = {};
+        const std = { enjoyed: null, cb: null, ca: null, learned: false, connected: false, friend: false, quote: '' };
+        questions.forEach(q => {
+          let a = body.answers[q.question];
+          if (a == null || a === '') return;
+          if (q.kind === 'score') { a = parseInt(a, 10); if (!(a >= 1 && a <= 5)) return; }
+          else { a = trim(a, 2000); if (!a) return; }
+          answers[q.question] = a;
+          if (!q.maps_to) return;
+          if (q.maps_to === 'quote') { if (!std.quote) std.quote = String(a); return; }
+          if (['enjoyed', 'cb', 'ca'].includes(q.maps_to)) { const sc = scoreOf(a); if (sc != null) std[q.maps_to] = Math.min(5, Math.max(1, Math.round(sc))); return; }
+          std[q.maps_to] = yesOf(a);
+        });
+        if (!Object.keys(answers).length) return bad(res, 'Please answer at least one question.');
+        row = Object.assign({ org_id: ctx.orgId, event_id: ctx.eventId, name: trim(body.name, 120), answers }, std);
+      } else {
+        // No questions set up yet — Vorlana's standard form
+        const clamp = (v) => { const x = parseInt(v, 10); return isNaN(x) ? null : Math.min(5, Math.max(1, x)); };
+        row = {
+          org_id: ctx.orgId, event_id: ctx.eventId, name: trim(body.name, 120),
+          enjoyed: clamp(body.enjoyed), cb: clamp(body.cb), ca: clamp(body.ca),
+          learned: !!body.learned, connected: !!body.connected, friend: !!body.friend,
           quote: trim(body.quote, 2000)
-        }])
-      });
+        };
+      }
+      try {
+        await sb('feedback', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([row]) });
+      } catch (e) {
+        if (!/answers/i.test(e.message || '')) throw e;
+        delete row.answers;
+        await sb('feedback', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([row]) });
+      }
       return res.status(200).json({ ok: true });
     }
 
     // ── volunteer check in ──────────────────────────────────
     if (action === 'checkin') {
-      const v = await findVolunteer(ev.org_id, body.email);
-      // Generic message either way — never reveals whether an email exists.
-      if (!v) {
-        return bad(res, 'We couldn\u2019t match that email to a registered volunteer for this event. Please check it, or ask a member of staff.', 404);
-      }
-
-      const existing = await openSession(ev.org_id, ev.id, v.id);
-      if (existing) {
-        return res.status(200).json({ ok: true, at: hhmm(existing.checked_in_at), already: true });
-      }
+      const r = await resolveVolunteer(ctx, body, true);
+      if (r.error) return bad(res, r.error, r.code || 400, r.unknown ? { unknown: true } : null);
+      const v = r.v;
 
       const nowIso = new Date().toISOString();
-      await sb('volunteer_checkins', {
-        method: 'POST',
-        headers: { Prefer: 'return=minimal' },
-        body: JSON.stringify([{
-          org_id: ev.org_id,
-          event_id: String(ev.id),
-          volunteer_id: String(v.id),
-          checked_in_at: nowIso
-        }])
-      });
-      return res.status(200).json({ ok: true, at: hhmm(nowIso), name: v.name || '' });
+      const existing = await openSession(ctx, v.id);
+      if (existing) {
+        // Same day → already in. Earlier day → they forgot to check out: close it (0h, flagged) and start fresh.
+        if (londonDay(existing.checked_in_at) === londonDay(nowIso)) {
+          return res.status(200).json({ ok: true, at: hhmm(existing.checked_in_at), already: true, name: v.name || '' });
+        }
+        await patchCheckin(existing.id, { checked_out_at: existing.checked_in_at, hours: 0, flagged: 'forgot to check out' });
+      }
+
+      const row = { org_id: ctx.orgId, event_id: ctx.eventId, volunteer_id: String(v.id), checked_in_at: nowIso };
+      if (ctx.siteId) row.site_id = ctx.siteId;
+      await sb('volunteer_checkins', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([row]) });
+      return res.status(200).json({ ok: true, at: hhmm(nowIso), name: v.name || '', created: !!r.created });
     }
 
     // ── volunteer check out ─────────────────────────────────
     if (action === 'checkout') {
-      const v = await findVolunteer(ev.org_id, body.email);
-      if (!v) {
-        return bad(res, 'We couldn\u2019t match that email to a registered volunteer for this event. Please check it, or ask a member of staff.', 404);
-      }
+      const r = await resolveVolunteer(ctx, body, false);
+      if (r.error) return bad(res, r.error, r.code || 400);
+      const v = r.v;
 
-      const open = await openSession(ev.org_id, ev.id, v.id);
-      if (!open) {
-        return bad(res, 'We don\u2019t have you checked in for this event. Tap \u201cCheck in\u201d first, or ask a member of staff to log your hours.', 409);
-      }
+      const open = await openSession(ctx, v.id);
+      if (!open) return bad(res, 'We don\u2019t have you checked in here today. Tap \u201cCheck in\u201d first, or ask a member of staff to log your hours.', 409);
 
       const outIso = new Date().toISOString();
       let hours = (new Date(outIso) - new Date(open.checked_in_at)) / 3600000;
-      if (!isFinite(hours) || hours <= 0) hours = 0;
-      if (hours > MAX_SESSION_HOURS) hours = MAX_SESSION_HOURS; // forgot to check out
-      hours = Math.round(hours * 4) / 4;                        // nearest 15 min
-      if (hours < 0.25) hours = 0.25;                           // minimum credit
+      if (!isFinite(hours) || hours < 0) hours = 0;
 
-      // Close the session
-      await sb(`volunteer_checkins?id=eq.${open.id}`, {
-        method: 'PATCH',
-        headers: { Prefer: 'return=minimal' },
-        body: JSON.stringify({ checked_out_at: outIso, hours: hours })
+      // Checked in on another day, or far too long ago — don't guess the hours; staff confirm them
+      if (hours > MAX_SESSION_HOURS || londonDay(open.checked_in_at) !== londonDay(outIso)) {
+        await patchCheckin(open.id, { checked_out_at: outIso, hours: 0, flagged: 'check-out too late — hours need confirming' });
+        return res.status(200).json({ ok: true, hours: 0, flagged: true, name: v.name || '' });
+      }
+
+      hours = Math.max(0.25, Math.round(hours * 4) / 4);   // nearest 15 min, minimum 15 min
+      await patchCheckin(open.id, { checked_out_at: outIso, hours });
+
+      const wb = parseInt(body.wellbeing, 10);
+      await insertHours({
+        org_id: ctx.orgId,
+        volunteer_id: String(v.id),
+        event_id: ctx.eventId,
+        site_id: ctx.siteId,
+        session_date: londonDay(outIso),
+        hours,
+        activity: trim(body.activity, 200) || (ctx.mode === 'event' ? 'Volunteered at ' + ctx.name : ctx.name),
+        wellbeing: (wb >= 1 && wb <= 5) ? wb : null,
+        source: 'qr'
       });
-
-      // Write the hours into the same log the app reads
-      await sb('volunteer_hours', {
-        method: 'POST',
-        headers: { Prefer: 'return=minimal' },
-        body: JSON.stringify([{
-          org_id: ev.org_id,
-          volunteer_id: String(v.id),
-          event_id: String(ev.id),
-          session_date: outIso.slice(0, 10),
-          hours: hours,
-          activity: ev.name ? ('Checked in at ' + ev.name) : null,
-          source: 'qr'
-        }])
-      });
-
-      return res.status(200).json({ ok: true, hours: hours, name: v.name || '' });
+      return res.status(200).json({ ok: true, hours, name: v.name || '' });
     }
 
     return bad(res, 'Unknown action.');
