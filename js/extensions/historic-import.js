@@ -33,7 +33,7 @@
 
 (function () {
 
-var VERSION = 'v3.4';
+var VERSION = 'v3.5';
 var BATCH = 500;
 var MAX_ROWS = 10000;
 
@@ -495,11 +495,26 @@ function analyseHours(headers, rows, existingVols, existingEvents, opts) {
   var evByName = {};
   (existingEvents || []).forEach(function (e) { evByName[norm(e.name)] = e; });
 
-  var newVols = {}, entries = [], skipped = [], linked = 0, fromTimes = 0, fromAnswer = 0;
+  var newVols = {}, entries = [], skipped = [], volOnly = [], skills = {}, linked = 0, fromTimes = 0, fromAnswer = 0;
   rows.forEach(function (r, idx) {
     var cellAt = function (i) { return i >= 0 && r[i] != null ? String(r[i]).trim() : ''; };
     var name = cellAt(nameCol).replace(/\s+/g, ' '), email = cellAt(emailCol);
     if (!name && !email) { skipped.push({ row: idx + 2, why: 'no name' }); return; }
+
+    // Volunteer + skills first — a volunteer is created even when the row has no hours or date
+    var key = email ? norm(email) : norm(name);
+    var existing = (email && byEmail[norm(email)]) || byName[norm(name)];
+    if (!existing && !newVols[key]) {
+      newVols[key] = { org_id: opts.orgId, name: name || email, first_name: (name || email).split(' ')[0],
+        last_name: (name || '').split(' ').slice(1).join(' '), email: email || null,
+        phone: cellAt(phoneCol) || null, role: 'Volunteer', status: 'Active', hours: 0, skills: '[]' };
+    }
+    var sk = skills[key] = skills[key] || { existing: existing || null, set: {} };
+    cellAt(actCol).split(/[,;\n]/).forEach(function (a) {
+      a = a.trim().replace(/\s+/g, ' ');
+      // a skill is a short activity name — not a date range or a note ("From July to October", "Every Friday…")
+      if (a && a.length <= 40 && !/\d/.test(a) && !/^(other|n\/?a|none)$/i.test(a) && !/^(from|every|meeting|each)\b/i.test(a)) sk.set[a.replace(/^\w/, function (c) { return c.toUpperCase(); })] = 1;
+    });
 
     var sane = function (iso) { if (!iso) return null; var y = +iso.slice(0, 4); return (y >= 2000 && y <= new Date().getFullYear() + 1) ? iso : null; };
     // A "previous date" can't be after the form was submitted. If it is, the
@@ -513,7 +528,7 @@ function analyseHours(headers, rows, existingVols, existingEvents, opts) {
       date = cand;
     }
     if (!date) date = stampDate;
-    if (!date) { skipped.push({ row: idx + 2, why: name + ' — no date' }); return; }
+    if (!date) { volOnly.push({ row: idx + 2, why: name + ' — no date, volunteer added without hours' }); return; }
 
     var hrs = 0;
     for (var h = 0; h < hourCols.length && !hrs; h++) {
@@ -528,15 +543,7 @@ function analyseHours(headers, rows, existingVols, existingEvents, opts) {
         if (diff > 0 && diff <= 16) { hrs = Math.round(diff * 100) / 100; fromTimes++; }
       }
     }
-    if (!hrs) { skipped.push({ row: idx + 2, why: name + ' on ' + date + ' — no hours given' }); return; }
-
-    var key = email ? norm(email) : norm(name);
-    var existing = (email && byEmail[norm(email)]) || byName[norm(name)];
-    if (!existing && !newVols[key]) {
-      newVols[key] = { org_id: opts.orgId, name: name || email, first_name: (name || email).split(' ')[0],
-        last_name: (name || '').split(' ').slice(1).join(' '), email: email || null,
-        phone: cellAt(phoneCol) || null, role: 'Volunteer', status: 'Active', hours: 0, skills: '[]' };
-    }
+    if (!hrs) { volOnly.push({ row: idx + 2, why: name + ' on ' + date + ' — no hours given, volunteer added without hours' }); return; }
 
     var ev = null, evName = cellAt(eventCol);
     if (evName) ev = evByName[norm(evName)] || null;
@@ -548,7 +555,21 @@ function analyseHours(headers, rows, existingVols, existingEvents, opts) {
       hours: Math.round(hrs * 100) / 100, activity: cellAt(actCol) || null });
   });
 
+  // skills: onto new volunteers directly; for existing ones, only what they don't already have
+  var skillUpdates = [], skillCount = 0;
+  Object.keys(skills).forEach(function (k) {
+    var list = Object.keys(skills[k].set);
+    if (!list.length) return;
+    if (newVols[k]) { newVols[k].skills = JSON.stringify(list); skillCount++; return; }
+    var ex = skills[k].existing;
+    if (!ex) return;
+    var have = (Array.isArray(ex.skills) ? ex.skills : []).map(norm);
+    var add = list.filter(function (x) { return have.indexOf(norm(x)) === -1; });
+    if (add.length) { skillUpdates.push({ id: ex.id, skills: (Array.isArray(ex.skills) ? ex.skills : []).concat(add) }); skillCount++; }
+  });
+
   return {
+    skillUpdates: skillUpdates, skillCount: skillCount, volOnly: volOnly,
     cols: { name: H[nameCol], stamp: H[stampCol], dates: dateCols.map(function (i) { return H[i]; }),
             hours: hourCols.map(function (i) { return H[i]; }), start: H[startCol], end: H[endCol], activity: H[actCol], event: H[eventCol] },
     newVols: Object.keys(newVols).map(function (k) { return { key: k, row: newVols[k] }; }),
@@ -858,7 +879,7 @@ function planEvents() {
 // ── plan: volunteers + hours ───────────────────────────────
 function planHours() {
   var A = analyseHours(S.headers, S.rows, DB.volunteers || [], DB.events || [], { dateOrder: S.dateOrder, orgId: orgId });
-  S.plan = { kind: 'hours', analysis: A, newVols: A.newVols, hourRows: A.entries, skipped: A.skipped };
+  S.plan = { kind: 'hours', analysis: A, newVols: A.newVols, hourRows: A.entries, skipped: A.skipped, skillUpdates: A.skillUpdates };
   var total = A.entries.reduce(function (a, h) { return a + h.hours; }, 0);
   var short = function (h) { return h ? '“' + (h.length > 45 ? h.slice(0, 45) + '…' : h) + '”' : null; };
   var notes = [];
@@ -868,16 +889,17 @@ function planHours() {
   if (A.fromAnswer) hs.push(A.fromAnswer + ' from ' + A.cols.hours.map(short).join(' / '));
   if (A.fromTimes) hs.push(A.fromTimes + ' worked out from Start and End time');
   if (hs.length) notes.push('Hours: ' + hs.join('; ') + '.');
-  if (A.cols.activity) notes.push('What they did from ' + short(A.cols.activity) + '.');
+  if (A.cols.activity) notes.push('What they did — and each volunteer\'s skills — from ' + short(A.cols.activity) + '. ' + A.skillCount + ' volunteer(s) get skills.');
+  if (A.volOnly.length) notes.push(A.volOnly.length + ' row(s) had a name but no hours or date — the volunteer is still added, just without an hour entry.');
   notes.push(A.linked ? A.linked + ' entries linked to the Vorlana event held that day; the rest import unlinked.' : 'Entries import unlinked to events (no single Vorlana event on those days).');
   renderPlan([
     ['Hour entries', A.entries.length],
     ['Total hours', Math.round(total * 10) / 10],
-    ['Volunteers', new Set(A.entries.map(function (e) { return e._volKey; })).size],
+    ['Volunteers', Object.keys(A.entries.concat(A.volOnly).reduce(function (o, e) { if (e._volKey) o[e._volKey] = 1; return o; }, {})).length || A.newVols.length],
     ['New volunteers', A.newVols.length],
     ['Linked to events', A.linked],
     ['Rows skipped', A.skipped.length]
-  ], A.skipped, A.entries.length > 0, notes);
+  ], A.skipped.concat(A.volOnly), (A.entries.length + A.newVols.length) > 0, notes);
 }
 
 // ── plan: feedback ─────────────────────────────────────────
@@ -960,7 +982,13 @@ function runImport() {
     var hb = 'imp-' + Date.now().toString(36);
     S.batch = hb;
     var newRows = S.plan.newVols.map(function (v) { return Object.assign({}, v.row, { import_batch: hb }); });
+    var su = S.plan.skillUpdates || [];
     job = writeBatched('volunteers', newRows, function (d, t) { progressBar('volunteers', d, t); })
+      .then(function () {
+        return su.reduce(function (p, u) {
+          return p.then(function () { return sb.from('volunteers').update({ skills: JSON.stringify(u.skills) }).eq('id', u.id).then(function () {}, function () {}); });
+        }, Promise.resolve());
+      })
       .then(function () { return refreshTable('volunteers'); })
       .then(function () {
         var byEmail = {}, byName = {};
@@ -974,7 +1002,7 @@ function runImport() {
             hours: h.hours, activity: h.activity, source: 'import', import_batch: hb,
             row_hash: hash(h._stamp + '|' + h._row + '|' + h._volKey + '|' + h.session_date + '|' + h.hours) });
         });
-        extra += '<br/>' + S.plan.newVols.length + ' volunteer(s) created.' + (orphans ? ' ' + orphans + ' hour row(s) could not be matched to a volunteer.' : '');
+        extra += '<br/>' + S.plan.newVols.length + ' volunteer(s) created' + (su.length ? ', ' + su.length + ' existing volunteer(s) given new skills' : '') + '.' + (orphans ? ' ' + orphans + ' hour row(s) could not be matched to a volunteer.' : '');
         return writeBatched('volunteer_hours', rows, function (d, t) { progressBar('hours', d, t); }, 'org_id,row_hash');
       })
       .then(function (res) {
