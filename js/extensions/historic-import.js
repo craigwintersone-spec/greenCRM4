@@ -25,12 +25,15 @@
 //      which Vorlana outcome (if any) each maps to. Saved per org in
 //      survey_measures so the next export of the same form is instant.
 //
+// v3.4 — volunteer hours: no mapping either. Hours from an hours
+// answer or End − Start; dates from override / mis-titled columns.
+//
 // Needs sql/import-v3.sql run once.
 'use strict';
 
 (function () {
 
-var VERSION = 'v3.2';
+var VERSION = 'v3.4';
 var BATCH = 500;
 var MAX_ROWS = 10000;
 
@@ -357,7 +360,8 @@ function analyseFeedback(headers, rows, existingEvents, opts) {
       answers[q] = sc != null ? sc : a;
     });
 
-    responses.push({ _row: idx + 2, _key: key, _date: date, _raw: raw, answers: answers });
+    var stamp = dateCol >= 0 ? String(r[dateCol] == null ? '' : r[dateCol]).trim() : '';
+    responses.push({ _row: idx + 2, _key: key, _date: date, _raw: raw, _stamp: stamp, answers: answers });
   });
 
   // 5. display name per cluster = most common spelling, tidied
@@ -411,6 +415,144 @@ function analyseFeedback(headers, rows, existingEvents, opts) {
     matchedSessions: sessList.filter(function (s) { return s.eventId; }).length,
     eventNames: Object.keys(clusterName).length,
     noDate: noDate, noName: noName, measures: measures
+  };
+}
+
+// ── VOLUNTEER HOURS ANALYSIS (pure — no DOM) ───────────────
+// Sign-in forms change over time, so hours and dates can each live in
+// several columns. Per row, the first usable value wins:
+//   date  : a "previous date" / "change the date" column → any other
+//           column whose values are dates → the Timestamp
+//   hours : a numeric "hours / how long" answer → End − Start time
+//   event : a real event column if there is one, else the one Vorlana
+//           event held that day (if exactly one)
+//   what they did : an "activities / tasks / role" column
+function parseTimeOfDay(v) {
+  var s = String(v == null ? '' : v).trim().toUpperCase();
+  var m = /^(\d{1,2})(?::(\d{2}))?(?::\d{2})?\s*(AM|PM)?$/.exec(s);
+  if (!m) return null;
+  var h = +m[1], mi = +(m[2] || 0);
+  if (m[3] === 'PM' && h < 12) h += 12;
+  if (m[3] === 'AM' && h === 12) h = 0;
+  if (h > 23 || mi > 59) return null;
+  return h + mi / 60;
+}
+
+function analyseHours(headers, rows, existingVols, existingEvents, opts) {
+  opts = opts || {};
+  var H = headers.map(function (h) { return String(h || '').trim(); });
+  var hn = H.map(norm);
+  var colVals = function (i) { return rows.map(function (r) { return r[i] == null ? '' : String(r[i]).trim(); }); };
+  var dateRate = function (i) {
+    var f = colVals(i).filter(Boolean);
+    if (!f.length) return 0;
+    return f.filter(function (v) { return DATE_RE.test(v) || /^\d{4}-\d{2}-\d{2}/.test(v); }).length / f.length;
+  };
+  var find = function (re, not) {
+    for (var i = 0; i < H.length; i++) if (re.test(hn[i]) && !(not && not.test(hn[i]))) return i;
+    return -1;
+  };
+
+  var nameCol  = find(/full name|your name|volunteer name|^name$|^volunteer$/);
+  var emailCol = find(/e-?mail/);
+  var phoneCol = find(/phone|mobile|telephone/);
+  var actCol   = find(/activit|task|what .*(doing|supporting|did)|^role$/);
+  var eventCol = find(/which (event|workshop|session)|name of the (event|workshop|session)|^event( name)?$/);
+
+  // timestamp = best date column, preferring one called "timestamp"
+  var stampCol = -1, best = 0;
+  H.forEach(function (h, i) {
+    var r = dateRate(i);
+    if (r > best || (r === best && r > 0 && /timestamp/.test(hn[i]))) { best = r; stampCol = i; }
+  });
+  // other date columns (override first, then any mis-titled date column)
+  var dateCols = [];
+  H.forEach(function (h, i) {
+    if (i === stampCol || i === nameCol || i === eventCol) return;
+    if (dateRate(i) >= 0.6) dateCols.push([/previous date|change the date|date of (the )?session|session date|^date$/.test(hn[i]) ? 0 : 1, i]);
+  });
+  dateCols.sort(function (a, b) { return a[0] - b[0]; });
+  dateCols = dateCols.map(function (p) { return p[1]; });
+
+  var allDates = [];
+  [stampCol].concat(dateCols).forEach(function (i) { if (i >= 0) allDates = allDates.concat(colVals(i)); });
+  var orders = detectDateOrders(allDates);
+  var fb = opts.dateOrder || 'mdy';
+  if (!opts.dateOrder) { var any = Object.keys(orders).map(function (k) { return orders[k]; }).filter(function (o) { return o !== 'auto'; }); if (any.length) fb = any[0]; }
+
+  // hours: numeric answers in an hours-ish column, then start/end
+  var hourCols = [];
+  H.forEach(function (h, i) {
+    if (!/hour|how long|duration|hrs/.test(hn[i]) || dateRate(i) >= 0.5) return;
+    hourCols.push(i);
+  });
+  var startCol = find(/start/), endCol = find(/\bend\b|finish/);
+
+  var byEmail = {}, byName = {};
+  (existingVols || []).forEach(function (v) { if (v.email) byEmail[norm(v.email)] = v; if (v.name) byName[norm(v.name)] = v; });
+  var evByDate = {};
+  (existingEvents || []).forEach(function (e) { if (e.date) (evByDate[e.date] = evByDate[e.date] || []).push(e); });
+  var evByName = {};
+  (existingEvents || []).forEach(function (e) { evByName[norm(e.name)] = e; });
+
+  var newVols = {}, entries = [], skipped = [], linked = 0, fromTimes = 0, fromAnswer = 0;
+  rows.forEach(function (r, idx) {
+    var cellAt = function (i) { return i >= 0 && r[i] != null ? String(r[i]).trim() : ''; };
+    var name = cellAt(nameCol).replace(/\s+/g, ' '), email = cellAt(emailCol);
+    if (!name && !email) { skipped.push({ row: idx + 2, why: 'no name' }); return; }
+
+    var sane = function (iso) { if (!iso) return null; var y = +iso.slice(0, 4); return (y >= 2000 && y <= new Date().getFullYear() + 1) ? iso : null; };
+    // A "previous date" can't be after the form was submitted. If it is, the
+    // day and month were probably typed the other way round; failing that, use the timestamp.
+    var stampDate = sane(parseDate(cellAt(stampCol), orders, fb));
+    var swap = function (iso) { if (!iso) return null; var p = iso.split('-'); return +p[2] <= 12 ? p[0] + '-' + p[2] + '-' + p[1] : null; };
+    var date = null;
+    for (var d = 0; d < dateCols.length && !date; d++) {
+      var cand = sane(parseDate(cellAt(dateCols[d]), orders, fb));
+      if (cand && stampDate && cand > stampDate) cand = (swap(cand) && swap(cand) <= stampDate) ? swap(cand) : null;
+      date = cand;
+    }
+    if (!date) date = stampDate;
+    if (!date) { skipped.push({ row: idx + 2, why: name + ' — no date' }); return; }
+
+    var hrs = 0;
+    for (var h = 0; h < hourCols.length && !hrs; h++) {
+      var raw = cellAt(hourCols[h]);
+      if (/^\d+(\.\d+)?(\s*(h|hrs?|hours?))?$/i.test(raw)) { var x = parseFloat(raw); if (x > 0 && x <= 16) { hrs = x; fromAnswer++; } }
+    }
+    if (!hrs && startCol >= 0 && endCol >= 0) {
+      var st = parseTimeOfDay(cellAt(startCol)), en = parseTimeOfDay(cellAt(endCol));
+      if (st != null && en != null) {
+        if (en <= st && en < 12) en += 12;          // "10:00" → "2:00" meant 2 pm
+        var diff = en - st;
+        if (diff > 0 && diff <= 16) { hrs = Math.round(diff * 100) / 100; fromTimes++; }
+      }
+    }
+    if (!hrs) { skipped.push({ row: idx + 2, why: name + ' on ' + date + ' — no hours given' }); return; }
+
+    var key = email ? norm(email) : norm(name);
+    var existing = (email && byEmail[norm(email)]) || byName[norm(name)];
+    if (!existing && !newVols[key]) {
+      newVols[key] = { org_id: opts.orgId, name: name || email, first_name: (name || email).split(' ')[0],
+        last_name: (name || '').split(' ').slice(1).join(' '), email: email || null,
+        phone: cellAt(phoneCol) || null, role: 'Volunteer', status: 'Active', hours: 0, skills: '[]' };
+    }
+
+    var ev = null, evName = cellAt(eventCol);
+    if (evName) ev = evByName[norm(evName)] || null;
+    if (!ev && evByDate[date] && evByDate[date].length === 1) ev = evByDate[date][0];
+    if (ev) linked++;
+
+    entries.push({ _volKey: key, _existingId: existing ? existing.id : null, _row: idx + 2,
+      _stamp: cellAt(stampCol), event_id: ev ? String(ev.id) : null, session_date: date,
+      hours: Math.round(hrs * 100) / 100, activity: cellAt(actCol) || null });
+  });
+
+  return {
+    cols: { name: H[nameCol], stamp: H[stampCol], dates: dateCols.map(function (i) { return H[i]; }),
+            hours: hourCols.map(function (i) { return H[i]; }), start: H[startCol], end: H[endCol], activity: H[actCol], event: H[eventCol] },
+    newVols: Object.keys(newVols).map(function (k) { return { key: k, row: newVols[k] }; }),
+    entries: entries, skipped: skipped, linked: linked, fromTimes: fromTimes, fromAnswer: fromAnswer
   };
 }
 
@@ -512,7 +654,7 @@ function injectModal() {
 
 var HINTS = {
   events: 'Needs at least: <strong>event name</strong> and <strong>date</strong>. Also reads type, location, attendees, capacity, and a funder/contract column.',
-  hours: 'Needs at least: <strong>volunteer name</strong>, <strong>date</strong> and <strong>hours</strong>. Volunteers not already on your list are created.',
+  hours: 'Drop your volunteer sign-in export. Vorlana finds the name, the date and the hours itself — including forms that changed over time (an hours answer on some rows, start and end times on others). Volunteers not already on your list are created.',
   feedback: 'Drop <strong>any</strong> survey export. Vorlana finds the date and the event name itself, keeps every question word-for-word, and leaves out personal data. ' +
             'Afterwards you tidy event names and confirm how each question is used in reports.'
 };
@@ -577,12 +719,12 @@ function readFile(file) {
       S.headers = parsed.headers;
       S.rows = parsed.rows;
       S.file = file.name;
-      S.map = S.kind === 'feedback' ? {} : autoMap(parsed.headers, SCHEMAS[S.kind]);
+      S.map = S.kind === 'events' ? autoMap(parsed.headers, SCHEMAS[S.kind]) : {};
       resolveDateOrder();
       $('hi-status').innerHTML = '✓ Read <strong>' + parsed.rows.length.toLocaleString() + '</strong> rows and ' +
         parsed.headers.length + ' columns from ' + esc(file.name) + (parsed.delim === '\t' ? ' (tab-separated)' : '');
       $('hi-after').innerHTML = '';
-      if (S.kind !== 'feedback') showMapping();
+      if (S.kind === 'events') showMapping();
       buildPlan();
     } catch (err) {
       $('hi-status').innerHTML = '<span style="color:var(--red)">' + esc(err.message) + '</span>';
@@ -596,7 +738,7 @@ function resolveDateOrder() {
   var pick = $('hi-date-order') ? $('hi-date-order').value : 'auto';
   if (pick === 'dmy' || pick === 'mdy') { S.dateOrder = pick; return; }
   S.dateOrder = null;   // let the analyser decide
-  if (S.kind !== 'feedback') {
+  if (S.kind === 'events') {
     var i = S.map.date;
     var orders = i == null ? {} : detectDateOrders(S.rows.map(function (r) { return r[i]; }));
     var any = Object.keys(orders).map(function (k) { return orders[k]; }).filter(function (o) { return o !== 'auto'; });
@@ -605,7 +747,7 @@ function resolveDateOrder() {
 }
 
 function requiredMissing() {
-  if (S.kind === 'feedback') return [];
+  if (S.kind !== 'events') return [];
   return SCHEMAS[S.kind].filter(function (f) { return f.required && S.map[f.key] == null; });
 }
 
@@ -713,49 +855,29 @@ function planEvents() {
   renderPlan([['Events to create', create.length], ['Linked to a funder', linked], ['Rows skipped', skipped.length]], skipped, create.length > 0, notes);
 }
 
-// ── plan: volunteers + hours (unchanged behaviour) ─────────
+// ── plan: volunteers + hours ───────────────────────────────
 function planHours() {
-  var vols = DB.volunteers || [];
-  var byEmail = {}, byName = {};
-  vols.forEach(function (v) { if (v.email) byEmail[norm(v.email)] = v; if (v.name) byName[norm(v.name)] = v; });
-  var evByName = {};
-  (DB.events || []).forEach(function (e) { evByName[norm(e.name)] = e; });
-  var newVols = {}, hourRows = [], skipped = [], matchedEv = 0, unmatchedEv = 0;
-  S.rows.forEach(function (r, idx) {
-    var name = cell(r, 'volunteer'), email = cell(r, 'email');
-    var date = pDate(cell(r, 'date'));
-    var hrs = parseHours(cell(r, 'hours'));
-    if (!name && !email) { skipped.push({ row: idx + 2, why: 'no volunteer name or email' }); return; }
-    if (!date) { skipped.push({ row: idx + 2, why: 'date not understood: "' + cell(r, 'date') + '"' }); return; }
-    if (!hrs || hrs <= 0) { skipped.push({ row: idx + 2, why: 'hours not understood: "' + cell(r, 'hours') + '"' }); return; }
-    var key = email ? norm(email) : norm(name);
-    var existing = (email && byEmail[norm(email)]) || byName[norm(name)];
-    if (!existing && !newVols[key]) {
-      newVols[key] = {
-        org_id: orgId, name: name || email, first_name: (name || email).split(' ')[0],
-        last_name: (name || '').split(' ').slice(1).join(' '), email: email || null,
-        phone: cell(r, 'phone') || null, role: 'Volunteer', status: 'Active', hours: 0, skills: '[]'
-      };
-    }
-    var evName = cell(r, 'event');
-    var ev = evName ? evByName[norm(evName)] : null;
-    if (evName) { if (ev) matchedEv++; else unmatchedEv++; }
-    hourRows.push({
-      _volKey: key, _existingId: existing ? existing.id : null, org_id: orgId,
-      event_id: ev ? String(ev.id) : null, session_date: date,
-      hours: Math.round(hrs * 100) / 100, activity: cell(r, 'activity') || null, source: 'import'
-    });
-  });
-  var newVolList = Object.keys(newVols).map(function (k) { return { key: k, row: newVols[k] }; });
-  S.plan = { kind: 'hours', newVols: newVolList, hourRows: hourRows, skipped: skipped };
-  var totalHours = hourRows.reduce(function (a, h) { return a + h.hours; }, 0);
+  var A = analyseHours(S.headers, S.rows, DB.volunteers || [], DB.events || [], { dateOrder: S.dateOrder, orgId: orgId });
+  S.plan = { kind: 'hours', analysis: A, newVols: A.newVols, hourRows: A.entries, skipped: A.skipped };
+  var total = A.entries.reduce(function (a, h) { return a + h.hours; }, 0);
+  var short = function (h) { return h ? '“' + (h.length > 45 ? h.slice(0, 45) + '…' : h) + '”' : null; };
   var notes = [];
-  if (unmatchedEv) notes.push(unmatchedEv + ' row(s) name an event not in Vorlana. Their hours still import, just unlinked.');
+  notes.push('Volunteer from ' + (short(A.cols.name) || 'no name column found') + '.');
+  notes.push('Date from ' + A.cols.dates.map(short).concat([short(A.cols.stamp)]).filter(Boolean).join(', then ') + '.');
+  var hs = [];
+  if (A.fromAnswer) hs.push(A.fromAnswer + ' from ' + A.cols.hours.map(short).join(' / '));
+  if (A.fromTimes) hs.push(A.fromTimes + ' worked out from Start and End time');
+  if (hs.length) notes.push('Hours: ' + hs.join('; ') + '.');
+  if (A.cols.activity) notes.push('What they did from ' + short(A.cols.activity) + '.');
+  notes.push(A.linked ? A.linked + ' entries linked to the Vorlana event held that day; the rest import unlinked.' : 'Entries import unlinked to events (no single Vorlana event on those days).');
   renderPlan([
-    ['Hour entries', hourRows.length], ['Total hours', Math.round(totalHours * 10) / 10],
-    ['New volunteers', newVolList.length], ['Matched to events', matchedEv],
-    ['Event not found', unmatchedEv], ['Rows skipped', skipped.length]
-  ], skipped, hourRows.length > 0, notes);
+    ['Hour entries', A.entries.length],
+    ['Total hours', Math.round(total * 10) / 10],
+    ['Volunteers', new Set(A.entries.map(function (e) { return e._volKey; })).size],
+    ['New volunteers', A.newVols.length],
+    ['Linked to events', A.linked],
+    ['Rows skipped', A.skipped.length]
+  ], A.skipped, A.entries.length > 0, notes);
 }
 
 // ── plan: feedback ─────────────────────────────────────────
@@ -835,7 +957,9 @@ function runImport() {
     job = runFeedback();
 
   } else {
-    var newRows = S.plan.newVols.map(function (v) { return v.row; });
+    var hb = 'imp-' + Date.now().toString(36);
+    S.batch = hb;
+    var newRows = S.plan.newVols.map(function (v) { return Object.assign({}, v.row, { import_batch: hb }); });
     job = writeBatched('volunteers', newRows, function (d, t) { progressBar('volunteers', d, t); })
       .then(function () { return refreshTable('volunteers'); })
       .then(function () {
@@ -846,10 +970,12 @@ function runImport() {
           var id = h._existingId;
           if (!id) { var v = byEmail[h._volKey] || byName[h._volKey]; id = v ? v.id : null; }
           if (!id) { orphans++; return; }
-          rows.push({ org_id: h.org_id, volunteer_id: String(id), event_id: h.event_id, session_date: h.session_date, hours: h.hours, activity: h.activity, source: h.source });
+          rows.push({ org_id: orgId, volunteer_id: String(id), event_id: h.event_id, session_date: h.session_date,
+            hours: h.hours, activity: h.activity, source: 'import', import_batch: hb,
+            row_hash: hash(h._stamp + '|' + h._row + '|' + h._volKey + '|' + h.session_date + '|' + h.hours) });
         });
         extra += '<br/>' + S.plan.newVols.length + ' volunteer(s) created.' + (orphans ? ' ' + orphans + ' hour row(s) could not be matched to a volunteer.' : '');
-        return writeBatched('volunteer_hours', rows, function (d, t) { progressBar('hours', d, t); });
+        return writeBatched('volunteer_hours', rows, function (d, t) { progressBar('hours', d, t); }, 'org_id,row_hash');
       })
       .then(function (res) {
         if (typeof window._reloadVolunteerHours === 'function') return window._reloadVolunteerHours().then(function () { return res; });
@@ -868,6 +994,7 @@ function runImport() {
       '</div>';
     btn.disabled = false;
     btn.textContent = 'Import';
+    if (S.plan.kind === 'hours' && !res.failed) { btn.style.display = 'none'; $('hi-undo').style.display = ''; }
     if (S.plan.kind === 'feedback' && !res.failed) {
       btn.style.display = 'none';
       $('hi-undo').style.display = '';
@@ -924,7 +1051,8 @@ function runFeedback() {
           enjoyed: std.enjoyed, cb: std.cb, ca: std.ca,
           learned: std.learned, connected: std.connected, friend: std.friend, quote: std.quote,
           answers: r.answers, import_batch: batch,
-          row_hash: hash(r._session + '|' + JSON.stringify(r.answers))
+          // timestamp + row number: two people giving identical answers at one session are two responses
+          row_hash: hash(r._stamp + '|' + r._row + '|' + r._session + '|' + JSON.stringify(r.answers))
         });
       });
       return writeBatched('feedback', rows, function (d, t) { progressBar('responses', d, t); }, 'org_id,row_hash')
@@ -944,11 +1072,18 @@ function runFeedback() {
 
 function undoImport() {
   if (!S.batch) return;
-  if (!confirm('Remove everything this import added (responses and any new sessions)?')) return;
+  var isHours = S.plan && S.plan.kind === 'hours';
+  if (!confirm(isHours ? 'Remove every hour entry and new volunteer this import added?' : 'Remove everything this import added (responses and any new sessions)?')) return;
   var b = S.batch;
-  sb.from('feedback').delete().eq('org_id', orgId).eq('import_batch', b)
-    .then(function () { return sb.from('events').delete().eq('org_id', orgId).eq('import_batch', b); })
-    .then(function () { return Promise.all([refreshTable('events'), refreshTable('feedback')]); })
+  var job = isHours
+    ? sb.from('volunteer_hours').delete().eq('org_id', orgId).eq('import_batch', b)
+        .then(function () { return sb.from('volunteers').delete().eq('org_id', orgId).eq('import_batch', b); })
+        .then(function () { return refreshTable('volunteers'); })
+        .then(function () { if (typeof window._reloadVolunteerHours === 'function') return window._reloadVolunteerHours(); })
+    : sb.from('feedback').delete().eq('org_id', orgId).eq('import_batch', b)
+        .then(function () { return sb.from('events').delete().eq('org_id', orgId).eq('import_batch', b); })
+        .then(function () { return Promise.all([refreshTable('events'), refreshTable('feedback')]); });
+  job
     .then(function () {
       S.batch = null;
       $('hi-plan').innerHTML = '<div class="alert alert-ok">Import removed.</div>';
@@ -1064,7 +1199,7 @@ function addButtons() {
 }
 
 // exposed for tests / other extensions
-window.HistoricImport = { VERSION: VERSION, parseCSV: parseCSV, analyseFeedback: analyseFeedback, nameKey: nameKey, parseDate: parseDate, detectDateOrders: detectDateOrders };
+window.HistoricImport = { VERSION: VERSION, parseCSV: parseCSV, analyseFeedback: analyseFeedback, analyseHours: analyseHours, nameKey: nameKey, parseDate: parseDate, detectDateOrders: detectDateOrders };
 
 // ── init ───────────────────────────────────────────────────
 function whenReady(fn) {
