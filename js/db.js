@@ -153,7 +153,8 @@ const MAPPERS = {
     capacity: num(r.capacity) || 20,
     location: r.location || '',
     contract_ids: toArr(r.contract_ids),
-    import_batch: r.import_batch || null
+    import_batch: r.import_batch || null,
+    question_ids: Array.isArray(r.question_ids) ? r.question_ids.map(String) : null   // null = ask every active question
   }),
   feedback: r => ({
     id: r.id,
@@ -258,7 +259,9 @@ const MAPPERS = {
     question: r.question || '',
     kind: r.kind || 'text',
     maps_to: r.maps_to || null,
-    label: r.label || (r.question || '').slice(0, 60)
+    label: r.label || (r.question || '').slice(0, 60),
+    active: r.active !== false,
+    sort: r.sort == null ? 0 : Number(r.sort)
   })
 };
 
