@@ -503,24 +503,65 @@ async function runRAGExplainer(cid, name, funder, sp, op, linked) {
 
 async function runFeedbackAnalyst() {
   const el = $('feedback-analyst-result'); if (!el) return;
-  const FB = DB.feedback;
+  let FB = DB.feedback || [];
+  const evFilter = $('fb-filter-ev') && $('fb-filter-ev').value;
+  if (evFilter) FB = FB.filter(f => String(f.eventId) === String(evFilter));
   if (!FB.length) { el.innerHTML = '<div class="alert alert-info">No feedback data yet. Add responses first.</div>'; return; }
-  const avgCB = (FB.reduce((a, f) => a + num(f.cb), 0) / FB.length).toFixed(1);
-  const avgCA = (FB.reduce((a, f) => a + num(f.ca), 0) / FB.length).toFixed(1);
-  const enjoyed = pct(FB.filter(f => f.enjoyed >= 4).length, FB.length);
+
+  // v11: read the org's OWN questions (same numbers as the Feedback page cards).
+  // Nothing is computed by the AI — code works out every figure, the AI writes prose.
+  const hasMeasures = typeof measureStats === 'function' && typeof activeMeasures === 'function' && activeMeasures().length;
+  const lines = [];
+  const caveats = [];
+  let journeyTxt = '';
+  if (hasMeasures) {
+    const j = measureJourney(FB);
+    if (j) journeyTxt = j.before + ' → ' + j.after;
+    if (j) lines.push('Confidence before → after (1–5): ' + j.before + ' → ' + j.after + ' (' + j.n + ' answers)');
+    measureStats(FB).forEach(st => {
+      if (j && (st.m.maps_to === 'cb' || st.m.maps_to === 'ca')) return;
+      const q = st.m.question;
+      if (st.kind === 'score') lines.push('"' + q + '": average ' + st.avg.toFixed(1) + ' / 5, ' + st.pctHigh + '% rated 4–5 (' + st.n + ' answers)');
+      else if (st.kind === 'yesno') {
+        lines.push('"' + q + '": ' + st.pctYes + '% yes (' + st.n + ' answers)');
+        if (st.pctYes === 100 && st.n >= 20) caveats.push('"' + q + '"');
+      }
+      else lines.push('"' + q + '": most common answer "' + st.breakdown[0][0] + '" (' + st.breakdown[0][1] + ' of ' + st.n + ')' + (st.breakdown[1] ? ', then "' + st.breakdown[1][0] + '" (' + st.breakdown[1][1] + ')' : ''));
+    });
+  } else {
+    const avg = k => { const v = FB.map(f => f[k]).filter(x => x != null && x !== '' && num(x) > 0).map(num); return v.length ? (v.reduce((a, b) => a + b, 0) / v.length).toFixed(1) : null; };
+    const cb = avg('cb'), ca = avg('ca');
+    if (cb && ca) { journeyTxt = cb + ' → ' + ca; lines.push('Confidence before → after (1–5): ' + cb + ' → ' + ca); }
+    const en = FB.filter(f => f.enjoyed != null && num(f.enjoyed) > 0);
+    if (en.length) lines.push('Enjoyed (rated 4–5): ' + pct(en.filter(f => num(f.enjoyed) >= 4).length, en.length) + '% of ' + en.length);
+    ['learned', 'connected', 'friend'].forEach(k => lines.push({ learned: 'Learned something new', connected: 'Felt more connected', friend: 'Made a new friend' }[k] + ': ' + pct(FB.filter(f => f[k]).length, FB.length) + '%'));
+  }
+  const quotes = (typeof measureQuotes === 'function' ? measureQuotes(FB) : FB.filter(f => f.quote).map(f => ({ quote: f.quote })))
+    .map(q => q.quote).filter(q => q.length > 12 && !/^(nothing|none|n\/?a|no|not really|all good)\b/i.test(q));
+  const sample = quotes.sort(() => 0.5 - Math.random()).slice(0, 12);
+  const events = new Set(FB.map(f => String(f.eventId))).size;
+
   const steps = [
-    { label: 'Reading feedback responses', meta: FB.length + ' responses' },
-    { label: 'Identifying themes', meta: 'Confidence: ' + avgCB + ' → ' + avgCA },
+    { label: 'Reading feedback responses', meta: FB.length + ' responses · ' + events + ' sessions' },
+    { label: 'Working out the figures', meta: journeyTxt ? 'Confidence: ' + journeyTxt : lines.length + ' measures' },
     { label: 'Writing board summary', meta: '' },
     { label: 'Ready', meta: '' }
   ];
-  const sys = 'You are a UK programme evaluation expert. Write a 100-150 word board-ready summary. Use **bold** for emphasis. End with one clear recommendation. No hashtags, no markdown headings.';
-  const prompt = 'Responses: ' + FB.length + '\nConf before: ' + avgCB + ' / 5\nConf after: ' + avgCA + ' / 5\nEnjoyed (4-5 stars): ' + enjoyed + '%';
+  const sys = 'You are a UK programme evaluation expert writing for a charity board. Write a 150-200 word summary. ' +
+    'Use ONLY the figures given — never invent, round differently or recalculate them. Quote each question in plain words, not word-for-word. ' +
+    'Lead with the strongest evidence of change. If a caveat is listed, mention it briefly and do not present that figure as evidence. ' +
+    'You may paraphrase themes from the comments but do not quote a comment unless it is in the list. ' +
+    'Use **bold** for key figures. End with one practical recommendation. No hashtags, no markdown headings, British English.';
+  const prompt =
+    'Responses: ' + FB.length + ' across ' + events + ' sessions\n\n' +
+    'Figures:\n- ' + lines.join('\n- ') +
+    (caveats.length ? '\n\nCaveat: every answer to ' + caveats.join(' and ') + ' was "Yes" — the form may only have offered Yes, so these are not reliable evidence.' : '') +
+    (sample.length ? '\n\nA sample of participant comments:\n- ' + sample.join('\n- ') : '');
   const raw = await runAgent({
     container: el,
     headerLabel: 'Feedback Analyst Agent',
     headerSub: 'Surfacing themes from participant feedback',
-    steps, sys, prompt, maxTok: 400
+    steps, sys, prompt, maxTok: 600
   });
   if (raw) aiResult(el, raw);
 }
