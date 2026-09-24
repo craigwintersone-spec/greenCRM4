@@ -31,7 +31,7 @@
 
 (function () {
 
-var VERSION = 'v2.0';
+var VERSION = 'v2.1';
 var BATCH = 500;
 var MAX_ROWS = 10000;
 
@@ -422,8 +422,9 @@ function resolveDateOrder() {
 function requiredMissing() {
   var schema = SCHEMAS[S.kind];
   var missing = schema.filter(function (f) { return f.required && S.map[f.key] == null; });
-  if (S.kind === 'feedback' && S.map.event == null && (S.map.location == null || S.map.date == null)) {
-    missing.push({ label: 'an Event column, or both a Location and a Date column' });
+  if (S.kind === 'feedback') {
+    if (S.map.date == null) missing.push({ label: 'a Date or Timestamp column' });
+    if (S.map.event == null && S.map.location == null) missing.push({ label: 'an Event name column, or a Location column' });
   }
   return missing;
 }
@@ -467,6 +468,7 @@ function bindMapping() {
       var k = sel.getAttribute('data-mapkey');
       if (sel.value === '') delete S.map[k]; else S.map[k] = parseInt(sel.value, 10);
       if (k === 'date') resolveDateOrder();
+      showMapping();   // refresh the "we could not find" notice
       buildPlan();
     });
   });
@@ -635,20 +637,24 @@ function planHours() {
 }
 
 // ── plan: feedback (any survey) ────────────────────────────
+// A "session" is one workshop: an event NAME (if the survey asks for it)
+// or a PLACE, on one DATE. Sessions are matched to events already in
+// Vorlana, and created when they're new — so a survey naming workshops
+// that aren't in the system yet still imports.
 function planFeedback() {
-  var evByName = {};
-  var evByDate = {};
+  var evByNameDate = {}, evByDate = {};
   (DB.events || []).forEach(function (e) {
-    evByName[norm(e.name)] = e;
-    if (e.date) (evByDate[e.date] = evByDate[e.date] || []).push(e);
+    if (e.date) {
+      evByNameDate[norm(e.name) + '|' + e.date] = e;
+      (evByDate[e.date] = evByDate[e.date] || []).push(e);
+    }
   });
 
   var mappedIdx = {};
   Object.keys(S.map).forEach(function (k) { mappedIdx[S.map[k]] = k; });
 
   // The org's own questions: every column that isn't mapped and isn't personal.
-  var excluded = [];
-  var questionCols = [];
+  var excluded = [], questionCols = [];
   S.headers.forEach(function (h, i) {
     if (isPersonalColumn(h)) { excluded.push(h); return; }
     if (mappedIdx[i] === 'event' || mappedIdx[i] === 'location' || mappedIdx[i] === 'date') return;
@@ -660,34 +666,40 @@ function planFeedback() {
   var evType = ($('hi-ev-type') && $('hi-ev-type').value) || 'Other';
   var bulkId = ($('hi-bulk-contract') && $('hi-bulk-contract').value) || '';
 
-  var sessions = {};  // key → { location, date, eventId|null, count }
+  var sessions = {};
   var responses = [];
   var skipped = [];
 
   S.rows.forEach(function (r, idx) {
-    var eventId = null, sessionKey = null;
+    var evName = S.map.event != null ? cell(r, 'event') : '';
+    var loc = S.map.location != null ? cell(r, 'location') : '';
+    var date = parseDate(cell(r, 'date'), S.dateOrder);
 
-    if (S.map.event != null) {
-      var evName = cell(r, 'event');
-      var ev = evName ? evByName[norm(evName)] : null;
-      if (!ev) { skipped.push({ row: idx + 2, why: 'event not found: "' + evName + '"' }); return; }
-      eventId = ev.id;
-    } else {
-      var loc = cell(r, 'location');
-      var date = parseDate(cell(r, 'date'), S.dateOrder);
-      if (!loc) { skipped.push({ row: idx + 2, why: 'no location given' }); return; }
-      if (!date) { skipped.push({ row: idx + 2, why: 'date not understood: "' + cell(r, 'date') + '"' }); return; }
-      sessionKey = norm(loc) + '|' + date;
-      if (!sessions[sessionKey]) {
-        // match an existing event on that date at that place
-        var match = (evByDate[date] || []).filter(function (e) {
+    if (!evName && !loc) { skipped.push({ row: idx + 2, why: 'no event name or location' }); return; }
+    if (!date) { skipped.push({ row: idx + 2, why: 'date not understood: "' + cell(r, 'date') + '"' }); return; }
+
+    var label = evName || loc;
+    var key = norm(label) + '|' + date;
+
+    if (!sessions[key]) {
+      // 1. exact name + date  2. same date, name/place appears in the event
+      var match = evByNameDate[norm(label) + '|' + date] || null;
+      if (!match) {
+        match = (evByDate[date] || []).filter(function (e) {
           var hay = norm((e.name || '') + ' ' + (e.location || ''));
-          return hay.indexOf(norm(loc)) !== -1;
+          return hay.indexOf(norm(label)) !== -1 || norm(label).indexOf(norm(e.name || '')) !== -1;
         })[0] || null;
-        sessions[sessionKey] = { location: loc, date: date, eventId: match ? match.id : null, eventName: match ? match.name : (prefix + ' — ' + loc), count: 0 };
       }
-      sessions[sessionKey].count++;
+      sessions[key] = {
+        label: label,
+        location: loc || '',
+        date: date,
+        eventId: match ? match.id : null,
+        eventName: match ? match.name : (evName ? evName : (prefix + ' — ' + loc)),
+        count: 0
+      };
     }
+    sessions[key].count++;
 
     // Vorlana's own fields — only ever from real answers, never invented
     function score(k) {
@@ -706,9 +718,9 @@ function planFeedback() {
     });
 
     responses.push({
-      _sessionKey: sessionKey,
+      _sessionKey: key,
       org_id: orgId,
-      event_id: eventId,
+      event_id: null,
       name: '',
       enjoyed: score('enjoyed'),
       cb: score('cb'),
@@ -737,7 +749,7 @@ function planFeedback() {
           name: x.s.eventName,
           event_date: x.s.date,
           type: evType,
-          location: x.s.location,
+          location: x.s.location || null,
           attendees: 0,
           capacity: null,
           contract_ids: bulkId ? [bulkId] : []
@@ -747,7 +759,6 @@ function planFeedback() {
     skipped: skipped
   };
 
-  // Explain exactly how the org's questions will be used
   var mapLines = [];
   [['connected', 'counted as “felt more connected” when 4–5 or agree'],
    ['learned', 'counted as “learned / more skilled” when 4–5 or agree'],
@@ -760,19 +771,18 @@ function planFeedback() {
     if (i != null) mapLines.push('“' + String(S.headers[i]).slice(0, 80) + '” — ' + p[1]);
   });
 
-  var notes = [];
-  if (S.map.event == null) notes.push(dateNote());
+  var notes = [dateNote()];
   if (toCreate.length) {
-    notes.push(toCreate.length + ' new session(s) will be created, named “' + prefix + ' — [place]”. Attendance isn\u2019t in the file, so it starts at 0 — add the real numbers on each event.');
+    notes.push(toCreate.length + ' session(s) are not in Vorlana yet and will be created. Attendance isn\u2019t in a feedback file, so it starts at 0 — add the real numbers on each event afterwards.');
   }
   notes.push('All ' + questionCols.length + ' of your questions are kept word-for-word on each response.');
   if (excluded.length) notes.push('Left out (personal data, never stored): ' + excluded.map(function (h) { return '“' + String(h).slice(0, 50) + (h.length > 50 ? '…' : '') + '”'; }).join(', '));
 
   var sessHTML = sessList.length
     ? '<details style="font-size:12px;color:var(--txt2);margin-bottom:8px"><summary style="cursor:pointer">Show ' + sessList.length + ' session(s) found</summary>' +
-      '<div style="background:var(--bg);border-radius:8px;padding:8px;margin-top:6px">' +
+      '<div style="max-height:220px;overflow:auto;background:var(--bg);border-radius:8px;padding:8px;margin-top:6px">' +
       sessList.sort(function (a, b) { return a.s.date.localeCompare(b.s.date); }).map(function (x) {
-        return esc(x.s.date) + ' · ' + esc(x.s.location) + ' — ' + x.s.count + ' response' + (x.s.count === 1 ? '' : 's') +
+        return esc(x.s.date) + ' · ' + esc(x.s.label) + ' — ' + x.s.count + ' response' + (x.s.count === 1 ? '' : 's') +
           (x.s.eventId ? ' · <span style="color:var(--em)">matches “' + esc(x.s.eventName) + '”</span>' : ' · <strong>new</strong>');
       }).join('<br/>') + '</div></details>'
     : '';
@@ -784,7 +794,7 @@ function planFeedback() {
 
   renderPlan([
     ['Responses', responses.length],
-    ['Sessions', S.map.event != null ? '—' : sessList.length],
+    ['Sessions', sessList.length],
     ['New events', toCreate.length],
     ['Matched events', matched],
     ['Your questions', questionCols.length],
@@ -847,9 +857,9 @@ function runImport() {
         var orphans = 0;
         var rows = [];
         plan.responses.forEach(function (r) {
-          var eid = r.event_id;
-          if (!eid && r._sessionKey) {
-            var s = plan.sessions[r._sessionKey];
+          var eid = null;
+          var s = plan.sessions[r._sessionKey];
+          if (s) {
             if (s.eventId) eid = s.eventId;
             else {
               var ev = byNameDate[norm(s.eventName) + '|' + s.date];
