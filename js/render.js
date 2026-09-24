@@ -6,6 +6,10 @@
 // that's modals.js's job.
 //
 // All field names match the MAPPERS in db.js exactly.
+//
+// v3 (feedback measures): the Feedback page, Social Impact and the
+// dashboard read the org's OWN questions (DB.survey_measures) instead
+// of Vorlana's fixed fields. See the FEEDBACK — measures section.
 
 'use strict';
 
@@ -120,7 +124,7 @@ function renderDashboard() {
   // Feedback highlights
   const fbHi = $('dash-fb-hi');
   if (fbHi) {
-    const quotes = FB.filter(f => f.quote && f.quote.trim()).slice(0, 3);
+    const quotes = measureQuotes(FB, 3);
     if (!quotes.length) {
       fbHi.innerHTML = renderEmpty('No feedback quotes yet.');
     } else {
@@ -139,8 +143,8 @@ function renderDashboard() {
     if (!FB.length) {
       cj.innerHTML = renderEmpty('Add feedback responses to see confidence journey.');
     } else {
-      const avgCB = (FB.reduce((a, f) => a + num(f.cb), 0) / FB.length).toFixed(1);
-      const avgCA = (FB.reduce((a, f) => a + num(f.ca), 0) / FB.length).toFixed(1);
+      const avgCB = stdAvg(FB, 'cb');
+      const avgCA = stdAvg(FB, 'ca');
       cj.innerHTML =
         '<div style="display:flex;justify-content:space-around;align-items:center;padding:12px 0">' +
           '<div style="text-align:center">' +
@@ -232,23 +236,34 @@ function renderImpact() {
   if ($('iw-v'))  $('iw-v').textContent  = V.filter(v => (v.status || 'Active') === 'Active').length;
   if ($('iw-fb')) $('iw-fb').textContent = FB.length;
 
-  const fbCount = FB.length || 1;
-  const enjoyed = FB.filter(f => num(f.enjoyed) >= 4).length;
-  const learned = FB.filter(f => f.learned).length;
-  const connected = FB.filter(f => f.connected).length;
+  // Standard outcomes — read through the org's own questions where they map to them
+  if ($('imp-enjoyed'))   $('imp-enjoyed').textContent   = stdPctOrScore(FB, 'enjoyed');
+  if ($('imp-learned'))   $('imp-learned').textContent   = stdPct(FB, 'learned');
+  if ($('imp-connected')) $('imp-connected').textContent = stdPct(FB, 'connected');
+  if ($('imp-cb')) $('imp-cb').textContent = stdAvg(FB, 'cb');
+  if ($('imp-ca')) $('imp-ca').textContent = stdAvg(FB, 'ca');
 
-  if ($('imp-enjoyed'))   $('imp-enjoyed').textContent   = FB.length ? pct(enjoyed, fbCount) + '%' : '—';
-  if ($('imp-learned'))   $('imp-learned').textContent   = FB.length ? pct(learned, fbCount) + '%' : '—';
-  if ($('imp-connected')) $('imp-connected').textContent = FB.length ? pct(connected, fbCount) + '%' : '—';
-
-  const cb = FB.map(f => num(f.cb)).filter(n => n > 0);
-  const ca = FB.map(f => num(f.ca)).filter(n => n > 0);
-  if ($('imp-cb')) $('imp-cb').textContent = cb.length ? (cb.reduce((a, b) => a + b, 0) / cb.length).toFixed(1) : '—';
-  if ($('imp-ca')) $('imp-ca').textContent = ca.length ? (ca.reduce((a, b) => a + b, 0) / ca.length).toFixed(1) : '—';
+  // The org's own measures — one card each (created once, below the standard three)
+  let mg = $('imp-measures');
+  if (!mg && $('imp-enjoyed')) {
+    mg = document.createElement('div');
+    mg.id = 'imp-measures';
+    const std3 = $('imp-enjoyed').parentNode.parentNode;
+    std3.parentNode.insertBefore(mg, std3.nextSibling);
+  }
+  if (mg) {
+    const own = measureStats(FB).filter(st => !['enjoyed', 'learned', 'connected', 'cb', 'ca'].includes(st.m.maps_to || ''));
+    mg.innerHTML = own.length
+      ? '<div class="card"><div class="card-title">What participants told us</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">' +
+        own.map(st => '<div class="stat-card"><div class="stat-lbl" title="' + escapeHTML(st.m.question) + '">' + escapeHTML(measureLabel(st.m)) + '</div><div class="stat-val">' + escapeHTML(st.value) + '</div><div style="font-size:11px;color:var(--txt3);margin-top:4px">' + escapeHTML(st.sub) + '</div></div>').join('') +
+        '</div></div>'
+      : '';
+  }
 
   const quotesEl = $('imp-quotes');
   if (quotesEl) {
-    const quotes = FB.filter(f => f.quote && f.quote.trim()).slice(0, 6);
+    const quotes = measureQuotes(FB, 6);
     if (!quotes.length) {
       quotesEl.innerHTML = renderEmpty('No participant quotes yet. Add feedback responses with quotes to populate this section.');
     } else {
@@ -533,7 +548,143 @@ function populateFbEvSelect() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// FEEDBACK
+// FEEDBACK — measures (the org's own questions)
+//
+// Every org has its own feedback questions in DB.survey_measures.
+// Each response keeps its answers word-for-word in f.answers, keyed by
+// question text. Older rows (before measures existed) only have the
+// fixed fields (enjoyed, cb, ca, learned, connected, friend, quote),
+// so a measure with maps_to set falls back to those.
+// ─────────────────────────────────────────────────────────────
+
+const MEASURE_KINDS = [['score', 'Score (1–5)'], ['yesno', 'Yes / no'], ['choice', 'Multiple choice'], ['text', 'Comment / quote'], ['ignore', 'Not used in reports']];
+const MEASURE_MAPS  = [['', 'Own measure'], ['cb', 'Confidence before'], ['ca', 'Confidence after'], ['enjoyed', 'Enjoyment'], ['connected', 'Felt connected'], ['learned', 'Learned / more skilled'], ['friend', 'Made a friend'], ['quote', 'Participant quote']];
+const DEFAULT_MEASURES = [
+  { question: 'How much did you enjoy the session?',                 kind: 'score', maps_to: 'enjoyed',   label: 'Enjoyed the session' },
+  { question: 'How confident did you feel before the session?',     kind: 'score', maps_to: 'cb',        label: 'Confidence before' },
+  { question: 'How confident do you feel now, after the session?',  kind: 'score', maps_to: 'ca',        label: 'Confidence after' },
+  { question: 'Did you learn something new?',                        kind: 'yesno', maps_to: 'learned',   label: 'Learned something new' },
+  { question: 'Do you feel more connected to your community?',       kind: 'yesno', maps_to: 'connected', label: 'Felt more connected' },
+  { question: 'Did you make a new friend or talk to new people?',    kind: 'yesno', maps_to: 'friend',    label: 'Made a new friend' },
+  { question: 'Is there anything else you would like to tell us?',   kind: 'text',  maps_to: 'quote',     label: 'Comments' }
+];
+const _LIKERT = {
+  'strongly disagree': 1, 'disagree': 2, 'somewhat disagree': 2,
+  'neutral': 3, 'neither agree nor disagree': 3, 'neither': 3, 'not sure': 3,
+  'somewhat agree': 4, 'agree': 4, 'strongly agree': 5,
+  'very poor': 1, 'poor': 2, 'average': 3, 'ok': 3, 'good': 4, 'very good': 5, 'excellent': 5
+};
+
+function activeMeasures() {
+  return (DB.survey_measures || []).filter(m => m.active !== false && m.kind !== 'ignore')
+    .slice().sort((a, b) => (a.sort || 0) - (b.sort || 0));
+}
+function measureLabel(m) {
+  const l = (m.label || m.question || '').trim();
+  return l.length > 42 ? l.slice(0, 42) + '…' : l;
+}
+function scoreOf(v) {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') return v;
+  if (typeof v === 'boolean') return v ? 5 : 1;
+  const s = String(v).trim().toLowerCase();
+  if (_LIKERT[s] != null) return _LIKERT[s];
+  if (/^\d+(\.\d+)?$/.test(s)) { const x = +s; return x >= 0 && x <= 10 ? x : null; }
+  return null;
+}
+function yesOf(v) {
+  if (v == null || v === '') return null;
+  if (typeof v === 'boolean') return v;
+  const sc = scoreOf(v);
+  if (sc != null) return sc >= 4;
+  const s = String(v).trim().toLowerCase();
+  if (/^(y|yes|yeah|yep|true|definitely|absolutely|✓)/.test(s)) return true;
+  if (/^(n|no|nope|false|not really)/.test(s)) return false;
+  return null;
+}
+// The answer a response gives to a measure: its own answer first, else the fixed field it maps to.
+function answerFor(f, m) {
+  const a = f.answers && f.answers[m.question];
+  if (a != null && a !== '') return a;
+  if (!m.maps_to) return null;
+  if (m.maps_to === 'quote') return f.quote || null;
+  const v = f[m.maps_to];
+  if (v == null || v === '') return null;
+  if (typeof v === 'boolean') return (m.kind === 'score') ? (v ? 5 : 1) : (v ? 'Yes' : 'No');
+  return v;
+}
+
+// One stat per active measure, computed from the responses given.
+function measureStats(F) {
+  const out = [];
+  activeMeasures().forEach(m => {
+    const vals = F.map(f => answerFor(f, m)).filter(v => v != null && v !== '');
+    if (!vals.length || m.kind === 'text') return;
+    if (m.kind === 'score') {
+      const sc = vals.map(scoreOf).filter(x => x != null);
+      if (!sc.length) return;
+      const avg = sc.reduce((a, b) => a + b, 0) / sc.length;
+      const high = sc.filter(x => x >= 4).length;
+      out.push({ m, kind: 'score', value: avg.toFixed(1) + ' / 5', sub: pct(high, sc.length) + '% rated 4–5 · ' + sc.length + ' answers', avg, n: sc.length, pctHigh: pct(high, sc.length) });
+    } else if (m.kind === 'yesno') {
+      const yn = vals.map(yesOf).filter(x => x != null);
+      if (!yn.length) return;
+      const yes = yn.filter(Boolean).length;
+      out.push({ m, kind: 'yesno', value: pct(yes, yn.length) + '%', sub: yes + ' of ' + yn.length + ' said yes', pctYes: pct(yes, yn.length), n: yn.length });
+    } else {
+      const counts = {};
+      vals.forEach(v => { const k = String(v).trim(); counts[k] = (counts[k] || 0) + 1; });
+      const top = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+      out.push({ m, kind: 'choice', value: top[0].length > 26 ? top[0].slice(0, 26) + '…' : top[0], sub: pct(counts[top[0]], vals.length) + '% · ' + vals.length + ' answers', breakdown: top.map(k => [k, counts[k]]), n: vals.length });
+    }
+  });
+  return out;
+}
+// Before → after pair, if the org has both.
+function measureJourney(F) {
+  const M = activeMeasures();
+  const cb = M.find(m => m.maps_to === 'cb'), ca = M.find(m => m.maps_to === 'ca');
+  if (!cb || !ca) return null;
+  const b = F.map(f => scoreOf(answerFor(f, cb))).filter(x => x != null);
+  const a = F.map(f => scoreOf(answerFor(f, ca))).filter(x => x != null);
+  if (!b.length || !a.length) return null;
+  return { before: (b.reduce((x, y) => x + y, 0) / b.length).toFixed(1), after: (a.reduce((x, y) => x + y, 0) / a.length).toFixed(1), n: Math.max(b.length, a.length) };
+}
+// Quotes: every text measure, plus the fixed quote field.
+function measureQuotes(F, limit) {
+  const textM = activeMeasures().filter(m => m.kind === 'text');
+  const out = [];
+  F.forEach(f => {
+    let q = f.quote && f.quote.trim();
+    if (!q && f.answers) {
+      for (const m of textM) { const a = f.answers[m.question]; if (a && String(a).trim().length > 3) { q = String(a).trim(); break; } }
+    }
+    if (q && q.length > 3 && !/^(no|none|n\/a|nothing|-|\.)$/i.test(q)) out.push({ quote: q, name: f.name || '' });
+  });
+  return limit ? out.slice(0, limit) : out;
+}
+// Fixed-field fallbacks used by pages built around Vorlana's standard outcomes.
+function stdPct(F, key) {
+  const m = activeMeasures().find(x => x.maps_to === key);
+  const vals = F.map(f => m ? yesOf(answerFor(f, m)) : (f[key] === true ? true : (f[key] === false ? false : null))).filter(x => x != null);
+  return vals.length ? pct(vals.filter(Boolean).length, vals.length) + '%' : '—';
+}
+// Enjoyment can be a score (avg ≥4 → %) or a yes/no question; either way report a %.
+function stdPctOrScore(F, key) {
+  const m = activeMeasures().find(x => x.maps_to === key);
+  const vals = F.map(f => m ? answerFor(f, m) : f[key]).filter(v => v != null && v !== '');
+  if (!vals.length) return '—';
+  const yn = vals.map(yesOf).filter(x => x != null);
+  return yn.length ? pct(yn.filter(Boolean).length, yn.length) + '%' : '—';
+}
+function stdAvg(F, key) {
+  const m = activeMeasures().find(x => x.maps_to === key);
+  const vals = F.map(f => m ? scoreOf(answerFor(f, m)) : (f[key] == null ? null : num(f[key]))).filter(x => x != null && x > 0);
+  return vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1) : '—';
+}
+
+// ─────────────────────────────────────────────────────────────
+// FEEDBACK PAGE
 // ─────────────────────────────────────────────────────────────
 
 function renderFeedback() {
@@ -555,16 +706,29 @@ function renderFeedback() {
 
   if ($('fb-sub')) $('fb-sub').textContent = F.length + ' responses';
 
-  // Stats
+  // Stats — one card per question the org measures
   const sg = $('fb-stats');
   if (sg) {
-    const avgEnj = F.length ? (F.reduce((a, f) => a + num(f.enjoyed), 0) / F.length).toFixed(1) : '—';
-    const avgCB = F.length ? (F.reduce((a, f) => a + num(f.cb), 0) / F.length).toFixed(1) : '—';
-    const avgCA = F.length ? (F.reduce((a, f) => a + num(f.ca), 0) / F.length).toFixed(1) : '—';
-    sg.innerHTML =
-      statCard('Avg enjoyment', avgEnj + ' / 5') +
-      statCard('Confidence before', avgCB + ' / 5') +
-      statCard('Confidence after', avgCA + ' / 5');
+    const M = activeMeasures();
+    if (!M.length) {
+      sg.innerHTML =
+        statCard('Avg enjoyment', stdAvg(F, 'enjoyed') + ' / 5') +
+        statCard('Confidence before', stdAvg(F, 'cb') + ' / 5') +
+        statCard('Confidence after', stdAvg(F, 'ca') + ' / 5') +
+        '<div class="stat-card" style="display:flex;flex-direction:column;justify-content:center;gap:6px">' +
+          '<div style="font-size:12px;color:var(--txt2);line-height:1.5">Set up your own feedback questions and every one becomes a metric here.</div>' +
+          '<button class="btn btn-ghost btn-sm" onclick="go(\'settings\');setTimeout(function(){var c=document.getElementById(\'settings-feedback-card\');if(c)c.scrollIntoView({behavior:\'smooth\'})},200)">Set up questions →</button>' +
+        '</div>';
+    } else {
+      const stats = measureStats(F);
+      const j = measureJourney(F);
+      sg.innerHTML =
+        (j ? '<div class="stat-card"><div class="stat-lbl">Confidence before → after</div>' +
+              '<div class="stat-val"><span style="color:var(--amber)">' + j.before + '</span> <span style="color:var(--txt3);font-size:16px">→</span> <span style="color:var(--em)">' + j.after + '</span></div>' +
+              '<div style="font-size:11px;color:var(--txt3);margin-top:4px">' + j.n + ' responses</div></div>' : '') +
+        stats.filter(st => !(j && (st.m.maps_to === 'cb' || st.m.maps_to === 'ca'))).map(st => statCard(measureLabel(st.m), st.value, st.sub)).join('') +
+        (stats.length ? '' : statCard('Responses', F.length, 'No answers to your questions yet'));
+    }
   }
 
   if (!F.length) {
@@ -572,30 +736,120 @@ function renderFeedback() {
     return;
   }
 
+  const M = activeMeasures();
   list.innerHTML = F.map(f => {
     const ev = (DB.events || []).find(e => String(e.id) === String(f.eventId));
+    const chips = [], quotes = [];
+    if (M.length) {
+      M.forEach(m => {
+        const a = answerFor(f, m);
+        if (a == null || a === '') return;
+        if (m.kind === 'text') { if (String(a).trim().length > 3) quotes.push(String(a)); return; }
+        let shown = String(a);
+        if (m.kind === 'yesno') { const y = yesOf(a); shown = y === true ? 'Yes' : y === false ? 'No' : shown; }
+        if (m.kind === 'score') { const sc = scoreOf(a); shown = sc != null ? sc + '/5' : shown; }
+        chips.push('<span title="' + escapeHTML(m.question) + '" style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--border)">' + escapeHTML(measureLabel(m)) + ': <strong>' + escapeHTML(shown.length > 30 ? shown.slice(0, 30) + '…' : shown) + '</strong></span>');
+      });
+      if (!quotes.length && f.quote) quotes.push(f.quote);
+    } else {
+      if (f.enjoyed != null) chips.push('<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--border)">★ ' + num(f.enjoyed) + '/5</span>');
+      if (f.cb != null || f.ca != null) chips.push('<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--border)">Conf ' + (f.cb == null ? '–' : num(f.cb)) + '→' + (f.ca == null ? '–' : num(f.ca)) + '</span>');
+      if (f.learned) chips.push('<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--border)">Learned new</span>');
+      if (f.connected) chips.push('<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--border)">More connected</span>');
+      if (f.friend) chips.push('<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--border)">New friend</span>');
+      if (f.quote) quotes.push(f.quote);
+    }
     return '<div class="card">' +
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">' +
         '<div>' +
           '<div style="font-size:13px;font-weight:600;color:var(--txt)">' + escapeHTML(f.name || 'Anonymous') + '</div>' +
-          '<div style="font-size:11px;color:var(--txt3)">' + escapeHTML(ev ? ev.name : 'Event removed') + '</div>' +
+          '<div style="font-size:11px;color:var(--txt3)">' + escapeHTML(ev ? ev.name : 'Event removed') + (ev && ev.date ? ' · ' + escapeHTML(fmtD(ev.date)) : '') + '</div>' +
         '</div>' +
-        '<div style="display:flex;gap:14px;font-size:12px;color:var(--txt2)">' +
-          '<span>★ ' + num(f.enjoyed) + '/5</span>' +
-          '<span>Conf ' + num(f.cb) + '→' + num(f.ca) + '</span>' +
-        '</div>' +
-      '</div>' +
-      (f.quote ? '<div style="margin-top:10px;font-size:13px;color:var(--txt2);font-style:italic;line-height:1.6">"' + escapeHTML(f.quote) + '"</div>' : '') +
-      '<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">' +
-        (f.learned ? '<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--border)">Learned new</span>' : '') +
-        (f.connected ? '<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--border)">More connected</span>' : '') +
-        (f.friend ? '<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--border)">New friend</span>' : '') +
-      '</div>' +
-      '<div style="text-align:right;margin-top:8px">' +
         '<button class="btn btn-ghost btn-sm" onclick="deleteFb(\'' + escapeHTML(String(f.id)) + '\')">×</button>' +
       '</div>' +
+      quotes.slice(0, 2).map(q => '<div style="margin-top:10px;font-size:13px;color:var(--txt2);font-style:italic;line-height:1.6">"' + escapeHTML(q) + '"</div>').join('') +
+      (chips.length ? '<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">' + chips.join('') + '</div>' : '') +
     '</div>';
   }).join('');
+}
+
+// ─────────────────────────────────────────────────────────────
+// FEEDBACK QUESTIONS — Settings card
+// ─────────────────────────────────────────────────────────────
+
+let _fqRows = null;   // working copy while editing
+
+function renderFeedbackQuestionsCard() {
+  const settingsPage = $('page-settings'); if (!settingsPage) return;
+  let card = $('settings-feedback-card');
+  if (!card) {
+    card = document.createElement('div');
+    card.id = 'settings-feedback-card';
+    card.className = 'card';
+    const saveBtn = $('set-save-btn');
+    if (saveBtn) settingsPage.insertBefore(card, saveBtn); else settingsPage.appendChild(card);
+  }
+  if (!_fqRows) _fqRows = (DB.survey_measures || []).slice().sort((a, b) => (a.sort || 0) - (b.sort || 0)).map(m => Object.assign({}, m));
+
+  const rows = _fqRows.map((m, i) =>
+    '<div style="display:grid;grid-template-columns:1fr 150px 170px 32px 32px;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--border)">' +
+      '<input data-fq="q" data-i="' + i + '" value="' + escapeHTML(m.question) + '" placeholder="Question as you ask it" style="font-size:13px"' + (m.id ? ' title="Changing the wording starts a new question; old answers stay with the old wording"' : '') + '/>' +
+      '<select data-fq="kind" data-i="' + i + '">' + MEASURE_KINDS.map(k => '<option value="' + k[0] + '"' + ((m.kind || 'text') === k[0] ? ' selected' : '') + '>' + k[1] + '</option>').join('') + '</select>' +
+      '<select data-fq="maps" data-i="' + i + '">' + MEASURE_MAPS.map(k => '<option value="' + k[0] + '"' + ((m.maps_to || '') === k[0] ? ' selected' : '') + '>' + k[1] + '</option>').join('') + '</select>' +
+      '<input type="checkbox" data-fq="active" data-i="' + i + '"' + (m.active !== false ? ' checked' : '') + ' title="Active — asked on the form and shown in reports" style="width:auto"/>' +
+      '<button class="btn btn-ghost btn-sm" data-fq="del" data-i="' + i + '" title="Remove">×</button>' +
+    '</div>'
+  ).join('');
+
+  card.innerHTML =
+    '<div class="card-title">💬 Feedback questions</div>' +
+    '<div style="font-size:13px;color:var(--txt3);margin-bottom:12px;line-height:1.5">Your own questions, asked on the feedback form and on the QR feedback page, matched when you import a survey file, and turned into the numbers on your Feedback page and reports. Untick to retire a question — its old answers stay.</div>' +
+    (_fqRows.length
+      ? '<div style="display:grid;grid-template-columns:1fr 150px 170px 32px 32px;gap:8px;font-size:11px;color:var(--txt3);font-weight:600;text-transform:uppercase;letter-spacing:.4px"><div>Question</div><div>Type</div><div>Counts as</div><div>On</div><div></div></div>' + rows
+      : '<div style="font-size:13px;color:var(--txt2);padding:10px;background:var(--bg);border-radius:8px;margin-bottom:8px">No questions yet. Start from Vorlana\'s standard set, or import a survey file on the Feedback page and the questions are lifted from it.</div>') +
+    '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center">' +
+      '<button class="btn btn-ghost btn-sm" onclick="fqAdd()">+ Add question</button>' +
+      (_fqRows.length ? '' : '<button class="btn btn-ghost btn-sm" onclick="fqUseDefaults()">Use Vorlana\'s standard questions</button>') +
+      '<button class="btn btn-p btn-sm" id="fq-save-btn" onclick="fqSave()">Save questions</button>' +
+      '<span id="fq-msg" style="font-size:12px;color:var(--txt3)"></span>' +
+    '</div>';
+
+  card.querySelectorAll('[data-fq]').forEach(el => {
+    const i = +el.getAttribute('data-i'), what = el.getAttribute('data-fq');
+    if (what === 'del') el.addEventListener('click', () => { _fqRows.splice(i, 1); renderFeedbackQuestionsCard(); });
+    else el.addEventListener('change', () => {
+      const r = _fqRows[i]; if (!r) return;
+      if (what === 'q') r.question = el.value.trim();
+      else if (what === 'kind') r.kind = el.value;
+      else if (what === 'maps') r.maps_to = el.value || null;
+      else if (what === 'active') r.active = el.checked;
+    });
+  });
+}
+function fqAdd() { _fqRows.push({ question: '', kind: 'score', maps_to: null, active: true, sort: _fqRows.length }); renderFeedbackQuestionsCard(); }
+function fqUseDefaults() { _fqRows = DEFAULT_MEASURES.map((m, i) => Object.assign({ active: true, sort: i }, m)); renderFeedbackQuestionsCard(); }
+async function fqSave() {
+  const btn = $('fq-save-btn'), msg = $('fq-msg');
+  const rows = _fqRows.filter(r => r.question && r.question.trim()).map((r, i) => {
+    const o = { org_id: orgId, question: r.question.trim(), kind: r.kind || 'text', maps_to: r.maps_to || null, label: r.label || r.question.trim().slice(0, 60), active: r.active !== false, sort: i };
+    if (r.id) o.id = r.id;
+    return o;
+  });
+  const keepIds = rows.filter(r => r.id).map(r => r.id);
+  btn.disabled = true; msg.textContent = 'Saving…';
+  try {
+    const gone = (DB.survey_measures || []).filter(m => !keepIds.includes(m.id)).map(m => m.id);
+    if (gone.length) { const d = await sb.from('survey_measures').delete().in('id', gone); if (d.error) throw d.error; }
+    if (rows.length) { const r = await sb.from('survey_measures').upsert(rows, { onConflict: 'org_id,question' }); if (r.error) throw r.error; }
+    await refreshTable('survey_measures');
+    _fqRows = null;
+    renderFeedbackQuestionsCard();
+    const m2 = $('fq-msg'); if (m2) m2.textContent = '✓ Saved';
+    renderFeedback(); renderImpact();
+  } catch (e) {
+    msg.textContent = 'Could not save: ' + (e.message || e) + (/survey_measures|active|sort/i.test(e.message || '') ? ' — run sql/import-v3.sql (with the v3.1 additions) in Supabase.' : '');
+    btn.disabled = false;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -992,6 +1246,10 @@ function renderSettings() {
   if (typeof _selectedLogoFile !== 'undefined') _selectedLogoFile = null;
   if (typeof _selectedColour !== 'undefined') _selectedColour = currentOrg.brand_color || '#1F6F6D';
   if (typeof renderSetSwatches === 'function') renderSetSwatches();
+
+  // Feedback questions card
+  _fqRows = null;
+  try { renderFeedbackQuestionsCard(); } catch (e) { console.error('[feedback questions]', e); }
 
   // Demo mode card
   let demoCard = $('demo-mode-card');
