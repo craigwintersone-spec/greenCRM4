@@ -187,6 +187,30 @@ function readVolEq() {
 function fillVolEq(v) {
   var ed = (v && v.equality_data) || {};
   EQ_FIELDS.forEach(function (k) { sv('vf-eq-' + k, ed[k] || ''); });
+  showLoggedHours(v);
+}
+
+// Hours logged in Vorlana (sessions, incl. imported sign-in sheets) live in
+// volunteer_hours, not in the opening-balance box — show them under it.
+function showLoggedHours(v) {
+  var box = $('vf-hours');
+  if (!box) return;
+  var note = $('vf-hours-logged');
+  if (!note) {
+    note = document.createElement('div');
+    note.id = 'vf-hours-logged';
+    note.style.cssText = 'font-size:12px;color:var(--txt2);margin-top:6px;line-height:1.5';
+    box.parentNode.appendChild(note);
+  }
+  if (!v) { note.innerHTML = ''; return; }
+  var S = sessionsFor(v.id);
+  var logged = Math.round(S.reduce(function (a, s) { return a + n(s.hours); }, 0) * 10) / 10;
+  var total = Math.round(totalHours(v) * 10) / 10;
+  note.innerHTML = S.length
+    ? '+ <strong>' + logged + 'h</strong> logged across ' + S.length + ' session' + (S.length === 1 ? '' : 's') +
+      ' = <strong style="color:var(--em)">' + total + 'h total</strong> · ' +
+      '<a href="#" style="color:var(--em)" onclick="event.preventDefault();closeModal(\'modal-vol\');openLogHours(\'' + esc(String(v.id)) + '\')">View sessions</a>'
+    : '<span style="color:var(--txt3)">No sessions logged yet.</span>';
 }
 
 // ── saveVol with equality_data (graceful if column missing) ─
