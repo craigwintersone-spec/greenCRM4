@@ -6,13 +6,14 @@
 // TIDY AFTERWARDS. No column mapping. No row is ever skipped.
 //
 //   1. Drop the file → "313 responses, 19 events, 25 questions" → Import.
+//      (v3.9: rows with no answers are skipped; same-day spellings merged.)
 //      • Date: the column whose values parse as dates most often
 //        (Google Forms "Timestamp"). Mixed US/UK formats handled per
 //        format signature. A row with no date takes the previous row's.
 //      • Event name: first sensible value from any event-ish column
 //        (event / workshop / session / "please specify" / a mis-used
 //        "Date" column). "Other", "Yes", "N/A" are not names.
-//        Rows with no name become "Session on 18 Apr 2025".
+//        Rows with no name are named by their date, e.g. "18 Apr 2025".
 //      • Near-duplicate names ("Flower pressing", "Flower Press
 //        Workshop") are grouped before events are created.
 //      • Every question kept word-for-word in feedback.answers.
@@ -20,7 +21,7 @@
 //        ethnicity, disability, prize draws) never stored.
 //      • Each import has a batch id and each row a hash: re-running the
 //        same file adds nothing, and Undo removes exactly what it added.
-//   2. Tidy events — merge look-alike names, rename "Session on …".
+//   2. Tidy events — merge look-alike names, rename date-named sessions.
 //   3. Confirm your questions — score / yes-no / comment / ignore, and
 //      which Vorlana outcome (if any) each maps to. Saved per org in
 //      survey_measures so the next export of the same form is instant.
@@ -33,7 +34,7 @@
 
 (function () {
 
-var VERSION = 'v3.7';
+var VERSION = 'v3.10';
 var BATCH = 500;
 var MAX_ROWS = 10000;
 
@@ -213,14 +214,37 @@ function isJunkName(v) {
 
 // "Flower pressing" / "Flower Press Workshop" / "flower-pressing" → one key
 var NAME_STOP = { workshop: 1, session: 1, event: 1, class: 1, the: 1, a: 1, an: 1, and: 1, of: 1, our: 1, at: 1, in: 1 };
+var SPELLING = { tire: 'tyre', tires: 'tyres', color: 'colour', colors: 'colours', center: 'centre', gray: 'grey', program: 'programme', mold: 'mould', favorite: 'favourite' };
 function nameKey(s) {
   return norm(s).replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(function (w) {
     return w && !NAME_STOP[w];
   }).map(function (w) {
+    w = SPELLING[w] || w;
     if (w.length > 5 && /ing$/.test(w)) w = w.slice(0, -3);
     else if (w.length > 4 && /s$/.test(w)) w = w.slice(0, -1);
     return w;
   }).sort().join(' ');
+}
+
+// Words too general to say two sessions are the same ("painting", "making")
+var GENERIC = { paint: 1, mak: 1, make: 1, craft: 1, crafts: 1, fun: 1, day: 1, free: 1, famil: 1, family: 1, kid: 1, kids: 1,
+  activit: 1, activity: 1, group: 1, drop: 1, open: 1, communit: 1, community: 1, taster: 1, intro: 1, beginner: 1, outdoor: 1, art: 1, arts: 1 };
+function lev1(a, b) {                       // true if a and b differ by at most one letter
+  if (a === b) return true;
+  if (Math.abs(a.length - b.length) > 1) return false;
+  var i = 0, j = 0, edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    if (++edits > 1) return false;
+    if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; }
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1;
+}
+function sameSession(k1, k2) {              // two session keys on the SAME day that are really one workshop
+  var w1 = k1.split(' ').filter(function (w) { return w.length >= 4 && !GENERIC[w]; });
+  var w2 = k2.split(' ').filter(function (w) { return w.length >= 4 && !GENERIC[w]; });
+  for (var i = 0; i < w1.length; i++) for (var j = 0; j < w2.length; j++) if (lev1(w1[i], w2[j])) return true;
+  return false;
 }
 
 // ── column detection for events / hours (unchanged from v2) ──
@@ -346,30 +370,20 @@ function analyseFeedback(headers, rows, existingEvents, opts) {
     questionCols.push(i);
   });
 
-  // 4. walk rows — never skip
-  var lastDate = null, noDate = 0, noName = 0;
+  // 4. walk rows — a row with no answers and no demographics is skipped (nothing to import)
+  var lastDate = null, noDate = 0, noName = 0, emptyRows = 0;
   var clusters = {};   // nameKey → { spellings: {raw: count} }
   var responses = [];
   rows.forEach(function (r, idx) {
     var date = dateCol >= 0 ? parseDate(r[dateCol], orders, fallbackOrder) : null;
-    if (!date) { date = lastDate; noDate++; }
-    if (!date) { date = opts.today || new Date().toISOString().slice(0, 10); }
-    lastDate = date;
+    var dateMissing = !date;
+    if (!date) date = lastDate;
+    if (!date) date = opts.today || new Date().toISOString().slice(0, 10);
 
     var raw = '';
     for (var k = 0; k < nameCols.length && !raw; k++) {
       var v = String(r[nameCols[k]] == null ? '' : r[nameCols[k]]).trim();
       if (!isJunkName(v)) raw = v;
-    }
-    var key;
-    if (raw) {
-      key = nameKey(raw);
-      var cl = clusters[key] = clusters[key] || { spellings: {} };
-      cl.spellings[raw] = (cl.spellings[raw] || 0) + 1;
-    } else {
-      noName++;
-      key = '__nameless__';
-      clusters[key] = clusters[key] || { spellings: {}, nameless: true };
     }
 
     var answers = {};
@@ -388,9 +402,57 @@ function analyseFeedback(headers, rows, existingEvents, opts) {
       if (v && !/^prefer not to say$/i.test(v)) demo[d.key] = v.slice(0, 60);
     });
 
+    if (!Object.keys(answers).length && !Object.keys(demo).length) { emptyRows++; return; }
+    if (dateMissing) noDate++;
+    lastDate = date;
+
+    var key;
+    if (raw) {
+      key = nameKey(raw) || '__nameless__';
+    } else key = '__nameless__';
+    if (key !== '__nameless__') {
+      var cl = clusters[key] = clusters[key] || { spellings: {} };
+      cl.spellings[raw] = (cl.spellings[raw] || 0) + 1;
+    }
+
     var stamp = dateCol >= 0 ? String(r[dateCol] == null ? '' : r[dateCol]).trim() : '';
     responses.push({ _row: idx + 2, _key: key, _date: date, _raw: raw, _stamp: stamp, answers: answers, demographics: demo });
   });
+
+  // 4b. same day, same workshop spelled differently ("Tyre painting" / "Tire workshop") → one session.
+  //     Different days are always different sessions. Unnamed responses join the day's session
+  //     when that day has only one.
+  var sameDayMerged = 0, namelessJoined = 0;
+  var byDate = {};
+  responses.forEach(function (r) {
+    var d = byDate[r._date] = byDate[r._date] || {};
+    d[r._key] = (d[r._key] || 0) + 1;
+  });
+  var remap = {};   // date|key → date|rep
+  Object.keys(byDate).forEach(function (date) {
+    var counts = byDate[date];
+    var keys = Object.keys(counts).filter(function (k) { return k !== '__nameless__'; })
+      .sort(function (a, b) { return counts[b] - counts[a]; });
+    var reps = [];
+    keys.forEach(function (k) {
+      var rep = null;
+      for (var i = 0; i < reps.length && !rep; i++) if (sameSession(k, reps[i])) rep = reps[i];
+      if (rep) { remap[date + '|' + k] = rep; sameDayMerged++; }
+      else reps.push(k);
+    });
+    if (counts.__nameless__ && reps.length === 1) remap[date + '|__nameless__'] = reps[0];
+  });
+  responses.forEach(function (r) {
+    var to = remap[r._date + '|' + r._key];
+    if (!to) return;
+    if (r._key === '__nameless__') namelessJoined++;
+    else {                                  // carry the spelling over so the best name wins
+      var from = clusters[r._key], into = clusters[to];
+      if (from && into && r._raw) { into.spellings[r._raw] = (into.spellings[r._raw] || 0) + 1; }
+    }
+    r._key = to;
+  });
+  noName = responses.filter(function (r) { return r._key === '__nameless__'; }).length;
 
   // 5. display name per cluster = most common spelling, tidied
   var clusterName = {};
@@ -406,7 +468,8 @@ function analyseFeedback(headers, rows, existingEvents, opts) {
   (existingEvents || []).forEach(function (e) { if (e.date) evByKeyDate[nameKey(e.name) + '|' + e.date] = e; });
   var sessions = {};
   responses.forEach(function (r) {
-    var name = r._key === '__nameless__' ? ('Session on ' + niceDate(r._date)) : clusterName[r._key];
+    // no event name given → the event is named by its date; staff can rename it afterwards
+    var name = r._key === '__nameless__' ? niceDate(r._date) : clusterName[r._key];
     var sk = nameKey(name) + '|' + r._date;
     r._session = sk;
     if (!sessions[sk]) {
@@ -442,8 +505,9 @@ function analyseFeedback(headers, rows, existingEvents, opts) {
     responses: responses, sessions: sessions,
     newSessions: sessList.filter(function (s) { return !s.eventId; }),
     matchedSessions: sessList.filter(function (s) { return s.eventId; }).length,
-    eventNames: Object.keys(clusterName).length,
-    noDate: noDate, noName: noName, measures: measures
+    eventNames: Object.keys(responses.reduce(function (o, r) { if (r._key !== '__nameless__') o[r._key] = 1; return o; }, {})).length,
+    noDate: noDate, noName: noName, measures: measures,
+    emptyRows: emptyRows, sameDayMerged: sameDayMerged, namelessJoined: namelessJoined
   };
 }
 
@@ -944,7 +1008,10 @@ function planFeedback() {
   } else notes.push('No date column found — rows are dated today. Add a date column to the file if that matters.');
   if (A.noDate) notes.push(A.noDate + ' row(s) had no readable date and took the date of the row before.');
   if (A.nameCols.length) notes.push('Event name taken from: ' + A.nameCols.map(function (h) { return '“' + h.slice(0, 40) + (h.length > 40 ? '…' : '') + '”'; }).join(', then ') + '.');
-  if (A.noName) notes.push(A.noName + ' response(s) had no event name — they become “Session on <date>”. Rename them in the next step.');
+  if (A.sameDayMerged || A.namelessJoined) notes.push('Same-day tidy: ' + (A.sameDayMerged ? A.sameDayMerged + ' spelling variant(s) joined to the same day\'s session (e.g. “Tyre painting” and “Tire workshop”)' : '') +
+    (A.sameDayMerged && A.namelessJoined ? '; ' : '') + (A.namelessJoined ? A.namelessJoined + ' unnamed response(s) joined the only session that day' : '') + '. Different days always stay separate.');
+  if (A.noName) notes.push(A.noName + ' response(s) had no event name and there was more than one session that day — they go into an event named by its date (e.g. “3 Apr 2026”). Rename it in the next step if you like.');
+  if (A.emptyRows) notes.push(A.emptyRows + ' empty row(s) skipped — no answers and no demographics.');
   notes.push(A.questionCols.length + ' questions kept word-for-word on every response.');
   if (A.demoCols.length) notes.push('Demographics kept anonymously (no name or email attached) from ' + A.demoCount + ' responses: ' +
     A.demoCols.map(function (d) { return d.key === 'postcode' ? 'postcode (first half only)' : d.key; }).join(', ') + '.');
@@ -964,7 +1031,7 @@ function planFeedback() {
     ['Sessions', sess.length],
     ['New sessions', A.newSessions.length],
     ['Questions', A.questionCols.length],
-    ['Rows skipped', 0]
+    ['Empty rows skipped', A.emptyRows]
   ], [], A.responses.length > 0, notes, sessHTML);
 }
 
@@ -1049,10 +1116,18 @@ function runImport() {
         (res.failed ? '⚠' : '✓') + ' Imported <strong>' + res.inserted.toLocaleString() + '</strong> record(s).' +
         (res.failed ? ' <strong>' + res.failed.toLocaleString() + '</strong> failed.' : '') +
         (res.duplicates ? ' ' + res.duplicates + ' already in Vorlana from an earlier import — not added twice.' : '') + extra +
-        (res.errors.length ? '<div style="font-size:11px;margin-top:6px;opacity:.85">' + esc(res.errors[0]) + (/answers|demographics|row_hash|import_batch|survey_measures/i.test(res.errors[0]) ? ' — run sql/import-v3.sql in Supabase, then import again.' : '') + '</div>' : '') +
+        (res.errors.length ? '<div style="font-size:11px;margin-top:6px;opacity:.85">' + esc(res.errors[0]) + (/answers|demographics|row_hash|import_batch|survey_measures/i.test(res.errors[0]) ? ' — a database column is missing. Run the latest SQL in Supabase, then press Import again.' : '') + '</div>' : '') +
       '</div>';
     btn.disabled = false;
     btn.textContent = 'Import';
+    // A failed run leaves the button usable — rebuild the plan against what's now in Vorlana
+    // so "Import" again only adds what is genuinely missing.
+    if (res.failed) {
+      var keepMsg = $('hi-plan').innerHTML;
+      try { buildPlan(); } catch (e) {}
+      $('hi-plan').innerHTML = keepMsg + '<div style="font-size:12px;color:var(--txt3);margin-top:6px">Fix the problem above, then press Import again — anything already added won\'t be added twice.</div>';
+      $('hi-run').disabled = false;
+    }
     if (S.plan.kind === 'hours' && !res.failed) { btn.style.display = 'none'; $('hi-undo').style.display = ''; }
     if (S.plan.kind === 'feedback' && !res.failed) {
       btn.style.display = 'none';
@@ -1075,7 +1150,17 @@ function runFeedback() {
   var measureByQ = {};
   A.measures.forEach(function (m) { measureByQ[m.question] = m; });
 
-  var newEvents = A.newSessions.map(function (s) {
+  // Re-check against the events as they are NOW — a retry after a failed
+  // import must not create the same sessions again.
+  var existingKeys = {};
+  (DB.events || []).forEach(function (e) { if (e.date) existingKeys[nameKey(e.name) + '|' + e.date] = e; });
+  var stillNew = A.newSessions.filter(function (s) {
+    var hit = existingKeys[nameKey(s.name) + '|' + s.date];
+    if (hit) { s.eventId = hit.id; return false; }
+    return true;
+  });
+
+  var newEvents = stillNew.map(function (s) {
     // everyone who left feedback was there — so responses are the minimum attendance
     return { org_id: orgId, name: s.name, event_date: s.date, type: evType, location: null, attendees: s.count, capacity: null, contract_ids: bulkId ? [bulkId] : [], import_batch: batch };
   });
@@ -1173,7 +1258,7 @@ var MAPS = [['', 'own measure'], ['cb', 'Confidence before'], ['ca', 'Confidence
 function eventClusters() {
   var by = {};
   (DB.events || []).forEach(function (e) {
-    var k = /^session on /i.test(e.name) ? '__nameless__:' + e.id : nameKey(e.name);
+    var k = (/^session on /i.test(e.name) || /^\d{1,2} [A-Z][a-z]{2} \d{4}$/.test(e.name)) ? '__nameless__:' + e.id : nameKey(e.name);
     var c = by[k] = by[k] || { key: k, names: {}, ids: [] };
     c.names[e.name] = (c.names[e.name] || 0) + 1;
     c.ids.push(e.id);
@@ -1193,8 +1278,8 @@ function renderAfter(A) {
         var names = Object.keys(c.names).sort(function (a, b) { return c.names[b] - c.names[a]; });
         var isNameless = /^__nameless__/.test(c.key);
         return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--border);font-size:12px">' +
-          '<div style="flex:1;color:var(--txt2)">' + (isNameless ? 'No name given: ' : '') + names.map(esc).join(' · ') + '</div>' +
-          '<input data-cl="' + ci + '" list="hi-names-' + ci + '" value="' + esc(isNameless ? '' : names[0]) + '" placeholder="Event name" style="width:200px"/>' +
+          '<div style="flex:1;color:var(--txt2)">' + (isNameless ? 'No name given — named by date: ' : '') + names.map(esc).join(' · ') + '</div>' +
+          '<input data-cl="' + ci + '" list="hi-names-' + ci + '" value="' + esc(names[0]) + '" placeholder="Event name" style="width:200px"/>' +
           '<datalist id="hi-names-' + ci + '">' + names.map(function (nm) { return '<option value="' + esc(nm) + '">'; }).join('') + '</datalist>' +
           '<button class="btn btn-ghost btn-sm" data-merge="' + ci + '">' + (isNameless ? 'Rename' : 'Merge') + '</button></div>';
       }).join('')
