@@ -5,7 +5,9 @@
 //   • Demographics section on the Add/Edit Participant modal
 //   • Extra fields on the Equality monitoring modal (orientation,
 //     religion, marital status, postcode)
-//   • A new "Demographics" page (renderDemographics)
+//   • A new "Demographics" page (renderDemographics) — participants,
+//     volunteers and event attendees (feedback.demographics), with a
+//     group switch and a report-ready headline
 //   • Patches go() to handle the 'demographics' route
 //   • Patches saveEqualityData() to save the extra fields
 //
@@ -47,10 +49,19 @@
     p.innerHTML = `
       <div class="page-header">
         <div><div class="page-title">Demographics</div><div class="page-sub" id="demo-sub">Voluntary equality data — anonymised aggregates only</div></div>
-        <button class="btn btn-ghost btn-sm" data-action="export-demographics">Export CSV</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="demo-group" style="width:auto">
+            <option value="all">Everyone</option>
+            <option value="participants">Participants</option>
+            <option value="volunteers">Volunteers</option>
+            <option value="attendees">Event attendees</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" data-action="export-demographics">Export CSV</button>
+        </div>
       </div>
-      <div class="alert alert-info">Demographics are collected voluntarily for anonymised reporting. They are never shared with funders at individual level. Records with no equality data are excluded from these counts.</div>
+      <div class="alert alert-info">Demographics are collected voluntarily for anonymised reporting. They are never shared with funders at individual level. Records with no equality data are excluded from these counts. Event attendees are counted per feedback response — someone who comes to three events and fills in the form each time counts three times.</div>
       <div class="stats-grid" id="demo-stats"></div>
+      <div class="card" id="demo-headline" style="margin-bottom:14px;display:none"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
         <div class="card"><div class="card-title">Age group</div><div id="demo-age"></div></div>
         <div class="card"><div class="card-title">Ethnicity</div><div id="demo-ethnicity"></div></div>
@@ -69,6 +80,8 @@
       </div>
     `;
     main.appendChild(p);
+    const grp = p.querySelector('#demo-group');
+    if (grp) grp.addEventListener('change', renderDemographics);
     const exportBtn = p.querySelector('[data-action="export-demographics"]');
     if (exportBtn) exportBtn.addEventListener('click', exportDemographics);
   }
@@ -234,68 +247,137 @@
     };
   }
 
-  function renderDemographics() {
-    const P = DB.participants;
-    const withData = P.filter(p => p.equality_data && Object.keys(p.equality_data).length > 0);
-    $('demo-sub').textContent = withData.length + ' of ' + P.length +
-      ' participants have equality data (' + pct(withData.length, P.length || 1) + '%)';
+  // ── Tidy answers so different forms add up ───────────────
+  // (Pe2 → PE2, Female → Woman, 45-64 → 45–64, "Yes, physical" → Physical / mobility)
+  const DISABILITY_LABELS = {
+    none: 'No disability', physical: 'Physical / mobility', sensory: 'Sensory',
+    mental: 'Mental health', learning: 'Learning disability', neurodiverse: 'Neurodiverse'
+  };
+  function tidy(key, v) {
+    if (v == null) return '';
+    let s = String(v).trim();
+    if (!s || /^(prefer not to say|n\/?a|none given|-)$/i.test(s)) return '';
+    const low = s.toLowerCase();
+    if (key === 'age') {
+      const a = s.replace(/\s*[-–]\s*/g, '–').replace(/^under/i, 'Under');
+      return a === '26–34' ? '25–34' : a;
+    }
+    if (key === 'gender') {
+      if (/^(female|woman|f)$/.test(low)) return 'Woman';
+      if (/^(male|man|m)$/.test(low)) return 'Man';
+      if (/non[- ]?binary/.test(low)) return 'Non-binary';
+      return s.charAt(0).toUpperCase() + s.slice(1);
+    }
+    if (key === 'disability') {
+      if (DISABILITY_LABELS[low]) return DISABILITY_LABELS[low];
+      if (/^(no|none|no disability)$/.test(low)) return 'No disability';
+      if (/both/.test(low)) return 'Physical and mental health';
+      if (/physical|mobility/.test(low)) return 'Physical / mobility';
+      if (/mental/.test(low)) return 'Mental health';
+      if (/sensory|sight|hearing/.test(low)) return 'Sensory';
+      if (/learning/.test(low)) return 'Learning disability';
+      if (/neuro|autis|adhd/.test(low)) return 'Neurodiverse';
+      if (/^yes/.test(low)) return 'Yes (not specified)';
+      return s;
+    }
+    if (key === 'postcode') {
+      const m = /^([A-Z]{1,2}\d[A-Z\d]?)/.exec(s.toUpperCase().replace(/\s+/g, ' '));
+      return m ? m[1] : '';
+    }
+    return s;
+  }
+  // "Black and ethnic minority" = any stated ethnicity outside the White groups
+  function isBEM(eth) { return !!eth && !/^white/i.test(eth) && !/prefer not/i.test(eth); }
+  function isDisabled(dis) { return !!dis && dis !== 'No disability'; }
 
-    $('demo-stats').innerHTML = [
-      { l: 'Total participants', v: P.length },
-      { l: 'Data completed', v: withData.length },
-      { l: 'Completion rate', v: pct(withData.length, P.length || 1) + '%' },
-      { l: 'Disclosed disability', v: withData.filter(p => p.equality_data.disability && p.equality_data.disability !== 'none').length }
-    ].map(s => '<div class="stat-card"><div class="stat-lbl">' + escapeHTML(s.l) + '</div><div class="stat-val">' + s.v + '</div></div>').join('');
-
-    const fields = [
-      { id: 'demo-age',         key: 'age' },
-      { id: 'demo-ethnicity',   key: 'ethnicity' },
-      { id: 'demo-gender',      key: 'gender' },
-      { id: 'demo-disability',  key: 'disability' },
-      { id: 'demo-orientation', key: 'orientation' },
-      { id: 'demo-religion',    key: 'religion' },
-      { id: 'demo-marital',     key: 'marital' },
-      { id: 'demo-postcode',    key: 'postcode' }
-    ];
-
-    fields.forEach(f => {
-      const counts = {};
-      withData.forEach(p => {
-        const v = p.equality_data[f.key] || '(not stated)';
-        counts[v] = (counts[v] || 0) + 1;
-      });
-      const pairs = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-      const total = withData.length || 1;
-      const el = $(f.id); if (!el) return;
-      if (!pairs.length) {
-        el.innerHTML = '<div style="color:var(--txt3);font-size:12px">No data yet.</div>';
-        return;
-      }
-      el.innerHTML = pairs.map(pair => {
-        const label = pair[0], count = pair[1];
-        const p = Math.round(count / total * 100);
-        return '<div class="demo-bar-wrap">' +
-          '<div class="demo-bar-top"><span>' + escapeHTML(label) + '</span>' +
-          '<span style="font-weight:600;color:var(--em)">' + count + ' (' + p + '%)</span></div>' +
-          '<div class="demo-bar-track"><div class="demo-bar-fill" style="width:' + p + '%"></div></div>' +
-          '</div>';
-      }).join('');
-    });
+  const FIELDS = ['age', 'ethnicity', 'gender', 'disability', 'orientation', 'religion', 'marital', 'postcode'];
+  function tidyRecord(d) {
+    const out = {};
+    FIELDS.forEach(k => { const v = tidy(k, d && d[k]); if (v) out[k] = v; });
+    return out;
   }
 
-  function exportDemographics() {
-    const P = DB.participants;
-    const rows = [['Participant ID', 'Age', 'Ethnicity', 'Gender', 'Disability', 'Orientation', 'Religion', 'Marital', 'Postcode']];
-    P.forEach(p => {
-      const e = p.equality_data || {};
-      rows.push([
-        'CV-' + String(p.id).padStart(4, '0'),
-        e.age || '', e.ethnicity || '', e.gender || '',
-        e.disability || '', e.orientation || '', e.religion || '',
-        e.marital || '', e.postcode || ''
-      ]);
+  // Everyone's demographics for the chosen group — records only, no names
+  function demoRecords(group) {
+    const recs = [];
+    if (group === 'all' || group === 'participants')
+      (DB.participants || []).forEach(p => recs.push({ group: 'Participant', d: tidyRecord(p.equality_data) }));
+    if (group === 'all' || group === 'volunteers')
+      (DB.volunteers || []).forEach(v => recs.push({ group: 'Volunteer', d: tidyRecord(v.equality_data) }));
+    if (group === 'all' || group === 'attendees')
+      (DB.feedback || []).forEach(f => recs.push({ group: 'Event attendee', d: tidyRecord(f.demographics) }));
+    return recs;
+  }
+
+  function renderDemographics() {
+    const group = ($('demo-group') && $('demo-group').value) || 'all';
+    const all = demoRecords(group);
+    const withData = all.filter(r => Object.keys(r.d).length > 0);
+    const noun = { all: 'records', participants: 'participants', volunteers: 'volunteers', attendees: 'feedback responses' }[group];
+    $('demo-sub').textContent = withData.length + ' of ' + all.length + ' ' + noun +
+      ' have equality data (' + pct(withData.length, all.length || 1) + '%)';
+
+    const eth = withData.filter(r => r.d.ethnicity);
+    const dis = withData.filter(r => r.d.disability);
+    const bem = eth.filter(r => isBEM(r.d.ethnicity)).length;
+    const disabled = dis.filter(r => isDisabled(r.d.disability)).length;
+
+    $('demo-stats').innerHTML = [
+      { l: 'With equality data', v: withData.length, s: pct(withData.length, all.length || 1) + '% of ' + all.length },
+      { l: 'Black and ethnic minority', v: eth.length ? pct(bem, eth.length) + '%' : '—', s: eth.length ? bem + ' of ' + eth.length + ' who said' : '' },
+      { l: 'Disabled', v: dis.length ? pct(disabled, dis.length) + '%' : '—', s: dis.length ? disabled + ' of ' + dis.length + ' who said' : '' },
+      { l: 'Postcode areas', v: new Set(withData.map(r => r.d.postcode).filter(Boolean)).size || '—', s: '' }
+    ].map(x => '<div class="stat-card"><div class="stat-lbl">' + escapeHTML(x.l) + '</div><div class="stat-val">' + x.v + '</div>' +
+      (x.s ? '<div style="font-size:11px;color:var(--txt3);margin-top:4px">' + escapeHTML(x.s) + '</div>' : '') + '</div>').join('');
+
+    // One sentence a funder report can use as-is
+    const pcs = withData.map(r => r.d.postcode).filter(Boolean);
+    const pcCount = {};
+    pcs.forEach(p => pcCount[p] = (pcCount[p] || 0) + 1);
+    const topPc = Object.keys(pcCount).sort((a, b) => pcCount[b] - pcCount[a]).slice(0, 2);
+    const bits = [];
+    if (eth.length) bits.push(pct(bem, eth.length) + '% black and ethnic minority');
+    if (dis.length) bits.push(pct(disabled, dis.length) + '% disabled');
+    if (topPc.length && pcs.length) bits.push(pct(topPc.reduce((a, p) => a + pcCount[p], 0), pcs.length) + '% from ' + topPc.join(' and '));
+    const hl = $('demo-headline');
+    if (hl) {
+      hl.style.display = bits.length ? 'block' : 'none';
+      hl.innerHTML = '<div class="card-title">For your reports</div>' +
+        '<div style="font-size:14px;color:var(--txt);line-height:1.6">Of the ' + noun + ' who told us: ' + escapeHTML(bits.join(', ')) + '.</div>' +
+        '<div style="font-size:11px;color:var(--txt3);margin-top:6px">Black and ethnic minority counts every stated ethnicity outside the White groups. Percentages are of people who answered that question.</div>';
+    }
+
+    const ids = { age: 'demo-age', ethnicity: 'demo-ethnicity', gender: 'demo-gender', disability: 'demo-disability',
+                  orientation: 'demo-orientation', religion: 'demo-religion', marital: 'demo-marital', postcode: 'demo-postcode' };
+    FIELDS.forEach(key => {
+      const el = $(ids[key]); if (!el) return;
+      const answered = withData.filter(r => r.d[key]);
+      const counts = {};
+      answered.forEach(r => { counts[r.d[key]] = (counts[r.d[key]] || 0) + 1; });
+      const pairs = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+      if (!pairs.length) { el.innerHTML = '<div style="color:var(--txt3);font-size:12px">No data yet.</div>'; return; }
+      const total = answered.length;
+      el.innerHTML = pairs.slice(0, key === 'postcode' ? 12 : 20).map(pair => {
+        const p = Math.round(pair[1] / total * 100);
+        return '<div class="demo-bar-wrap">' +
+          '<div class="demo-bar-top"><span>' + escapeHTML(pair[0]) + '</span>' +
+          '<span style="font-weight:600;color:var(--em)">' + pair[1] + ' (' + p + '%)</span></div>' +
+          '<div class="demo-bar-track"><div class="demo-bar-fill" style="width:' + p + '%"></div></div>' +
+          '</div>';
+      }).join('') + '<div style="font-size:11px;color:var(--txt3);margin-top:6px">' + total + ' answered</div>';
     });
-    downloadCSV(rows, 'civara-demographics-anonymised.csv');
+  }
+  window.renderDemographics = renderDemographics;
+
+  // Anonymised export: no IDs, no names — one row per record, group + answers
+  function exportDemographics() {
+    const group = ($('demo-group') && $('demo-group').value) || 'all';
+    const rows = [['Group', 'Age', 'Ethnicity', 'Gender', 'Disability', 'Orientation', 'Religion', 'Marital', 'Postcode area']];
+    demoRecords(group).filter(r => Object.keys(r.d).length).forEach(r => {
+      const e = r.d;
+      rows.push([r.group, e.age || '', e.ethnicity || '', e.gender || '', e.disability || '', e.orientation || '', e.religion || '', e.marital || '', e.postcode || '']);
+    });
+    downloadCSV(rows, 'demographics-anonymised.csv');
   }
 
   // ── Patch saveEqualityData to include the extra fields ──────
