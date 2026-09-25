@@ -104,6 +104,17 @@ textarea{min-height:88px;resize:vertical}
         <p class="sub">Two minutes, completely anonymous unless you add your name. It helps us keep doing this.</p>
         <div class="msg err" id="fb-err"></div>
         <div id="fb-questions"></div>
+
+        <details id="fb-about" style="margin:4px 0 16px">
+          <summary style="cursor:pointer;font-size:15px;font-weight:600;color:var(--em2);padding:6px 0">About you (optional)</summary>
+          <p class="sub" style="margin:6px 0 12px">Helps us show we reach everyone in the community. Never linked to your name.</p>
+          <div class="field"><label>Age</label><select id="ab-age"><option value="">Prefer not to say</option><option>Under 25</option><option>25–34</option><option>35–44</option><option>45–64</option><option>65+</option></select></div>
+          <div class="field"><label>Gender</label><select id="ab-gender"><option value="">Prefer not to say</option><option>Woman</option><option>Man</option><option>Non-binary</option><option>Other</option></select></div>
+          <div class="field"><label>Ethnicity</label><select id="ab-ethnicity"><option value="">Prefer not to say</option><option>White British</option><option>White Irish</option><option>White Other</option><option>Mixed / Multiple ethnic backgrounds</option><option>South Asian</option><option>East Asian</option><option>Black British / African / Caribbean</option><option>Arab</option><option>Other</option></select></div>
+          <div class="field"><label>Do you consider yourself to have a disability?</label><select id="ab-disability"><option value="">Prefer not to say</option><option value="No">No</option><option value="Physical">Yes — physical / mobility</option><option value="Mental health">Yes — mental health</option><option value="Physical and mental health">Yes — both</option><option value="Sensory">Yes — sensory</option><option value="Learning disability">Yes — learning disability</option><option value="Neurodiverse">Neurodiverse</option></select></div>
+          <div class="field"><label>Postcode (first half only, e.g. PE2)</label><input id="ab-postcode" maxlength="4" autocapitalize="characters" placeholder="e.g. PE2"/></div>
+        </details>
+
         <div class="field">
           <label>Your name (optional)</label>
           <input id="fb-name" placeholder="Leave blank to stay anonymous" autocomplete="name"/>
@@ -329,6 +340,12 @@ $('fb-submit').addEventListener('click', function () {
     ? { answers: r.values, name: name }
     : { name: name, enjoyed: r.values.enjoyed, cb: r.values.cb, ca: r.values.ca, quote: r.values.quote || '',
         learned: r.values.learned === 'Yes', connected: r.values.connected === 'Yes', friend: r.values.friend === 'Yes' };
+  var demo = {};
+  ['age', 'gender', 'ethnicity', 'disability', 'postcode'].forEach(function (k) {
+    var v = ($('ab-' + k).value || '').trim();
+    if (v) demo[k] = v;
+  });
+  payload.demographics = demo;
   call('feedback', payload)
     .then(function () { doneScreen('Thank you', 'Your feedback has been sent. It genuinely helps.'); })
     .catch(function (e) { msg('fb-err', e.message, 'err'); })
