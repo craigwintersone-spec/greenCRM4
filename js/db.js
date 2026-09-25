@@ -168,6 +168,7 @@ const MAPPERS = {
     friend: !!r.friend,
     quote: r.quote || '',
     answers: (r.answers && typeof r.answers === 'object') ? r.answers : {},
+    demographics: (r.demographics && typeof r.demographics === 'object') ? r.demographics : {},
     import_batch: r.import_batch || null,
     created_at: r.created_at || ''
   }),
