@@ -33,7 +33,7 @@
 
 (function () {
 
-var VERSION = 'v3.6';
+var VERSION = 'v3.7';
 var BATCH = 500;
 var MAX_ROWS = 10000;
 
@@ -1076,10 +1076,22 @@ function runFeedback() {
   A.measures.forEach(function (m) { measureByQ[m.question] = m; });
 
   var newEvents = A.newSessions.map(function (s) {
-    return { org_id: orgId, name: s.name, event_date: s.date, type: evType, location: null, attendees: 0, capacity: null, contract_ids: bulkId ? [bulkId] : [], import_batch: batch };
+    // everyone who left feedback was there — so responses are the minimum attendance
+    return { org_id: orgId, name: s.name, event_date: s.date, type: evType, location: null, attendees: s.count, capacity: null, contract_ids: bulkId ? [bulkId] : [], import_batch: batch };
+  });
+
+  var raise = Object.keys(A.sessions).map(function (k) { return A.sessions[k]; }).filter(function (s) {
+    if (!s.eventId) return false;
+    var ev = (DB.events || []).filter(function (e) { return String(e.id) === String(s.eventId); })[0];
+    return ev && n(ev.attendees) < s.count;
   });
 
   return writeBatched('events', newEvents, function (d, t) { progressBar('sessions', d, t); })
+    .then(function () {
+      return raise.reduce(function (p, s) {
+        return p.then(function () { return sb.from('events').update({ attendees: s.count }).eq('id', s.eventId).then(function () {}, function () {}); });
+      }, Promise.resolve());
+    })
     .then(function () { return refreshTable('events'); })
     .then(function () {
       var byKeyDate = {};
