@@ -33,7 +33,7 @@
 
 (function () {
 
-var VERSION = 'v3.5';
+var VERSION = 'v3.6';
 var BATCH = 500;
 var MAX_ROWS = 10000;
 
@@ -177,12 +177,31 @@ function truthy(v) {
   return isYes(v);
 }
 
+// Demographic questions: kept ANONYMOUSLY on each response (never with a
+// name or email) so the Demographics page can count event attendees.
+function demoKey(h) {
+  var x = norm(h);
+  if (/date of birth|\bdob\b/.test(x)) return null;
+  if (/\bage\b|age group|how old/.test(x)) return 'age';
+  if (/gender|\bsex\b/.test(x)) return 'gender';
+  if (/ethnic/.test(x)) return 'ethnicity';
+  if (/disabilit/.test(x)) return 'disability';
+  if (/postcode|post code/.test(x)) return 'postcode';
+  if (/religio|belief/.test(x)) return 'religion';
+  if (/sexual orientation/.test(x)) return 'orientation';
+  return null;
+}
+// Postcodes: first half only (PE2 7AB → PE2)
+function outwardCode(v) {
+  var m = /^([A-Z]{1,2}\d[A-Z\d]?)/.exec(String(v || '').toUpperCase().trim());
+  return m ? m[1] : '';
+}
 // Personal data: never imported for feedback.
 function isPersonalColumn(h) {
   var x = norm(h);
-  return /e-?mail|phone|mobile|telephone|postcode|post code|address|date of birth|\bdob\b/.test(x) ||
+  if (demoKey(h)) return false;
+  return /e-?mail|phone|mobile|telephone|address|date of birth|\bdob\b/.test(x) ||
          /\byour name\b|^name$|name and email|full name|first name|surname/.test(x) ||
-         /\bage\b|gender|ethnicity|ethnic|disabilit|religion|sexual orientation/.test(x) ||
          /prize|raffle|win!|leave us a review|support us/.test(x);
 }
 
@@ -315,12 +334,14 @@ function analyseFeedback(headers, rows, existingEvents, opts) {
   nameCols.sort(function (a, b) { return a[0] - b[0]; });
   nameCols = nameCols.map(function (p) { return p[1]; });
 
-  // 3. question columns = everything else with a header
-  var excluded = [], questionCols = [];
+  // 3. question columns = everything else with a header; demographic columns set aside
+  var excluded = [], questionCols = [], demoCols = [];
   var nameSet = {}; nameCols.forEach(function (i) { nameSet[i] = 1; });
   H.forEach(function (h, i) {
     if (!h) return;
     if (i === dateCol || nameSet[i]) return;
+    var dk = demoKey(h);
+    if (dk) { if (!demoCols.some(function (d) { return d.key === dk; })) demoCols.push({ i: i, key: dk, header: h }); return; }
     if (isPersonalColumn(h)) { excluded.push(h); return; }
     questionCols.push(i);
   });
@@ -360,8 +381,15 @@ function analyseFeedback(headers, rows, existingEvents, opts) {
       answers[q] = sc != null ? sc : a;
     });
 
+    var demo = {};
+    demoCols.forEach(function (d) {
+      var v = String(r[d.i] == null ? '' : r[d.i]).trim();
+      if (d.key === 'postcode') v = outwardCode(v);
+      if (v && !/^prefer not to say$/i.test(v)) demo[d.key] = v.slice(0, 60);
+    });
+
     var stamp = dateCol >= 0 ? String(r[dateCol] == null ? '' : r[dateCol]).trim() : '';
-    responses.push({ _row: idx + 2, _key: key, _date: date, _raw: raw, _stamp: stamp, answers: answers });
+    responses.push({ _row: idx + 2, _key: key, _date: date, _raw: raw, _stamp: stamp, answers: answers, demographics: demo });
   });
 
   // 5. display name per cluster = most common spelling, tidied
@@ -410,6 +438,7 @@ function analyseFeedback(headers, rows, existingEvents, opts) {
     dateCol: dateCol, dateHeader: dateCol >= 0 ? H[dateCol] : null, orders: orders, fallbackOrder: fallbackOrder,
     nameCols: nameCols.map(function (i) { return H[i]; }),
     questionCols: questionCols, excluded: excluded,
+    demoCols: demoCols, demoCount: responses.filter(function (r) { return Object.keys(r.demographics).length; }).length,
     responses: responses, sessions: sessions,
     newSessions: sessList.filter(function (s) { return !s.eventId; }),
     matchedSessions: sessList.filter(function (s) { return s.eventId; }).length,
@@ -917,6 +946,8 @@ function planFeedback() {
   if (A.nameCols.length) notes.push('Event name taken from: ' + A.nameCols.map(function (h) { return '“' + h.slice(0, 40) + (h.length > 40 ? '…' : '') + '”'; }).join(', then ') + '.');
   if (A.noName) notes.push(A.noName + ' response(s) had no event name — they become “Session on <date>”. Rename them in the next step.');
   notes.push(A.questionCols.length + ' questions kept word-for-word on every response.');
+  if (A.demoCols.length) notes.push('Demographics kept anonymously (no name or email attached) from ' + A.demoCount + ' responses: ' +
+    A.demoCols.map(function (d) { return d.key === 'postcode' ? 'postcode (first half only)' : d.key; }).join(', ') + '.');
   if (A.excluded.length) notes.push('Left out (personal data, never stored): ' + A.excluded.map(function (h) { return '“' + h.slice(0, 40) + (h.length > 40 ? '…' : '') + '”'; }).join(', '));
 
   var sess = Object.keys(A.sessions).map(function (k) { return A.sessions[k]; }).sort(function (a, b) { return a.date.localeCompare(b.date); });
@@ -1018,7 +1049,7 @@ function runImport() {
         (res.failed ? '⚠' : '✓') + ' Imported <strong>' + res.inserted.toLocaleString() + '</strong> record(s).' +
         (res.failed ? ' <strong>' + res.failed.toLocaleString() + '</strong> failed.' : '') +
         (res.duplicates ? ' ' + res.duplicates + ' already in Vorlana from an earlier import — not added twice.' : '') + extra +
-        (res.errors.length ? '<div style="font-size:11px;margin-top:6px;opacity:.85">' + esc(res.errors[0]) + (/answers|row_hash|import_batch|survey_measures/i.test(res.errors[0]) ? ' — run sql/import-v3.sql in Supabase, then import again.' : '') + '</div>' : '') +
+        (res.errors.length ? '<div style="font-size:11px;margin-top:6px;opacity:.85">' + esc(res.errors[0]) + (/answers|demographics|row_hash|import_batch|survey_measures/i.test(res.errors[0]) ? ' — run sql/import-v3.sql in Supabase, then import again.' : '') + '</div>' : '') +
       '</div>';
     btn.disabled = false;
     btn.textContent = 'Import';
@@ -1078,7 +1109,7 @@ function runFeedback() {
           org_id: orgId, event_id: eid, name: '',
           enjoyed: std.enjoyed, cb: std.cb, ca: std.ca,
           learned: std.learned, connected: std.connected, friend: std.friend, quote: std.quote,
-          answers: r.answers, import_batch: batch,
+          answers: r.answers, demographics: r.demographics || {}, import_batch: batch,
           // timestamp + row number: two people giving identical answers at one session are two responses
           row_hash: hash(r._stamp + '|' + r._row + '|' + r._session + '|' + JSON.stringify(r.answers))
         });
