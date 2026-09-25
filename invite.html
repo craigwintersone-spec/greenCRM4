@@ -111,6 +111,10 @@ input[readonly]{background:var(--card);opacity:.75;cursor:not-allowed}
     <label>Password</label>
     <input id="si-pass" type="password" placeholder="••••••••"/>
     <button class="btn" id="si-btn" onclick="signInExisting()">Sign in & join →</button>
+    <div style="text-align:center;margin-top:14px;font-size:14px">
+      <a href="#" id="si-forgot" onclick="event.preventDefault();forgotPassword()" style="color:inherit;text-decoration:underline">Forgot your password?</a>
+    </div>
+    <div class="msg" id="si-sent" style="display:none;margin-top:12px;background:#F0FDF4;border:1px solid #BBF7D0;color:#15803D;padding:11px 14px;border-radius:8px;font-size:14px"></div>
   </div>
 
   <!-- SUCCESS -->
@@ -317,6 +321,22 @@ async function signInExisting(){
 
   showState('success');
   setTimeout(goToApp, 2000);
+}
+
+// Existing account, forgotten password: email a reset link, then bring them
+// straight back to THIS invite so they can finish joining.
+async function forgotPassword(){
+  if(!invite) return;
+  $('si-err').style.display='none';
+  const link=$('si-forgot');
+  link.style.pointerEvents='none';link.textContent='Sending…';
+  try{ localStorage.setItem('vorlana-after-reset', window.location.href); }catch(e){}
+  const{error}=await sb.auth.resetPasswordForEmail(invite.email,{redirectTo:window.location.origin+'/reset-password.html'});
+  link.style.pointerEvents='';link.textContent='Forgot your password?';
+  if(error){showErr('si-err','Couldn\u2019t send the reset email: '+error.message);return;}
+  const ok=$('si-sent');
+  ok.textContent='We\u2019ve emailed a reset link to '+invite.email+'. Open it on this device, choose a new password, and you\u2019ll come straight back here to join.';
+  ok.style.display='block';
 }
 
 function showErr(id,msg){const e=$(id);e.textContent=msg;e.style.display='block';}
