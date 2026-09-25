@@ -24,7 +24,7 @@
 
 (function () {
 
-var VERSION = 'v1.1';
+var VERSION = 'v1.2';
 
 // UK Living Wage (Living Wage Foundation, 2024/25). Shown in the
 // report and editable — never present a made-up rate to a funder.
@@ -176,23 +176,60 @@ function buildStats(p) {
   });
 
   var fbCount = FB.length;
-  function avg(key) { return fbCount ? FB.reduce(function (a, f) { return a + n(f[key]); }, 0) / fbCount : 0; }
-  var learned = FB.filter(function (f) { return f.learned; }).length;
-  var connected = FB.filter(function (f) { return f.connected; }).length;
-  var friend = FB.filter(function (f) { return f.friend; }).length;
-  var improved = FB.filter(function (f) { return n(f.ca) > n(f.cb); }).length;
-  var quotes = FB.filter(function (f) { return f.quote && String(f.quote).trim().length > 15; })
-                 .map(function (f) { return String(f.quote).trim(); });
-
-  var withEq = activeVols.filter(function (v) { return v.equality_data && Object.keys(v.equality_data).length; });
-  function tally(key) {
-    var out = {};
-    withEq.forEach(function (v) {
-      var val = v.equality_data[key];
-      if (val) out[val] = (out[val] || 0) + 1;
-    });
-    return out;
+  // Averages over people who ANSWERED — a blank is not a zero
+  function avg(key) {
+    var v = FB.map(function (f) { return f[key]; }).filter(function (x) { return x != null && x !== '' && n(x) > 0; }).map(n);
+    return v.length ? v.reduce(function (a, b) { return a + b; }, 0) / v.length : 0;
   }
+  function answeredPct(key) {
+    var v = FB.filter(function (f) { return f[key] === true || f[key] === false; });
+    return v.length ? pct(v.filter(function (f) { return f[key]; }).length, v.length) : 0;
+  }
+  var pairs = FB.filter(function (f) { return n(f.cb) > 0 && n(f.ca) > 0; });
+  var improved = pairs.filter(function (f) { return n(f.ca) > n(f.cb); }).length;
+  var quotes = (typeof measureQuotes === 'function' ? measureQuotes(FB).map(function (q) { return q.quote; })
+               : FB.map(function (f) { return f.quote; }))
+    .filter(function (q) { return q && String(q).trim().length > 15 && !/^(nothing|none|n\/?a|no|not really|all good)\b/i.test(String(q).trim()); })
+    .map(function (q) { return String(q).trim(); });
+
+  // The org's own questions (same figures as the Feedback page)
+  var ownMeasures = [];
+  if (typeof measureStats === 'function' && typeof activeMeasures === 'function' && activeMeasures().length) {
+    measureStats(FB).forEach(function (st) {
+      if (st.m.maps_to === 'cb' || st.m.maps_to === 'ca') return;
+      var line = st.kind === 'score' ? st.avg.toFixed(1) + ' / 5 average (' + st.pctHigh + '% rated 4–5)'
+               : st.kind === 'yesno' ? st.pctYes + '% yes'
+               : 'most common answer "' + st.breakdown[0][0] + '"';
+      ownMeasures.push({ q: st.m.question, text: line, n: st.n, allYes: st.kind === 'yesno' && st.pctYes === 100 && st.n >= 20 });
+    });
+  }
+  var journey = (typeof measureJourney === 'function') ? measureJourney(FB) : null;
+
+  // Demographics — tidied the same way as the Demographics page
+  var T = window.DemoTidy || { tidyRecord: function (d) { return d || {}; }, isBEM: function (e) { return !!e && !/^white/i.test(e); }, isDisabled: function (d) { return !!d && !/^(no|none|no disability)$/i.test(d); } };
+  function demoSummary(records) {
+    var withData = records.filter(function (d) { return Object.keys(d).length; });
+    function tally(key) {
+      var out = {};
+      withData.forEach(function (d) { if (d[key]) out[d[key]] = (out[d[key]] || 0) + 1; });
+      return out;
+    }
+    var eth = withData.filter(function (d) { return d.ethnicity; });
+    var dis = withData.filter(function (d) { return d.disability; });
+    var pcs = tally('postcode');
+    var topPc = Object.keys(pcs).sort(function (a, b) { return pcs[b] - pcs[a]; }).slice(0, 3);
+    var pcTotal = Object.keys(pcs).reduce(function (a, k) { return a + pcs[k]; }, 0);
+    return {
+      count: withData.length,
+      age: tally('age'), ethnicity: tally('ethnicity'), gender: tally('gender'), disability: tally('disability'), postcode: pcs,
+      ethN: eth.length, bemPct: eth.length ? pct(eth.filter(function (d) { return T.isBEM(d.ethnicity); }).length, eth.length) : null,
+      disN: dis.length, disabledPct: dis.length ? pct(dis.filter(function (d) { return T.isDisabled(d.disability); }).length, dis.length) : null,
+      topPostcodes: topPc, topPostcodePct: pcTotal ? pct(topPc.slice(0, 2).reduce(function (a, k) { return a + pcs[k]; }, 0), pcTotal) : null
+    };
+  }
+  var volDemo = demoSummary(activeVols.map(function (v) { return T.tidyRecord(v.equality_data); }));
+  var attDemo = demoSummary(FB.map(function (f) { return T.tidyRecord(f.demographics); }));
+  var withEq = { length: volDemo.count };
 
   // hours with no event can't be attributed to a funder — say so
   var unlinkedHours = conId ? 0 : (DB.volunteer_hours || []).filter(function (h) {
@@ -224,19 +261,22 @@ function buildStats(p) {
     avgPerVolunteer: activeVols.length ? round1(totalHours / activeVols.length) : 0,
     fbCount: fbCount,
     avgEnjoyed: round1(avg('enjoyed')),
-    avgCB: round1(avg('cb')),
-    avgCA: round1(avg('ca')),
-    confGain: round1(avg('ca') - avg('cb')),
-    improvedPct: fbCount ? pct(improved, fbCount) : 0,
-    learnedPct: fbCount ? pct(learned, fbCount) : 0,
-    connectedPct: fbCount ? pct(connected, fbCount) : 0,
-    friendPct: fbCount ? pct(friend, fbCount) : 0,
+    avgCB: journey ? +journey.before : round1(avg('cb')),
+    avgCA: journey ? +journey.after : round1(avg('ca')),
+    confGain: journey ? round1(journey.after - journey.before) : round1(avg('ca') - avg('cb')),
+    improvedPct: pairs.length ? pct(improved, pairs.length) : 0,
+    learnedPct: answeredPct('learned'),
+    connectedPct: answeredPct('connected'),
+    friendPct: answeredPct('friend'),
+    ownMeasures: ownMeasures,
     quotes: quotes,
-    eqCount: withEq.length,
-    eqAge: tally('age'),
-    eqEthnicity: tally('ethnicity'),
-    eqGender: tally('gender'),
-    eqDisability: tally('disability')
+    eqCount: volDemo.count,
+    eqAge: volDemo.age,
+    eqEthnicity: volDemo.ethnicity,
+    eqGender: volDemo.gender,
+    eqDisability: volDemo.disability,
+    volDemo: volDemo,
+    attDemo: attDemo
   };
 }
 
@@ -244,6 +284,9 @@ function gapsFor(s) {
   var gaps = [];
   if (s.activeVolunteers && s.eqCount < s.activeVolunteers) {
     gaps.push('Demographic data is held for ' + s.eqCount + ' of ' + s.activeVolunteers + ' active volunteers (' + pct(s.eqCount, s.activeVolunteers) + '%); completion is voluntary.');
+  }
+  if (s.fbCount && s.attDemo.count < s.fbCount) {
+    gaps.push('Demographic data was given in ' + s.attDemo.count + ' of ' + s.fbCount + ' feedback responses (' + pct(s.attDemo.count, s.fbCount) + '%); it is optional and anonymous.');
   }
   if (s.eventCount && !s.fbCount) gaps.push('No feedback responses were collected in this period.');
   if (s.eventCount && !s.capacity) gaps.push('Capacity was not recorded for these events, so an attendance rate is not given.');
@@ -440,7 +483,8 @@ function generate() {
 
   var sys = 'You are a professional UK charity impact writer producing a delivery report for a funder or board. ' +
     'Write clean formal British English. Structure with these sections, each beginning with ## and the section title: ' +
-    'Executive Summary, Delivery Overview, Volunteer Contribution, Participant Experience, Data Quality, Forward View. ' +
+    'Executive Summary, Delivery Overview, Who We Reached, Volunteer Contribution, Participant Experience, Data Quality, Forward View. ' +
+    'In Who We Reached, describe the people reached using only the demographic figures supplied, in plain respectful language, and say they are from optional anonymous answers. ' +
     'CRITICAL: use ONLY the figures supplied. Never invent, estimate, extrapolate or recalculate any number — ' +
     'every statistic has already been computed from the database. Do not add totals of your own. ' +
     'Quote the supplied numbers exactly as given. Use **bold** sparingly for headline figures. 600-800 words. ' +
@@ -469,12 +513,24 @@ function generate() {
     '',
     'PARTICIPANT FEEDBACK',
     'Responses: ' + s.fbCount,
-    s.fbCount ? 'Average enjoyment: ' + s.avgEnjoyed + ' out of 5' : '',
-    s.fbCount ? 'Confidence before: ' + s.avgCB + ' → after: ' + s.avgCA + ' (average gain ' + s.confGain + ')' : '',
-    s.fbCount ? 'Reported increased confidence: ' + s.improvedPct + '%' : '',
-    s.fbCount ? 'Learned something new: ' + s.learnedPct + '%' : '',
-    s.fbCount ? 'Felt more connected: ' + s.connectedPct + '%' : '',
-    s.fbCount ? 'Made a new friend: ' + s.friendPct + '%' : '',
+    s.fbCount && s.avgCB && s.avgCA ? 'Confidence before: ' + s.avgCB + ' → after: ' + s.avgCA + ' out of 5 (average gain ' + s.confGain + ')' : '',
+    s.ownMeasures.length
+      ? s.ownMeasures.map(function (m) { return '"' + m.q + '": ' + m.text + ' (' + m.n + ' answers)'; }).join('\n')
+      : [s.fbCount && s.avgEnjoyed ? 'Average enjoyment: ' + s.avgEnjoyed + ' out of 5' : '',
+         s.fbCount ? 'Learned something new: ' + s.learnedPct + '%' : '',
+         s.fbCount ? 'Felt more connected: ' + s.connectedPct + '%' : '',
+         s.fbCount ? 'Made a new friend: ' + s.friendPct + '%' : ''].filter(Boolean).join('\n'),
+    s.ownMeasures.some(function (m) { return m.allYes; })
+      ? 'Caveat: every answer to ' + s.ownMeasures.filter(function (m) { return m.allYes; }).map(function (m) { return '"' + m.q + '"'; }).join(' and ') + ' was "Yes" — the form may only have offered Yes; mention this and do not present those as evidence.' : '',
+    '',
+    'WHO WE REACHED (event attendees, from anonymous optional answers)',
+    s.attDemo.count ? 'Responses with demographic data: ' + s.attDemo.count + ' of ' + s.fbCount : 'No attendee demographic data in this period.',
+    s.attDemo.bemPct != null ? 'Black and ethnic minority: ' + s.attDemo.bemPct + '% (of ' + s.attDemo.ethN + ' who stated ethnicity)' : '',
+    s.attDemo.disabledPct != null ? 'Disabled: ' + s.attDemo.disabledPct + '% (of ' + s.attDemo.disN + ' who answered)' : '',
+    s.attDemo.topPostcodes.length ? 'Main postcode areas: ' + s.attDemo.topPostcodes.join(', ') + (s.attDemo.topPostcodePct != null ? ' (' + s.attDemo.topPostcodePct + '% from ' + s.attDemo.topPostcodes.slice(0, 2).join(' and ') + ')' : '') : '',
+    Object.keys(s.attDemo.age).length ? 'Age groups: ' + Object.keys(s.attDemo.age).sort(function (a, b) { return s.attDemo.age[b] - s.attDemo.age[a]; }).map(function (k) { return k + ' ' + s.attDemo.age[k]; }).join(', ') : '',
+    Object.keys(s.attDemo.gender).length ? 'Gender: ' + Object.keys(s.attDemo.gender).map(function (k) { return k + ' ' + s.attDemo.gender[k]; }).join(', ') : '',
+    s.volDemo.count ? 'Volunteers with demographic data: ' + s.volDemo.count + (s.volDemo.bemPct != null ? ' · black and ethnic minority ' + s.volDemo.bemPct + '%' : '') + (s.volDemo.disabledPct != null ? ' · disabled ' + s.volDemo.disabledPct + '%' : '') : '',
     s.quotes.length ? 'Participant quotes you may use verbatim (do not alter):\n' + s.quotes.slice(0, 4).map(function (q) { return '- "' + q + '"'; }).join('\n') : '',
     '',
     'DATA QUALITY NOTES',
@@ -532,16 +588,29 @@ function renderDoc(raw, s, orgName, todayStr, funderName) {
       fig('Feedback responses', s.fbCount) +
     '</div>';
 
-  var demographics = '';
-  if (s.eqCount) {
-    demographics =
-      '<h3>Volunteer demographics</h3>' +
-      '<p style="font-size:12px;color:#666">Aggregate and anonymised. Based on the ' + s.eqCount + ' active volunteer' + (s.eqCount === 1 ? '' : 's') + ' who chose to provide this information.</p>' +
-      tableFrom(s.eqAge, 'Age group', s.eqCount) +
-      tableFrom(s.eqEthnicity, 'Ethnicity', s.eqCount) +
-      tableFrom(s.eqGender, 'Gender', s.eqCount) +
-      tableFrom(s.eqDisability, 'Disability', s.eqCount);
+  function demoBlock(title, d, who) {
+    if (!d.count) return '';
+    var head = [];
+    if (d.bemPct != null) head.push(d.bemPct + '% black and ethnic minority');
+    if (d.disabledPct != null) head.push(d.disabledPct + '% disabled');
+    if (d.topPostcodePct != null && d.topPostcodes.length) head.push(d.topPostcodePct + '% from ' + d.topPostcodes.slice(0, 2).join(' and '));
+    return '<h3>' + esc(title) + '</h3>' +
+      '<p style="font-size:12px;color:#666">Aggregate and anonymised. Based on the ' + d.count + ' ' + esc(who) + ' who chose to provide this information.' +
+        (head.length ? ' <strong>' + esc(head.join(' · ')) + '</strong>.' : '') + '</p>' +
+      tableFrom(d.age, 'Age group') +
+      tableFrom(d.ethnicity, 'Ethnicity') +
+      tableFrom(d.gender, 'Gender') +
+      tableFrom(d.disability, 'Disability') +
+      tableFrom(topN(d.postcode, 10), 'Postcode area');
   }
+  function topN(obj, k) {
+    var out = {};
+    Object.keys(obj).sort(function (a, b) { return obj[b] - obj[a]; }).slice(0, k).forEach(function (x) { out[x] = obj[x]; });
+    return out;
+  }
+  var demographics =
+    demoBlock('Who we reached — event attendees', s.attDemo, 'feedback responses') +
+    demoBlock('Volunteer demographics', s.volDemo, 'active volunteers');
 
   var appendix =
     '<h3>Appendix A — Events delivered</h3>' + (eventTable(s) || '<p>No events in this period.</p>') +
