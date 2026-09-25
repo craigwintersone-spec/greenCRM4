@@ -290,12 +290,15 @@
   function isBEM(eth) { return !!eth && !/^white/i.test(eth) && !/prefer not/i.test(eth); }
   function isDisabled(dis) { return !!dis && dis !== 'No disability'; }
 
+
   const FIELDS = ['age', 'ethnicity', 'gender', 'disability', 'orientation', 'religion', 'marital', 'postcode'];
   function tidyRecord(d) {
     const out = {};
     FIELDS.forEach(k => { const v = tidy(k, d && d[k]); if (v) out[k] = v; });
     return out;
   }
+  // shared with the Delivery Report so both count the same way
+  window.DemoTidy = { tidy, tidyRecord, isBEM, isDisabled };
 
   // Everyone's demographics for the chosen group — records only, no names
   function demoRecords(group) {
