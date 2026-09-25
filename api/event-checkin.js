@@ -295,11 +295,19 @@ module.exports = async function handler(req, res) {
           quote: trim(body.quote, 2000)
         };
       }
+      // Optional "About you" — anonymous, never stored with an email; postcode first half only
+      const demo = {};
+      const d = (body.demographics && typeof body.demographics === 'object') ? body.demographics : {};
+      ['age', 'gender', 'ethnicity', 'disability'].forEach(k => { const v = trim(d[k], 60); if (v) demo[k] = v; });
+      const pc = /^([A-Z]{1,2}\d[A-Z\d]?)/.exec(String(d.postcode || '').toUpperCase().trim());
+      if (pc) demo.postcode = pc[1];
+      if (Object.keys(demo).length) row.demographics = demo;
+
       try {
         await sb('feedback', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([row]) });
       } catch (e) {
-        if (!/answers/i.test(e.message || '')) throw e;
-        delete row.answers;
+        if (!/answers|demographics/i.test(e.message || '')) throw e;
+        delete row.answers; delete row.demographics;
         await sb('feedback', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([row]) });
       }
       return res.status(200).json({ ok: true });
