@@ -18,13 +18,16 @@
 // file finished loading second — so choosing a funder changed
 // nothing. No cross-file wrapping any more.
 //
+// v1.3 — circular economy figures (render.js cxReportStats) are part of
+// the report, filtered by the same funder/contract and period.
+//
 // Depends on: db.js (DB, sb, orgId), agents.js (runAgent,
 //   cleanReportText, reportTextToHTML, getOrgLogoUrl)
 'use strict';
 
 (function () {
 
-var VERSION = 'v1.2';
+var VERSION = 'v1.3';
 
 // UK Living Wage (Living Wage Foundation, 2024/25). Shown in the
 // report and editable — never present a made-up rate to a funder.
@@ -236,7 +239,10 @@ function buildStats(p) {
     return inPeriod(h.date, p) && !h.event_id;
   }).reduce(function (a, h) { return a + n(h.hours); }, 0);
 
+  var circ = (typeof cxReportStats === 'function') ? cxReportStats({ from: p.from, to: p.to, contractId: conId }) : null;
+
   return {
+    circ: circ,
     period: p,
     contract: con,
     funder: con ? funderFor(con) : null,
@@ -292,6 +298,7 @@ function gapsFor(s) {
   if (s.eventCount && !s.capacity) gaps.push('Capacity was not recorded for these events, so an attendance rate is not given.');
   if (s.contract && !s.eventCount) gaps.push('No events are linked to this contract in this period.');
   if (s.unlinkedHours) gaps.push(s.unlinkedHours + ' volunteer hours in this period are not linked to an event.');
+  if (typeof cxReportGaps === 'function') gaps = gaps.concat(cxReportGaps(s.circ));
   return gaps;
 }
 
@@ -382,9 +389,10 @@ function injectUI() {
     var el = $(id); if (el) el.addEventListener('change', renderPreview);
   });
   $('dr-generate').addEventListener('click', generate);
-  $('dr-refresh').addEventListener('click', renderPreview);
+  $('dr-refresh').addEventListener('click', function () { if (typeof cxReportLoad === 'function') cxReportLoad(true).then(renderPreview); else renderPreview(); });
 
   renderPreview();
+  if (typeof cxReportLoad === 'function') cxReportLoad().then(renderPreview);
 }
 
 function renderPreview() {
@@ -403,6 +411,9 @@ function renderPreview() {
       stat('Hours', s.totalHours) +
       stat('Value', money(s.value)) +
       stat('Feedback', s.fbCount) +
+      (s.circ && s.circ.entries ? stat('Kg diverted', s.circ.kg) : '') +
+      (s.circ && s.circ.co2 ? stat('CO₂e (t)', Math.round(s.circ.co2 / 100) / 10) : '') +
+      (s.circ && s.circ.foodKg ? stat('Meals', s.circ.meals) : '') +
     '</div>' +
     (gaps.length
       ? '<div class="alert alert-warn" style="margin:0;font-size:12px"><strong>Data gaps — these will be stated in the report:</strong><br/>• ' + gaps.map(esc).join('<br/>• ') + '</div>'
@@ -452,6 +463,10 @@ function eventTable(s) {
 
 // ── generate ───────────────────────────────────────────────
 function generate() {
+  if (typeof cxReportLoad === 'function') return cxReportLoad().then(generateNow, generateNow);
+  return generateNow();
+}
+function generateNow() {
   var progressEl = $('brain-progress');
   var outEl = $('report-output');
   if (!progressEl || !outEl) return;
@@ -459,7 +474,8 @@ function generate() {
   var p = currentPeriod();
   var s = buildStats(p);
 
-  if (!s.eventCount && !s.hoursRows.length && !s.fbCount) {
+  var hasCirc = !!(s.circ && s.circ.entries);
+  if (!s.eventCount && !s.hoursRows.length && !s.fbCount && !hasCirc) {
     outEl.innerHTML = '<div class="alert alert-warn">There is no event, volunteer-hour or feedback data for this ' +
       (s.contract ? 'funder in this period.' : 'period.') + ' Choose a wider period, or link events to this contract.</div>';
     return;
@@ -483,7 +499,8 @@ function generate() {
 
   var sys = 'You are a professional UK charity impact writer producing a delivery report for a funder or board. ' +
     'Write clean formal British English. Structure with these sections, each beginning with ## and the section title: ' +
-    'Executive Summary, Delivery Overview, Who We Reached, Volunteer Contribution, Participant Experience, Data Quality, Forward View. ' +
+    'Executive Summary, Delivery Overview, Who We Reached, Volunteer Contribution, ' + (hasCirc ? 'Circular Economy, ' : '') + 'Participant Experience, Data Quality, Forward View. ' +
+    (hasCirc ? 'In Circular Economy, report weight diverted, reuse and repair, food shared and CO2e using only the figures supplied, and say CO2e and value are estimates. ' : '') +
     'In Who We Reached, describe the people reached using only the demographic figures supplied, in plain respectful language, and say they are from optional anonymous answers. ' +
     'CRITICAL: use ONLY the figures supplied. Never invent, estimate, extrapolate or recalculate any number — ' +
     'every statistic has already been computed from the database. Do not add totals of your own. ' +
@@ -532,6 +549,7 @@ function generate() {
     Object.keys(s.attDemo.gender).length ? 'Gender: ' + Object.keys(s.attDemo.gender).map(function (k) { return k + ' ' + s.attDemo.gender[k]; }).join(', ') : '',
     s.volDemo.count ? 'Volunteers with demographic data: ' + s.volDemo.count + (s.volDemo.bemPct != null ? ' · black and ethnic minority ' + s.volDemo.bemPct + '%' : '') + (s.volDemo.disabledPct != null ? ' · disabled ' + s.volDemo.disabledPct + '%' : '') : '',
     s.quotes.length ? 'Participant quotes you may use verbatim (do not alter):\n' + s.quotes.slice(0, 4).map(function (q) { return '- "' + q + '"'; }).join('\n') : '',
+    (typeof cxReportLines === 'function' ? cxReportLines(s.circ).join('\n') : ''),
     '',
     'DATA QUALITY NOTES',
     gaps.length ? gaps.map(function (g) { return '- ' + g; }).join('\n') : '- No significant data gaps in this period.'
@@ -586,6 +604,9 @@ function renderDoc(raw, s, orgName, todayStr, funderName) {
       fig('Hours contributed', s.totalHours) +
       fig('Value of volunteer time', money(s.value)) +
       fig('Feedback responses', s.fbCount) +
+      (s.circ && s.circ.entries ? fig('Diverted from waste', s.circ.kg + ' kg') : '') +
+      (s.circ && s.circ.co2 ? fig('CO₂e avoided (est.)', (Math.round(s.circ.co2 / 100) / 10) + ' t') : '') +
+      (s.circ && s.circ.foodKg ? fig('Meals equivalent', s.circ.meals) : '') +
     '</div>';
 
   function demoBlock(title, d, who) {
@@ -617,8 +638,9 @@ function renderDoc(raw, s, orgName, todayStr, funderName) {
     '<h3>Appendix B — Volunteer hours by month</h3>' + (monthTable(s.byMonth) || '<p>No hours logged in this period.</p>') +
     (Object.keys(s.byType).length ? '<h3>Appendix C — Events by type</h3>' + tableFrom(s.byType, 'Type', s.eventCount) : '') +
     demographics +
+    (typeof cxReportDocHTML === 'function' ? cxReportDocHTML(s.circ, 'Appendix D — Circular economy') : '') +
     '<p style="font-size:11px;color:#777;margin-top:18px">Volunteer time valued at £' + s.rate.toFixed(2) + ' per hour — ' + esc(RATE_LABEL) + '. ' +
-      'All figures calculated directly from records held in Vorlana for the period stated' + (funderName ? ', limited to events linked to ' + esc(funderName) : '') + '.</p>';
+      'All figures calculated directly from records held in Vorlana for the period stated' + (funderName ? ', limited to events and circular activities linked to ' + esc(funderName) : '') + '.</p>';
 
   outEl.innerHTML =
     '<style>' +
