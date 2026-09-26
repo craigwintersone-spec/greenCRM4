@@ -853,52 +853,804 @@ async function fqSave() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// CIRCULAR ECONOMY
+// CIRCULAR ECONOMY — v2
+// Activities come from Settings → Circular activities
+// (table circular_activities). Items carry a passport code, move
+// through stages, and every move is written to circular_item_events
+// (append-only, hash-linked in the database = chain of custody).
+//
+// Covers: stock board, log item (with AI photo intake), item
+// passport + history, QR labels, scan-to-advance, collections
+// (bookings → run sheet → collected → booked in), growing/food
+// (kg shared, meals equivalent), impact strip.
 // ─────────────────────────────────────────────────────────────
 
-function renderCircular() {
-  const tbody = $('eco-table'); if (!tbody) return;
-  const I = DB.circular || [];
+const CX = { acts: [], items: [], cols: [], tab: 'all', colFilter: 'open', ready: false, err: '', pendingCode: null };
+const CX_KG_PER_MEAL = 0.42;              // WRAP standard meal equivalent
+const CX_IMPACT_CO2 = ['reuse', 'repair', 'share'];
+const CX_IMPACT_KG  = ['reuse', 'repair', 'share', 'recycle'];
 
-  // Stats
-  const sg = $('eco-stats');
-  if (sg) {
-    const totalKg = I.reduce((a, i) => a + num(i.weight_kg), 0);
-    const repaired = I.filter(i => i.status === 'Repaired' || i.status === 'Resold' || i.outcome === 'Resold' || i.outcome === 'Donated').length;
-    sg.innerHTML =
-      statCard('Items logged', I.length) +
-      statCard('Repaired/diverted', repaired) +
-      statCard('Total weight', totalKg.toFixed(1) + ' kg');
-  }
-
-  // Impact
-  const impEl = $('eco-impact');
-  if (impEl) {
-    const totalKg = I.reduce((a, i) => a + num(i.weight_kg), 0);
-    const co2 = (totalKg * 6).toFixed(1); // rough estimate, 6kg CO2 per kg waste diverted
-    impEl.innerHTML =
-      '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--txt2)">♻️ <strong>' + totalKg.toFixed(1) + ' kg</strong> diverted from landfill</div>' +
-      '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--txt2)">🌍 <strong>~' + co2 + ' kg</strong> CO₂ saved (estimate)</div>';
-  }
-
-  if (!I.length) {
-    tbody.innerHTML = '<tr><td colspan="7">' + renderEmpty('No items logged yet.') + '</td></tr>';
-    return;
-  }
-
-  tbody.innerHTML = I.map(i => '<tr>' +
-    '<td style="font-weight:600">' + escapeHTML(i.name || '—') + '</td>' +
-    '<td>' + escapeHTML(i.category || '—') + '</td>' +
-    '<td style="text-align:center">' + num(i.weight_kg).toFixed(1) + ' kg</td>' +
-    '<td>' + stageBadge(i.status) + '</td>' +
-    '<td>' + escapeHTML(i.fixer || '—') + '</td>' +
-    '<td>' + escapeHTML(i.outcome || '—') + '</td>' +
-    '<td style="text-align:right;white-space:nowrap">' +
-      '<button class="btn btn-ghost btn-sm" onclick="openEditItem(\'' + escapeHTML(String(i.id)) + '\')">Edit</button> ' +
-      '<button class="btn btn-ghost btn-sm" onclick="deleteItem(\'' + escapeHTML(String(i.id)) + '\')">×</button>' +
-    '</td>' +
-  '</tr>').join('');
+function cxE(s) { return escapeHTML(s == null ? '' : String(s)); }
+function cxFmt(n, dp) { return (+n || 0).toLocaleString('en-GB', { maximumFractionDigits: dp == null ? 0 : dp, minimumFractionDigits: 0 }); }
+function cxAct(id) { return CX.acts.find(a => a.id === id); }
+function cxColAct() { return CX.acts.find(a => a.template === 'collections'); }
+function cxItemActs() { return CX.acts.filter(a => a.template !== 'collections'); }
+function cxType(act, key) { return act && (act.item_types || []).find(t => t.key === key); }
+function cxPerKg(t) { return !!t && /per\s*kg/i.test(t.label || ''); }
+function cxStage(act, key) { return act && (act.stages || []).find(s => s.key === key); }
+function cxOutcome(act, key) { return act && (act.outcomes || []).find(o => o.key === key); }
+function cxDays(d) { return d ? Math.floor((Date.now() - new Date(d).getTime()) / 86400000) : 0; }
+function cxItemUrl(code) { return location.origin + '/app.html#item=' + encodeURIComponent(code); }
+function cxActorName() {
+  try { return (currentUser && (currentUser.user_metadata && currentUser.user_metadata.full_name || currentUser.email)) || ''; }
+  catch (e) { return ''; }
 }
+
+function cxInjectStyle() {
+  if (document.getElementById('cxp-style')) return;
+  const st = document.createElement('style'); st.id = 'cxp-style';
+  st.textContent = `
+.cxp-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+.cxp-tab{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:6px 14px;font-size:13px;font-weight:600;color:var(--txt2)}
+.cxp-tab.on{background:var(--em);border-color:var(--em);color:#fff}
+.cxp-board{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;margin-bottom:20px}
+.cxp-col{min-width:220px;flex:1;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px}
+.cxp-col-h{font-size:12px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;display:flex;justify-content:space-between}
+.cxp-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 10px;margin-bottom:7px;cursor:pointer}
+.cxp-card:hover{border-color:var(--em)}
+.cxp-card.stuck{border-left:3px solid var(--amber);border-radius:0 8px 8px 0}
+.cxp-t{font-size:13px;font-weight:600;color:var(--txt)}
+.cxp-s{font-size:11px;color:var(--txt3)}
+.cxp-code{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--em);background:rgba(31,111,109,.07);padding:1px 6px;border-radius:4px}
+.cxp-sum{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-bottom:20px}
+.cxp-chip{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--border);color:var(--txt2);margin:2px 4px 2px 0}
+.cxp-btns{display:flex;flex-wrap:wrap;gap:6px}
+.cxp-tl{border-left:2px solid var(--border);margin-left:6px;padding-left:14px}
+.cxp-ev{position:relative;padding-bottom:12px}
+.cxp-ev:before{content:'';position:absolute;left:-20px;top:5px;width:10px;height:10px;border-radius:50%;background:var(--em)}
+.cxp-list-row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)}
+.cxp-warn{background:#FFFBEB;border:1px solid #FDE68A;color:#92400E;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px}
+.cxp-err{background:#FEF2F2;border:1px solid #FECACA;color:#B91C1C;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px}
+@media(max-width:700px){.cxp-col{min-width:180px}}`;
+  document.head.appendChild(st);
+}
+
+// Single reusable modal
+function cxModal(html, maxW) {
+  let m = $('cx-modal');
+  if (!m) {
+    m = document.createElement('div');
+    m.className = 'modal-overlay'; m.id = 'cx-modal';
+    m.addEventListener('click', e => { if (e.target === m) cxCloseModal(); });
+    document.body.appendChild(m);
+  }
+  m.innerHTML = '<div class="modal" style="max-width:' + (maxW || 560) + 'px">' + html + '</div>';
+  m.classList.add('open');
+}
+function cxCloseModal() { cxStopScan(); const m = $('cx-modal'); if (m) m.classList.remove('open'); }
+
+// ── Data ─────────────────────────────────────────────────────
+async function cxLoad() {
+  CX.err = '';
+  const a = await sb.from('circular_activities').select('*').eq('org_id', orgId).eq('active', true).order('sort');
+  if (a.error) { CX.err = 'Circular needs the database update. Run circular-migration.sql in Supabase, then refresh.'; CX.acts = []; CX.items = []; CX.cols = []; CX.ready = true; return; }
+  CX.acts = a.data || [];
+  const [it, co] = await Promise.all([
+    sb.from('circular_items').select('*').eq('org_id', orgId).order('updated_at', { ascending: false }).limit(3000),
+    sb.from('circular_collections').select('*').eq('org_id', orgId).order('created_at', { ascending: false }).limit(1000)
+  ]);
+  CX.items = it.error ? [] : (it.data || []);
+  CX.cols = co.error ? [] : (co.data || []);
+  if (it.error) CX.err = 'Could not load items: ' + it.error.message;
+  CX.ready = true;
+}
+
+async function cxLog(item, action, from, to, data) {
+  const { error } = await sb.from('circular_item_events').insert([{
+    org_id: orgId, item_id: String(item.id), activity_id: item.activity_id || null,
+    action, from_stage: from || null, to_stage: to || null, data: data || {}, actor_name: cxActorName()
+  }]);
+  if (error) console.error('[circular] custody log failed', error);
+}
+
+// ── Impact ───────────────────────────────────────────────────
+function cxImpact(items) {
+  const r = { inProgress: 0, finished: 0, kg: 0, co2: 0, value: 0, reused: 0, foodKg: 0, income: 0, repairTried: 0, repairFixed: 0 };
+  items.forEach(i => {
+    if (!i.outcome_type) { r.inProgress++; return; }
+    r.finished++;
+    const t = i.outcome_type;
+    if (CX_IMPACT_KG.includes(t)) r.kg += +i.weight_kg || 0;
+    if (CX_IMPACT_CO2.includes(t)) { r.co2 += +i.co2e_kg || 0; r.value += +i.value_gbp || 0; }
+    if (t === 'reuse' || t === 'repair') r.reused += +i.quantity || 1;
+    if (t === 'share') r.foodKg += +i.weight_kg || 0;
+    if (i.custom && +i.custom.sale_gbp) r.income += +i.custom.sale_gbp;
+    const act = cxAct(i.activity_id);
+    if (act && act.template === 'repair_cafe') { r.repairTried += +i.quantity || 1; if (t === 'repair') r.repairFixed += +i.quantity || 1; }
+  });
+  return r;
+}
+
+// ── Page ─────────────────────────────────────────────────────
+function cxPage() {
+  let p = $('page-circular');
+  if (!p) {
+    p = document.createElement('div'); p.className = 'page'; p.id = 'page-circular';
+    const main = $('main'); if (main) main.appendChild(p);
+  }
+  return p;
+}
+
+async function renderCircular() {
+  cxInjectStyle();
+  const p = cxPage();
+  p.innerHTML = '<div class="page-header"><div><div class="page-title">♻️ Circular</div><div class="page-sub">Loading…</div></div></div>';
+  await cxLoad();
+  cxDraw();
+  if (CX.pendingCode) { const c = CX.pendingCode; CX.pendingCode = null; cxOpenByCode(c); }
+}
+
+function cxDraw() {
+  const p = cxPage();
+  const colAct = cxColAct();
+  const acts = cxItemActs();
+  if (CX.tab !== 'all' && CX.tab !== 'collections' && !cxAct(CX.tab)) CX.tab = 'all';
+  if (CX.tab === 'collections' && !colAct) CX.tab = 'all';
+
+  let h = '<div class="page-header"><div><div class="page-title">♻️ Circular</div>' +
+    '<div class="page-sub">Every item has a passport. Every move is logged.</div></div>' +
+    '<div class="cxp-btns">' +
+      '<button class="btn btn-ghost btn-sm" onclick="cxOpenScan()">📷 Scan</button>' +
+      (colAct ? '<button class="btn btn-ghost btn-sm" onclick="cxOpenBooking()">🚚 New booking</button>' : '') +
+      '<button class="btn btn-p btn-sm" onclick="cxOpenLog({})">+ Log item</button>' +
+    '</div></div>';
+
+  if (CX.err) h += '<div class="cxp-err">' + cxE(CX.err) + '</div>';
+  if (!CX.err && !CX.acts.length) {
+    h += '<div class="card">' + renderEmpty('No circular activities yet.') +
+      '<div style="text-align:center"><button class="btn btn-p btn-sm" onclick="go(\'settings\')">Set up in Settings</button></div></div>';
+    p.innerHTML = h; return;
+  }
+
+  h += '<div class="cxp-tabs"><button class="cxp-tab ' + (CX.tab === 'all' ? 'on' : '') + '" onclick="cxTab(\'all\')">All</button>' +
+    acts.map(a => '<button class="cxp-tab ' + (CX.tab === a.id ? 'on' : '') + '" onclick="cxTab(\'' + a.id + '\')">' + cxE(a.icon) + ' ' + cxE(a.name) + '</button>').join('') +
+    (colAct ? '<button class="cxp-tab ' + (CX.tab === 'collections' ? 'on' : '') + '" onclick="cxTab(\'collections\')">' + cxE(colAct.icon) + ' ' + cxE(colAct.name) + '</button>' : '') +
+    '</div>';
+
+  if (CX.tab === 'collections') { h += cxCollectionsHTML(); p.innerHTML = h; return; }
+
+  const scope = CX.tab === 'all' ? CX.items.filter(i => i.activity_id) : CX.items.filter(i => i.activity_id === CX.tab);
+  const im = cxImpact(scope);
+  const act = CX.tab === 'all' ? null : cxAct(CX.tab);
+  const food = !!act && ['food', 'growing'].includes(act.template);
+
+  h += '<div class="stats-grid">' +
+    statCard('In progress', cxFmt(im.inProgress)) +
+    statCard('Diverted from waste', cxFmt(im.kg, 1) + ' kg') +
+    (food
+      ? statCard('Food shared', cxFmt(im.foodKg, 1) + ' kg', '≈ ' + cxFmt(im.foodKg / CX_KG_PER_MEAL) + ' meals')
+      : statCard('CO₂e avoided', cxFmt(im.co2 / 1000, 2) + ' t', 'reuse and repair')) +
+    (act && act.template === 'repair_cafe'
+      ? statCard('Fix rate', im.repairTried ? Math.round(im.repairFixed / im.repairTried * 100) + '%' : '—', cxFmt(im.repairFixed) + ' of ' + cxFmt(im.repairTried) + ' fixed')
+      : statCard('Value to people', '£' + cxFmt(im.value), im.income ? '£' + cxFmt(im.income) + ' sales income' : cxFmt(im.reused) + ' items reused')) +
+    '</div>';
+
+  h += CX.tab === 'all' ? cxSummaryHTML(acts) : cxBoardHTML(act);
+  p.innerHTML = h;
+}
+
+function cxTab(t) { CX.tab = t; cxDraw(); }
+
+function cxSummaryHTML(acts) {
+  if (!acts.length) return '<div class="card">' + renderEmpty('Only Collections is set up. Add an activity for booked-in items in Settings.') + '</div>';
+  const old = CX.items.filter(i => !i.activity_id).length;
+  return '<div class="cxp-sum">' + acts.map(a => {
+    const its = CX.items.filter(i => i.activity_id === a.id);
+    const live = its.filter(i => !i.outcome_type);
+    const stuck = live.filter(i => cxDays(i.updated_at) > 14).length;
+    const im = cxImpact(its);
+    return '<div class="card" style="cursor:pointer;margin:0" onclick="cxTab(\'' + a.id + '\')">' +
+      '<div class="card-title">' + cxE(a.icon) + ' ' + cxE(a.name) + '</div>' +
+      '<div style="margin:6px 0 8px">' + (a.stages || []).map(s =>
+        '<span class="cxp-chip">' + cxE(s.label) + ' · ' + live.filter(i => i.stage === s.key).length + '</span>').join('') + '</div>' +
+      '<div class="cxp-s">' + cxFmt(im.finished) + ' finished · ' + cxFmt(im.kg, 1) + ' kg diverted' +
+      (stuck ? ' · <span style="color:var(--amber);font-weight:700">' + stuck + ' waiting over 14 days</span>' : '') + '</div>' +
+    '</div>';
+  }).join('') + '</div>' +
+  (old ? '<div class="cxp-s" style="margin-bottom:16px">' + old + ' older items were logged before activities existed. They are kept but not shown here.</div>' : '');
+}
+
+function cxBoardHTML(act) {
+  const its = CX.items.filter(i => i.activity_id === act.id);
+  const live = its.filter(i => !i.outcome_type);
+  const done = its.filter(i => i.outcome_type).slice(0, 40);
+  let h = '<div class="cxp-board">' + (act.stages || []).map(s => {
+    const col = live.filter(i => i.stage === s.key);
+    return '<div class="cxp-col"><div class="cxp-col-h"><span>' + cxE(s.label) + '</span><span>' + col.length + '</span></div>' +
+      (col.map(cxCardHTML).join('') || '<div class="cxp-s" style="text-align:center;padding:10px 0">Empty</div>') +
+      '<button class="btn btn-ghost btn-sm" style="width:100%" onclick="cxOpenLog({activity_id:\'' + act.id + '\',stage:\'' + s.key + '\'})">+ Add here</button>' +
+    '</div>';
+  }).join('') + '</div>';
+
+  const orphan = live.filter(i => !cxStage(act, i.stage));
+  if (orphan.length) h += '<div class="cxp-warn">' + orphan.length + ' items are at a stage that no longer exists. Open one to move it. ' +
+    orphan.map(i => '<a href="#" onclick="cxOpenItem(\'' + i.id + '\');return false">' + cxE(i.passport_code) + '</a>').join(', ') + '</div>';
+
+  h += '<div class="card"><div class="card-title">Finished</div>' +
+    (done.length ? done.map(i => {
+      const o = cxOutcome(act, i.outcome);
+      return '<div class="cxp-list-row" style="cursor:pointer" onclick="cxOpenItem(\'' + i.id + '\')"><div><div class="cxp-t">' + cxE(i.name) + ' <span class="cxp-code">' + cxE(i.passport_code) + '</span></div>' +
+        '<div class="cxp-s">' + cxE(o ? o.label : i.outcome) + ' · ' + (i.outcome_at ? new Date(i.outcome_at).toLocaleDateString('en-GB') : '') + '</div></div>' +
+        '<div class="cxp-s">' + cxFmt(i.weight_kg, 1) + ' kg</div></div>';
+    }).join('') : renderEmpty('Nothing finished yet.')) + '</div>';
+  return h;
+}
+
+function cxCardHTML(i) {
+  const d = cxDays(i.updated_at);
+  return '<div class="cxp-card ' + (d > 14 ? 'stuck' : '') + '" onclick="cxOpenItem(\'' + i.id + '\')">' +
+    '<div class="cxp-t">' + cxE(i.name || 'Item') + (+i.quantity > 1 ? ' ×' + cxFmt(i.quantity) : '') + '</div>' +
+    '<div class="cxp-s"><span class="cxp-code">' + cxE(i.passport_code) + '</span> · ' + (d ? d + 'd here' : 'today') + '</div></div>';
+}
+
+// ── Log / edit item ──────────────────────────────────────────
+function cxOpenLog(o) {
+  const acts = cxItemActs();
+  if (!acts.length) { alert('Add an activity in Settings first.'); return; }
+  const edit = o.id ? CX.items.find(i => i.id === o.id) : null;
+  const actId = (edit && edit.activity_id) || o.activity_id || (CX.tab !== 'all' && CX.tab !== 'collections' ? CX.tab : acts[0].id);
+  CX.logCtx = { edit, collection_id: o.collection_id || (edit && edit.collection_id) || null, source: o.source || (edit && edit.source) || '' };
+  cxModal(
+    '<h2>' + (edit ? 'Edit ' + cxE(edit.passport_code) : 'Log item') + '</h2>' +
+    (edit ? '' : '<div style="margin-bottom:12px"><button class="btn btn-ghost btn-sm" onclick="$(\'cx-photo\').click()">📷 Identify from photo</button>' +
+      '<input type="file" id="cx-photo" accept="image/*" capture="environment" style="display:none" onchange="cxPhoto(event)"/>' +
+      '<span id="cx-photo-status" class="cxp-s" style="margin-left:8px"></span></div>') +
+    '<div class="form-grid-2">' +
+      '<div class="form-row"><label>Activity</label><select id="cx-act" onchange="cxLogFill()">' +
+        acts.map(a => '<option value="' + a.id + '" ' + (a.id === actId ? 'selected' : '') + '>' + cxE(a.icon + ' ' + a.name) + '</option>').join('') + '</select></div>' +
+      '<div class="form-row"><label>Item type</label><select id="cx-type" onchange="cxLogType()"></select></div>' +
+    '</div>' +
+    '<div class="form-row"><label>Name / description</label><input id="cx-name" placeholder="Left blank = item type"/></div>' +
+    '<div class="form-grid-2">' +
+      '<div class="form-row" id="cx-qty-row"><label>Quantity</label><input id="cx-qty" type="number" min="1" step="1" value="1" oninput="cxLogType(true)"/></div>' +
+      '<div class="form-row"><label id="cx-kg-lbl">Weight (kg)</label><input id="cx-kg" type="number" min="0" step="0.1"/></div>' +
+    '</div>' +
+    '<div class="form-grid-2">' +
+      '<div class="form-row"><label>Stage</label><select id="cx-stage"></select></div>' +
+      '<div class="form-row"><label>Source / donor</label><input id="cx-source" placeholder="e.g. WLWA Southall site"/></div>' +
+    '</div>' +
+    '<details id="cx-more"><summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--txt2);margin-bottom:10px">Brand, model, serial</summary>' +
+      '<div class="form-grid-2"><div class="form-row"><label>Brand</label><input id="cx-brand"/></div><div class="form-row"><label>Model</label><input id="cx-model"/></div></div>' +
+      '<div class="form-row"><label>Serial / frame number</label><input id="cx-serial"/></div>' +
+    '</details>' +
+    '<div id="cx-fields"></div>' +
+    '<div class="cxp-s" id="cx-factors" style="margin-top:6px"></div>' +
+    '<div class="modal-footer"><button class="btn btn-ghost" onclick="cxCloseModal()">Cancel</button>' +
+      '<button class="btn btn-p" id="cx-save" onclick="cxSaveItem()">' + (edit ? 'Save' : 'Log item') + '</button></div>'
+  );
+  cxLogFill(o.stage);
+  if (edit) {
+    $('cx-type').value = edit.item_type || '';
+    $('cx-name').value = edit.name || '';
+    $('cx-qty').value = edit.quantity || 1;
+    $('cx-kg').value = edit.weight_kg || '';
+    $('cx-brand').value = edit.brand || ''; $('cx-model').value = edit.model || ''; $('cx-serial').value = edit.serial || '';
+    $('cx-source').value = edit.source || '';
+    $('cx-stage').value = edit.stage || ''; $('cx-stage').disabled = true;
+    $('cx-act').disabled = true;
+    cxLogType(true, true);
+    const act = cxAct(edit.activity_id);
+    (act.fields || []).forEach(f => { const el = $('cx-f-' + f.key); if (!el) return; const v = (edit.custom || {})[f.key]; if (f.type === 'yesno') el.value = v === true ? 'yes' : v === false ? 'no' : ''; else el.value = v == null ? '' : v; });
+    if (edit.brand || edit.model || edit.serial) $('cx-more').open = true;
+  } else {
+    $('cx-source').value = CX.logCtx.source || '';
+  }
+}
+
+function cxLogFill(stageKey) {
+  const act = cxAct($('cx-act').value); if (!act) return;
+  $('cx-type').innerHTML = (act.item_types || []).map(t => '<option value="' + cxE(t.key) + '">' + cxE(t.label) + '</option>').join('') + '<option value="">Other</option>';
+  $('cx-stage').innerHTML = (act.stages || []).map(s => '<option value="' + cxE(s.key) + '">' + cxE(s.label) + '</option>').join('');
+  if (stageKey) $('cx-stage').value = stageKey;
+  $('cx-fields').innerHTML = (act.fields || []).map(f => {
+    const id = 'cx-f-' + f.key;
+    const input = f.type === 'yesno' ? '<select id="' + id + '"><option value="">—</option><option value="yes">Yes</option><option value="no">No</option></select>'
+      : '<input id="' + id + '" type="' + (f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text') + '"/>';
+    return '<div class="form-row"><label>' + cxE(f.label) + '</label>' + input + '</div>';
+  }).join('');
+  const noSerial = ['food', 'growing', 'textiles', 'scrap_store'].includes(act.template);
+  $('cx-more').style.display = noSerial ? 'none' : '';
+  cxLogType();
+}
+
+function cxLogType(keepKg, silent) {
+  const act = cxAct($('cx-act').value); const t = cxType(act, $('cx-type').value);
+  const perKg = cxPerKg(t);
+  $('cx-qty-row').style.display = perKg ? 'none' : '';
+  $('cx-kg-lbl').textContent = perKg ? 'Weight (kg)' : 'Total weight (kg)';
+  if (!keepKg || !perKg) {
+    if (t && !perKg && !silent) $('cx-kg').value = +((+t.weight_kg || 0) * (+$('cx-qty').value || 1)).toFixed(2);
+    if (t && perKg && !keepKg) $('cx-kg').value = '';
+  }
+  $('cx-factors').textContent = t ? (perKg ? 'Per kg: ' : 'Each: ') + (+t.co2e_kg || 0) + ' kg CO₂e · £' + (+t.value_gbp || 0) + ' value · ' + (t.source || '') : 'Other: no CO₂e or value counted.';
+}
+
+function cxCalc(act, typeKey, qty, kg) {
+  const t = cxType(act, typeKey);
+  if (!t) return { co2: 0, value: 0 };
+  if (cxPerKg(t)) return { co2: +(kg * (+t.co2e_kg || 0)).toFixed(2), value: +(kg * (+t.value_gbp || 0)).toFixed(2) };
+  return { co2: +(qty * (+t.co2e_kg || 0)).toFixed(2), value: +(qty * (+t.value_gbp || 0)).toFixed(2) };
+}
+
+async function cxSaveItem() {
+  const btn = $('cx-save'); btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const edit = CX.logCtx.edit;
+    const act = cxAct($('cx-act').value);
+    const typeKey = $('cx-type').value;
+    const t = cxType(act, typeKey);
+    const perKg = cxPerKg(t);
+    const qty = perKg ? 1 : Math.max(1, Math.round(+$('cx-qty').value || 1));
+    const kg = +$('cx-kg').value || 0;
+    if (perKg && !kg) throw new Error('Enter the weight in kg');
+    const custom = Object.assign({}, edit ? edit.custom : {});
+    (act.fields || []).forEach(f => {
+      const el = $('cx-f-' + f.key); if (!el) return;
+      let v = el.value;
+      if (f.type === 'yesno') v = v === 'yes' ? true : v === 'no' ? false : null;
+      else if (f.type === 'number') v = v === '' ? null : +v;
+      if (v === '' || v == null) delete custom[f.key]; else custom[f.key] = v;
+    });
+    const f = cxCalc(act, typeKey, qty, kg);
+    const stageKey = $('cx-stage').value;
+    const d = {
+      activity_id: act.id, item_type: typeKey || null,
+      name: $('cx-name').value.trim() || (t ? t.label.replace(/\s*\(per kg\)/i, '') : 'Item'),
+      category: act.name, quantity: qty, weight_kg: kg, co2e_kg: f.co2, value_gbp: f.value,
+      brand: $('cx-brand').value.trim() || null, model: $('cx-model').value.trim() || null, serial: $('cx-serial').value.trim() || null,
+      source: $('cx-source').value.trim() || null, custom, updated_at: new Date().toISOString()
+    };
+    if (edit) {
+      const { error } = await sb.from('circular_items').update(d).eq('id', edit.id);
+      if (error) throw error;
+      await cxLog(Object.assign({}, edit, d), 'edited', null, null, { name: d.name, weight_kg: kg, quantity: qty, serial: d.serial });
+      Object.assign(edit, d);
+      cxDraw(); cxOpenItem(edit.id);
+    } else {
+      d.stage = stageKey; d.status = (cxStage(act, stageKey) || {}).label || '';
+      d.collection_id = CX.logCtx.collection_id;
+      d.org_id = orgId;
+      const { data, error } = await sb.from('circular_items').insert([d]).select().single();
+      if (error) throw error;
+      await cxLog(data, CX.logCtx.collection_id ? 'booked_in' : 'logged', null, stageKey,
+        { name: d.name, item_type: typeKey, quantity: qty, weight_kg: kg, source: d.source, collection_id: d.collection_id });
+      CX.items.unshift(data);
+      if (CX.logCtx.collection_id) await cxMarkBookedIn(CX.logCtx.collection_id);
+      cxDraw();
+      cxOpenItem(data.id, true);
+    }
+  } catch (e) {
+    alert('Could not save: ' + (e.message || e) + (/quantity|column/i.test(e.message || '') ? ' — run circular-migration-v2.sql in Supabase.' : ''));
+    btn.disabled = false; btn.textContent = 'Save';
+  }
+}
+
+// ── AI photo intake ──────────────────────────────────────────
+async function cxPhoto(ev) {
+  const file = ev.target.files && ev.target.files[0]; if (!file) return;
+  const st = $('cx-photo-status'); st.textContent = 'Reading photo…';
+  try {
+    const b64 = await cxResize(file, 1024, 0.7);
+    const act = cxAct($('cx-act').value);
+    const types = (act.item_types || []).map(t => t.key + ' = ' + t.label).join('; ');
+    const { data: { session } } = await sb.auth.getSession();
+    const res = await fetch('/api/claude', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': session ? 'Bearer ' + session.access_token : '' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6', max_tokens: 400, purpose: 'circular_intake',
+        system: 'You identify donated items for a UK reuse charity from one photo. Reply with JSON only, no other text.',
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
+          { type: 'text', text: 'Item types for this activity: ' + (types || 'none') + '.\nReturn {"item_type": one key from the list or "", "name": short description, "brand": "", "model": "", "serial": text read from any label or "", "weight_kg": estimate number, "hazards": e.g. "lithium battery" or "", "condition": short}. Only read serials you can actually see. Never guess a serial.' }
+        ] }]
+      })
+    });
+    const data = await res.json();
+    if (!res.ok || data.type === 'error') throw new Error((data.error && (data.error.message || data.error)) || 'AI unavailable');
+    const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+    const j = JSON.parse(text.replace(/```json|```/g, '').trim());
+    if (j.item_type && cxType(act, j.item_type)) { $('cx-type').value = j.item_type; cxLogType(); }
+    if (j.name) $('cx-name').value = j.name;
+    if (j.brand || j.model || j.serial) {
+      $('cx-more').open = true;
+      if (j.brand) $('cx-brand').value = j.brand;
+      if (j.model) $('cx-model').value = j.model;
+      if (j.serial) $('cx-serial').value = j.serial;
+    }
+    if (+j.weight_kg && !$('cx-kg').value) $('cx-kg').value = +j.weight_kg;
+    st.innerHTML = '✓ Filled in — check before saving' + (j.hazards ? ' · <strong style="color:var(--red)">⚠ ' + cxE(j.hazards) + '</strong>' : '') + (j.condition ? ' · ' + cxE(j.condition) : '');
+  } catch (e) {
+    st.textContent = 'Could not read photo: ' + (e.message || e);
+  }
+}
+
+function cxResize(file, max, q) {
+  return new Promise((ok, bad) => {
+    const img = new Image(); const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const s = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas'); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      ok(c.toDataURL('image/jpeg', q).split(',')[1]);
+    };
+    img.onerror = () => bad(new Error('Image could not be read'));
+    img.src = url;
+  });
+}
+
+// ── Item passport ────────────────────────────────────────────
+function cxOpenByCode(code) {
+  code = String(code || '').trim().toUpperCase().replace(/^.*#ITEM=/, '');
+  const it = CX.items.find(i => (i.passport_code || '').toUpperCase() === code);
+  if (it) cxOpenItem(it.id); else alert('No item found with code ' + code);
+}
+
+async function cxOpenItem(id, justLogged) {
+  const it = CX.items.find(i => String(i.id) === String(id)); if (!it) return;
+  const act = cxAct(it.activity_id);
+  const stage = cxStage(act, it.stage);
+  const out = cxOutcome(act, it.outcome);
+  const custom = it.custom || {};
+  const t = cxType(act, it.item_type);
+
+  let actions = '';
+  if (!it.outcome_type && act) {
+    const idx = (act.stages || []).findIndex(s => s.key === it.stage);
+    const next = act.stages[idx + 1];
+    actions =
+      '<div class="form-row"><label>Note (optional, saved with the next step)</label><input id="cx-note" placeholder="e.g. Wiped with nwipe, cert #1234 / given to J.S."/></div>' +
+      '<div class="cxp-s" style="margin-bottom:6px">Move to stage</div><div class="cxp-btns" style="margin-bottom:12px">' +
+        (next ? '<button class="btn btn-p btn-sm" onclick="cxMove(\'' + it.id + '\',\'' + next.key + '\')">→ ' + cxE(next.label) + '</button>' : '') +
+        (act.stages || []).filter(s => s.key !== it.stage && (!next || s.key !== next.key)).map(s =>
+          '<button class="btn btn-ghost btn-sm" onclick="cxMove(\'' + it.id + '\',\'' + s.key + '\')">' + cxE(s.label) + '</button>').join('') +
+      '</div>' +
+      '<div class="cxp-s" style="margin-bottom:6px">Finish as</div><div class="cxp-btns" style="margin-bottom:12px">' +
+        (act.outcomes || []).map(o => '<button class="btn btn-ghost btn-sm" onclick="cxFinish(\'' + it.id + '\',\'' + o.key + '\')">' + cxE(o.label) + '</button>').join('') +
+      '</div>' +
+      (act.links || []).filter(l => l.on === 'end' && l.to).map(l => {
+        const to = CX.acts.find(a => a.key === l.to);
+        return to && to.template !== 'collections' ? '<div class="cxp-btns" style="margin-bottom:12px"><button class="btn btn-ghost btn-sm" onclick="cxPass(\'' + it.id + '\',\'' + to.id + '\')">Pass to ' + cxE(to.icon + ' ' + to.name) + ' →</button></div>' : '';
+      }).join('');
+  }
+
+  cxModal(
+    (justLogged ? '<div style="background:#F0FDF4;border:1px solid #BBF7D0;color:#15803D;border-radius:8px;padding:8px 12px;font-size:13px;margin-bottom:12px">✓ Logged. Print the label and stick it on the item.</div>' : '') +
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px"><div>' +
+      '<h2 style="margin-bottom:4px">' + cxE(it.name) + (+it.quantity > 1 ? ' ×' + cxFmt(it.quantity) : '') + '</h2>' +
+      '<div class="cxp-s"><span class="cxp-code">' + cxE(it.passport_code) + '</span> · ' + cxE(act ? act.icon + ' ' + act.name : 'No activity') + '</div></div>' +
+      '<div class="cxp-btns"><button class="btn btn-ghost btn-sm" onclick="cxPrintLabels([\'' + it.id + '\'])">🏷️ Label</button>' +
+      '<button class="btn btn-ghost btn-sm" onclick="cxOpenLog({id:\'' + it.id + '\'})">Edit</button></div></div>' +
+    '<div style="margin:14px 0;padding:12px;background:var(--bg);border-radius:8px;font-size:13px;line-height:1.8">' +
+      '<strong>' + (it.outcome_type ? 'Finished: ' + cxE(out ? out.label : it.outcome) : 'Stage: ' + cxE(stage ? stage.label : (it.stage || 'unknown'))) + '</strong><br>' +
+      cxFmt(it.weight_kg, 1) + ' kg · ' + cxFmt(it.co2e_kg, 1) + ' kg CO₂e · £' + cxFmt(it.value_gbp) + ' value' +
+      (t ? ' <span class="cxp-s">(' + cxE(t.source || '') + ')</span>' : '') + '<br>' +
+      [it.brand, it.model].filter(Boolean).map(cxE).join(' ') + (it.serial ? ' · SN ' + cxE(it.serial) : '') +
+      (it.source ? '<br>From: ' + cxE(it.source) : '') +
+      Object.keys(custom).filter(k => k !== 'sale_gbp').map(k => {
+        const f = act && (act.fields || []).find(x => x.key === k);
+        const v = custom[k] === true ? 'Yes' : custom[k] === false ? 'No' : custom[k];
+        return '<br>' + cxE(f ? f.label : k) + ': ' + cxE(v);
+      }).join('') +
+      (+custom.sale_gbp ? '<br>Sold for £' + cxFmt(custom.sale_gbp, 2) : '') +
+    '</div>' +
+    actions +
+    '<div class="card-title" style="margin-top:6px">Chain of custody</div><div id="cx-hist" class="cxp-s">Loading…</div>' +
+    '<div class="modal-footer"><button class="btn btn-ghost" onclick="cxCloseModal()">Close</button></div>', 600);
+
+  const { data, error } = await sb.from('circular_item_events').select('*').eq('org_id', orgId).eq('item_id', String(it.id)).order('id');
+  const el = $('cx-hist'); if (!el) return;
+  if (error) { el.textContent = 'Could not load history.'; return; }
+  const evs = data || [];
+  let intact = true;
+  evs.forEach((e, i) => { if (e.prev_hash !== (i ? evs[i - 1].hash : 'GENESIS')) intact = false; });
+  const lbl = k => { const s = cxStage(act, k) || cxOutcome(act, k); return s ? s.label : (k || ''); };
+  el.innerHTML = evs.length
+    ? '<div style="margin-bottom:10px;font-weight:700;color:' + (intact ? 'var(--em)' : 'var(--red)') + '">' +
+        (intact ? '✓ Chain intact · ' + evs.length + ' linked entries' : '⚠ Chain broken — an entry does not link to the one before') + '</div>' +
+      '<div class="cxp-tl">' + evs.map(e => {
+        const d = e.data || {};
+        const what = e.action === 'moved' ? cxE(lbl(e.from_stage)) + ' → ' + cxE(lbl(e.to_stage))
+          : e.action === 'finished' ? 'Finished: ' + cxE(lbl(e.to_stage))
+          : e.action === 'passed' ? 'Passed to ' + cxE(d.to_activity || 'another activity')
+          : e.action === 'booked_in' ? 'Booked in from collection'
+          : e.action === 'logged' ? 'Logged at ' + cxE(lbl(e.to_stage))
+          : cxE(e.action);
+        return '<div class="cxp-ev"><div class="cxp-t" style="font-weight:600">' + what + '</div>' +
+          '<div class="cxp-s">' + new Date(e.occurred_at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) +
+          (e.actor_name ? ' · ' + cxE(e.actor_name) : '') + (d.note ? ' · ' + cxE(d.note) : '') +
+          (d.sale_gbp ? ' · £' + cxFmt(d.sale_gbp, 2) : '') + '</div>' +
+          '<div class="cxp-s" style="font-family:ui-monospace,monospace;font-size:10px">#' + cxE((e.hash || '').slice(0, 12)) + '</div></div>';
+      }).join('') + '</div>'
+    : 'No history recorded yet.';
+}
+
+function cxNote() { const n = $('cx-note'); return n ? n.value.trim() : ''; }
+
+async function cxMove(id, stageKey) {
+  const it = CX.items.find(i => String(i.id) === String(id)); const act = cxAct(it.activity_id);
+  const from = it.stage; const note = cxNote();
+  const d = { stage: stageKey, status: (cxStage(act, stageKey) || {}).label || '', updated_at: new Date().toISOString() };
+  const { error } = await sb.from('circular_items').update(d).eq('id', it.id);
+  if (error) { alert('Could not move: ' + error.message); return; }
+  Object.assign(it, d);
+  await cxLog(it, 'moved', from, stageKey, note ? { note } : {});
+  cxDraw(); cxOpenItem(it.id);
+}
+
+async function cxFinish(id, outKey) {
+  const it = CX.items.find(i => String(i.id) === String(id)); const act = cxAct(it.activity_id);
+  const o = cxOutcome(act, outKey); const note = cxNote();
+  const data = note ? { note } : {};
+  const custom = Object.assign({}, it.custom || {});
+  if (/sold|resold|sale/i.test(o.label)) {
+    const p = prompt('Sale price £ (leave blank if unknown)');
+    if (p === null) return;
+    if (+p) { custom.sale_gbp = +p; data.sale_gbp = +p; }
+  }
+  // Link: this outcome sends the item on to another activity
+  const link = (act.links || []).find(l => l.on === 'outcome:' + outKey && l.to);
+  const to = link && CX.acts.find(a => a.key === link.to && a.template !== 'collections');
+  if (to) {
+    await cxLog(it, 'finished', it.stage, outKey, data);
+    return cxPass(id, to.id, true);
+  }
+  const d = { outcome: outKey, outcome_type: o.type, outcome_at: new Date().toISOString(), status: o.label, custom, updated_at: new Date().toISOString() };
+  const { error } = await sb.from('circular_items').update(d).eq('id', it.id);
+  if (error) { alert('Could not save: ' + error.message); return; }
+  const from = it.stage;
+  Object.assign(it, d);
+  await cxLog(it, 'finished', from, outKey, data);
+  cxDraw(); cxOpenItem(it.id);
+}
+
+async function cxPass(id, toActId, silentNote) {
+  const it = CX.items.find(i => String(i.id) === String(id)); const to = cxAct(toActId); const fromAct = cxAct(it.activity_id);
+  const first = (to.stages || [])[0];
+  const t = cxType(to, it.item_type) || (to.item_types || []).find(x => x.label === (cxType(fromAct, it.item_type) || {}).label);
+  const f = t ? cxCalc(to, t.key, +it.quantity || 1, +it.weight_kg || 0) : { co2: it.co2e_kg, value: it.value_gbp };
+  const d = { activity_id: to.id, category: to.name, stage: first ? first.key : null, status: first ? first.label : '',
+    item_type: t ? t.key : it.item_type, co2e_kg: f.co2, value_gbp: f.value,
+    outcome: null, outcome_type: null, outcome_at: null, updated_at: new Date().toISOString() };
+  const { error } = await sb.from('circular_items').update(d).eq('id', it.id);
+  if (error) { alert('Could not pass on: ' + error.message); return; }
+  const note = silentNote ? '' : cxNote();
+  Object.assign(it, d);
+  await cxLog(it, 'passed', null, d.stage, Object.assign({ from_activity: fromAct && fromAct.name, to_activity: to.name }, note ? { note } : {}));
+  cxDraw(); cxOpenItem(it.id);
+}
+
+// ── QR labels ────────────────────────────────────────────────
+function cxPrintLabels(ids) {
+  const its = ids.map(id => CX.items.find(i => String(i.id) === String(id))).filter(Boolean);
+  const org = (typeof currentOrg !== 'undefined' && currentOrg && currentOrg.name) || 'Vorlana';
+  const w = window.open('', '_blank', 'width=480,height=640');
+  if (!w) { alert('Allow pop-ups to print labels.'); return; }
+  const labels = its.map((i, n) =>
+    '<div class="l"><div id="q' + n + '" class="q"></div><div class="t"><div class="c">' + cxE(i.passport_code) + '</div>' +
+    '<div class="n">' + cxE(i.name) + '</div><div class="o">' + cxE(org) + '<br>Scan for history</div></div></div>').join('');
+  w.document.write('<!DOCTYPE html><html><head><title>Labels</title><style>' +
+    '@page{size:62mm 29mm;margin:0}body{margin:0;font-family:Arial,sans-serif}' +
+    '.l{width:62mm;height:29mm;display:flex;align-items:center;gap:2mm;padding:1.5mm;box-sizing:border-box;page-break-after:always}' +
+    '.q{width:25mm;height:25mm;flex-shrink:0}.q img,.q canvas{width:25mm!important;height:25mm!important}' +
+    '.c{font:700 13pt ui-monospace,Menlo,monospace;letter-spacing:.5px}.n{font-size:8pt;margin:1mm 0;max-height:7mm;overflow:hidden}.o{font-size:6.5pt;color:#555}' +
+    '</style></head><body>' + labels +
+    '<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script><script>' +
+    'var urls=' + JSON.stringify(its.map(i => cxItemUrl(i.passport_code))) + ';' +
+    'urls.forEach(function(u,n){new QRCode(document.getElementById("q"+n),{text:u,width:200,height:200,correctLevel:QRCode.CorrectLevel.M});});' +
+    'setTimeout(function(){window.print();},600);<\/script></body></html>');
+  w.document.close();
+}
+
+// ── Scan ─────────────────────────────────────────────────────
+let _cxStream = null, _cxScanTimer = null;
+function cxStopScan() {
+  if (_cxScanTimer) { clearInterval(_cxScanTimer); _cxScanTimer = null; }
+  if (_cxStream) { _cxStream.getTracks().forEach(t => t.stop()); _cxStream = null; }
+}
+async function cxOpenScan() {
+  cxModal('<h2>Scan item</h2>' +
+    '<video id="cx-video" playsinline muted style="width:100%;border-radius:8px;background:#000;max-height:320px"></video>' +
+    '<div class="cxp-s" id="cx-scan-status" style="margin:8px 0">Starting camera…</div>' +
+    '<div class="form-row"><label>Or type the code</label><div style="display:flex;gap:6px"><input id="cx-code" placeholder="e.g. 3FA9C21B" style="text-transform:uppercase"/>' +
+    '<button class="btn btn-p" onclick="cxScanned($(\'cx-code\').value)">Open</button></div></div>' +
+    '<div class="modal-footer"><button class="btn btn-ghost" onclick="cxCloseModal()">Close</button></div>', 480);
+  const status = $('cx-scan-status');
+  try {
+    _cxStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    const v = $('cx-video'); v.srcObject = _cxStream; await v.play();
+    let detect;
+    if ('BarcodeDetector' in window) {
+      const bd = new BarcodeDetector({ formats: ['qr_code'] });
+      detect = async () => { const r = await bd.detect(v); return r[0] && r[0].rawValue; };
+    } else {
+      if (!window.jsQR) await new Promise((ok, bad) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js'; s.onload = ok; s.onerror = bad; document.head.appendChild(s); });
+      const c = document.createElement('canvas'); const ctx = c.getContext('2d', { willReadFrequently: true });
+      detect = async () => {
+        if (!v.videoWidth) return null;
+        c.width = v.videoWidth; c.height = v.videoHeight; ctx.drawImage(v, 0, 0);
+        const r = window.jsQR(ctx.getImageData(0, 0, c.width, c.height).data, c.width, c.height);
+        return r && r.data;
+      };
+    }
+    status.textContent = 'Point the camera at the label';
+    _cxScanTimer = setInterval(async () => {
+      try { const val = await detect(); if (val) cxScanned(val); } catch (e) { /* keep trying */ }
+    }, 350);
+  } catch (e) {
+    status.textContent = 'Camera not available — type the code instead.';
+  }
+}
+function cxScanned(val) {
+  cxStopScan();
+  const code = String(val || '').replace(/^.*#item=/i, '');
+  if (!code.trim()) return;
+  cxOpenByCode(decodeURIComponent(code));
+}
+
+// ── Collections ──────────────────────────────────────────────
+const CX_COL_STATUS = [['requested', 'Requested'], ['scheduled', 'Scheduled'], ['collected', 'Collected'], ['booked_in', 'Booked in'], ['cancelled', 'Cancelled']];
+function cxColStatusLabel(s) { const f = CX_COL_STATUS.find(x => x[0] === s); return f ? f[1] : s; }
+
+function cxCollectionsHTML() {
+  const f = CX.colFilter;
+  const list = CX.cols.filter(c => f === 'all' ? true : f === 'open' ? ['requested', 'scheduled', 'collected'].includes(c.status) : c.status === f);
+  const today = new Date().toISOString().slice(0, 10);
+  const stat = s => CX.cols.filter(c => c.status === s).length;
+  const booked = CX.items.filter(i => i.collection_id);
+  let h = '<div class="stats-grid">' +
+    statCard('Requested', stat('requested')) + statCard('Scheduled', stat('scheduled')) +
+    statCard('Collected, not booked in', stat('collected')) +
+    statCard('Items booked in', cxFmt(booked.length), cxFmt(booked.reduce((a, i) => a + (+i.weight_kg || 0), 0), 1) + ' kg') + '</div>';
+  h += '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">' +
+    '<div class="cxp-tabs" style="margin:0">' + [['open', 'Open'], ['requested', 'Requested'], ['scheduled', 'Scheduled'], ['collected', 'Collected'], ['booked_in', 'Booked in'], ['all', 'All']].map(x =>
+      '<button class="cxp-tab ' + (f === x[0] ? 'on' : '') + '" onclick="CX.colFilter=\'' + x[0] + '\';cxDraw()">' + x[1] + '</button>').join('') + '</div>' +
+    '<div style="display:flex;gap:6px;align-items:center"><input type="date" id="cx-run-date" value="' + today + '" style="width:auto"/>' +
+    '<button class="btn btn-ghost btn-sm" onclick="cxRunSheet($(\'cx-run-date\').value)">🗺️ Run sheet</button></div></div>' +
+    (list.length ? list.map(c =>
+      '<div class="cxp-list-row"><div style="flex:1;min-width:0">' +
+        '<div class="cxp-t">' + cxE(c.donor_org || c.donor_name || 'Donor') + ' <span class="cxp-code">' + cxE(c.booking_ref) + '</span> <span class="cxp-chip">' + cxE(cxColStatusLabel(c.status)) + '</span></div>' +
+        '<div class="cxp-s">' + cxE([c.address, c.postcode].filter(Boolean).join(', ')) + (c.donor_phone ? ' · ' + cxE(c.donor_phone) : '') + '</div>' +
+        '<div class="cxp-s">' + cxE(c.items_summary || '') + (c.scheduled_date ? ' · 📅 ' + new Date(c.scheduled_date).toLocaleDateString('en-GB') : c.requested_date ? ' · wants ' + new Date(c.requested_date).toLocaleDateString('en-GB') : '') + '</div>' +
+      '</div><div class="cxp-btns" style="justify-content:flex-end">' +
+        (c.status === 'requested' || c.status === 'scheduled' ? '<button class="btn btn-ghost btn-sm" onclick="cxSchedule(\'' + c.id + '\')">📅 ' + (c.status === 'scheduled' ? 'Move' : 'Schedule') + '</button>' +
+          '<button class="btn btn-p btn-sm" onclick="cxCollected(\'' + c.id + '\')">✓ Collected</button>' : '') +
+        (c.status === 'collected' || c.status === 'booked_in' ? '<button class="btn btn-p btn-sm" onclick="cxBookIn(\'' + c.id + '\')">+ Book in item</button>' : '') +
+        '<button class="btn btn-ghost btn-sm" onclick="cxOpenBooking(\'' + c.id + '\')">Edit</button>' +
+      '</div></div>').join('') : renderEmpty('No collections here.')) + '</div>';
+  return h;
+}
+
+function cxOpenBooking(id) {
+  const c = id ? CX.cols.find(x => x.id === id) : {};
+  const v = k => cxE(c[k] || '');
+  cxModal('<h2>' + (id ? 'Collection ' + cxE(c.booking_ref) : 'New collection booking') + '</h2>' +
+    '<div class="form-grid-2">' +
+      '<div class="form-row"><label>Donor type</label><select id="cb-type">' + [['household', 'Household'], ['business', 'Business'], ['council', 'Council / public body'], ['partner', 'Partner organisation'], ['site', 'Waste / collection site']].map(o =>
+        '<option value="' + o[0] + '" ' + (c.donor_type === o[0] ? 'selected' : '') + '>' + o[1] + '</option>').join('') + '</select></div>' +
+      '<div class="form-row"><label>Organisation</label><input id="cb-org" value="' + v('donor_org') + '"/></div>' +
+    '</div><div class="form-grid-2">' +
+      '<div class="form-row"><label>Contact name</label><input id="cb-name" value="' + v('donor_name') + '"/></div>' +
+      '<div class="form-row"><label>Phone</label><input id="cb-phone" value="' + v('donor_phone') + '"/></div>' +
+    '</div>' +
+    '<div class="form-row"><label>Email</label><input id="cb-email" type="email" value="' + v('donor_email') + '"/></div>' +
+    '<div class="form-grid-2"><div class="form-row"><label>Address</label><input id="cb-addr" value="' + v('address') + '"/></div>' +
+      '<div class="form-row"><label>Postcode</label><input id="cb-pc" value="' + v('postcode') + '" style="text-transform:uppercase"/></div></div>' +
+    '<div class="form-row"><label>What is being collected</label><textarea id="cb-items">' + v('items_summary') + '</textarea></div>' +
+    '<div class="form-grid-2"><div class="form-row"><label>Preferred date</label><input id="cb-req" type="date" value="' + v('requested_date') + '"/></div>' +
+      '<div class="form-row"><label>Scheduled for</label><input id="cb-sched" type="date" value="' + v('scheduled_date') + '"/></div></div>' +
+    '<div class="form-row"><label>Notes (access, parking, stairs)</label><textarea id="cb-notes">' + v('notes') + '</textarea></div>' +
+    '<div class="modal-footer">' + (id && c.status !== 'cancelled' && c.status !== 'booked_in' ? '<button class="btn btn-ghost" style="color:var(--red);margin-right:auto" onclick="cxColStatus(\'' + id + '\',\'cancelled\')">Cancel booking</button>' : '') +
+      '<button class="btn btn-ghost" onclick="cxCloseModal()">Close</button><button class="btn btn-p" id="cb-save" onclick="cxSaveBooking(' + (id ? '\'' + id + '\'' : '') + ')">Save</button></div>');
+}
+
+async function cxSaveBooking(id) {
+  const btn = $('cb-save'); btn.disabled = true;
+  const sched = $('cb-sched').value || null;
+  const d = {
+    donor_type: $('cb-type').value, donor_org: $('cb-org').value.trim() || null, donor_name: $('cb-name').value.trim() || null,
+    donor_phone: $('cb-phone').value.trim() || null, donor_email: $('cb-email').value.trim() || null,
+    address: $('cb-addr').value.trim() || null, postcode: ($('cb-pc').value || '').trim().toUpperCase() || null,
+    items_summary: $('cb-items').value.trim() || null, requested_date: $('cb-req').value || null,
+    scheduled_date: sched, notes: $('cb-notes').value.trim() || null
+  };
+  try {
+    if (id) {
+      const c = CX.cols.find(x => x.id === id);
+      if (c.status === 'requested' && sched) d.status = 'scheduled';
+      const { error } = await sb.from('circular_collections').update(d).eq('id', id); if (error) throw error;
+      Object.assign(c, d);
+    } else {
+      d.org_id = orgId; d.activity_id = (cxColAct() || {}).id || null; d.status = sched ? 'scheduled' : 'requested';
+      const { data, error } = await sb.from('circular_collections').insert([d]).select().single(); if (error) throw error;
+      CX.cols.unshift(data);
+    }
+    cxCloseModal(); CX.tab = 'collections'; cxDraw();
+  } catch (e) { alert('Could not save: ' + e.message); btn.disabled = false; }
+}
+
+async function cxColStatus(id, status, extra) {
+  const c = CX.cols.find(x => x.id === id);
+  const d = Object.assign({ status }, extra || {});
+  const { error } = await sb.from('circular_collections').update(d).eq('id', id);
+  if (error) { alert('Could not update: ' + error.message); return false; }
+  Object.assign(c, d); cxCloseModal(); cxDraw(); return true;
+}
+function cxSchedule(id) {
+  const c = CX.cols.find(x => x.id === id);
+  const d = prompt('Collection date (YYYY-MM-DD)', c.scheduled_date || c.requested_date || new Date().toISOString().slice(0, 10));
+  if (!d) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { alert('Use the format YYYY-MM-DD'); return; }
+  cxColStatus(id, 'scheduled', { scheduled_date: d });
+}
+function cxCollected(id) {
+  const by = prompt('Collected by (name or van)', cxActorName());
+  if (by === null) return;
+  const extra = { collected_by: by || null, collected_at: new Date().toISOString() };
+  const save = () => cxColStatus(id, 'collected', extra);
+  if (navigator.geolocation) navigator.geolocation.getCurrentPosition(p => { extra.lat = p.coords.latitude; extra.lng = p.coords.longitude; save(); }, save, { timeout: 5000 });
+  else save();
+}
+function cxBookIn(id) {
+  const c = CX.cols.find(x => x.id === id);
+  const colAct = cxColAct();
+  const link = colAct && (colAct.links || []).find(l => l.on === 'end' && l.to);
+  const to = link && CX.acts.find(a => a.key === link.to);
+  cxOpenLog({ collection_id: id, activity_id: to ? to.id : null, source: [c.donor_org || c.donor_name, c.booking_ref].filter(Boolean).join(' · ') });
+}
+async function cxMarkBookedIn(id) {
+  const c = CX.cols.find(x => x.id === id);
+  if (c && c.status !== 'booked_in') {
+    const { error } = await sb.from('circular_collections').update({ status: 'booked_in' }).eq('id', id);
+    if (!error) c.status = 'booked_in';
+  }
+}
+
+function cxRunSheet(date) {
+  const list = CX.cols.filter(c => c.scheduled_date === date && c.status === 'scheduled')
+    .sort((a, b) => (a.postcode || '').localeCompare(b.postcode || ''));
+  if (!list.length) { alert('No scheduled collections on that date.'); return; }
+  const w = window.open('', '_blank'); if (!w) { alert('Allow pop-ups to print the run sheet.'); return; }
+  const org = (typeof currentOrg !== 'undefined' && currentOrg && currentOrg.name) || '';
+  w.document.write('<!DOCTYPE html><html><head><title>Run sheet ' + cxE(date) + '</title><style>body{font-family:Arial,sans-serif;padding:20px;font-size:12px}' +
+    'h1{font-size:18px;margin:0 0 4px}table{width:100%;border-collapse:collapse;margin-top:14px}td,th{border:1px solid #ccc;padding:8px;text-align:left;vertical-align:top}th{background:#f3f3f3}.b{width:60px}</style></head><body>' +
+    '<h1>Collection run sheet · ' + new Date(date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }) + '</h1><div>' + cxE(org) + ' · ' + list.length + ' stops · ordered by postcode</div>' +
+    '<table><tr><th>#</th><th>Ref</th><th>Donor</th><th>Address</th><th>Items</th><th>Notes</th><th class="b">Done</th></tr>' +
+    list.map((c, i) => '<tr><td>' + (i + 1) + '</td><td>' + cxE(c.booking_ref) + '</td><td>' + cxE([c.donor_org, c.donor_name, c.donor_phone].filter(Boolean).join('<br>')) +
+      '</td><td>' + cxE([c.address, c.postcode].filter(Boolean).join(', ')) + '</td><td>' + cxE(c.items_summary || '') + '</td><td>' + cxE(c.notes || '') + '</td><td></td></tr>').join('') +
+    '</table><script>setTimeout(function(){window.print()},300)<\/script></body></html>');
+  w.document.close();
+}
+
+// ── Open an item straight from a scanned label URL (#item=CODE) ─
+(function cxHashWatch() {
+  function check() {
+    const m = (location.hash || '').match(/^#item=([^&]+)/i);
+    if (!m) return;
+    CX.pendingCode = decodeURIComponent(m[1]);
+    history.replaceState(null, '', location.pathname + location.search);
+    if (typeof go === 'function') go('circular');
+  }
+  let tries = 0;
+  const t = setInterval(() => {
+    tries++;
+    if (typeof orgId !== 'undefined' && orgId && typeof currentOrg !== 'undefined' && currentOrg && document.querySelector('.nav-btn')) {
+      clearInterval(t); setTimeout(check, 500);
+    } else if (tries > 120) clearInterval(t);
+  }, 500);
+  window.addEventListener('hashchange', check);
+})();
 
 // ─────────────────────────────────────────────────────────────
 // OUTCOMES
