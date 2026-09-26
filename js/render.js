@@ -1129,6 +1129,7 @@ async function renderCircular() {
 }
 
 function cxDraw() {
+  cxInjectPassStyle();
   const p = cxPage();
   const colAct = cxColAct();
   const acts = cxItemActs();
@@ -1137,7 +1138,8 @@ function cxDraw() {
 
   let h = '<div class="page-header"><div><div class="page-title">♻️ Circular</div>' +
     '<div class="page-sub">Every item has a passport. Every move is logged.</div></div>' +
-    '<div class="cxp-btns">' +
+    '<div class="cxp-btns" style="align-items:center">' +
+      '<div class="cxs-wrap"><input id="cxs-q" placeholder="🔍 Search ID, serial, name…" autocomplete="off" onkeyup="cxSearchInput(event)" onblur="setTimeout(()=>{const b=$(\'cxs-res\');if(b)b.innerHTML=\'\'},150)"/><div id="cxs-res" class="cxs-res"></div></div>' +
       '<button class="btn btn-ghost btn-sm" onclick="_setSection=\'circular\';go(\'settings\')">⚙️ Set up</button>' +
       '<button class="btn btn-ghost btn-sm" onclick="cxImportOpen()">⬆ Import</button>' +
       '<button class="btn btn-ghost btn-sm" onclick="cxOpenScan()">📷 Scan</button>' +
@@ -1438,6 +1440,10 @@ async function cxQuickLog(actId, kind, key) {
     CX.undo = { act: actId, ids: [r.row.id], at: Date.now(), text: r.text + ' → ' + (dest ? dest.label : ''), label: kind === 'stage' };
     Object.assign(q, { amt: '', brand: '', model: '', serial: '', name: '', status: '', newType: null, more: false });
     cxDraw(); cxUndoTimer();
+    if (kind === 'stage' && (act.fields || []).some(f => cxFieldStage(act, f) === key)) {
+      _cxPass = { id: r.row.id, action: { kind: 'move', key }, recip: 'person', personId: '', channel: '' };
+      cxOpenItem(r.row.id, true);
+    }
     const a = $('cxq-amt-' + actId); if (a && kind === 'outcome') a.focus();
   } catch (e) { q.status = e.message || String(e); q.statusErr = true; cxDraw(); q.statusErr = false; }
 }
@@ -2402,132 +2408,282 @@ function cxResize(file, max, q, limit) {
 }
 
 // ── Item passport ────────────────────────────────────────────
+// One screen per item: where it is, the next step in one tap, how it
+// left, and the chain of custody. Anything a step or outcome needs
+// (wipe certificate, PAT, who received it, sale price) is asked for
+// in a small panel right there — no browser pop-ups.
 function cxOpenByCode(code) {
   code = String(code || '').trim().toUpperCase().replace(/^.*#ITEM=/, '');
   const it = CX.items.find(i => (i.passport_code || '').toUpperCase() === code);
-  if (it) cxOpenItem(it.id); else alert('No item found with code ' + code);
+  if (it) cxOpenItem(it.id); else { const r = cxSearchItems(code); if (r.length === 1) cxOpenItem(r[0].id); else alert('No item found for ' + code); }
 }
+
+// Which step asks for each extra field (set in Settings; sensible defaults)
+function cxFieldStage(act, f) {
+  if (f.ask_at === '-') return '';
+  if (f.ask_at) return f.ask_at;
+  const st = act.stages || [];
+  const find = rx => (st.find(s => rx.test(s.label)) || {}).key || '';
+  const k = (f.key + ' ' + f.label).toLowerCase();
+  if (/wipe|erase|data/.test(k)) return find(/wip|eras|data/i);
+  if (/pat|test|safety/.test(k)) return find(/test|pat|safety|check/i);
+  if (/fire/.test(k)) return find(/check|inspect/i);
+  if (/borrow|due/.test(k)) return find(/loan/i);
+  if (/frame|serial/.test(k)) return (st[0] || {}).key || '';
+  return '';
+}
+// What an outcome needs to ask for
+function cxOutcomeKind(o) {
+  if (!o) return '';
+  if (/sold|resold|sale/i.test(o.label)) return 'sale';
+  if (o.type === 'loan' || /loan/i.test(o.label)) return 'loan';
+  if (/donat|rehom|given|gift|shared|food bank|partner/i.test(o.label) || (o.type === 'reuse' && !/swap/i.test(o.label))) return 'recipient';
+  return '';
+}
+function cxPersonName(p) { return ((p.first_name || '') + ' ' + (p.last_name || '')).trim() || 'Unnamed'; }
+
+let _cxPass = null;   // { id, action: {kind:'move'|'finish', key}, recip: 'person'|'org'|'none', personId, channel }
 
 async function cxOpenItem(id, justLogged) {
   const it = CX.items.find(i => String(i.id) === String(id)); if (!it) return;
-  const act = cxAct(it.activity_id);
-  const stage = cxStage(act, it.stage);
-  const out = cxOutcome(act, it.outcome);
+  if (!_cxPass || _cxPass.id !== it.id) _cxPass = { id: it.id, action: null, recip: 'person', personId: '', channel: '' };
+  const act = cxAct(it.activity_id), e = cxE;
   const custom = it.custom || {};
   const t = cxType(act, it.item_type);
+  const out = cxOutcome(act, it.outcome);
+  const stages = (act && act.stages) || [];
+  const idx = stages.findIndex(s => s.key === it.stage);
+  const tracked = act && circMode(act) === 'tracked';
+  cxInjectPassStyle();
 
+  // Progress rail (tracked) or status line
+  const rail = tracked && stages.length
+    ? '<div class="pp-rail">' + stages.map((s, i) => '<div class="pp-step ' + (it.outcome_type ? 'done' : i < idx ? 'done' : i === idx ? 'now' : '') + '"><span></span><em>' + e(s.label) + '</em></div>').join('') +
+      '<div class="pp-step ' + (it.outcome_type ? 'now' : '') + '"><span></span><em>' + e(out ? out.label : 'Out') + '</em></div></div>'
+    : '';
+
+  // Details
+  const det = [];
+  if (it.brand || it.model) det.push(['Make', [it.brand, it.model].filter(Boolean).join(' ')]);
+  if (it.serial) det.push(['Serial', it.serial]);
+  det.push(['Weight', cxFmt(it.weight_kg, 1) + ' kg']);
+  if (+it.co2e_kg) det.push(['CO₂e', cxFmt(it.co2e_kg, 1) + ' kg']);
+  if (+it.value_gbp) det.push(['Value', '£' + cxFmt(it.value_gbp)]);
+  if (it.source) det.push(['From', it.source]);
+  if (it.event_id && cxSessionLabel(it.event_id)) det.push(['Session', cxSessionLabel(it.event_id)]);
+  (act && act.fields || []).forEach(f => { const v = custom[f.key]; if (v != null && v !== '') det.push([f.label, v === true ? 'Yes' : v === false ? 'No' : v]); });
+  if (it.recipient_participant_id) { const p = (DB.participants || []).find(x => String(x.id) === String(it.recipient_participant_id)); det.push(['Given to', p ? cxPersonName(p) : 'A person we support']); }
+  else if (custom.recipient_org) det.push(['Given to', custom.recipient_org]);
+  if (+custom.sale_gbp) det.push(['Sold for', '£' + cxFmt(custom.sale_gbp, 2) + (custom.sale_channel ? ' · ' + custom.sale_channel : '')]);
+  if (custom.borrower) det.push(['Borrower', custom.borrower + (custom.due_back ? ' · due ' + new Date(custom.due_back).toLocaleDateString('en-GB') : '')]);
+
+  // Actions
   let actions = '';
-  if (!it.outcome_type && act) {
-    const idx = (act.stages || []).findIndex(s => s.key === it.stage);
-    const next = act.stages[idx + 1];
-    actions =
-      '<div class="form-row"><label>Note (optional, saved with the next step)</label><input id="cx-note" placeholder="e.g. Wiped with nwipe, cert #1234 / given to J.S."/></div>' +
-      '<div class="cxp-s" style="margin-bottom:6px">Move to stage</div><div class="cxp-btns" style="margin-bottom:12px">' +
-        (next ? '<button class="btn btn-p btn-sm" onclick="cxMove(\'' + it.id + '\',\'' + next.key + '\')">→ ' + cxE(next.label) + '</button>' : '') +
-        (act.stages || []).filter(s => s.key !== it.stage && (!next || s.key !== next.key)).map(s =>
-          '<button class="btn btn-ghost btn-sm" onclick="cxMove(\'' + it.id + '\',\'' + s.key + '\')">' + cxE(s.label) + '</button>').join('') +
-      '</div>' +
-      '<div class="cxp-s" style="margin-bottom:6px">Finish as</div><div class="cxp-btns" style="margin-bottom:12px">' +
-        (act.outcomes || []).map(o => '<button class="btn btn-ghost btn-sm" onclick="cxFinish(\'' + it.id + '\',\'' + o.key + '\')">' + cxE(o.label) + '</button>').join('') +
-      '</div>' +
-      (act.links || []).filter(l => l.on === 'end' && l.to).map(l => {
-        const to = CX.acts.find(a => a.key === l.to);
-        return to && to.template !== 'collections' ? '<div class="cxp-btns" style="margin-bottom:12px"><button class="btn btn-ghost btn-sm" onclick="cxPass(\'' + it.id + '\',\'' + to.id + '\')">Pass to ' + cxE(to.icon + ' ' + to.name) + ' →</button></div>' : '';
-      }).join('');
+  if (act && !it.outcome_type) {
+    const next = stages[idx + 1];
+    const others = stages.filter((s, i) => i !== idx && (!next || s.key !== next.key));
+    actions = '<div class="pp-sec">' +
+      (next ? '<button class="pp-next" onclick="cxPassAct(\'move\',\'' + e(next.key) + '\')">Move to ' + e(next.label) + ' →</button>' : '') +
+      (others.length ? '<div class="pp-mini">' + (next ? 'or ' : 'Move to ') + others.map(s => '<a href="#" onclick="cxPassAct(\'move\',\'' + e(s.key) + '\');return false">' + e(s.label) + '</a>').join(' · ') + '</div>' : '') +
+      '<div class="pp-lbl">' + (tracked ? 'Finished with it?' : 'Where did it go?') + '</div><div class="pp-outs">' +
+        (act.outcomes || []).map(o => '<button class="pp-out ' + (_cxPass.action && _cxPass.action.key === o.key ? 'on' : '') + '" onclick="cxPassAct(\'finish\',\'' + e(o.key) + '\')">' + e(o.label) + '</button>').join('') + '</div>' +
+      (act.links || []).filter(l => l.on === 'end' && l.to).map(l => { const to = CX.acts.find(a => a.key === l.to); return to && to.template !== 'collections' ? '<div class="pp-mini"><a href="#" onclick="cxPass(\'' + it.id + '\',\'' + to.id + '\');return false">Pass to ' + e(to.icon + ' ' + to.name) + ' →</a></div>' : ''; }).join('') +
+      '<div id="pp-panel">' + cxPassPanelHTML(it, act) + '</div></div>';
+  } else if (it.outcome_type) {
+    actions = '<div class="pp-sec pp-done"><span>✓ ' + e(out ? out.label : it.status) + (it.outcome_at ? ' · ' + new Date(it.outcome_at).toLocaleDateString('en-GB') : '') + '</span>' +
+      '<a href="#" onclick="cxReopen(\'' + it.id + '\');return false">Undo</a></div>';
   }
 
   cxModal(
-    (justLogged ? '<div style="background:#F0FDF4;border:1px solid #BBF7D0;color:#15803D;border-radius:8px;padding:8px 12px;font-size:13px;margin-bottom:12px">✓ Logged. Print the label and stick it on the item.</div>' : '') +
-    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px"><div>' +
-      '<h2 style="margin-bottom:4px">' + cxE(it.name) + (+it.quantity > 1 ? ' ×' + cxFmt(it.quantity) : '') + '</h2>' +
-      '<div class="cxp-s"><span class="cxp-code">' + cxE(it.passport_code) + '</span> · ' + cxE(act ? act.icon + ' ' + act.name : 'No activity') + '</div></div>' +
-      '<div class="cxp-btns"><button class="btn btn-ghost btn-sm" onclick="cxPrintLabels([\'' + it.id + '\'])">🏷️ Label</button>' +
-      '<button class="btn btn-ghost btn-sm" onclick="cxOpenLog({id:\'' + it.id + '\'})">Edit</button></div></div>' +
-    '<div style="margin:14px 0;padding:12px;background:var(--bg);border-radius:8px;font-size:13px;line-height:1.8">' +
-      '<strong>' + (it.outcome_type ? 'Finished: ' + cxE(out ? out.label : it.outcome) : 'Stage: ' + cxE(stage ? stage.label : (it.stage || 'unknown'))) + '</strong><br>' +
-      cxFmt(it.weight_kg, 1) + ' kg · ' + cxFmt(it.co2e_kg, 1) + ' kg CO₂e · £' + cxFmt(it.value_gbp) + ' value' +
-      (t ? ' <span class="cxp-s">(' + cxE(t.source || '') + ')</span>' : '') + '<br>' +
-      [it.brand, it.model].filter(Boolean).map(cxE).join(' ') + (it.serial ? ' · SN ' + cxE(it.serial) : '') +
-      (it.source ? '<br>From: ' + cxE(it.source) : '') +
-      (it.event_id && cxSessionLabel(it.event_id) ? '<br>Session: ' + cxE(cxSessionLabel(it.event_id)) : '') +
-      Object.keys(custom).filter(k => k !== 'sale_gbp').map(k => {
-        const f = act && (act.fields || []).find(x => x.key === k);
-        const v = custom[k] === true ? 'Yes' : custom[k] === false ? 'No' : custom[k];
-        return '<br>' + cxE(f ? f.label : k) + ': ' + cxE(v);
-      }).join('') +
-      (+custom.sale_gbp ? '<br>Sold for £' + cxFmt(custom.sale_gbp, 2) : '') +
-    '</div>' +
-    actions +
-    '<div class="card-title" style="margin-top:6px">Chain of custody</div><div id="cx-hist" class="cxp-s">Loading…</div>' +
-    '<div class="modal-footer"><button class="btn btn-ghost" onclick="cxCloseModal()">Close</button></div>', 600);
+    (justLogged ? '<div class="pp-ok">✓ Logged — print the label and stick it on the item.</div>' : '') +
+    '<div class="pp-head"><div style="min-width:0"><div class="pp-code">' + e(it.passport_code || '') + '</div>' +
+      '<div class="pp-name">' + e(it.name) + (+it.quantity > 1 ? ' ×' + cxFmt(it.quantity) : '') + '</div>' +
+      '<div class="cxp-s">' + e(act ? act.icon + ' ' + act.name : '') + (t ? ' · ' + e(t.label) : '') + (it.stage && !it.outcome_type ? ' · ' + cxDays(it.updated_at) + ' days at this step' : '') + '</div></div>' +
+      '<div class="pp-tools"><button class="btn btn-ghost btn-sm" title="Print label" onclick="cxPrintLabels([\'' + it.id + '\'])">🏷️</button><button class="btn btn-ghost btn-sm" title="Edit details" onclick="cxOpenLog({id:\'' + it.id + '\'})">✎</button><button class="btn btn-ghost btn-sm" title="Close" onclick="cxCloseModal()">✕</button></div></div>' +
+    rail + actions +
+    '<div class="pp-grid">' + det.map(d => '<div><span>' + e(d[0]) + '</span><b>' + e(d[1]) + '</b></div>').join('') + '</div>' +
+    '<details class="pp-hist" id="pp-hist-wrap"><summary id="pp-hist-sum">Chain of custody</summary><div id="cx-hist" class="cxp-s">Loading…</div></details>', 560);
 
   const { data, error } = await sb.from('circular_item_events').select('*').eq('org_id', orgId).eq('item_id', String(it.id)).order('id');
   const el = $('cx-hist'); if (!el) return;
   if (error) { el.textContent = 'Could not load history.'; return; }
   const evs = data || [];
   let intact = true;
-  evs.forEach((e, i) => { if (e.prev_hash !== (i ? evs[i - 1].hash : 'GENESIS')) intact = false; });
+  evs.forEach((ev, i) => { if (ev.prev_hash !== (i ? evs[i - 1].hash : 'GENESIS')) intact = false; });
+  const sum = $('pp-hist-sum');
+  if (sum) sum.innerHTML = 'Chain of custody <span style="color:' + (intact ? 'var(--em)' : 'var(--red)') + ';font-weight:700">' + (intact ? '✓ intact' : '⚠ broken') + '</span> · ' + evs.length + ' entr' + (evs.length === 1 ? 'y' : 'ies');
   const lbl = k => { const s = cxStage(act, k) || cxOutcome(act, k); return s ? s.label : (k || ''); };
-  el.innerHTML = evs.length
-    ? '<div style="margin-bottom:10px;font-weight:700;color:' + (intact ? 'var(--em)' : 'var(--red)') + '">' +
-        (intact ? '✓ Chain intact · ' + evs.length + ' linked entries' : '⚠ Chain broken — an entry does not link to the one before') + '</div>' +
-      '<div class="cxp-tl">' + evs.map(e => {
-        const d = e.data || {};
-        const what = e.action === 'moved' ? cxE(lbl(e.from_stage)) + ' → ' + cxE(lbl(e.to_stage))
-          : e.action === 'finished' ? 'Finished: ' + cxE(lbl(e.to_stage))
-          : e.action === 'passed' ? 'Passed to ' + cxE(d.to_activity || 'another activity')
-          : e.action === 'booked_in' ? 'Booked in from collection'
-          : e.action === 'logged' ? 'Logged at ' + cxE(lbl(e.to_stage))
-          : cxE(e.action);
-        return '<div class="cxp-ev"><div class="cxp-t" style="font-weight:600">' + what + '</div>' +
-          '<div class="cxp-s">' + new Date(e.occurred_at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) +
-          (e.actor_name ? ' · ' + cxE(e.actor_name) : '') + (d.note ? ' · ' + cxE(d.note) : '') +
-          (d.sale_gbp ? ' · £' + cxFmt(d.sale_gbp, 2) : '') + '</div>' +
-          '<div class="cxp-s" style="font-family:ui-monospace,monospace;font-size:10px">#' + cxE((e.hash || '').slice(0, 12)) + '</div></div>';
-      }).join('') + '</div>'
-    : 'No history recorded yet.';
+  el.innerHTML = evs.length ? '<div class="cxp-tl">' + evs.map(ev => {
+    const d = ev.data || {};
+    const what = ev.action === 'moved' ? e(lbl(ev.from_stage)) + ' → ' + e(lbl(ev.to_stage))
+      : ev.action === 'finished' ? 'Finished: ' + e(lbl(ev.to_stage))
+      : ev.action === 'reopened' ? 'Reopened'
+      : ev.action === 'details' ? 'Details added at ' + e(lbl(ev.to_stage))
+      : ev.action === 'passed' ? 'Passed to ' + e(d.to_activity || 'another activity')
+      : ev.action === 'booked_in' ? 'Booked in from collection'
+      : ev.action === 'imported' ? 'Imported from ' + e(d.file || 'a file')
+      : ev.action === 'logged' || ev.action === 'tallied' ? 'Logged' + (ev.to_stage ? ' at ' + e(lbl(ev.to_stage)) : '')
+      : e(ev.action);
+    const extra = Object.keys(d.fields || {}).map(k => { const f = act && (act.fields || []).find(x => x.key === k); const v = d.fields[k]; return e(f ? f.label : k) + ': ' + e(v === true ? 'Yes' : v === false ? 'No' : v); });
+    if (d.recipient) extra.push('to ' + e(d.recipient));
+    if (d.sale_gbp) extra.push('£' + cxFmt(d.sale_gbp, 2) + (d.sale_channel ? ' via ' + e(d.sale_channel) : ''));
+    if (d.note) extra.push(e(d.note));
+    return '<div class="cxp-ev"><div class="cxp-t" style="font-weight:600">' + what + '</div>' +
+      '<div class="cxp-s">' + new Date(ev.occurred_at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) + (ev.actor_name ? ' · ' + e(ev.actor_name) : '') + (extra.length ? ' · ' + extra.join(' · ') : '') + '</div>' +
+      '<div class="cxp-s" style="font-family:ui-monospace,monospace;font-size:10px">#' + e((ev.hash || '').slice(0, 12)) + '</div></div>';
+  }).join('') + '</div>' : 'No history recorded yet.';
 }
 
-function cxNote() { const n = $('cx-note'); return n ? n.value.trim() : ''; }
+// The panel under the buttons — only shown when a choice needs details
+function cxPassPanelHTML(it, act) {
+  const a = _cxPass.action; if (!a) return '';
+  const e = cxE, custom = it.custom || {};
+  let body = '', title = '';
+  if (a.kind === 'move') {
+    const s = cxStage(act, a.key); title = (a.key === it.stage ? 'Details for ' : 'Move to ') + (s ? s.label : '');
+    body = (act.fields || []).filter(f => cxFieldStage(act, f) === a.key).map(f => {
+      const id = 'pp-f-' + f.key, v = custom[f.key];
+      if (f.type === 'yesno') return '<div class="pp-field"><label>' + e(f.label) + '</label><div class="pp-seg" data-for="' + id + '">' +
+        ['Yes', 'No'].map(x => '<button type="button" class="' + ((v === true && x === 'Yes') || (v === false && x === 'No') ? 'on' : '') + '" onclick="this.parentNode.querySelectorAll(\'button\').forEach(b=>b.classList.remove(\'on\'));this.classList.add(\'on\');$(\'' + id + '\').value=\'' + x.toLowerCase() + '\'">' + (x === 'Yes' ? '✓ Pass / Yes' : '✗ Fail / No') + '</button>').join('') +
+        '</div><input type="hidden" id="' + id + '" value="' + (v === true ? 'yes' : v === false ? 'no' : '') + '"/></div>';
+      return '<div class="pp-field"><label>' + e(f.label) + '</label><input id="' + id + '" type="' + (f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text') + '" value="' + e(v == null ? '' : v) + '"/></div>';
+    }).join('');
+  } else {
+    const o = cxOutcome(act, a.key); title = o ? o.label : '';
+    const kind = cxOutcomeKind(o);
+    if (kind === 'sale') {
+      body = '<div class="pp-field"><label>Price</label><div class="pp-money"><span>£</span><input id="pp-price" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00"/></div></div>' +
+        '<div class="pp-field"><label>Sold through</label><div class="pp-chips">' + ['Shop', 'Online', 'eBay', 'Marketplace', 'Event', 'Other'].map(c => '<button type="button" class="' + (_cxPass.channel === c ? 'on' : '') + '" onclick="_cxPass.channel=\'' + c + '\';this.parentNode.querySelectorAll(\'button\').forEach(b=>b.classList.remove(\'on\'));this.classList.add(\'on\')">' + c + '</button>').join('') + '</div></div>';
+    } else if (kind === 'recipient' || kind === 'loan') {
+      const r = _cxPass.recip;
+      body = '<div class="pp-field"><label>' + (kind === 'loan' ? 'Borrowed by' : 'Who received it?') + '</label><div class="pp-seg">' +
+        [['person', 'Someone we support'], ['org', 'An organisation'], ['none', 'Not recorded']].map(x => '<button type="button" class="' + (r === x[0] ? 'on' : '') + '" onclick="cxPassRecip(\'' + x[0] + '\')">' + x[1] + '</button>').join('') + '</div></div>' +
+        (r === 'person' ? '<div class="pp-field" style="position:relative"><input id="pp-person" placeholder="Start typing a name…" autocomplete="off" oninput="cxPersonSearch(this.value)" value="' + e(_cxPass.personId ? cxPersonName((DB.participants || []).find(p => String(p.id) === String(_cxPass.personId)) || {}) : '') + '"/><div id="pp-person-list" class="pp-drop"></div>' +
+          '<div class="cxp-s" style="margin-top:4px">Links it to their record, so it shows in their support and outcomes.</div></div>' : '') +
+        (r === 'org' ? '<div class="pp-field"><input id="pp-org" list="pp-orgs" placeholder="e.g. Ealing Foodbank"/><datalist id="pp-orgs">' + cxKnownOrgs().map(x => '<option value="' + e(x) + '">').join('') + '</datalist></div>' : '') +
+        (kind === 'loan' ? '<div class="pp-field"><label>Due back</label><input id="pp-due" type="date"/></div>' : '');
+    }
+  }
+  return '<div class="pp-panel"><div class="pp-panel-h">' + e(title) + '</div>' + body +
+    '<div class="pp-field"><input id="pp-note" placeholder="Note (optional)"/></div>' +
+    '<div class="pp-panel-f"><a href="#" onclick="_cxPass.action=null;cxOpenItem(\'' + it.id + '\');return false">Cancel</a><button class="btn btn-p" id="pp-confirm" onclick="cxPassConfirm()">Confirm</button></div></div>';
+}
+function cxKnownOrgs() {
+  const s = new Set();
+  CX.items.forEach(i => { if (i.custom && i.custom.recipient_org) s.add(i.custom.recipient_org); });
+  (DB.funders || []).forEach(f => f.name && s.add(f.name));
+  return Array.from(s).slice(0, 50);
+}
+function cxPassRecip(r) { _cxPass.recip = r; _cxPass.personId = ''; const it = CX.items.find(i => i.id === _cxPass.id); $('pp-panel').innerHTML = cxPassPanelHTML(it, cxAct(it.activity_id)); }
+function cxPersonSearch(q) {
+  const box = $('pp-person-list'); if (!box) return;
+  _cxPass.personId = '';
+  q = String(q || '').toLowerCase().trim();
+  if (q.length < 2) { box.innerHTML = ''; return; }
+  const hits = (DB.participants || []).filter(p => cxPersonName(p).toLowerCase().includes(q)).slice(0, 6);
+  box.innerHTML = hits.length ? hits.map(p => '<div onclick="_cxPass.personId=\'' + cxE(String(p.id)) + '\';$(\'pp-person\').value=this.textContent;$(\'pp-person-list\').innerHTML=\'\'">' + cxE(cxPersonName(p)) + '</div>').join('')
+    : '<div class="cxp-s" style="cursor:default">No match — pick "An organisation" or "Not recorded"</div>';
+}
 
-async function cxMove(id, stageKey) {
+// Tap a step or outcome: go straight through when nothing is needed
+function cxPassAct(kind, key) {
+  const it = CX.items.find(i => i.id === _cxPass.id), act = cxAct(it.activity_id);
+  let needs = false;
+  if (kind === 'move') needs = (act.fields || []).some(f => cxFieldStage(act, f) === key);
+  else needs = !!cxOutcomeKind(cxOutcome(act, key));
+  if (!needs) return kind === 'move' ? cxMove(it.id, key) : cxFinish(it.id, key, {});
+  _cxPass.action = { kind, key }; _cxPass.recip = 'person'; _cxPass.personId = ''; _cxPass.channel = '';
+  cxOpenItem(it.id);
+  setTimeout(() => { const f = document.querySelector('#pp-panel input:not([type=hidden])'); if (f) f.focus(); }, 30);
+}
+
+async function cxPassConfirm() {
+  const it = CX.items.find(i => i.id === _cxPass.id), act = cxAct(it.activity_id), a = _cxPass.action;
+  const btn = $('pp-confirm'); if (btn) btn.disabled = true;
+  const note = ($('pp-note') || {}).value || '';
+  if (a.kind === 'move') {
+    const fields = {};
+    (act.fields || []).filter(f => cxFieldStage(act, f) === a.key).forEach(f => {
+      const el = $('pp-f-' + f.key); if (!el) return;
+      let v = el.value;
+      if (f.type === 'yesno') v = v === 'yes' ? true : v === 'no' ? false : null;
+      else if (f.type === 'number') v = v === '' ? null : +v;
+      if (v !== '' && v != null) fields[f.key] = v;
+    });
+    return cxMove(it.id, a.key, { note, fields });
+  }
+  const o = cxOutcome(act, a.key), kind = cxOutcomeKind(o), extra = { note };
+  if (kind === 'sale') { const p = +(($('pp-price') || {}).value || 0); if (p) extra.sale_gbp = p; if (_cxPass.channel) extra.sale_channel = _cxPass.channel; }
+  if (kind === 'recipient' || kind === 'loan') {
+    if (_cxPass.recip === 'person') {
+      if (!_cxPass.personId && ($('pp-person') || {}).value) { alert('Pick the person from the list, or choose "An organisation" / "Not recorded".'); if (btn) btn.disabled = false; return; }
+      if (_cxPass.personId) extra.personId = _cxPass.personId;
+    }
+    if (_cxPass.recip === 'org') { const v = (($('pp-org') || {}).value || '').trim(); if (v) extra.org = v; }
+    if (kind === 'loan' && $('pp-due') && $('pp-due').value) extra.due_back = $('pp-due').value;
+  }
+  return cxFinish(it.id, a.key, extra);
+}
+
+async function cxMove(id, stageKey, opt) {
+  opt = opt || {};
   const it = CX.items.find(i => String(i.id) === String(id)); const act = cxAct(it.activity_id);
-  const from = it.stage; const note = cxNote();
-  const d = { stage: stageKey, status: (cxStage(act, stageKey) || {}).label || '', updated_at: new Date().toISOString() };
+  const from = it.stage;
+  const custom = Object.assign({}, it.custom || {}, opt.fields || {});
+  const d = { stage: stageKey, status: (cxStage(act, stageKey) || {}).label || '', custom, updated_at: new Date().toISOString() };
   const { error } = await sb.from('circular_items').update(d).eq('id', it.id);
   if (error) { alert('Could not move: ' + error.message); return; }
   Object.assign(it, d);
-  await cxLog(it, 'moved', from, stageKey, note ? { note } : {});
+  const data = {}; if (opt.note) data.note = opt.note; if (opt.fields && Object.keys(opt.fields).length) data.fields = opt.fields;
+  await cxLog(it, from === stageKey ? 'details' : 'moved', from, stageKey, data);
+  _cxPass.action = null;
   cxDraw(); cxOpenItem(it.id);
 }
 
-async function cxFinish(id, outKey) {
+async function cxFinish(id, outKey, extra) {
+  extra = extra || {};
   const it = CX.items.find(i => String(i.id) === String(id)); const act = cxAct(it.activity_id);
-  const o = cxOutcome(act, outKey); const note = cxNote();
-  const data = note ? { note } : {};
+  const o = cxOutcome(act, outKey);
+  const data = {};
+  if (extra.note) data.note = extra.note;
   const custom = Object.assign({}, it.custom || {});
-  if (/sold|resold|sale/i.test(o.label)) {
-    const p = prompt('Sale price £ (leave blank if unknown)');
-    if (p === null) return;
-    if (+p) { custom.sale_gbp = +p; data.sale_gbp = +p; }
-  }
-  // Link: this outcome sends the item on to another activity
+  const d = {};
+  if (extra.sale_gbp) { custom.sale_gbp = extra.sale_gbp; data.sale_gbp = extra.sale_gbp; }
+  if (extra.sale_channel) { custom.sale_channel = extra.sale_channel; data.sale_channel = extra.sale_channel; }
+  if (extra.personId) { d.recipient_participant_id = String(extra.personId); const p = (DB.participants || []).find(x => String(x.id) === String(extra.personId)); data.recipient = p ? cxPersonName(p) : 'a person we support'; }
+  if (extra.org) { custom.recipient_org = extra.org; data.recipient = extra.org; }
+  if (extra.due_back) { custom.due_back = extra.due_back; data.due_back = extra.due_back; }
+  if (extra.personId && cxOutcomeKind(o) === 'loan') { const p = (DB.participants || []).find(x => String(x.id) === String(extra.personId)); if (p) custom.borrower = cxPersonName(p); }
+  if (extra.org && cxOutcomeKind(o) === 'loan') custom.borrower = extra.org;
+  // Link: this outcome hands the item to another activity
   const link = (act.links || []).find(l => l.on === 'outcome:' + outKey && l.to);
   const to = link && CX.acts.find(a => a.key === link.to && a.template !== 'collections');
-  if (to) {
-    await cxLog(it, 'finished', it.stage, outKey, data);
-    return cxPass(id, to.id, true);
-  }
-  const d = { outcome: outKey, outcome_type: o.type, outcome_at: new Date().toISOString(), status: o.label, custom, updated_at: new Date().toISOString() };
+  if (to) { await cxLog(it, 'finished', it.stage, outKey, data); _cxPass.action = null; return cxPass(id, to.id, true); }
+  Object.assign(d, { outcome: outKey, outcome_type: o.type, outcome_at: new Date().toISOString(), status: o.label, custom, updated_at: new Date().toISOString() });
   const { error } = await sb.from('circular_items').update(d).eq('id', it.id);
-  if (error) { alert('Could not save: ' + error.message); return; }
+  if (error) { alert('Could not save: ' + error.message); const b = $('pp-confirm'); if (b) b.disabled = false; return; }
   const from = it.stage;
   Object.assign(it, d);
   await cxLog(it, 'finished', from, outKey, data);
+  _cxPass.action = null;
   cxDraw(); cxOpenItem(it.id);
 }
 
-async function cxPass(id, toActId, silentNote) {
+async function cxReopen(id) {
+  const it = CX.items.find(i => String(i.id) === String(id)); if (!it) return;
+  const act = cxAct(it.activity_id);
+  const custom = Object.assign({}, it.custom || {}); delete custom.sale_gbp; delete custom.sale_channel; delete custom.recipient_org; delete custom.due_back; delete custom.borrower;
+  const back = it.stage || ((act.stages || []).slice(-1)[0] || {}).key || null;
+  const d = { outcome: null, outcome_type: null, outcome_at: null, recipient_participant_id: null, custom, stage: back, status: (cxStage(act, back) || {}).label || '', updated_at: new Date().toISOString() };
+  const { error } = await sb.from('circular_items').update(d).eq('id', it.id);
+  if (error) { alert('Could not undo: ' + error.message); return; }
+  const was = it.outcome;
+  Object.assign(it, d);
+  await cxLog(it, 'reopened', was, back, {});
+  cxDraw(); cxOpenItem(it.id);
+}
+
+async function cxPass(id, toActId, silent) {
   const it = CX.items.find(i => String(i.id) === String(id)); const to = cxAct(toActId); const fromAct = cxAct(it.activity_id);
   const first = (to.stages || [])[0];
   const t = cxType(to, it.item_type) || (to.item_types || []).find(x => x.label === (cxType(fromAct, it.item_type) || {}).label);
@@ -2537,10 +2693,103 @@ async function cxPass(id, toActId, silentNote) {
     outcome: null, outcome_type: null, outcome_at: null, updated_at: new Date().toISOString() };
   const { error } = await sb.from('circular_items').update(d).eq('id', it.id);
   if (error) { alert('Could not pass on: ' + error.message); return; }
-  const note = silentNote ? '' : cxNote();
   Object.assign(it, d);
-  await cxLog(it, 'passed', null, d.stage, Object.assign({ from_activity: fromAct && fromAct.name, to_activity: to.name }, note ? { note } : {}));
+  await cxLog(it, 'passed', null, d.stage, { from_activity: fromAct && fromAct.name, to_activity: to.name });
   cxDraw(); cxOpenItem(it.id);
+}
+
+function cxInjectPassStyle() {
+  if (document.getElementById('pp-style')) return;
+  const st = document.createElement('style'); st.id = 'pp-style';
+  st.textContent = `
+.pp-ok{background:#F0FDF4;border:1px solid #BBF7D0;color:#15803D;border-radius:8px;padding:8px 12px;font-size:13px;margin-bottom:12px}
+.pp-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:12px}
+.pp-code{font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:700;color:var(--em);letter-spacing:.5px}
+.pp-name{font-size:19px;font-weight:700;color:var(--txt);margin:2px 0}
+.pp-tools{display:flex;gap:4px;flex-shrink:0}
+.pp-rail{display:flex;margin:4px 0 16px;overflow-x:auto}
+.pp-step{flex:1;min-width:64px;position:relative;text-align:center}
+.pp-step span{display:block;width:12px;height:12px;border-radius:50%;background:var(--border);margin:0 auto 5px;position:relative;z-index:1}
+.pp-step:before{content:'';position:absolute;top:5px;left:-50%;width:100%;height:2px;background:var(--border)}
+.pp-step:first-child:before{display:none}
+.pp-step.done span,.pp-step.done:before,.pp-step.now:before{background:var(--em)}
+.pp-step.now span{background:var(--em);box-shadow:0 0 0 4px rgba(31,111,109,.18)}
+.pp-step em{font-style:normal;font-size:10.5px;color:var(--txt3);display:block;line-height:1.2}
+.pp-step.now em{color:var(--txt);font-weight:700}
+.pp-sec{border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:14px 0;margin-bottom:14px}
+.pp-next{width:100%;height:50px;border-radius:12px;border:none;background:var(--em);color:#fff;font-size:15px;font-weight:700}
+.pp-mini{font-size:12px;color:var(--txt3);text-align:center;margin:8px 0 2px}
+.pp-mini a{color:var(--txt2);font-weight:600}
+.pp-lbl{font-size:12px;color:var(--txt3);margin:14px 0 6px}
+.pp-outs{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px}
+.pp-out{height:44px;border-radius:10px;border:1px solid var(--border);background:var(--surface);font-size:13px;font-weight:600;color:var(--txt)}
+.pp-out.on{border:2px solid var(--em);color:var(--em)}
+.pp-panel{background:var(--bg);border-radius:12px;padding:12px;margin-top:12px}
+.pp-panel-h{font-size:14px;font-weight:700;margin-bottom:10px}
+.pp-field{margin-bottom:10px}
+.pp-field label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;font-weight:600;margin-bottom:5px}
+.pp-seg{display:flex;gap:4px;flex-wrap:wrap}
+.pp-seg button,.pp-chips button{border:1px solid var(--border);background:var(--surface);border-radius:18px;padding:7px 12px;font-size:12.5px;color:var(--txt2)}
+.pp-seg button.on,.pp-chips button.on{background:var(--em);border-color:var(--em);color:#fff;font-weight:600}
+.pp-chips{display:flex;gap:4px;flex-wrap:wrap}
+.pp-money{display:flex;align-items:center;gap:6px}.pp-money span{font-size:20px;font-weight:700;color:var(--txt3)}.pp-money input{font-size:20px;font-weight:700}
+.pp-drop{position:absolute;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.08);z-index:5}
+.pp-drop:empty{display:none}
+.pp-drop div{padding:8px 12px;font-size:13px;cursor:pointer}.pp-drop div:hover{background:var(--bg)}
+.pp-panel-f{display:flex;justify-content:space-between;align-items:center}
+.pp-panel-f a{font-size:13px;color:var(--txt3)}
+.pp-done{display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:700;color:var(--em)}
+.pp-done a{font-size:12px;font-weight:600;color:var(--txt3)}
+.pp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px 14px;margin-bottom:14px}
+.pp-grid div{min-width:0}
+.pp-grid span{display:block;font-size:10.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;font-weight:600}
+.pp-grid b{display:block;font-size:13px;color:var(--txt);font-weight:600;overflow-wrap:anywhere}
+.pp-hist summary{cursor:pointer;font-size:13px;color:var(--txt2);margin-bottom:10px}
+.cxs-wrap{position:relative;flex:1;min-width:180px;max-width:320px}
+.cxs-wrap input{padding:7px 12px;font-size:13px;border-radius:20px}
+.cxs-res{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.1);z-index:20;max-height:360px;overflow:auto}
+.cxs-res:empty{display:none}
+.cxs-row{padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border)}
+.cxs-row:last-child{border-bottom:none}
+.cxs-row:hover,.cxs-row.on{background:var(--bg)}`;
+  document.head.appendChild(st);
+}
+
+// ── Search: ID, serial, name, make, donor ────────────────────
+function cxSearchItems(q) {
+  q = String(q || '').trim().toLowerCase().replace(/^.*#item=/, '');
+  if (q.length < 2) return [];
+  const score = i => {
+    const code = (i.passport_code || '').toLowerCase();
+    if (code === q) return 100;
+    if (code.startsWith(q)) return 80;
+    if ((i.serial || '').toLowerCase() === q) return 90;
+    if ((i.serial || '').toLowerCase().includes(q)) return 60;
+    const hay = [i.name, i.brand, i.model, i.source, i.custom && i.custom.recipient_org, i.custom && i.custom.note].filter(Boolean).join(' ').toLowerCase();
+    return hay.includes(q) ? 30 : 0;
+  };
+  return CX.items.map(i => [score(i), i]).filter(x => x[0] > 0).sort((a, b) => b[0] - a[0] || String(b[1].updated_at).localeCompare(String(a[1].updated_at))).slice(0, 8).map(x => x[1]);
+}
+let _cxsSel = 0;
+function cxSearchInput(ev) {
+  const box = $('cxs-res'); if (!box) return;
+  const hits = cxSearchItems(ev.target.value);
+  if (ev.key === 'Enter') {
+    const pick = hits[_cxsSel] || hits[0];
+    if (pick) { box.innerHTML = ''; ev.target.value = ''; cxOpenItem(pick.id); }
+    else if (ev.target.value.trim()) box.innerHTML = '<div class="cxs-row cxp-s" style="cursor:default">Nothing found for "' + cxE(ev.target.value.trim()) + '"</div>';
+    return;
+  }
+  if (ev.key === 'Escape') { box.innerHTML = ''; ev.target.blur(); return; }
+  if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') { _cxsSel = Math.max(0, Math.min(hits.length - 1, _cxsSel + (ev.key === 'ArrowDown' ? 1 : -1))); }
+  else _cxsSel = 0;
+  cxInjectPassStyle();
+  box.innerHTML = hits.map((i, n) => {
+    const a = cxAct(i.activity_id), o = cxOutcome(a, i.outcome), s = cxStage(a, i.stage);
+    return '<div class="cxs-row ' + (n === _cxsSel ? 'on' : '') + '" onmousedown="event.preventDefault();$(\'cxs-res\').innerHTML=\'\';$(\'cxs-q\').value=\'\';cxOpenItem(\'' + i.id + '\')">' +
+      '<div class="cxp-t"><span class="cxp-code">' + cxE(i.passport_code || '') + '</span> ' + cxE(i.name) + '</div>' +
+      '<div class="cxp-s">' + cxE(a ? a.icon + ' ' + a.name : '') + ' · ' + cxE(o ? o.label : s ? s.label : (i.status || '')) + (i.serial ? ' · SN ' + cxE(i.serial) : '') + '</div></div>';
+  }).join('');
 }
 
 // ── QR labels ────────────────────────────────────────────────
@@ -3597,13 +3846,16 @@ function circPanelHTML(a, ai) {
         '</table></div><div style="font-size:11px;color:var(--txt3);margin-bottom:16px">Starter figures are Vorlana estimates. Once you change one it shows as "set by your organisation" in reports.</div>';
     }
     if (!isCol && tracked) {
-      h += '<div class="st-lbl">Extra details recorded per item</div><div class="st-chips">' + (a.fields || []).map((f, i) =>
-        '<span class="st-chip ' + (_circEdit && _circEdit.list === 'fields' && _circEdit.i === i ? 'sel' : '') + '" onclick="circChip(\'fields\',' + i + ')">' + e(f.label) + '</span>').join('') +
+      h += '<div class="st-lbl">Extra details — asked at the step where they happen</div><div class="st-chips">' + (a.fields || []).map((f, i) => {
+        const at = cxStage(a, cxFieldStage(a, f));
+        return '<span class="st-chip ' + (_circEdit && _circEdit.list === 'fields' && _circEdit.i === i ? 'sel' : '') + '" onclick="circChip(\'fields\',' + i + ')">' + e(f.label) + (at ? '<small>at ' + e(at.label) + '</small>' : '') + '</span>';
+      }).join('') +
         '<span class="st-chip new" onclick="circAdd(' + ai + ',\'fields\')">+ Add</span></div>';
       if (_circEdit && _circEdit.list === 'fields' && a.fields[_circEdit.i]) {
         const f = a.fields[_circEdit.i], i = _circEdit.i;
         h += '<div class="st-edit"><input value="' + e(f.label) + '" onchange="circSet(' + ai + ',\'fields\',' + i + ',\'label\',this.value)"/>' +
           '<select style="flex:0 0 120px" onchange="circSet(' + ai + ',\'fields\',' + i + ',\'type\',this.value)">' + CIRC_FIELD_TYPES.map(x => '<option value="' + x[0] + '"' + (x[0] === f.type ? ' selected' : '') + '>' + x[1] + '</option>').join('') + '</select>' +
+          '<select style="flex:0 0 170px" title="Asked when an item reaches this step" onchange="circSet(' + ai + ',\'fields\',' + i + ',\'ask_at\',this.value)"><option value="-"' + (f.ask_at === '-' ? ' selected' : '') + '>Only when editing</option>' + (a.stages || []).map(x => '<option value="' + e(x.key) + '"' + (x.key === cxFieldStage(a, f) ? ' selected' : '') + '>Ask at: ' + e(x.label) + '</option>').join('') + '</select>' +
           '<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="circDel(' + ai + ',\'fields\',' + i + ')">Remove</button></div>';
       }
     }
