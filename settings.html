@@ -187,6 +187,27 @@ label{display:block;font-size:12px;font-weight:600;color:var(--txt2);margin-bott
 .preview-nav{padding:5px 8px;border-radius:5px;font-size:11px;margin-bottom:2px;color:var(--txt2)}
 .preview-nav.active{background:rgba(0,0,0,.04);font-weight:600}
 
+/* CIRCULAR ACTIVITIES */
+.tpl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.tpl{padding:12px 14px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);display:flex;flex-direction:column;gap:6px}
+.tpl.on{border-color:rgba(31,111,109,.35);background:rgba(31,111,109,.05)}
+.tpl-name{font-size:13px;font-weight:700}
+.tpl-desc{font-size:12px;color:var(--txt3);line-height:1.45;flex:1}
+.act{border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:10px;background:var(--surface)}
+.act>summary{list-style:none;cursor:pointer;padding:12px 14px;display:flex;align-items:center;gap:10px;font-weight:700;font-size:14px}
+.act>summary::-webkit-details-marker{display:none}
+.act>summary .meta{font-weight:400;font-size:12px;color:var(--txt3);margin-left:auto}
+.act-body{padding:4px 14px 14px;border-top:1px solid var(--border)}
+.sec{margin-top:14px}
+.sec-h{font-size:12px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+.row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+.row input,.row select{padding:6px 9px;font-size:13px}
+.row .n{width:84px;flex-shrink:0}
+.ib{background:var(--card);border:1px solid var(--border);border-radius:6px;width:30px;height:30px;flex-shrink:0;color:var(--txt2);font-size:13px}
+.ib:hover{border-color:var(--em);color:var(--em)}
+.chip{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;background:var(--card);border:1px solid var(--border);color:var(--txt2)}
+.cols{display:flex;gap:6px;font-size:11px;color:var(--txt3);margin-bottom:4px}
+
 /* SPINNER */
 .spinner{
   display:inline-block;width:13px;height:13px;
@@ -222,7 +243,7 @@ label{display:block;font-size:12px;font-weight:600;color:var(--txt2);margin-bott
   <div class="title-row">
     <div>
       <div class="page-title" id="org-title">Organisation settings</div>
-      <div class="page-sub">Customise modules, branding and organisation details</div>
+      <div class="page-sub">Customise modules, circular activities, branding and organisation details</div>
     </div>
     <button class="btn btn-p" id="save-btn" onclick="saveAll()">Save changes</button>
   </div>
@@ -233,6 +254,7 @@ label{display:block;font-size:12px;font-weight:600;color:var(--txt2);margin-bott
   <div class="tabs" role="tablist">
     <button class="tab active" data-tab="modules" onclick="switchTab('modules',this)">🧩 Modules</button>
     <button class="tab" data-tab="branding" onclick="switchTab('branding',this)">🎨 Branding</button>
+    <button class="tab" data-tab="circular" onclick="switchTab('circular',this)">♻️ Circular</button>
     <button class="tab" data-tab="org" onclick="switchTab('org',this)">🏢 Organisation</button>
   </div>
 
@@ -287,6 +309,22 @@ label{display:block;font-size:12px;font-weight:600;color:var(--txt2);margin-bott
           The accent colour is used for the active page indicator, primary buttons, links and highlights throughout the app.
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- CIRCULAR -->
+  <div id="tab-circular" class="tab-pane">
+    <div class="msg msg-err" id="circ-missing" style="display:none"></div>
+    <div class="card">
+      <div class="card-title">Your circular activities</div>
+      <div class="card-sub">Add the activities you run. Each one comes pre-set with stages, outcomes and item types. Change anything to match how you work, or build your own.</div>
+      <div class="tpl-grid" id="tpl-grid"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Set up each activity</div>
+      <div class="card-sub">Stages are the steps an item moves through. Outcomes are how it leaves. Item types fill in weight, CO₂e and value automatically when logged. Links pass items between activities.</div>
+      <div id="act-list"></div>
+      <div class="hint" style="margin-top:10px">Weights, CO₂e and £ values are Vorlana starter estimates. Replace them with your own or your funder's preferred figures. Reports always show the source.</div>
     </div>
   </div>
 
@@ -431,6 +469,10 @@ async function init(){
 
   populate();
   document.body.classList.add('ready');
+  loadCircular();
+  const t=new URLSearchParams(window.location.search).get('tab');
+  const tb=t&&document.querySelector('.tab[data-tab="'+t+'"]');
+  if(tb)switchTab(t,tb);
 }
 
 function showGate(title,msg){
@@ -563,6 +605,253 @@ function renderPreview(logoDataUrl){
   $('preview-sidebar').innerHTML=html;
 }
 
+// ── Circular activities ─────────────────────────────────────
+// Templates. Item rows: [label, kg, CO₂e kg avoided if reused, £ value to a household].
+// Outcome types drive impact: reuse / repair / share count CO₂e and £; recycle counts kg only.
+const OUT_TYPES=[
+  ['reuse','Reused'],['repair','Repaired'],['share','Shared (food)'],['loan','Loaned'],
+  ['return','Returned to owner'],['recycle','Recycled'],['dispose','Disposed'],['other','Other']
+];
+const FIELD_TYPES=[['text','Text'],['number','Number'],['date','Date'],['yesno','Yes / no']];
+const STARTER='Vorlana starter estimate';
+
+function T(key,name,icon,desc,stages,outcomes,items,fields,links){
+  return{key,name,icon,desc,
+    stages:stages.map(s=>({key:slug(s),label:s})),
+    outcomes:outcomes.map(o=>({key:slug(o[0]),label:o[0],type:o[1]})),
+    item_types:items.map(i=>({key:slug(i[0]),label:i[0],weight_kg:i[1],co2e_kg:i[2],value_gbp:i[3],source:STARTER})),
+    fields:(fields||[]).map(f=>({key:slug(f[0]),label:f[0],type:f[1]})),
+    links:links||[]};
+}
+function slug(s){return String(s).toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'').slice(0,40)||'x'}
+function rid(p){return p+'_'+Math.random().toString(36).slice(2,8)}
+
+const CIRC_TEMPLATES=[
+  T('collections','Collections','🚚','Donors, councils and businesses book a pickup. Items are collected, booked in and passed on.',
+    ['Requested','Scheduled','Collected','Booked in'],
+    [['Passed to activity','other'],['Declined','other']],
+    [],[['Donor reference','text']],[{on:'end',to:''}]),
+  T('device_reuse','Device reuse','💻','Laptops, phones and tablets: data wiped, tested, refurbished, then donated or resold.',
+    ['Booked in','Data wiped','Tested','Refurbished','Ready'],
+    [['Donated','reuse'],['Resold','reuse'],['Parts harvested','recycle'],['Recycled','recycle']],
+    [['Laptop',2.2,250,200],['Desktop PC',8,300,150],['Monitor',5,200,60],['Tablet',0.5,90,120],['Smartphone',0.2,55,100],['Printer',7,60,50]],
+    [['Wipe method','text'],['Wipe certificate ref','text'],['PAT result','yesno']]),
+  T('repair_cafe','Repair café','🔧','Items brought to a session. Fixed or not, back to the owner with advice.',
+    ['Brought in','Diagnosed','Being repaired'],
+    [['Fixed','repair'],['Partly fixed','repair'],['Not fixable – advice given','return'],['Referred on','other']],
+    [['Kettle',1.2,10,20],['Toaster',1.5,12,20],['Vacuum cleaner',5,35,80],['Lamp',1,8,15],['Hairdryer',0.6,6,15],['Radio / speaker',1.5,15,30],['Clothing item',0.5,8,15],['Bike',15,100,150]],
+    [['Fault','text'],['Fixer','text']]),
+  T('furniture','Furniture & household','🛋️','Furniture and household goods checked, cleaned, then rehomed, sold or recycled.',
+    ['Booked in','Checked','Cleaned / repaired','Ready'],
+    [['Rehomed','reuse'],['Sold','reuse'],['Recycled','recycle'],['Disposed','dispose']],
+    [['Sofa',40,90,250],['Chair',7,15,40],['Table',20,35,80],['Wardrobe',50,80,150],['Bed frame',35,60,120],['Mattress',25,60,150]],
+    [['Fire safety label present','yesno']]),
+  T('textiles','Textiles & clothing','👕','Clothing and textiles sorted, then reused, swapped, sold or recycled.',
+    ['Received','Sorted'],
+    [['Reused','reuse'],['Swapped','reuse'],['Sold','reuse'],['Recycled','recycle']],
+    [['Clothing (per kg)',1,15,10],['Shoes (pair)',1,10,15],['Bedding / linen (per kg)',1,10,8]],
+    []),
+  T('bikes','Bikes','🚲','Bikes safety checked and refurbished, then sold, donated or loaned.',
+    ['Booked in','Safety checked','Refurbished','Ready'],
+    [['Sold','reuse'],['Donated','reuse'],['Loaned','loan'],['Stripped for parts','recycle'],['Recycled','recycle']],
+    [['Adult bike',15,100,150],['Child bike',8,50,60]],
+    [['Frame number','text']]),
+  T('food','Food surplus','🥕','Surplus food collected, stored and shared with households or partners.',
+    ['Collected','Stored'],
+    [['Shared with households','share'],['Given to partner','share'],['Composted','recycle'],['Disposed','dispose']],
+    [['Food (per kg)',1,2.5,3]],
+    [['Use-by date','date']]),
+  T('growing','Growing','🌱','Food grown, harvested and shared, sold or given to food banks.',
+    ['Planted','Growing','Harvested'],
+    [['Shared','share'],['Given to food bank','share'],['Sold','share'],['Composted','recycle']],
+    [['Produce (per kg)',1,0,3]],
+    [['Crop','text']]),
+  T('tool_library','Library of things','🧰','Tools and equipment loaned out and returned.',
+    ['Available','On loan','Returned','Under repair'],
+    [['Retired','recycle']],
+    [['Power tool',2,25,60],['Garden tool',2,10,25],['Event / camping kit',5,20,50]],
+    [['Borrower','text'],['Due back','date']]),
+  T('scrap_store','Scrap store & upcycling','🎨','Materials received, sorted and used in workshops or passed to groups.',
+    ['Received','Sorted','In stock'],
+    [['Used in workshop','reuse'],['Given to groups / schools','reuse'],['Sold','reuse'],['Recycled','recycle']],
+    [['Materials (per kg)',1,1,2]],
+    [])
+];
+
+let CIRC=[];          // org's activities (loaded + edited)
+let CIRC_REMOVED=[];  // saved ids removed this session
+let CIRC_READY=false;
+
+async function loadCircular(){
+  const{data,error}=await sb.from('circular_activities').select('*').eq('org_id',ORG_ID).order('sort');
+  if(error){
+    $('circ-missing').textContent='Circular set-up needs the database update. Run circular-migration.sql in Supabase, then refresh.';
+    $('circ-missing').style.display='block';
+    CIRC_READY=false;
+  }else{
+    CIRC=(data||[]).filter(a=>a.active);
+    CIRC_READY=true;
+  }
+  renderCircular();
+}
+
+function renderCircular(){
+  const active=new Set(CIRC.map(a=>a.template).filter(Boolean));
+  $('tpl-grid').innerHTML=CIRC_TEMPLATES.map(t=>{
+    const on=active.has(t.key);
+    return `<div class="tpl ${on?'on':''}">
+      <div class="tpl-name">${t.icon} ${escapeHTML(t.name)}</div>
+      <div class="tpl-desc">${escapeHTML(t.desc)}</div>
+      <div>${on?'<span class="chip">Added</span>':`<button class="btn btn-ghost btn-sm" onclick="addTemplate('${t.key}')">Add</button>`}</div>
+    </div>`;
+  }).join('')+
+  `<div class="tpl"><div class="tpl-name">✏️ Build your own</div>
+    <div class="tpl-desc">Start blank and set your own stages, outcomes and items.</div>
+    <div><button class="btn btn-ghost btn-sm" onclick="addCustom()">Create</button></div></div>`;
+
+  if(!CIRC.length){
+    $('act-list').innerHTML='<div class="hint">No activities yet. Add one above.</div>';
+    return;
+  }
+  $('act-list').innerHTML=CIRC.map((a,ai)=>actHTML(a,ai)).join('');
+}
+
+function opt(list,val){return list.map(([v,l])=>`<option value="${v}" ${v===val?'selected':''}>${escapeHTML(l)}</option>`).join('')}
+
+function actHTML(a,ai){
+  const e=escapeHTML;
+  const stages=a.stages.map((s,i)=>`<div class="row">
+      <input value="${e(s.label)}" onchange="circSet(${ai},'stages',${i},'label',this.value)"/>
+      <button class="ib" title="Move up" onclick="circMove(${ai},'stages',${i},-1)">↑</button>
+      <button class="ib" title="Move down" onclick="circMove(${ai},'stages',${i},1)">↓</button>
+      <button class="ib" title="Remove" onclick="circDel(${ai},'stages',${i})">×</button></div>`).join('');
+  const outs=a.outcomes.map((o,i)=>`<div class="row">
+      <input value="${e(o.label)}" onchange="circSet(${ai},'outcomes',${i},'label',this.value)"/>
+      <select style="width:170px;flex-shrink:0" onchange="circSet(${ai},'outcomes',${i},'type',this.value)">${opt(OUT_TYPES,o.type)}</select>
+      <button class="ib" title="Remove" onclick="circDel(${ai},'outcomes',${i})">×</button></div>`).join('');
+  const items=a.item_types.map((t,i)=>`<div class="row">
+      <input value="${e(t.label)}" onchange="circSet(${ai},'item_types',${i},'label',this.value)"/>
+      <input class="n" type="number" step="0.1" min="0" value="${t.weight_kg??''}" onchange="circSet(${ai},'item_types',${i},'weight_kg',+this.value)"/>
+      <input class="n" type="number" step="0.1" min="0" value="${t.co2e_kg??''}" onchange="circSet(${ai},'item_types',${i},'co2e_kg',+this.value)"/>
+      <input class="n" type="number" step="1" min="0" value="${t.value_gbp??''}" onchange="circSet(${ai},'item_types',${i},'value_gbp',+this.value)"/>
+      <button class="ib" title="Remove" onclick="circDel(${ai},'item_types',${i})">×</button></div>`).join('');
+  const fields=a.fields.map((f,i)=>`<div class="row">
+      <input value="${e(f.label)}" onchange="circSet(${ai},'fields',${i},'label',this.value)"/>
+      <select style="width:130px;flex-shrink:0" onchange="circSet(${ai},'fields',${i},'type',this.value)">${opt(FIELD_TYPES,f.type)}</select>
+      <button class="ib" title="Remove" onclick="circDel(${ai},'fields',${i})">×</button></div>`).join('');
+
+  const others=CIRC.filter((x,xi)=>xi!==ai).map(x=>[x.key,x.icon+' '+x.name]);
+  const onOpts=[['end','Finishes the last stage']].concat(a.outcomes.map(o=>['outcome:'+o.key,'Outcome: '+o.label]));
+  const links=a.links.map((l,i)=>`<div class="row">
+      <select onchange="circSet(${ai},'links',${i},'on',this.value)">${opt(onOpts,l.on)}</select>
+      <span style="font-size:13px;color:var(--txt3)">→</span>
+      <select onchange="circSet(${ai},'links',${i},'to',this.value)"><option value="">Choose activity…</option>${opt(others,l.to)}</select>
+      <button class="ib" title="Remove" onclick="circDel(${ai},'links',${i})">×</button></div>`).join('');
+
+  return `<details class="act" ${a._open?'open':''} ontoggle="CIRC[${ai}]._open=this.open">
+    <summary>${e(a.icon||'♻️')} ${e(a.name)}<span class="meta">${a.stages.length} stages · ${a.outcomes.length} outcomes · ${a.item_types.length} item types</span></summary>
+    <div class="act-body">
+      <div class="sec" style="display:grid;grid-template-columns:70px 1fr;gap:8px">
+        <div><label>Icon</label><input value="${e(a.icon||'')}" maxlength="4" onchange="circTop(${ai},'icon',this.value)"/></div>
+        <div><label>Name</label><input value="${e(a.name)}" onchange="circTop(${ai},'name',this.value)"/></div>
+      </div>
+      <div class="sec"><div class="sec-h">Stages</div>${stages||'<div class="hint">No stages.</div>'}
+        <button class="btn btn-ghost btn-sm" onclick="circAdd(${ai},'stages')">+ Stage</button></div>
+      <div class="sec"><div class="sec-h">Outcomes</div>${outs||'<div class="hint">No outcomes.</div>'}
+        <button class="btn btn-ghost btn-sm" onclick="circAdd(${ai},'outcomes')">+ Outcome</button></div>
+      <div class="sec"><div class="sec-h">Item types</div>
+        ${a.item_types.length?'<div class="cols"><span style="flex:1">Item</span><span style="width:84px">Weight kg</span><span style="width:84px">CO₂e kg</span><span style="width:84px">Value £</span><span style="width:30px"></span></div>':''}
+        ${items||'<div class="hint">No item types.</div>'}
+        <button class="btn btn-ghost btn-sm" onclick="circAdd(${ai},'item_types')">+ Item type</button></div>
+      <div class="sec"><div class="sec-h">Extra fields</div>${fields||'<div class="hint">None. Add any detail you need to record per item.</div>'}
+        <button class="btn btn-ghost btn-sm" onclick="circAdd(${ai},'fields')">+ Field</button></div>
+      <div class="sec"><div class="sec-h">Links to other activities</div>${links||'<div class="hint">No links. Items stay in this activity.</div>'}
+        <button class="btn btn-ghost btn-sm" onclick="circAdd(${ai},'links')" ${others.length?'':'disabled title="Add another activity first"'}>+ Link</button></div>
+      <div class="sec" style="text-align:right"><button class="btn btn-danger-outline btn-sm" onclick="circRemove(${ai})">Remove activity</button></div>
+    </div>
+  </details>`;
+}
+
+function uniqueKey(base){
+  let k=slug(base),n=2;
+  while(CIRC.some(a=>a.key===k))k=slug(base)+'_'+(n++);
+  return k;
+}
+function addTemplate(key){
+  const t=JSON.parse(JSON.stringify(CIRC_TEMPLATES.find(x=>x.key===key)));
+  const a={key:uniqueKey(t.key),template:t.key,name:t.name,icon:t.icon,description:t.desc,
+    stages:t.stages,outcomes:t.outcomes,item_types:t.item_types,fields:t.fields,links:t.links,_open:true};
+  // Collections: default hand-over to the first other activity
+  if(key==='collections'){const other=CIRC.find(x=>x.template!=='collections');a.links=[{on:'end',to:other?other.key:''}]}
+  // Anything already added that finishes into nothing: offer collections → this
+  CIRC.forEach(x=>{if(x.template==='collections'&&x.links.length&&!x.links[0].to)x.links[0].to=a.key});
+  CIRC.push(a);
+  renderCircular();
+}
+function addCustom(){
+  CIRC.push({key:uniqueKey('custom'),template:null,name:'New activity',icon:'♻️',description:'',
+    stages:[{key:rid('st'),label:'Received'},{key:rid('st'),label:'Ready'}],
+    outcomes:[{key:rid('oc'),label:'Reused',type:'reuse'},{key:rid('oc'),label:'Recycled',type:'recycle'}],
+    item_types:[],fields:[],links:[],_open:true});
+  renderCircular();
+}
+function circTop(ai,f,v){CIRC[ai][f]=v;if(f!=='icon'||v)renderCircular()}
+function circSet(ai,list,i,f,v){CIRC[ai][list][i][f]=v;if(f==='label'&&list!=='item_types'&&list!=='fields')renderCircular()}
+function circMove(ai,list,i,d){
+  const arr=CIRC[ai][list],j=i+d;if(j<0||j>=arr.length)return;
+  [arr[i],arr[j]]=[arr[j],arr[i]];renderCircular();
+}
+function circDel(ai,list,i){CIRC[ai][list].splice(i,1);renderCircular()}
+function circAdd(ai,list){
+  const a=CIRC[ai];
+  if(list==='stages')a.stages.push({key:rid('st'),label:'New stage'});
+  if(list==='outcomes')a.outcomes.push({key:rid('oc'),label:'New outcome',type:'reuse'});
+  if(list==='item_types')a.item_types.push({key:rid('it'),label:'New item',weight_kg:0,co2e_kg:0,value_gbp:0,source:'Set by organisation'});
+  if(list==='fields')a.fields.push({key:rid('f'),label:'New field',type:'text'});
+  if(list==='links')a.links.push({on:'end',to:''});
+  renderCircular();
+}
+function circRemove(ai){
+  const a=CIRC[ai];
+  if(!confirm('Remove '+a.name+'? Items already logged keep their history.'))return;
+  if(a.id)CIRC_REMOVED.push(a.id);
+  CIRC.splice(ai,1);
+  CIRC.forEach(x=>x.links=x.links.filter(l=>l.to!==a.key));
+  renderCircular();
+}
+// Item types edited by hand lose the starter-estimate label
+function markEditedSources(){
+  CIRC.forEach(a=>a.item_types.forEach(t=>{
+    const tpl=CIRC_TEMPLATES.find(x=>x.key===a.template);
+    const orig=tpl&&tpl.item_types.find(o=>o.key===t.key);
+    if(orig&&(orig.weight_kg!==t.weight_kg||orig.co2e_kg!==t.co2e_kg||orig.value_gbp!==t.value_gbp))t.source='Set by organisation';
+  }));
+}
+
+async function saveCircular(){
+  if(!CIRC_READY)return;
+  markEditedSources();
+  for(const a of CIRC){
+    if(!a.name.trim())throw new Error('Every circular activity needs a name');
+    const row={org_id:ORG_ID,key:a.key,template:a.template,name:a.name.trim(),icon:a.icon||'♻️',
+      description:a.description||'',stages:a.stages,outcomes:a.outcomes,item_types:a.item_types,
+      fields:a.fields,links:a.links.filter(l=>l.to),active:true,sort:CIRC.indexOf(a),updated_at:new Date().toISOString()};
+    if(a.id){
+      const{error}=await sb.from('circular_activities').update(row).eq('id',a.id);
+      if(error)throw error;
+    }else{
+      const{data,error}=await sb.from('circular_activities').insert([row]).select('id').single();
+      if(error)throw error;
+      a.id=data.id;
+    }
+  }
+  for(const id of CIRC_REMOVED){
+    const{error}=await sb.from('circular_activities').update({active:false}).eq('id',id);
+    if(error)throw error;
+  }
+  CIRC_REMOVED=[];
+}
+
 // ── Tabs ────────────────────────────────────────────────────
 function switchTab(name,btn){
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
@@ -595,6 +884,10 @@ async function saveAll(){
     // so nothing saved elsewhere is lost.
     const modules=Object.assign({},ORG.modules||{});
     SET_MODULES.forEach(m=>modules[m.k]=!!modState[m.k]);
+    // Circular activities chosen → make sure the Circular module is on
+    if(CIRC.length){modules.circular=true;modState.circular=true;renderModules()}
+
+    await saveCircular();
 
     const newSettings=Object.assign({},ORG.settings||{},{branding_completed:true});
     const update={
