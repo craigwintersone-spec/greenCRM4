@@ -1251,6 +1251,9 @@ function renderSettings() {
   _fqRows = null;
   try { renderFeedbackQuestionsCard(); } catch (e) { console.error('[feedback questions]', e); }
 
+  // Circular activities card
+  try { renderCircularSettingsCard(); } catch (e) { console.error('[circular settings]', e); }
+
   // Demo mode card
   let demoCard = $('demo-mode-card');
   if (!demoCard) {
@@ -1336,6 +1339,7 @@ function toggleMod(key) {
   if (track) track.style.background = _modState[key] ? '#1F6F6D' : '#E0DAD0';
   if (thumb) thumb.style.left = _modState[key] ? '23px' : '3px';
   if (item)  item.classList.toggle('on', _modState[key]);
+  if (key === 'circular' && typeof renderCircularSettingsCard === 'function') renderCircularSettingsCard();
 }
 
 async function saveSettings() {
@@ -1369,6 +1373,8 @@ async function saveSettings() {
       logo_url: logoUrl
     };
 
+    if (_modState.circular !== false && typeof saveCircularActivities === 'function') await saveCircularActivities();
+
     await sbUpdate('organisations', d, orgId);
     currentOrg = Object.assign({}, currentOrg, d);
 
@@ -1386,4 +1392,315 @@ async function saveSettings() {
     btn.textContent = 'Save settings';
     btn.disabled = false;
   }
+}
+
+// ─────────────────────────────────────────────────────────────
+// CIRCULAR ACTIVITIES — settings builder
+// Stored in circular_activities (see circular-migration.sql).
+// ─────────────────────────────────────────────────────────────
+
+// ── Circular activities ─────────────────────────────────────
+// Templates. Item rows: [label, kg, CO₂e kg avoided if reused, £ value to a household].
+// Outcome types drive impact: reuse / repair / share count CO₂e and £; recycle counts kg only.
+const CIRC_OUT_TYPES=[
+  ['reuse','Reused'],['repair','Repaired'],['share','Shared (food)'],['loan','Loaned'],
+  ['return','Returned to owner'],['recycle','Recycled'],['dispose','Disposed'],['other','Other']
+];
+const CIRC_FIELD_TYPES=[['text','Text'],['number','Number'],['date','Date'],['yesno','Yes / no']];
+const CIRC_STARTER='Vorlana starter estimate';
+
+function _circT(key,name,icon,desc,stages,outcomes,items,fields,links){
+  return{key,name,icon,desc,
+    stages:stages.map(s=>({key:_circSlug(s),label:s})),
+    outcomes:outcomes.map(o=>({key:_circSlug(o[0]),label:o[0],type:o[1]})),
+    item_types:items.map(i=>({key:_circSlug(i[0]),label:i[0],weight_kg:i[1],co2e_kg:i[2],value_gbp:i[3],source:CIRC_STARTER})),
+    fields:(fields||[]).map(f=>({key:_circSlug(f[0]),label:f[0],type:f[1]})),
+    links:links||[]};
+}
+function _circSlug(s){return String(s).toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'').slice(0,40)||'x'}
+function _circRid(p){return p+'_'+Math.random().toString(36).slice(2,8)}
+
+const CIRC_TEMPLATES=[
+  _circT('collections','Collections','🚚','Donors, councils and businesses book a pickup. Items are collected, booked in and passed on.',
+    ['Requested','Scheduled','Collected','Booked in'],
+    [['Passed to activity','other'],['Declined','other']],
+    [],[['Donor reference','text']],[{on:'end',to:''}]),
+  _circT('device_reuse','Device reuse','💻','Laptops, phones and tablets: data wiped, tested, refurbished, then donated or resold.',
+    ['Booked in','Data wiped','Tested','Refurbished','Ready'],
+    [['Donated','reuse'],['Resold','reuse'],['Parts harvested','recycle'],['Recycled','recycle']],
+    [['Laptop',2.2,250,200],['Desktop PC',8,300,150],['Monitor',5,200,60],['Tablet',0.5,90,120],['Smartphone',0.2,55,100],['Printer',7,60,50]],
+    [['Wipe method','text'],['Wipe certificate ref','text'],['PAT result','yesno']]),
+  _circT('repair_cafe','Repair café','🔧','Items brought to a session. Fixed or not, back to the owner with advice.',
+    ['Brought in','Diagnosed','Being repaired'],
+    [['Fixed','repair'],['Partly fixed','repair'],['Not fixable – advice given','return'],['Referred on','other']],
+    [['Kettle',1.2,10,20],['Toaster',1.5,12,20],['Vacuum cleaner',5,35,80],['Lamp',1,8,15],['Hairdryer',0.6,6,15],['Radio / speaker',1.5,15,30],['Clothing item',0.5,8,15],['Bike',15,100,150]],
+    [['Fault','text'],['Fixer','text']]),
+  _circT('furniture','Furniture & household','🛋️','Furniture and household goods checked, cleaned, then rehomed, sold or recycled.',
+    ['Booked in','Checked','Cleaned / repaired','Ready'],
+    [['Rehomed','reuse'],['Sold','reuse'],['Recycled','recycle'],['Disposed','dispose']],
+    [['Sofa',40,90,250],['Chair',7,15,40],['Table',20,35,80],['Wardrobe',50,80,150],['Bed frame',35,60,120],['Mattress',25,60,150]],
+    [['Fire safety label present','yesno']]),
+  _circT('textiles','Textiles & clothing','👕','Clothing and textiles sorted, then reused, swapped, sold or recycled.',
+    ['Received','Sorted'],
+    [['Reused','reuse'],['Swapped','reuse'],['Sold','reuse'],['Recycled','recycle']],
+    [['Clothing (per kg)',1,15,10],['Shoes (pair)',1,10,15],['Bedding / linen (per kg)',1,10,8]],
+    []),
+  _circT('bikes','Bikes','🚲','Bikes safety checked and refurbished, then sold, donated or loaned.',
+    ['Booked in','Safety checked','Refurbished','Ready'],
+    [['Sold','reuse'],['Donated','reuse'],['Loaned','loan'],['Stripped for parts','recycle'],['Recycled','recycle']],
+    [['Adult bike',15,100,150],['Child bike',8,50,60]],
+    [['Frame number','text']]),
+  _circT('food','Food surplus','🥕','Surplus food collected, stored and shared with households or partners.',
+    ['Collected','Stored'],
+    [['Shared with households','share'],['Given to partner','share'],['Composted','recycle'],['Disposed','dispose']],
+    [['Food (per kg)',1,2.5,3]],
+    [['Use-by date','date']]),
+  _circT('growing','Growing','🌱','Food grown, harvested and shared, sold or given to food banks.',
+    ['Planted','Growing','Harvested'],
+    [['Shared','share'],['Given to food bank','share'],['Sold','share'],['Composted','recycle']],
+    [['Produce (per kg)',1,0,3]],
+    [['Crop','text']]),
+  _circT('tool_library','Library of things','🧰','Tools and equipment loaned out and returned.',
+    ['Available','On loan','Returned','Under repair'],
+    [['Retired','recycle']],
+    [['Power tool',2,25,60],['Garden tool',2,10,25],['Event / camping kit',5,20,50]],
+    [['Borrower','text'],['Due back','date']]),
+  _circT('scrap_store','Scrap store & upcycling','🎨','Materials received, sorted and used in workshops or passed to groups.',
+    ['Received','Sorted','In stock'],
+    [['Used in workshop','reuse'],['Given to groups / schools','reuse'],['Sold','reuse'],['Recycled','recycle']],
+    [['Materials (per kg)',1,1,2]],
+    [])
+];
+
+let CIRC=[];          // org's activities (loaded + edited)
+let CIRC_REMOVED=[];  // saved ids removed this session
+let CIRC_READY=false;
+
+async function loadCircSettings(){
+  const{data,error}=await sb.from('circular_activities').select('*').eq('org_id',orgId).order('sort');
+  if(error){
+    $('cx-missing').textContent='Circular set-up needs the database update. Run circular-migration.sql in Supabase, then refresh.';
+    $('cx-missing').style.display='block';
+    if($('cx-body'))$('cx-body').style.display='none';
+    CIRC_READY=false;
+  }else{
+    CIRC=(data||[]).filter(a=>a.active);
+    CIRC_READY=true;
+  }
+  renderCircSettings();
+}
+
+function renderCircSettings(){
+  const active=new Set(CIRC.map(a=>a.template).filter(Boolean));
+  $('cx-tpl-grid').innerHTML=CIRC_TEMPLATES.map(t=>{
+    const on=active.has(t.key);
+    return `<div class="cx-tpl ${on?'on':''}">
+      <div class="cx-tpl-name">${t.icon} ${escapeHTML(t.name)}</div>
+      <div class="cx-tpl-desc">${escapeHTML(t.desc)}</div>
+      <div>${on?'<span class="cx-chip">Added</span>':`<button class="btn btn-ghost btn-sm" onclick="circAddTemplate('${t.key}')">Add</button>`}</div>
+    </div>`;
+  }).join('')+
+  `<div class="cx-tpl"><div class="cx-tpl-name">✏️ Build your own</div>
+    <div class="cx-tpl-desc">Start blank and set your own stages, outcomes and items.</div>
+    <div><button class="btn btn-ghost btn-sm" onclick="circAddCustom()">Create</button></div></div>`;
+
+  if(!CIRC.length){
+    $('cx-act-list').innerHTML='<div class="cx-hint">No activities yet. Add one above.</div>';
+    return;
+  }
+  $('cx-act-list').innerHTML=CIRC.map((a,ai)=>_circActHTML(a,ai)).join('');
+}
+
+function _circOpt(list,val){return list.map(([v,l])=>`<option value="${v}" ${v===val?'selected':''}>${escapeHTML(l)}</option>`).join('')}
+
+function _circActHTML(a,ai){
+  const e=escapeHTML;
+  const stages=a.stages.map((s,i)=>`<div class="cx-row">
+      <input value="${e(s.label)}" onchange="circSet(${ai},'stages',${i},'label',this.value)"/>
+      <button class="cx-ib" title="Move up" onclick="circMove(${ai},'stages',${i},-1)">↑</button>
+      <button class="cx-ib" title="Move down" onclick="circMove(${ai},'stages',${i},1)">↓</button>
+      <button class="cx-ib" title="Remove" onclick="circDel(${ai},'stages',${i})">×</button></div>`).join('');
+  const outs=a.outcomes.map((o,i)=>`<div class="cx-row">
+      <input value="${e(o.label)}" onchange="circSet(${ai},'outcomes',${i},'label',this.value)"/>
+      <select style="width:170px;flex-shrink:0" onchange="circSet(${ai},'outcomes',${i},'type',this.value)">${_circOpt(CIRC_OUT_TYPES,o.type)}</select>
+      <button class="cx-ib" title="Remove" onclick="circDel(${ai},'outcomes',${i})">×</button></div>`).join('');
+  const items=a.item_types.map((t,i)=>`<div class="cx-row">
+      <input value="${e(t.label)}" onchange="circSet(${ai},'item_types',${i},'label',this.value)"/>
+      <input class="cx-n" type="number" step="0.1" min="0" value="${t.weight_kg??''}" onchange="circSet(${ai},'item_types',${i},'weight_kg',+this.value)"/>
+      <input class="cx-n" type="number" step="0.1" min="0" value="${t.co2e_kg??''}" onchange="circSet(${ai},'item_types',${i},'co2e_kg',+this.value)"/>
+      <input class="cx-n" type="number" step="1" min="0" value="${t.value_gbp??''}" onchange="circSet(${ai},'item_types',${i},'value_gbp',+this.value)"/>
+      <button class="cx-ib" title="Remove" onclick="circDel(${ai},'item_types',${i})">×</button></div>`).join('');
+  const fields=a.fields.map((f,i)=>`<div class="cx-row">
+      <input value="${e(f.label)}" onchange="circSet(${ai},'fields',${i},'label',this.value)"/>
+      <select style="width:130px;flex-shrink:0" onchange="circSet(${ai},'fields',${i},'type',this.value)">${_circOpt(CIRC_FIELD_TYPES,f.type)}</select>
+      <button class="cx-ib" title="Remove" onclick="circDel(${ai},'fields',${i})">×</button></div>`).join('');
+
+  const others=CIRC.filter((x,xi)=>xi!==ai).map(x=>[x.key,x.icon+' '+x.name]);
+  const onOpts=[['end','Finishes the last stage']].concat(a.outcomes.map(o=>['outcome:'+o.key,'Outcome: '+o.label]));
+  const links=a.links.map((l,i)=>`<div class="cx-row">
+      <select onchange="circSet(${ai},'links',${i},'on',this.value)">${_circOpt(onOpts,l.on)}</select>
+      <span style="font-size:13px;color:var(--txt3)">→</span>
+      <select onchange="circSet(${ai},'links',${i},'to',this.value)"><option value="">Choose activity…</option>${_circOpt(others,l.to)}</select>
+      <button class="cx-ib" title="Remove" onclick="circDel(${ai},'links',${i})">×</button></div>`).join('');
+
+  return `<details class="cx-act" ${a._open?'open':''} ontoggle="CIRC[${ai}]._open=this.open">
+    <summary>${e(a.icon||'♻️')} ${e(a.name)}<span class="cx-meta">${a.stages.length} stages · ${a.outcomes.length} outcomes · ${a.item_types.length} item types</span></summary>
+    <div class="cx-act-body">
+      <div class="cx-sec" style="display:grid;grid-template-columns:70px 1fr;gap:8px">
+        <div><label>Icon</label><input value="${e(a.icon||'')}" maxlength="4" onchange="circTop(${ai},'icon',this.value)"/></div>
+        <div><label>Name</label><input value="${e(a.name)}" onchange="circTop(${ai},'name',this.value)"/></div>
+      </div>
+      <div class="cx-sec"><div class="cx-sec-h">Stages</div>${stages||'<div class="cx-hint">No stages.</div>'}
+        <button class="btn btn-ghost btn-sm" onclick="circAdd(${ai},'stages')">+ Stage</button></div>
+      <div class="cx-sec"><div class="cx-sec-h">Outcomes</div>${outs||'<div class="cx-hint">No outcomes.</div>'}
+        <button class="btn btn-ghost btn-sm" onclick="circAdd(${ai},'outcomes')">+ Outcome</button></div>
+      <div class="cx-sec"><div class="cx-sec-h">Item types</div>
+        ${a.item_types.length?'<div class="cx-cols"><span style="flex:1">Item</span><span style="width:84px">Weight kg</span><span style="width:84px">CO₂e kg</span><span style="width:84px">Value £</span><span style="width:30px"></span></div>':''}
+        ${items||'<div class="cx-hint">No item types.</div>'}
+        <button class="btn btn-ghost btn-sm" onclick="circAdd(${ai},'item_types')">+ Item type</button></div>
+      <div class="cx-sec"><div class="cx-sec-h">Extra fields</div>${fields||'<div class="cx-hint">None. Add any detail you need to record per item.</div>'}
+        <button class="btn btn-ghost btn-sm" onclick="circAdd(${ai},'fields')">+ Field</button></div>
+      <div class="cx-sec"><div class="cx-sec-h">Links to other activities</div>${links||'<div class="cx-hint">No links. Items stay in this activity.</div>'}
+        <button class="btn btn-ghost btn-sm" onclick="circAdd(${ai},'links')" ${others.length?'':'disabled title="Add another activity first"'}>+ Link</button></div>
+      <div class="cx-sec" style="text-align:right"><button class="btn btn-ghost btn-sm" style="color:var(--red);border-color:var(--red)" onclick="circRemove(${ai})">Remove activity</button></div>
+    </div>
+  </details>`;
+}
+
+function _circUniqueKey(base){
+  let k=_circSlug(base),n=2;
+  while(CIRC.some(a=>a.key===k))k=_circSlug(base)+'_'+(n++);
+  return k;
+}
+function circAddTemplate(key){
+  const t=JSON.parse(JSON.stringify(CIRC_TEMPLATES.find(x=>x.key===key)));
+  const a={key:_circUniqueKey(t.key),template:t.key,name:t.name,icon:t.icon,description:t.desc,
+    stages:t.stages,outcomes:t.outcomes,item_types:t.item_types,fields:t.fields,links:t.links,_open:true};
+  // Collections: default hand-over to the first other activity
+  if(key==='collections'){const other=CIRC.find(x=>x.template!=='collections');a.links=[{on:'end',to:other?other.key:''}]}
+  // Anything already added that finishes into nothing: offer collections → this
+  CIRC.forEach(x=>{if(x.template==='collections'&&x.links.length&&!x.links[0].to)x.links[0].to=a.key});
+  CIRC.push(a);
+  renderCircSettings();
+}
+function circAddCustom(){
+  CIRC.push({key:_circUniqueKey('custom'),template:null,name:'New activity',icon:'♻️',description:'',
+    stages:[{key:_circRid('st'),label:'Received'},{key:_circRid('st'),label:'Ready'}],
+    outcomes:[{key:_circRid('oc'),label:'Reused',type:'reuse'},{key:_circRid('oc'),label:'Recycled',type:'recycle'}],
+    item_types:[],fields:[],links:[],_open:true});
+  renderCircSettings();
+}
+function circTop(ai,f,v){CIRC[ai][f]=v;if(f!=='icon'||v)renderCircSettings()}
+function circSet(ai,list,i,f,v){CIRC[ai][list][i][f]=v;if(f==='label'&&list!=='item_types'&&list!=='fields')renderCircSettings()}
+function circMove(ai,list,i,d){
+  const arr=CIRC[ai][list],j=i+d;if(j<0||j>=arr.length)return;
+  [arr[i],arr[j]]=[arr[j],arr[i]];renderCircSettings();
+}
+function circDel(ai,list,i){CIRC[ai][list].splice(i,1);renderCircSettings()}
+function circAdd(ai,list){
+  const a=CIRC[ai];
+  if(list==='stages')a.stages.push({key:_circRid('st'),label:'New stage'});
+  if(list==='outcomes')a.outcomes.push({key:_circRid('oc'),label:'New outcome',type:'reuse'});
+  if(list==='item_types')a.item_types.push({key:_circRid('it'),label:'New item',weight_kg:0,co2e_kg:0,value_gbp:0,source:'Set by organisation'});
+  if(list==='fields')a.fields.push({key:_circRid('f'),label:'New field',type:'text'});
+  if(list==='links')a.links.push({on:'end',to:''});
+  renderCircSettings();
+}
+function circRemove(ai){
+  const a=CIRC[ai];
+  if(!confirm('Remove '+a.name+'? Items already logged keep their history.'))return;
+  if(a.id)CIRC_REMOVED.push(a.id);
+  CIRC.splice(ai,1);
+  CIRC.forEach(x=>x.links=x.links.filter(l=>l.to!==a.key));
+  renderCircSettings();
+}
+// Item types edited by hand lose the starter-estimate label
+function _circMarkEdited(){
+  CIRC.forEach(a=>a.item_types.forEach(t=>{
+    const tpl=CIRC_TEMPLATES.find(x=>x.key===a.template);
+    const orig=tpl&&tpl.item_types.find(o=>o.key===t.key);
+    if(orig&&(orig.weight_kg!==t.weight_kg||orig.co2e_kg!==t.co2e_kg||orig.value_gbp!==t.value_gbp))t.source='Set by organisation';
+  }));
+}
+
+async function saveCircularActivities(){
+  if(!CIRC_READY)return;
+  _circMarkEdited();
+  for(const a of CIRC){
+    if(!a.name.trim())throw new Error('Every circular activity needs a name');
+    const row={org_id:orgId,key:a.key,template:a.template,name:a.name.trim(),icon:a.icon||'♻️',
+      description:a.description||'',stages:a.stages,outcomes:a.outcomes,item_types:a.item_types,
+      fields:a.fields,links:a.links.filter(l=>l.to),active:true,sort:CIRC.indexOf(a),updated_at:new Date().toISOString()};
+    if(a.id){
+      const{error}=await sb.from('circular_activities').update(row).eq('id',a.id);
+      if(error)throw error;
+    }else{
+      const{data,error}=await sb.from('circular_activities').insert([row]).select('id').single();
+      if(error)throw error;
+      a.id=data.id;
+    }
+  }
+  for(const id of CIRC_REMOVED){
+    const{error}=await sb.from('circular_activities').update({active:false}).eq('id',id);
+    if(error)throw error;
+  }
+  CIRC_REMOVED=[];
+}
+
+// ── Settings card: circular activities ──────────────────────
+function _circInjectStyle(){
+  if(document.getElementById('cx-style'))return;
+  const st=document.createElement('style');st.id='cx-style';
+  st.textContent=`
+.cx-tpl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.cx-tpl{padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-direction:column;gap:6px}
+.cx-tpl.on{border-color:rgba(31,111,109,.35);background:rgba(31,111,109,.05)}
+.cx-tpl-name{font-size:13px;font-weight:700}
+.cx-tpl-desc{font-size:12px;color:var(--txt3);line-height:1.45;flex:1}
+.cx-act{border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;background:var(--surface)}
+.cx-act>summary{list-style:none;cursor:pointer;padding:12px 14px;display:flex;align-items:center;gap:10px;font-weight:700;font-size:14px}
+.cx-act>summary::-webkit-details-marker{display:none}
+.cx-meta{font-weight:400;font-size:12px;color:var(--txt3);margin-left:auto}
+.cx-act-body{padding:4px 14px 14px;border-top:1px solid var(--border)}
+.cx-sec{margin-top:14px}
+.cx-sec label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;font-weight:600}
+.cx-sec-h{font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.cx-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+.cx-row input,.cx-row select{padding:6px 9px}
+.cx-n{width:84px!important;flex-shrink:0}
+.cx-ib{background:var(--bg);border:1px solid var(--border);border-radius:6px;width:30px;height:30px;flex-shrink:0;color:var(--txt2);font-size:13px}
+.cx-ib:hover{border-color:var(--em);color:var(--em)}
+.cx-chip{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--border);color:var(--txt2)}
+.cx-cols{display:flex;gap:6px;font-size:11px;color:var(--txt3);margin-bottom:4px}
+.cx-hint{font-size:12px;color:var(--txt3);line-height:1.5}`;
+  document.head.appendChild(st);
+}
+
+function renderCircularSettingsCard(){
+  _circInjectStyle();
+  let card=$('circ-settings-card');
+  if(!card){
+    card=document.createElement('div');
+    card.id='circ-settings-card';
+    card.className='card';
+    const page=$('page-settings'),saveBtn=$('set-save-btn'),demo=$('demo-mode-card');
+    if(page&&demo)page.insertBefore(card,demo);
+    else if(page&&saveBtn)page.insertBefore(card,saveBtn);
+    else if(page)page.appendChild(card);
+  }
+  const on=_modState.circular!==false;
+  card.style.display=on?'':'none';
+  if(!on)return;
+  card.innerHTML=
+    '<div class="card-title">♻️ Circular activities</div>'+
+    '<div class="cx-hint" style="margin-bottom:14px">Add the activities you run. Each comes pre-set with stages, outcomes and item types. Change anything to match how you work, or build your own. Saved with <strong>Save settings</strong>.</div>'+
+    '<div id="cx-missing" style="display:none;background:#FEF2F2;border:1px solid #FECACA;color:#B91C1C;padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>'+
+    '<div id="cx-body">'+
+      '<div class="cx-tpl-grid" id="cx-tpl-grid"><div class="cx-hint">Loading…</div></div>'+
+      '<div class="cx-sec-h" style="margin-top:20px">Set up each activity</div>'+
+      '<div id="cx-act-list"></div>'+
+      '<div class="cx-hint" style="margin-top:10px">Weights, CO₂e and £ values are Vorlana starter estimates. Replace them with your own or your funder\'s figures. Reports always show the source.</div>'+
+    '</div>';
+  CIRC=[];CIRC_REMOVED=[];CIRC_READY=false;
+  loadCircSettings();
 }
