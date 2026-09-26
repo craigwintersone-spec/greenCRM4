@@ -1192,7 +1192,7 @@ function cxSummaryHTML(acts) {
     return '<div class="card" style="cursor:pointer;margin:0" onclick="cxTab(\'' + a.id + '\')">' +
       '<div class="card-title">' + cxE(a.icon) + ' ' + cxE(a.name) + '</div>' +
       (circMode(a) === 'tally'
-        ? '<div style="margin:6px 0 8px"><span class="cxp-chip">' + its.filter(cxIsToday).length + ' today</span><span class="cxp-chip">' + cxFmt(its.filter(i => i.created_at && new Date(i.created_at).getMonth() === new Date().getMonth() && new Date(i.created_at).getFullYear() === new Date().getFullYear()).reduce((x, i) => x + (+i.weight_kg || 0), 0), 1) + ' kg this month</span></div>'
+        ? '<div style="margin:6px 0 8px">' + (live.length ? '<span class="cxp-chip" style="color:var(--amber);border-color:var(--amber)">' + live.length + ' to sort</span>' : '') + '<span class="cxp-chip">' + its.filter(cxIsToday).length + ' today</span><span class="cxp-chip">' + cxFmt(its.filter(i => i.created_at && new Date(i.created_at).getMonth() === new Date().getMonth() && new Date(i.created_at).getFullYear() === new Date().getFullYear()).reduce((x, i) => x + (+i.weight_kg || 0), 0), 1) + ' kg this month</span></div>'
         : '<div style="margin:6px 0 8px">' + (a.stages || []).map(s =>
         '<span class="cxp-chip">' + cxE(s.label) + ' · ' + live.filter(i => i.stage === s.key).length + '</span>').join('') + '</div>') +
       '<div class="cxp-s">' + cxFmt(im.finished) + ' finished · ' + cxFmt(im.kg, 1) + ' kg diverted' +
@@ -1572,8 +1572,8 @@ function cxRecentHTML(act) {
   const done = its.filter(i => i.outcome_type).slice(0, 30);
   const open = its.filter(i => !i.outcome_type);
   let h = '<div class="card" style="max-width:640px"><div class="card-title">Recent</div>';
-  if (open.length) h += '<div class="cxp-warn">' + open.length + ' earlier entr' + (open.length === 1 ? 'y has' : 'ies have') + ' no destination yet: ' +
-    open.slice(0, 8).map(i => '<a href="#" onclick="cxOpenItem(\'' + i.id + '\');return false">' + cxE(i.name) + '</a>').join(', ') + '</div>';
+  if (open.length) h += '<div class="cxp-warn" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span>' + open.length + ' entr' + (open.length === 1 ? 'y has' : 'ies have') + ' no destination yet, so reports leave ' + (open.length === 1 ? 'it' : 'them') + ' out.</span>' +
+    '<button class="btn btn-p btn-sm" onclick="cxTidyOpen(\'' + act.id + '\')">Sort them</button></div>';
   h += done.length ? done.map(i => {
     const o = cxOutcome(act, i.outcome); const t = cxType(act, i.item_type);
     const d = new Date(i.outcome_at || i.created_at);
@@ -1636,14 +1636,14 @@ function cxReportStats(o) {
     if (cid) return _cxrArr(a.contract_ids).includes(cid) || (!!i.event_id && (evCons[String(i.event_id)] || []).includes(cid));
     return true;
   });
-  const r = { entries: items.length, inProgress: 0, finished: 0, kg: 0, co2: 0, value: 0, reused: 0, foodKg: 0, meals: 0,
+  const r = { entries: items.length, inProgress: 0, undecided: 0, inStock: 0, finished: 0, kg: 0, co2: 0, value: 0, reused: 0, foodKg: 0, meals: 0,
     repairTried: 0, repairFixed: 0, income: 0, recycledKg: 0, byActivity: {}, byOutcome: {}, starter: false, noSession: 0, activities: [] };
   items.forEach(i => {
     const a = acts[i.activity_id];
     const qty = +i.quantity || 1, kg = +i.weight_kg || 0;
     const row = r.byActivity[a.name] || (r.byActivity[a.name] = { icon: a.icon || '♻️', items: 0, kg: 0, co2: 0, value: 0 });
     if (!i.event_id) r.noSession++;
-    if (!i.outcome_type) { r.inProgress++; return; }
+    if (!i.outcome_type) { r.inProgress++; if (circMode(a) === 'tracked') r.inStock++; else r.undecided++; return; }
     r.finished++; row.items += qty;
     const t = i.outcome_type;
     const o2 = (a.outcomes || []).find(x => x.key === i.outcome);
@@ -1674,7 +1674,8 @@ function cxReportLines(r) {
     '',
     'CIRCULAR ECONOMY (calculated from item records)',
     'Activities: ' + r.activities.join(', '),
-    'Items and batches with a final outcome: ' + r.finished + (r.inProgress ? ' · still in progress: ' + r.inProgress : ''),
+    'Items and batches with a final outcome: ' + r.finished,
+    r.inStock ? 'Items currently being processed (in stock, not yet counted): ' + r.inStock : '',
     'Weight diverted from waste (reused, repaired, shared or recycled): ' + r.kg + ' kg' + (r.recycledKg ? ' (of which recycled: ' + r.recycledKg + ' kg)' : ''),
     r.reused ? 'Items reused or repaired: ' + r.reused : '',
     r.co2 ? 'Estimated CO2e avoided: ' + r.co2 + ' kg (' + (Math.round(r.co2 / 100) / 10) + ' tonnes)' : '',
@@ -1691,7 +1692,7 @@ function cxReportGaps(r) {
   const g = [];
   if (!r || !r.entries) return g;
   if (r.starter) g.push('Some CO2e and value figures use Vorlana starter estimates rather than the organisation\'s own figures.');
-  if (r.inProgress) g.push(r.inProgress + ' circular item' + (r.inProgress === 1 ? ' is' : 's are') + ' still in progress and not counted in the impact figures.');
+  if (r.undecided) g.push(r.undecided + ' circular entr' + (r.undecided === 1 ? 'y has' : 'ies have') + ' no destination recorded yet, so ' + (r.undecided === 1 ? 'it is' : 'they are') + ' not counted in the impact figures.');
   return g;
 }
 
@@ -2015,7 +2016,7 @@ function cxiBuild() {
     if (seen[fp] <= (have[fp] || 0)) { dupes++; left.push({ row: rowNo, why: 'already in Vorlana' }); return; }
     let event_id = null;
     if (CXI.link && byDate[date] && byDate[date].length === 1) event_id = String(byDate[date][0].id);
-    out.push({ t, kg, qty, okey, skey, date, event_id, fp, noWeight, name: g('name'), brand: g('brand'), model: g('model'), serial: g('serial'), source: g('source'), sale: cxiNum(g('sale')), notes: g('notes'), row: rowNo });
+    out.push({ t, kg, qty, okey, skey, date, event_id, fp, noWeight, name: g('name'), brand: g('brand'), model: g('model'), serial: g('serial'), source: g('source'), sale: cxiNum(g('sale')), notes: g('notes'), row: rowNo, rawOut });
   });
   return { entries: out, notes, left, dupes, empty, counts: c, newTypes: Object.values(newTypes) };
 }
@@ -2083,6 +2084,7 @@ async function cxImportSave() {
       if (x.notes) custom.note = x.notes;
       if (x.sale) custom.sale_gbp = x.sale;
       if (x.noWeight) custom.no_weight = true;
+      if (x.rawOut && !x.okey) custom.raw_outcome = x.rawOut;
       custom.import_row = x.row;
       return {
         org_id: orgId, activity_id: act.id, item_type: x.t.key, name: x.name || x.t.label, category: act.name,
@@ -2127,6 +2129,67 @@ async function cxImportUndo(batch) {
   CX.items = CX.items.filter(i => !(i.custom && i.custom.import_batch === batch));
   if (typeof CXR !== 'undefined') CXR.at = 0;
   cxCloseModal(); cxDraw();
+}
+
+// ── Sort undecided entries in bulk ───────────────────────────
+// Imported or quick-logged entries with no destination aren't counted
+// in reports. Grouped by item and by what the file said, one choice
+// per group — dates stay as logged.
+let _cxTidy = null;
+function cxTidyOpen(actId) {
+  const act = cxAct(actId); if (!act) return;
+  const open = CX.items.filter(i => i.activity_id === actId && !i.outcome_type);
+  if (!open.length) return;
+  const groups = {};
+  open.forEach(i => {
+    const raw = (i.custom && i.custom.raw_outcome) || '';
+    const k = (i.item_type || '') + '|' + raw.toLowerCase();
+    const g = groups[k] || (groups[k] = { key: k, type: i.item_type, raw, ids: [], kg: 0, qty: 0, pick: '' });
+    g.ids.push(i.id); g.kg += +i.weight_kg || 0; g.qty += +i.quantity || 1;
+  });
+  _cxTidy = { act: actId, groups: Object.values(groups).sort((a, b) => b.ids.length - a.ids.length) };
+  // Pre-pick where the file's wording matches a destination
+  _cxTidy.groups.forEach(g => { if (g.raw) g.pick = cxiMatch(act.outcomes || [], g.raw) || ''; });
+  cxTidyDraw();
+}
+function cxTidyDraw() {
+  const t = _cxTidy, act = cxAct(t.act), e = cxE;
+  const opts = sel => '<option value="">Leave for now</option>' + (act.outcomes || []).map(o => '<option value="' + e(o.key) + '"' + (o.key === sel ? ' selected' : '') + '>' + e(o.label) + '</option>').join('');
+  const total = t.groups.reduce((a, g) => a + g.ids.length, 0);
+  cxModal('<h2>Sort ' + total + ' undecided entr' + (total === 1 ? 'y' : 'ies') + '</h2>' +
+    '<div class="cxp-s" style="margin-bottom:12px">These have no destination, so reports leave them out. Pick where each group went — dates stay as they were logged.</div>' +
+    '<div class="form-row"><label>Quick: set every group to</label><select onchange="_cxTidy.groups.forEach(g=>g.pick=this.value);cxTidyDraw()">' + opts('') + '</select></div>' +
+    '<div style="max-height:360px;overflow:auto">' + t.groups.map((g, i) => {
+      const ty = cxType(act, g.type);
+      return '<div class="cxp-list-row"><div style="min-width:0"><div class="cxp-t">' + e(ty ? ty.label : 'Item') + ' · ' + g.ids.length + ' entr' + (g.ids.length === 1 ? 'y' : 'ies') + '</div>' +
+        '<div class="cxp-s">' + cxFmt(g.kg, 1) + ' kg' + (g.raw ? ' · file said "' + e(g.raw) + '"' : ' · no destination in the file') + '</div></div>' +
+        '<select style="width:auto;max-width:190px" onchange="_cxTidy.groups[' + i + '].pick=this.value">' + opts(g.pick) + '</select></div>';
+    }).join('') + '</div>' +
+    '<div class="modal-footer"><button class="btn btn-ghost" onclick="cxCloseModal()">Cancel</button><button class="btn btn-p" id="cx-tidy-go" onclick="cxTidyApply()">Apply</button></div>', 620);
+}
+async function cxTidyApply() {
+  const t = _cxTidy, act = cxAct(t.act), btn = $('cx-tidy-go');
+  const todo = t.groups.filter(g => g.pick);
+  if (!todo.length) { cxCloseModal(); return; }
+  btn.disabled = true;
+  let done = 0;
+  try {
+    for (const g of todo) {
+      const o = cxOutcome(act, g.pick);
+      for (let i = 0; i < g.ids.length; i += 200) {
+        const ids = g.ids.slice(i, i + 200);
+        btn.textContent = 'Saving ' + (done + ids.length) + '…';
+        // outcome_at stays empty so reports keep each entry's own logged date
+        const { error } = await sb.from('circular_items').update({ outcome: o.key, outcome_type: o.type, status: o.label, updated_at: new Date().toISOString() }).in('id', ids);
+        if (error) throw error;
+        await sb.from('circular_item_events').insert(ids.map(id => ({ org_id: orgId, item_id: String(id), activity_id: act.id, action: 'finished', to_stage: o.key, data: { via: 'sorted in bulk' }, actor_name: cxActorName() })));
+        CX.items.forEach(it => { if (ids.includes(it.id)) Object.assign(it, { outcome: o.key, outcome_type: o.type, status: o.label }); });
+        done += ids.length;
+      }
+    }
+    if (typeof CXR !== 'undefined') CXR.at = 0;
+    cxCloseModal(); cxDraw();
+  } catch (e) { alert('Stopped after ' + done + ': ' + (e.message || e)); btn.disabled = false; btn.textContent = 'Apply'; }
 }
 
 // ── Log / edit item ──────────────────────────────────────────
