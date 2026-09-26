@@ -1434,7 +1434,7 @@ async function cxQPhoto(ev, actId) {
   const act = cxAct(actId), q = cxQ(act), tracked = circMode(act) === 'tracked';
   q.status = '✨ Looking at the photo…'; q.newType = null; cxDraw();
   try {
-    const b64 = await cxResize(file, 1200, 0.72);
+    const b64 = await cxResize(file, 1024, 0.7);
     const list = (act.item_types || []).map(t => t.key + ' = ' + t.label + ' (' + (cxPerKg(t) ? 'weighed' : 'counted') + ')').join('; ');
     const j = await vAI(
       'You help a UK community organisation log what is in a photo for their "' + act.name + '" activity. Reply with JSON only.',
@@ -1735,17 +1735,27 @@ async function cxPhoto(ev) {
   }
 }
 
-function cxResize(file, max, q) {
+// Shrinks a photo until it fits the AI request limit (200k chars incl. prompt).
+// Starts at max px / quality q, then steps down size and quality.
+function cxResize(file, max, q, limit) {
+  limit = limit || 140000;
   return new Promise((ok, bad) => {
     const img = new Image(); const url = URL.createObjectURL(file);
     img.onload = () => {
-      const s = Math.min(1, max / Math.max(img.width, img.height));
-      const c = document.createElement('canvas'); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
       URL.revokeObjectURL(url);
-      ok(c.toDataURL('image/jpeg', q).split(',')[1]);
+      let side = Math.min(max, Math.max(img.width, img.height)), quality = q, out = '';
+      for (let n = 0; n < 8; n++) {
+        const s = side / Math.max(img.width, img.height);
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(img.width * s)); c.height = Math.max(1, Math.round(img.height * s));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        out = c.toDataURL('image/jpeg', quality).split(',')[1];
+        if (out.length <= limit) return ok(out);
+        if (quality > 0.5) quality = Math.max(0.5, quality - 0.1); else side = Math.round(side * 0.8);
+      }
+      out.length <= limit ? ok(out) : bad(new Error('Photo is too detailed to send — try again a little further away'));
     };
-    img.onerror = () => bad(new Error('Image could not be read'));
+    img.onerror = () => bad(new Error('Image could not be read. On iPhone, set Camera → Formats → Most Compatible if this keeps happening'));
     img.src = url;
   });
 }
