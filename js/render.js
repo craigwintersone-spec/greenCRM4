@@ -216,6 +216,7 @@ function renderRAG() {
 
 function renderImpact() {
   if (!currentOrg) return;
+  try { cxImpactCard(); } catch (e) { console.error('[circular impact]', e); }
 
   // Header — org name + UK financial year (Apr–Mar)
   const now = new Date();
@@ -1138,6 +1139,7 @@ function cxDraw() {
     '<div class="page-sub">Every item has a passport. Every move is logged.</div></div>' +
     '<div class="cxp-btns">' +
       '<button class="btn btn-ghost btn-sm" onclick="_setSection=\'circular\';go(\'settings\')">⚙️ Set up</button>' +
+      '<button class="btn btn-ghost btn-sm" onclick="cxImportOpen()">⬆ Import</button>' +
       '<button class="btn btn-ghost btn-sm" onclick="cxOpenScan()">📷 Scan</button>' +
       (colAct ? '<button class="btn btn-ghost btn-sm" onclick="cxOpenBooking()">🚚 New booking</button>' : '') +
       '<button class="btn btn-p btn-sm" onclick="cxOpenLog({})">+ Log item</button>' +
@@ -1240,9 +1242,40 @@ function cxCardHTML(i) {
 CX.q = {};
 CX.undo = null;
 function cxQ(act) {
-  if (!CX.q[act.id]) CX.q[act.id] = { type: ((act.item_types || [])[0] || {}).key || '', amt: '', batch: false, tell: false };
+  if (!CX.q[act.id]) CX.q[act.id] = { type: ((act.item_types || [])[0] || {}).key || '', amt: '', batch: false, tell: false, event: cxDefaultSession() };
   return CX.q[act.id];
 }
+// Sessions (events) to link circular entries to — today first, then recent
+function cxSessions() {
+  const today = new Date().toISOString().slice(0, 10);
+  const lo = new Date(Date.now() - 45 * 864e5).toISOString().slice(0, 10);
+  const hi = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
+  return (DB.events || []).filter(e => e.date && String(e.date).slice(0, 10) >= lo && String(e.date).slice(0, 10) <= hi)
+    .sort((a, b) => {
+      const at = String(a.date).slice(0, 10) === today, bt = String(b.date).slice(0, 10) === today;
+      if (at !== bt) return at ? -1 : 1;
+      return String(b.date).localeCompare(String(a.date));
+    });
+}
+function cxDefaultSession() {
+  const today = new Date().toISOString().slice(0, 10);
+  const t = (DB.events || []).filter(e => String(e.date || '').slice(0, 10) === today);
+  return t.length === 1 ? String(t[0].id) : '';
+}
+function cxSessionLabel(id) {
+  const ev = (DB.events || []).find(e => String(e.id) === String(id)); if (!ev) return '';
+  const today = new Date().toISOString().slice(0, 10);
+  const d = String(ev.date || '').slice(0, 10);
+  return (d === today ? 'Today' : new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })) + ' · ' + (ev.name || 'Session');
+}
+function cxSessionOptions(sel) {
+  const list = cxSessions();
+  const has = sel && list.some(e => String(e.id) === String(sel));
+  return '<option value="">No session</option>' +
+    (sel && !has ? '<option value="' + cxE(sel) + '" selected>' + cxE(cxSessionLabel(sel) || 'Linked session') + '</option>' : '') +
+    list.map(e => '<option value="' + cxE(e.id) + '"' + (String(e.id) === String(sel) ? ' selected' : '') + '>' + cxE(cxSessionLabel(e.id)) + '</option>').join('');
+}
+
 function cxIsToday(i) { const d = i.created_at || i.updated_at; return d && new Date(d).toDateString() === new Date().toDateString(); }
 
 function cxQuickHTML(act) {
@@ -1265,6 +1298,9 @@ function cxQuickHTML(act) {
   let h = '<div class="card cxq"><div class="cxq-top"><div><div class="cxq-k">' + e(act.icon) + ' ' + e(act.name) + '</div><div class="cxq-h">' + (tracked ? 'Add an item' : 'Log it') + '</div></div>' +
     '<div style="text-align:right"><div class="cxq-big">' + big + '</div><div class="cxq-small">' + small + '</div></div></div>';
 
+  if ((DB.events || []).length) {
+    h += '<div class="cxq-sess"><span>Session</span><select onchange="cxQ(cxAct(\'' + id + '\')).event=this.value">' + cxSessionOptions(q.event) + '</select></div>';
+  }
   h += '<div class="cxq-cap">' +
     '<label class="cxq-cam"><span>📷</span> Photo' + (kg || !t ? ' on the scales' : '') + '<input type="file" accept="image/*" capture="environment" style="display:none" onchange="cxQPhoto(event,\'' + id + '\')"/></label>' +
     '<button class="cxq-tellbtn" onclick="cxQ(cxAct(\'' + id + '\')).tell=!cxQ(cxAct(\'' + id + '\')).tell;cxDraw()">✍️ Just tell it</button></div>';
@@ -1326,6 +1362,8 @@ function cxInjectQuickStyle() {
 .cxq-h{font-size:18px;font-weight:700;color:var(--txt)}
 .cxq-big{font-size:22px;font-weight:700;color:var(--em)}
 .cxq-small{font-size:11px;color:var(--txt3)}
+.cxq-sess{display:flex;align-items:center;gap:8px;margin:-4px 0 12px;font-size:12px;color:var(--txt3)}
+.cxq-sess select{width:auto;flex:1;max-width:340px;padding:6px 9px;font-size:13px}
 .cxq-cap{display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-bottom:10px}
 .cxq-cam{display:flex;align-items:center;justify-content:center;gap:8px;height:64px;border-radius:12px;background:rgba(31,111,109,.08);border:1.5px dashed rgba(31,111,109,.35);color:var(--em);font-weight:700;font-size:14px;cursor:pointer}
 .cxq-cam span{font-size:22px}
@@ -1370,8 +1408,10 @@ async function cxQInsert(act, typeKey, amount, kind, key, extra) {
   const weight = kg ? amt : +((+t.weight_kg || 0) * qty).toFixed(2);
   const f = cxCalc(act, t.key, qty, weight);
   const now = new Date().toISOString();
+  const qs = CX.q[act.id];
   const d = Object.assign({
     org_id: orgId, activity_id: act.id, item_type: t.key, name: t.label, category: act.name,
+    event_id: qs && qs.event ? qs.event : null,
     quantity: qty, weight_kg: weight, co2e_kg: f.co2, value_gbp: f.value, custom: {}, updated_at: now
   }, extra || {});
   if (kind === 'outcome') {
@@ -1553,6 +1593,542 @@ async function cxDelEntry(id) {
   CX.items = CX.items.filter(i => i !== it); cxDraw();
 }
 
+// ─────────────────────────────────────────────────────────────
+// CIRCULAR → REPORTS
+// One set of numbers for every report: Delivery report, contract
+// (funder) report, session report and Social Impact.
+// An item counts for a contract when its activity is funded by that
+// contract (Settings → Circular → Basics → Funded by) OR it was
+// logged at a session (event) linked to that contract.
+// PRINCIPLE: code calculates every figure; the AI only writes prose.
+// ─────────────────────────────────────────────────────────────
+const CXR = { items: [], acts: [], at: 0, ok: false };
+
+async function cxReportLoad(force) {
+  if (!force && CXR.ok && Date.now() - CXR.at < 60000) return CXR;
+  try {
+    const a = await sb.from('circular_activities').select('*').eq('org_id', orgId);
+    if (a.error) { CXR.ok = false; return CXR; }
+    const it = await sb.from('circular_items').select('*').eq('org_id', orgId).limit(20000);
+    CXR.acts = a.data || []; CXR.items = it.error ? [] : (it.data || []);
+    CXR.ok = true; CXR.at = Date.now();
+  } catch (e) { CXR.ok = false; }
+  return CXR;
+}
+function _cxrArr(v) {
+  if (Array.isArray(v)) return v.map(String);
+  if (typeof v === 'string' && v.charAt(0) === '[') { try { return JSON.parse(v).map(String); } catch (e) { return []; } }
+  return [];
+}
+
+// o: { from, to (YYYY-MM-DD), contractId, eventId }
+function cxReportStats(o) {
+  o = o || {};
+  if (!CXR.ok) return null;
+  const acts = {}; CXR.acts.forEach(a => { acts[a.id] = a; });
+  const evCons = {}; (DB.events || []).forEach(e => { evCons[String(e.id)] = _cxrArr(e.contract_ids); });
+  const cid = o.contractId ? String(o.contractId) : '';
+  const items = CXR.items.filter(i => {
+    const a = acts[i.activity_id]; if (!a) return false;
+    const d = String(i.outcome_at || i.created_at || '').slice(0, 10);
+    if (o.from && o.to && (!d || d < o.from || d > o.to)) return false;
+    if (o.eventId) return String(i.event_id || '') === String(o.eventId);
+    if (cid) return _cxrArr(a.contract_ids).includes(cid) || (!!i.event_id && (evCons[String(i.event_id)] || []).includes(cid));
+    return true;
+  });
+  const r = { entries: items.length, inProgress: 0, finished: 0, kg: 0, co2: 0, value: 0, reused: 0, foodKg: 0, meals: 0,
+    repairTried: 0, repairFixed: 0, income: 0, recycledKg: 0, byActivity: {}, byOutcome: {}, starter: false, noSession: 0, activities: [] };
+  items.forEach(i => {
+    const a = acts[i.activity_id];
+    const qty = +i.quantity || 1, kg = +i.weight_kg || 0;
+    const row = r.byActivity[a.name] || (r.byActivity[a.name] = { icon: a.icon || '♻️', items: 0, kg: 0, co2: 0, value: 0 });
+    if (!i.event_id) r.noSession++;
+    if (!i.outcome_type) { r.inProgress++; return; }
+    r.finished++; row.items += qty;
+    const t = i.outcome_type;
+    const o2 = (a.outcomes || []).find(x => x.key === i.outcome);
+    const ol = (o2 ? o2.label : (i.status || t));
+    r.byOutcome[ol] = (r.byOutcome[ol] || 0) + qty;
+    if (CX_IMPACT_KG.includes(t)) { r.kg += kg; row.kg += kg; }
+    if (t === 'recycle') r.recycledKg += kg;
+    if (CX_IMPACT_CO2.includes(t)) { r.co2 += +i.co2e_kg || 0; r.value += +i.value_gbp || 0; row.co2 += +i.co2e_kg || 0; row.value += +i.value_gbp || 0; }
+    if (t === 'reuse' || t === 'repair') r.reused += qty;
+    if (t === 'share') r.foodKg += kg;
+    if (i.custom && +i.custom.sale_gbp) r.income += +i.custom.sale_gbp;
+    if (a.template === 'repair_cafe') { r.repairTried += qty; if (t === 'repair') r.repairFixed += qty; }
+    const ty = (a.item_types || []).find(x => x.key === i.item_type);
+    if (ty && ty.source === CIRC_STARTER && ((+i.co2e_kg || 0) > 0 || (+i.value_gbp || 0) > 0)) r.starter = true;
+  });
+  const r1 = v => Math.round(v * 10) / 10;
+  r.kg = r1(r.kg); r.co2 = r1(r.co2); r.value = Math.round(r.value); r.foodKg = r1(r.foodKg); r.recycledKg = r1(r.recycledKg);
+  r.meals = Math.round(r.foodKg / CX_KG_PER_MEAL);
+  r.fixRate = r.repairTried ? Math.round(r.repairFixed / r.repairTried * 100) : null;
+  r.activities = Object.keys(r.byActivity);
+  return r;
+}
+
+function cxReportLines(r) {
+  if (!r || !r.entries) return [];
+  const m = v => '£' + Math.round(v).toLocaleString('en-GB');
+  return [
+    '',
+    'CIRCULAR ECONOMY (calculated from item records)',
+    'Activities: ' + r.activities.join(', '),
+    'Items and batches with a final outcome: ' + r.finished + (r.inProgress ? ' · still in progress: ' + r.inProgress : ''),
+    'Weight diverted from waste (reused, repaired, shared or recycled): ' + r.kg + ' kg' + (r.recycledKg ? ' (of which recycled: ' + r.recycledKg + ' kg)' : ''),
+    r.reused ? 'Items reused or repaired: ' + r.reused : '',
+    r.co2 ? 'Estimated CO2e avoided: ' + r.co2 + ' kg (' + (Math.round(r.co2 / 100) / 10) + ' tonnes)' : '',
+    r.value ? 'Estimated value to people receiving items: ' + m(r.value) : '',
+    r.foodKg ? 'Food shared: ' + r.foodKg + ' kg (about ' + r.meals + ' meals at 420 g per meal, WRAP)' : '',
+    r.fixRate != null ? 'Repair: ' + r.repairFixed + ' of ' + r.repairTried + ' items fixed (' + r.fixRate + '% fix rate)' : '',
+    r.income ? 'Income from resale: ' + m(r.income) : '',
+    'By outcome: ' + Object.keys(r.byOutcome).map(k => k + ' ' + r.byOutcome[k]).join(', '),
+    'Method: CO2e and value use per-item factors held in Vorlana' + (r.starter ? ', some of which are Vorlana starter estimates not yet set by the organisation' : ' set by the organisation') + '. State that these are estimates.'
+  ].filter(Boolean);
+}
+
+function cxReportGaps(r) {
+  const g = [];
+  if (!r || !r.entries) return g;
+  if (r.starter) g.push('Some CO2e and value figures use Vorlana starter estimates rather than the organisation\'s own figures.');
+  if (r.inProgress) g.push(r.inProgress + ' circular item' + (r.inProgress === 1 ? ' is' : 's are') + ' still in progress and not counted in the impact figures.');
+  return g;
+}
+
+// Figures + tables for the report document
+function cxReportDocHTML(r, title) {
+  if (!r || !r.entries) return '';
+  const esc = escapeHTML, m = v => '£' + Math.round(v).toLocaleString('en-GB');
+  const figs = [
+    ['Diverted from waste', r.kg.toLocaleString('en-GB') + ' kg'],
+    r.co2 ? ['CO₂e avoided (est.)', (Math.round(r.co2 / 100) / 10) + ' t'] : null,
+    r.reused ? ['Items reused or repaired', r.reused] : null,
+    r.foodKg ? ['Food shared', r.foodKg + ' kg'] : null,
+    r.foodKg ? ['Meals equivalent', r.meals] : null,
+    r.fixRate != null ? ['Repair fix rate', r.fixRate + '%'] : null,
+    r.value ? ['Value to people (est.)', m(r.value)] : null,
+    r.income ? ['Resale income', m(r.income)] : null
+  ].filter(Boolean);
+  const actRows = r.activities.map(k => { const a = r.byActivity[k]; return '<tr><td>' + esc(a.icon + ' ' + k) + '</td><td>' + a.items + '</td><td>' + (Math.round(a.kg * 10) / 10) + '</td><td>' + (Math.round(a.co2 * 10) / 10) + '</td></tr>'; }).join('');
+  const outKeys = Object.keys(r.byOutcome).sort((a, b) => r.byOutcome[b] - r.byOutcome[a]);
+  return '<h3>' + esc(title || 'Circular economy') + '</h3>' +
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0 16px">' + figs.map(f =>
+      '<div style="border:1px solid #ddd;border-radius:8px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:800;color:#1F6F6D">' + esc(String(f[1])) + '</div>' +
+      '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#777;font-weight:700">' + esc(f[0]) + '</div></div>').join('') + '</div>' +
+    '<table class="dr-tbl" style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px"><thead><tr><th style="text-align:left">Activity</th><th style="text-align:left">Items</th><th style="text-align:left">kg</th><th style="text-align:left">CO₂e kg</th></tr></thead><tbody>' + actRows + '</tbody></table>' +
+    (outKeys.length ? '<table class="dr-tbl" style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:10px"><thead><tr><th style="text-align:left">Where it went</th><th style="text-align:left">Items</th></tr></thead><tbody>' +
+      outKeys.map(k => '<tr><td>' + esc(k) + '</td><td>' + r.byOutcome[k] + '</td></tr>').join('') + '</tbody></table>' : '') +
+    '<p style="font-size:11px;color:#777">CO₂e and value are estimates from per-item factors' + (r.starter ? ' (including Vorlana starter estimates)' : ' set by the organisation') + '. Meals at 420 g per meal (WRAP). Weight diverted includes items reused, repaired, shared or recycled.</p>';
+}
+
+// Social Impact page card
+async function cxImpactCard() {
+  const page = $('page-impact'); if (!page) return;
+  if (typeof currentOrg !== 'undefined' && currentOrg && currentOrg.modules && currentOrg.modules.circular === false) { const c = $('cx-impact-card'); if (c) c.remove(); return; }
+  await cxReportLoad();
+  const sel = $('ir-period');
+  if (sel && !sel._cx) { sel._cx = true; sel.addEventListener('change', () => cxImpactCard()); }
+  const key = (sel && sel.value) || 'all';
+  let from = null, to = null;
+  if (typeof _impactRange === 'function') { try { const rg = _impactRange(key); from = rg.from || null; to = rg.to || null; } catch (e) { /* all time */ } }
+  const r = cxReportStats({ from, to });
+  let card = $('cx-impact-card');
+  if (!r || !r.entries) { if (card) card.remove(); return; }
+  if (!card) {
+    card = document.createElement('div'); card.id = 'cx-impact-card'; card.className = 'card';
+    const wall = page.querySelector('.impact-wall');
+    if (wall && wall.nextSibling) page.insertBefore(card, wall.nextSibling); else page.appendChild(card);
+  }
+  const m = v => '£' + Math.round(v).toLocaleString('en-GB');
+  card.innerHTML = '<div class="card-title">♻️ Circular economy</div><div class="stats-grid" style="margin:0">' +
+    statCard('Diverted from waste', r.kg.toLocaleString('en-GB') + ' kg') +
+    (r.co2 ? statCard('CO₂e avoided', (Math.round(r.co2 / 100) / 10) + ' t', 'estimate') : '') +
+    (r.foodKg ? statCard('Food shared', r.foodKg + ' kg', '≈ ' + r.meals + ' meals') : '') +
+    (r.fixRate != null ? statCard('Fix rate', r.fixRate + '%', r.repairFixed + ' of ' + r.repairTried) : statCard('Items reused', r.reused)) +
+    (r.value ? statCard('Value to people', m(r.value), 'estimate') : '') + '</div>';
+}
+
+// ─────────────────────────────────────────────────────────────
+// CIRCULAR IMPORTER — historic spreadsheets, no column mapping
+// CSV / TSV / Excel. ✨ reads the headers and values and matches
+// them to the activity's items and destinations; the code does all
+// the counting, dates and weights. Duplicates are skipped, new
+// items are added to the list, and the whole import can be undone.
+// ─────────────────────────────────────────────────────────────
+const CXI = { file: null, headers: [], rows: [], act: null, map: {}, vals: { item: {}, outcome: {}, stage: {} }, gUnit: 'kg', plan: null, batch: null, link: true, defOut: '' };
+const CXI_FIELDS = [
+  ['date', 'Date'], ['item', 'Item / crop'], ['kg', 'Weight'], ['qty', 'Quantity'], ['outcome', 'Where it went / result'],
+  ['stage', 'Step'], ['name', 'Description'], ['brand', 'Brand'], ['model', 'Model'], ['serial', 'Serial'], ['source', 'Donor / source'], ['sale', 'Sale price'], ['notes', 'Notes']
+];
+
+function cxImportOpen() {
+  const acts = cxItemActs();
+  if (!acts.length) { alert('Add an activity in ⚙️ Set up first.'); return; }
+  const cur = CX.tab !== 'all' && cxAct(CX.tab) && CX.tab !== 'collections' ? CX.tab : acts[0].id;
+  cxModal('<h2>Import past records</h2>' +
+    '<div class="cxp-s" style="font-size:13px;line-height:1.5;margin-bottom:14px">Upload a spreadsheet of past harvests, repairs, donations or devices. No column matching needed — ✨ works out which column is which, and you check the result before anything is saved.</div>' +
+    '<div class="form-row"><label>Which activity is this for?</label><select id="cxi-act">' + acts.map(a => '<option value="' + a.id + '"' + (a.id === cur ? ' selected' : '') + '>' + cxE(a.icon + ' ' + a.name) + '</option>').join('') + '</select></div>' +
+    '<div class="form-row"><label>File</label><input type="file" id="cxi-file" accept=".csv,.tsv,.txt,.xlsx,.xls,text/csv"/><div class="cxp-s" style="margin-top:4px">CSV, TSV or Excel. First row should be the column headings.</div></div>' +
+    ((DB.events || []).length ? '<label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:6px"><input type="checkbox" id="cxi-link" checked style="width:auto"/> Link rows to a session held on the same date</label>' : '') +
+    '<div id="cxi-msg" class="cxp-s" style="margin-top:8px"></div>' +
+    '<div class="modal-footer"><button class="btn btn-ghost" onclick="cxCloseModal()">Cancel</button><button class="btn btn-p" id="cxi-go" onclick="cxImportRead()">Read file</button></div>', 560);
+}
+
+function cxiParseDelimited(text) {
+  text = text.replace(/^\uFEFF/, '');
+  const first = text.split(/\r?\n/)[0] || '';
+  const delim = (first.match(/\t/g) || []).length > (first.match(/,/g) || []).length ? '\t' : (first.match(/;/g) || []).length > (first.match(/,/g) || []).length ? ';' : ',';
+  const rows = []; let cur = [], f = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], nx = text[i + 1];
+    if (q) { if (c === '"' && nx === '"') { f += '"'; i++; } else if (c === '"') q = false; else f += c; }
+    else if (c === '"') q = true;
+    else if (c === delim) { cur.push(f); f = ''; }
+    else if (c === '\n') { cur.push(f); rows.push(cur); cur = []; f = ''; }
+    else if (c !== '\r') f += c;
+  }
+  if (f.length || cur.length) { cur.push(f); rows.push(cur); }
+  return rows;
+}
+async function cxiLoadXLSX() {
+  if (window.XLSX) return;
+  await new Promise((ok, bad) => { const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; s.onload = ok; s.onerror = () => bad(new Error('Could not load the Excel reader — save the sheet as CSV and try again')); document.head.appendChild(s); });
+}
+async function cxiReadFile(file) {
+  let rows;
+  if (/\.xlsx?$/i.test(file.name)) {
+    await cxiLoadXLSX();
+    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, dateNF: 'yyyy-mm-dd', defval: '' });
+  } else rows = cxiParseDelimited(await file.text());
+  // header = first row with 2+ filled cells
+  let hi = rows.findIndex(r => r.filter(c => String(c).trim()).length >= 2);
+  if (hi < 0) throw new Error('That file looks empty.');
+  const headers = rows[hi].map((h, i) => String(h).trim() || ('Column ' + (i + 1)));
+  const body = rows.slice(hi + 1).filter(r => r.some(c => String(c).trim()));
+  if (!body.length) throw new Error('No data rows found under the headings.');
+  return { headers, rows: body.map(r => headers.map((_, i) => String(r[i] == null ? '' : r[i]).trim())) };
+}
+
+// Best guess from headings alone — used when ✨ is unavailable
+function cxiGuess(headers) {
+  const rx = {
+    date: /date|when|day|timestamp|time/i, kg: /kg|kilo|weight|grams?\b|\bg\b/i, qty: /qty|quantity|count|number of|how many|^no\.?$|items?$/i,
+    outcome: /outcome|result|status|destination|went|fixed|repaired|where|given to/i, stage: /stage|step/i, serial: /serial|s\/n|frame/i,
+    brand: /brand|make|manufacturer/i, model: /model/i, source: /donor|source|from|site|supplier/i, sale: /price|sold for|sale|£/i,
+    notes: /note|comment/i, item: /item|type|crop|produce|product|category|what|device|object/i, name: /description|desc|name/i
+  };
+  const m = {}, used = new Set();
+  ['date', 'serial', 'brand', 'model', 'kg', 'qty', 'sale', 'outcome', 'stage', 'source', 'notes', 'item', 'name'].forEach(f => {
+    const h = headers.find(x => !used.has(x) && rx[f].test(x));
+    if (h) { m[f] = h; used.add(h); }
+  });
+  return m;
+}
+function cxiDistinct(col, cap) {
+  const i = CXI.headers.indexOf(col); if (i < 0) return [];
+  const seen = new Map();
+  CXI.rows.forEach(r => { const v = r[i]; if (v && !seen.has(v.toLowerCase())) seen.set(v.toLowerCase(), v); });
+  return Array.from(seen.values()).slice(0, cap || 80);
+}
+function cxiMatch(list, raw) {
+  const v = String(raw || '').trim().toLowerCase(); if (!v) return '';
+  const exact = list.find(x => x.label.toLowerCase() === v || x.key === v);
+  if (exact) return exact.key;
+  const part = list.find(x => v.includes(x.label.toLowerCase()) || x.label.toLowerCase().includes(v));
+  return part ? part.key : '';
+}
+
+async function cxImportRead() {
+  const f = $('cxi-file').files && $('cxi-file').files[0];
+  const msg = $('cxi-msg'), btn = $('cxi-go');
+  if (!f) { msg.textContent = 'Choose a file first.'; return; }
+  btn.disabled = true; btn.textContent = 'Reading…';
+  try {
+    const { headers, rows } = await cxiReadFile(f);
+    Object.assign(CXI, { file: f.name, headers, rows, act: cxAct($('cxi-act').value), link: $('cxi-link') ? $('cxi-link').checked : false, batch: null });
+    const act = CXI.act, tracked = circMode(act) === 'tracked';
+    CXI.map = cxiGuess(headers); CXI.vals = { item: {}, outcome: {}, stage: {} }; CXI.gUnit = 'kg';
+    CXI.defOut = '';
+    msg.textContent = '✨ Working out the columns…';
+    try {
+      const cols = headers.map((h, i) => {
+        const vals = cxiDistinct(h, 12);
+        return '"' + h + '": ' + JSON.stringify(vals);
+      }).join('\n');
+      const j = await vAI('You map a charity\'s spreadsheet to their records. Reply with JSON only. Never invent values.',
+        'Activity: ' + act.name + ' (' + (tracked ? 'each item tracked' : 'quick tally') + ')\n' +
+        'Item list: ' + (act.item_types || []).map(t => t.key + ' = ' + t.label + ' (' + (cxPerKg(t) ? 'weighed' : 'counted') + ')').join('; ') + '\n' +
+        'Destinations: ' + (act.outcomes || []).map(o => o.key + ' = ' + o.label).join('; ') + '\n' +
+        (tracked ? 'Steps: ' + (act.stages || []).map(s => s.key + ' = ' + s.label).join('; ') + '\n' : '') +
+        'Columns with sample values:\n' + cols + '\n\n' +
+        'Return {"columns": {' + CXI_FIELDS.map(x => '"' + x[0] + '": exact column heading or ""').join(', ') + '}, "weight_unit": "kg" or "g"}. ' +
+        'item = what the thing is (crop, device, item type). outcome = where it went or the repair result. kg = weight. qty = number of items. Leave a field "" if no column fits.', 700);
+      const c = j.columns || {};
+      const m = {};
+      Object.keys(c).forEach(k => { if (c[k] && headers.includes(c[k])) m[k] = c[k]; });
+      if (Object.keys(m).length) CXI.map = m;
+      if (j.weight_unit === 'g') CXI.gUnit = 'g';
+      // Value matching for item and outcome columns
+      const itemVals = CXI.map.item ? cxiDistinct(CXI.map.item, 120) : [];
+      const outVals = CXI.map.outcome ? cxiDistinct(CXI.map.outcome, 60) : [];
+      const stVals = tracked && CXI.map.stage ? cxiDistinct(CXI.map.stage, 40) : [];
+      if (itemVals.length || outVals.length || stVals.length) {
+        const v = await vAI('You match spreadsheet values to a charity\'s lists. Reply with JSON only.',
+          'Item list: ' + (act.item_types || []).map(t => t.key + ' = ' + t.label).join('; ') + '\nDestinations: ' + (act.outcomes || []).map(o => o.key + ' = ' + o.label + ' (' + o.type + ')').join('; ') +
+          (tracked ? '\nSteps: ' + (act.stages || []).map(s => s.key + ' = ' + s.label).join('; ') : '') +
+          '\nItem values: ' + JSON.stringify(itemVals) + '\nOutcome values: ' + JSON.stringify(outVals) + (stVals.length ? '\nStep values: ' + JSON.stringify(stVals) : '') +
+          '\nReturn {"item": {value: key, or "NEW:Tidy name" if nothing on the list fits}, "outcome": {value: key or ""}, "stage": {value: key or ""}}. ' +
+          'Merge spelling variants and plurals onto the same key (e.g. "tomato", "Tomatoes ") . For repair results, yes/fixed/repaired → the fixed key, no/not fixed → the not fixable key.', 1500);
+        CXI.vals = { item: v.item || {}, outcome: v.outcome || {}, stage: v.stage || {} };
+      }
+    } catch (e) {
+      msg.textContent = '✨ unavailable (' + e.message + ') — using a best guess from the headings.';
+    }
+    cxiPickDateCol();
+    cxImportPreview();
+  } catch (e) { msg.textContent = e.message || String(e); btn.disabled = false; btn.textContent = 'Read file'; }
+}
+
+// Dates: UK order unless the column proves otherwise (a first part over 12
+// means day-first, a second part over 12 means month-first). Excel serials ok.
+function cxiDateOrder(values) {
+  let dmy = false, mdy = false;
+  values.forEach(v => { const m = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.]\d{2,4}/.exec(String(v || '').trim()); if (m) { if (+m[1] > 12) dmy = true; if (+m[2] > 12) mdy = true; } });
+  return mdy && !dmy ? 'mdy' : 'dmy';
+}
+function cxiDate(v, order) {
+  const s = String(v || '').trim(); if (!s) return null;
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);
+  if (m) return m[1] + '-' + m[2].padStart(2, '0') + '-' + m[3].padStart(2, '0');
+  if (/^\d{5}(\.\d+)?$/.test(s)) { const d = new Date(Date.UTC(1899, 11, 30) + Math.floor(+s) * 864e5); return d.toISOString().slice(0, 10); }
+  m = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/.exec(s);
+  if (m) {
+    const a = +m[1], b = +m[2]; const y = m[3].length === 2 ? '20' + m[3] : m[3];
+    let day = order === 'mdy' ? b : a, mon = order === 'mdy' ? a : b;
+    if (mon > 12 && day <= 12) { const t = day; day = mon; mon = t; }
+    if (mon < 1 || mon > 12 || day < 1 || day > 31) return null;
+    return y + '-' + String(mon).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+  }
+  const d = new Date(s);
+  return !isNaN(d) && /\d{4}/.test(s) ? d.toISOString().slice(0, 10) : null;
+}
+function cxiNum(v) { const n = parseFloat(String(v || '').replace(/,/g, '').replace(/[^0-9.\-]/g, '')); return isNaN(n) ? null : n; }
+function cxiFp(actId, date, type, kg, qty, dest, serial) {
+  return [actId, date || '', type || '', Math.round((+kg || 0) * 100) / 100, +qty || 1, dest || '', (serial || '').toLowerCase()].join('|');
+}
+// "Tomato", "tomatoes ", "TOMATOES" → one key
+function cxiNorm(v) { return String(v || '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/(ies)$/, 'y').replace(/(oes|ses|xes)$/, m => m.slice(0, -2)).replace(/([^s])s$/, '$1'); }
+
+// The date column is the one whose values read as dates most often
+function cxiPickDateCol() {
+  let best = CXI.map.date || '', bestRate = -1;
+  CXI.headers.forEach((h, i) => {
+    const vals = CXI.rows.map(r => r[i]).filter(Boolean);
+    if (!vals.length) return;
+    const ord = cxiDateOrder(vals);
+    const rate = vals.filter(v => /^\d{4}-\d|^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|^\d{5}(\.\d+)?$/.test(String(v).trim()) && cxiDate(v, ord)).length / vals.length;
+    const bonus = h === CXI.map.date ? 0.05 : 0;
+    if (rate + bonus > bestRate && rate >= 0.6) { bestRate = rate + bonus; best = h; }
+  });
+  if (best) CXI.map.date = best;
+}
+
+// IMPORT EVERYTHING, TIDY AFTERWARDS — the same rule as the event importer.
+// Only completely empty rows and rows already in Vorlana are left out.
+// Gaps are filled sensibly and listed by row number so they can be tidied.
+function cxiBuild() {
+  const act = CXI.act, tracked = circMode(act) === 'tracked', col = f => CXI.headers.indexOf(CXI.map[f] || '');
+  const ci = {}; CXI_FIELDS.forEach(f => { ci[f[0]] = col(f[0]); });
+  const types = act.item_types || [];
+  const newTypes = {}, out = [], notes = [], left = [];
+  const note = (row, why) => notes.push({ row, why });
+  const byDate = {};
+  (DB.events || []).forEach(e => { const d = String(e.date || '').slice(0, 10); (byDate[d] = byDate[d] || []).push(e); });
+  const order = ci.date >= 0 ? cxiDateOrder(CXI.rows.map(r => r[ci.date])) : 'dmy';
+  const today = new Date().toISOString().slice(0, 10);
+  const have = {};
+  CX.items.filter(i => i.activity_id === act.id).forEach(i => {
+    const fp = (i.custom && i.custom.fp) || cxiFp(act.id, String(i.outcome_at || i.created_at || '').slice(0, 10), i.item_type, i.weight_kg, i.quantity, i.outcome || i.stage, i.serial);
+    have[fp] = (have[fp] || 0) + 1;
+  });
+  const seen = {};
+  let dupes = 0, empty = 0, lastDate = null;
+  const c = { noDate: 0, noItem: 0, noWeight: 0, noDest: 0, badDate: 0 };
+  const findType = raw => {
+    const mv = CXI.vals.item[raw] || CXI.vals.item[String(raw).trim()];
+    if (mv && String(mv).indexOf('NEW:') !== 0 && types.some(t => t.key === mv)) return { t: types.find(t => t.key === mv) };
+    const n = cxiNorm(raw);
+    const hit = types.find(t => cxiNorm(t.label) === n) || (n.length > 3 && types.find(t => cxiNorm(t.label).includes(n) || n.includes(cxiNorm(t.label))));
+    if (hit) return { t: hit };
+    const label = (mv && String(mv).indexOf('NEW:') === 0 ? String(mv).slice(4) : String(raw)).trim().replace(/\s+/g, ' ').replace(/^./, x => x.toUpperCase());
+    return { newLabel: label, nk: cxiNorm(label) };
+  };
+  CXI.rows.forEach((r, idx) => {
+    const rowNo = idx + 2;   // row 1 is the headings
+    const g = k => ci[k] >= 0 ? String(r[ci[k]] || '').trim() : '';
+    const rawItem = g('item'), rawKg = g('kg'), rawQty = g('qty'), rawOut = g('outcome'), rawSt = g('stage');
+    if (!rawItem && !rawKg && !rawQty && !rawOut && !rawSt && !g('name') && !g('serial')) { empty++; return; }
+
+    // item — never dropped: unknown becomes "Not recorded"
+    let t;
+    if (rawItem) {
+      const f = findType(rawItem);
+      if (f.t) t = f.t;
+      else {
+        const hasKg = ci.kg >= 0 && cxiNum(rawKg) != null;
+        t = newTypes[f.nk] || (newTypes[f.nk] = { key: _circSlug(f.newLabel) + '_' + Math.random().toString(36).slice(2, 5), label: f.newLabel, unit: hasKg && ci.qty < 0 ? 'kg' : 'each', weight_kg: 1, co2e_kg: 0, value_gbp: 0, source: 'Set by organisation', _new: true });
+      }
+    } else if (types.length === 1 && ci.item < 0) t = types[0];
+    else {
+      const nr = types.find(x => cxiNorm(x.label) === 'not recorded');
+      t = nr || newTypes['not recorded'] || (newTypes['not recorded'] = { key: 'not_recorded', label: 'Not recorded', unit: ci.kg >= 0 ? 'kg' : 'each', weight_kg: ci.kg >= 0 ? 1 : 0, co2e_kg: 0, value_gbp: 0, source: 'Set by organisation', _new: true });
+      c.noItem++; note(rowNo, 'no item — imported as "Not recorded"');
+    }
+
+    // amounts — never estimated: a missing weight is imported as 0 kg and listed
+    let kg = cxiNum(rawKg); if (kg != null && CXI.gUnit === 'g') kg = kg / 1000;
+    let qty = cxiNum(rawQty);
+    const perKg = t.unit === 'kg' || (t.unit !== 'each' && /per\s*kg/i.test(t.label));
+    let noWeight = false;
+    if (perKg) { qty = 1; if (kg == null || kg < 0) { kg = 0; noWeight = true; c.noWeight++; note(rowNo, 'no weight — imported as 0 kg'); } }
+    else { qty = Math.max(1, Math.round(qty || 1)); if (kg == null || kg <= 0) kg = +((+t.weight_kg || 0) * qty).toFixed(2); }
+
+    // destination / step — undecided rows are imported and left to tidy
+    let okey = '', skey = '';
+    if (rawOut) { const v = CXI.vals.outcome[rawOut]; okey = v && cxOutcome(act, v) ? v : cxiMatch(act.outcomes || [], rawOut); }
+    if (tracked && rawSt) { const v = CXI.vals.stage[rawSt]; skey = v && cxStage(act, v) ? v : cxiMatch(act.stages || [], rawSt); }
+    if (!okey && !tracked && CXI.defOut) okey = CXI.defOut;
+    if (!okey && !skey && tracked) skey = ((act.stages || [])[0] || {}).key || '';
+    if (!okey && !skey) { c.noDest++; note(rowNo, (rawOut ? '"' + rawOut + '" not matched' : 'no destination') + ' — imported as undecided'); }
+
+    // date — missing takes the row above's, then today
+    let date = ci.date >= 0 ? cxiDate(g('date'), order) : null;
+    if (!date) {
+      if (ci.date >= 0) { if (g('date')) { c.badDate++; note(rowNo, 'date "' + g('date') + '" not understood — used ' + (lastDate ? 'the row above\'s' : 'today')); } else { c.noDate++; note(rowNo, 'no date — used ' + (lastDate ? 'the row above\'s' : 'today')); } }
+      date = lastDate || today;
+    } else lastDate = date;
+
+    const fp = cxiFp(act.id, date, t.key, kg, qty, okey || skey, g('serial'));
+    seen[fp] = (seen[fp] || 0) + 1;
+    if (seen[fp] <= (have[fp] || 0)) { dupes++; left.push({ row: rowNo, why: 'already in Vorlana' }); return; }
+    let event_id = null;
+    if (CXI.link && byDate[date] && byDate[date].length === 1) event_id = String(byDate[date][0].id);
+    out.push({ t, kg, qty, okey, skey, date, event_id, fp, noWeight, name: g('name'), brand: g('brand'), model: g('model'), serial: g('serial'), source: g('source'), sale: cxiNum(g('sale')), notes: g('notes'), row: rowNo });
+  });
+  return { entries: out, notes, left, dupes, empty, counts: c, newTypes: Object.values(newTypes) };
+}
+
+function cxImportPreview() {
+  const act = CXI.act, tracked = circMode(act) === 'tracked';
+  const p = CXI.plan = cxiBuild();
+  const e = cxE;
+  const kg = p.entries.reduce((a, x) => a + (+x.kg || 0), 0);
+  const byItem = {}, byDest = {};
+  p.entries.forEach(x => { byItem[x.t.label] = (byItem[x.t.label] || 0) + (+x.kg || 0); const d = cxOutcome(act, x.okey) || cxStage(act, x.skey); const l = d ? d.label : '—'; byDest[l] = (byDest[l] || 0) + 1; });
+  const linked = p.entries.filter(x => x.event_id).length;
+  const dates = p.entries.map(x => x.date).filter(Boolean).sort();
+  const cn = p.counts;
+  const gapTxt = [cn.noDest ? cn.noDest + ' undecided destination' : '', cn.noWeight ? cn.noWeight + ' with no weight' : '', cn.noItem ? cn.noItem + ' with no item' : '', (cn.noDate + cn.badDate) ? (cn.noDate + cn.badDate) + ' with a missing or unclear date' : ''].filter(Boolean).join(', ');
+  const colSel = f => '<select onchange="CXI.map[\'' + f + '\']=this.value;cxImportPreview()" style="padding:5px 8px;font-size:12px"><option value="">—</option>' +
+    CXI.headers.map(h => '<option' + (CXI.map[f] === h ? ' selected' : '') + '>' + e(h) + '</option>').join('') + '</select>';
+  const shown = CXI_FIELDS.filter(f => (tracked || f[0] !== 'stage'));
+  cxModal('<h2>Check before importing</h2>' +
+    '<div class="cxp-s" style="margin-bottom:12px">' + e(CXI.file) + ' · ' + CXI.rows.length + ' rows · into ' + e(act.icon + ' ' + act.name) + '</div>' +
+    '<div class="stats-grid" style="margin-bottom:12px">' +
+      statCard('Rows to import', p.entries.length, 'of ' + CXI.rows.length + ' in the file') +
+      statCard('Total weight', cxFmt(kg, 1) + ' kg') +
+      statCard('Already in Vorlana', p.dupes, 'skipped') +
+      (dates.length ? statCard('Dates', new Date(dates[0]).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }), 'to ' + new Date(dates[dates.length - 1]).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })) : '') +
+    '</div>' +
+    (gapTxt ? '<div class="cxp-warn">Every row is imported. To tidy afterwards: ' + e(gapTxt) + '.</div>' : '') +
+    (p.empty ? '<div class="cxp-s" style="margin-bottom:8px">' + p.empty + ' completely empty row' + (p.empty === 1 ? '' : 's') + ' ignored.</div>' : '') +
+    (!CXI.map.date ? '<div class="cxp-warn">No date column found — entries will be dated today. Pick the date column below if there is one.</div>' : '') +
+    (p.newTypes.length ? '<div class="cxq-status">New on your list: ' + p.newTypes.map(t => '<b>' + e(t.label) + '</b> <small>(' + (t.unit === 'kg' ? 'weighed' : 'counted') + ')</small>').join(', ') + '</div>' : '') +
+    (CXI.link && (DB.events || []).length ? '<div class="cxp-s" style="margin-bottom:10px">' + linked + ' of ' + p.entries.length + ' linked to a session on the same date.</div>' : '') +
+    (!tracked ? '<div class="form-row"><label>Rows with no destination</label><select onchange="CXI.defOut=this.value;cxImportPreview()"><option value="">Import as undecided — tidy later</option>' +
+      (act.outcomes || []).map(o => '<option value="' + e(o.key) + '"' + (o.key === CXI.defOut ? ' selected' : '') + '>' + e(o.label) + '</option>').join('') + '</select></div>' : '') +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">' +
+      '<div><div class="cxq-lbl">By item</div>' + Object.keys(byItem).sort((a, b) => byItem[b] - byItem[a]).slice(0, 8).map(k => '<div class="cxp-list-row" style="padding:4px 0"><span class="cxp-s">' + e(k) + '</span><span class="cxp-s">' + cxFmt(byItem[k], 1) + ' kg</span></div>').join('') + '</div>' +
+      '<div><div class="cxq-lbl">By destination</div>' + Object.keys(byDest).map(k => '<div class="cxp-list-row" style="padding:4px 0"><span class="cxp-s">' + e(k) + '</span><span class="cxp-s">' + byDest[k] + '</span></div>').join('') + '</div>' +
+    '</div>' +
+    (p.notes.length || p.left.length ? '<details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--txt2)">Show ' + (p.notes.length + p.left.length) + ' row note' + (p.notes.length + p.left.length === 1 ? '' : 's') + '</summary>' +
+      '<div class="cxp-s" style="max-height:180px;overflow:auto;margin-top:6px;line-height:1.7">' + p.notes.concat(p.left).sort((x, y) => x.row - y.row).slice(0, 200).map(n => 'Row ' + n.row + ' — ' + e(n.why)).join('<br>') + '</div></details>' : '') +
+    '<details><summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--txt2);margin-bottom:8px">Columns used (change if ✨ got one wrong)</summary>' +
+      '<div style="display:grid;grid-template-columns:130px 1fr;gap:6px 10px;align-items:center;font-size:12px">' + shown.map(f => '<span>' + f[1] + '</span>' + colSel(f[0])).join('') + '</div>' +
+      '<div style="margin-top:8px;font-size:12px">Weight column is in <select onchange="CXI.gUnit=this.value;cxImportPreview()" style="width:auto;padding:4px 8px;font-size:12px"><option value="kg"' + (CXI.gUnit === 'kg' ? ' selected' : '') + '>kg</option><option value="g"' + (CXI.gUnit === 'g' ? ' selected' : '') + '>grams</option></select></div>' +
+    '</details>' +
+    '<div class="modal-footer"><button class="btn btn-ghost" onclick="cxCloseModal()">Cancel</button>' +
+      '<button class="btn btn-p" id="cxi-save" onclick="cxImportSave()"' + (p.entries.length ? '' : ' disabled') + '>Import ' + p.entries.length + ' rows</button></div>', 640);
+}
+
+async function cxImportSave() {
+  const act = CXI.act, p = CXI.plan; if (!p || !p.entries.length) return;
+  const btn = $('cxi-save'); btn.disabled = true;
+  const batch = 'imp_' + Date.now().toString(36);
+  try {
+    if (p.newTypes.length) {
+      btn.textContent = 'Adding new items…';
+      const types = (act.item_types || []).concat(p.newTypes.map(t => { const c = Object.assign({}, t); delete c._new; return c; }));
+      const { error } = await sb.from('circular_activities').update({ item_types: types }).eq('id', act.id);
+      if (error) throw error;
+      act.item_types = types;
+    }
+    const rows = p.entries.map(x => {
+      const at = x.date ? x.date + 'T12:00:00Z' : new Date().toISOString();
+      const f = cxCalc(act, x.t.key, x.qty, x.kg);
+      const o = x.okey ? cxOutcome(act, x.okey) : null, st = x.skey ? cxStage(act, x.skey) : null;
+      const custom = { import_batch: batch, fp: x.fp };
+      if (x.notes) custom.note = x.notes;
+      if (x.sale) custom.sale_gbp = x.sale;
+      if (x.noWeight) custom.no_weight = true;
+      custom.import_row = x.row;
+      return {
+        org_id: orgId, activity_id: act.id, item_type: x.t.key, name: x.name || x.t.label, category: act.name,
+        quantity: x.qty, weight_kg: x.kg, co2e_kg: f.co2, value_gbp: f.value,
+        brand: x.brand || null, model: x.model || null, serial: x.serial || null, source: x.source || null, event_id: x.event_id,
+        stage: o ? null : (st ? st.key : null), outcome: o ? o.key : null, outcome_type: o ? o.type : null, outcome_at: o ? at : null,
+        status: o ? o.label : (st ? st.label : ''), custom, created_at: at, updated_at: at
+      };
+    });
+    const saved = [];
+    for (let i = 0; i < rows.length; i += 250) {
+      btn.textContent = 'Saving ' + Math.min(i + 250, rows.length) + ' of ' + rows.length + '…';
+      const { data, error } = await sb.from('circular_items').insert(rows.slice(i, i + 250)).select();
+      if (error) throw error;
+      saved.push(...(data || []));
+    }
+    // One custody-log entry per item, in bulk
+    for (let i = 0; i < saved.length; i += 250) {
+      await sb.from('circular_item_events').insert(saved.slice(i, i + 250).map(it => ({
+        org_id: orgId, item_id: String(it.id), activity_id: act.id, action: 'imported', to_stage: it.outcome || it.stage,
+        data: { file: CXI.file, import_batch: batch }, actor_name: cxActorName()
+      })));
+    }
+    CX.items = saved.concat(CX.items);
+    CXI.batch = batch;
+    if (typeof CXR !== 'undefined') CXR.at = 0;
+    cxModal('<h2>✓ Imported</h2><div style="font-size:14px;margin-bottom:10px">' + saved.length + ' entries added to ' + cxE(act.icon + ' ' + act.name) + '.</div>' +
+      '<div class="cxp-s">They now count in the Circular page, Social Impact and every funder report for their dates.</div>' +
+      '<div class="modal-footer"><button class="btn btn-ghost" style="color:var(--red);margin-right:auto" onclick="cxImportUndo(\'' + batch + '\')">Undo this import</button><button class="btn btn-p" onclick="cxCloseModal();CX.tab=\'' + act.id + '\';cxDraw()">Done</button></div>');
+  } catch (e) {
+    alert('Import stopped: ' + (e.message || e) + (CXI.batch ? '' : '\nAnything saved so far can be removed with Undo.'));
+    cxImportUndoOffer(batch);
+  }
+}
+function cxImportUndoOffer(batch) {
+  cxModal('<h2>Import did not finish</h2><div class="cxp-s">Remove the rows that were saved, then try again.</div><div class="modal-footer"><button class="btn btn-p" onclick="cxImportUndo(\'' + batch + '\')">Remove saved rows</button></div>');
+}
+async function cxImportUndo(batch) {
+  if (!confirm('Remove every entry from this import?')) return;
+  const { error } = await sb.from('circular_items').delete().eq('org_id', orgId).eq('custom->>import_batch', batch);
+  if (error) { alert('Could not undo: ' + error.message); return; }
+  CX.items = CX.items.filter(i => !(i.custom && i.custom.import_batch === batch));
+  if (typeof CXR !== 'undefined') CXR.at = 0;
+  cxCloseModal(); cxDraw();
+}
+
 // ── Log / edit item ──────────────────────────────────────────
 function cxOpenLog(o) {
   const acts = cxItemActs();
@@ -1579,6 +2155,7 @@ function cxOpenLog(o) {
       '<div class="form-row"><label>Stage</label><select id="cx-stage"></select></div>' +
       '<div class="form-row"><label>Source / donor</label><input id="cx-source" placeholder="e.g. WLWA Southall site"/></div>' +
     '</div>' +
+    ((DB.events || []).length ? '<div class="form-row"><label>Session</label><select id="cx-event">' + cxSessionOptions(edit ? edit.event_id : (CX.q[actId] && CX.q[actId].event != null ? CX.q[actId].event : cxDefaultSession())) + '</select></div>' : '') +
     '<details id="cx-more"><summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--txt2);margin-bottom:10px">Brand, model, serial</summary>' +
       '<div class="form-grid-2"><div class="form-row"><label>Brand</label><input id="cx-brand"/></div><div class="form-row"><label>Model</label><input id="cx-model"/></div></div>' +
       '<div class="form-row"><label>Serial / frame number</label><input id="cx-serial"/></div>' +
@@ -1670,6 +2247,7 @@ async function cxSaveItem() {
       brand: $('cx-brand').value.trim() || null, model: $('cx-model').value.trim() || null, serial: $('cx-serial').value.trim() || null,
       source: $('cx-source').value.trim() || null, custom, updated_at: new Date().toISOString()
     };
+    if ($('cx-event')) d.event_id = $('cx-event').value || null;
     if (edit) {
       const { error } = await sb.from('circular_items').update(d).eq('id', edit.id);
       if (error) throw error;
@@ -1808,6 +2386,7 @@ async function cxOpenItem(id, justLogged) {
       (t ? ' <span class="cxp-s">(' + cxE(t.source || '') + ')</span>' : '') + '<br>' +
       [it.brand, it.model].filter(Boolean).map(cxE).join(' ') + (it.serial ? ' · SN ' + cxE(it.serial) : '') +
       (it.source ? '<br>From: ' + cxE(it.source) : '') +
+      (it.event_id && cxSessionLabel(it.event_id) ? '<br>Session: ' + cxE(cxSessionLabel(it.event_id)) : '') +
       Object.keys(custom).filter(k => k !== 'sale_gbp').map(k => {
         const f = act && (act.fields || []).find(x => x.key === k);
         const v = custom[k] === true ? 'Yes' : custom[k] === false ? 'No' : custom[k];
@@ -2892,6 +3471,14 @@ function circPanelHTML(a, ai) {
       h += '<div class="st-lbl">Collected items go to</div><select onchange="circColTarget(' + ai + ',this.value)" style="margin-bottom:14px"><option value="">Choose when booking in</option>' +
         others.map(x => '<option value="' + e(x.key) + '"' + (x.key === cur ? ' selected' : '') + '>' + e(x.icon + ' ' + x.name) + '</option>').join('') + '</select>';
     } else {
+      const cons = DB.contracts || [];
+      if (cons.length) {
+        const on = _cxrArr(a.contract_ids);
+        h += '<div class="st-lbl">Funded by — everything logged here counts in these funder reports</div><div class="st-chips">' + cons.map(c => {
+          const f = (DB.funders || []).find(x => String(x.id) === String(c.funder_id));
+          return '<span class="st-chip ' + (on.includes(String(c.id)) ? 'fill' : '') + '" onclick="circToggleContract(' + ai + ',\'' + e(String(c.id)) + '\')">' + (on.includes(String(c.id)) ? '✓ ' : '') + e(c.name || 'Contract') + (f ? '<small>' + e(f.name) + '</small>' : '') + '</span>';
+        }).join('') + '</div><div style="font-size:11px;color:var(--txt3);margin:-6px 0 14px">Entries logged at a session linked to a contract also count for it.</div>';
+      }
       h += '<div class="st-lbl">How do you record it?</div><div class="st-mode">' +
         '<div class="' + (!tracked ? 'on' : '') + '" onclick="circSetMode(' + ai + ',\'tally\')"><b>Quick tally</b><span>Weigh or count, tap where it went</span></div>' +
         '<div class="' + (tracked ? 'on' : '') + '" onclick="circSetMode(' + ai + ',\'tracked\')"><b>Track each item</b><span>QR label, steps and full history</span></div></div>';
@@ -3026,6 +3613,11 @@ function circAddCustom(quiet) {
 }
 
 function circTop(ai, f, v) { CIRC[ai][f] = v; renderCircSettings(); _circQueueSave(); }
+function circToggleContract(ai, id) {
+  const a = CIRC[ai], cur = _cxrArr(a.contract_ids);
+  a.contract_ids = cur.includes(id) ? cur.filter(x => x !== id) : cur.concat(id);
+  renderCircSettings(); _circQueueSave();
+}
 function circSetMode(ai, m) { CIRC[ai].mode = m; renderCircSettings(); _circQueueSave(); }
 function circColTarget(ai, key) { CIRC[ai].links = [{ on: 'end', to: key }]; _circQueueSave(); }
 function circSet(ai, list, i, f, v) {
@@ -3073,7 +3665,7 @@ async function _circRunSave() {
   if (_circSaving) { _circSaveAgain = true; return; }
   _circSaving = true;
   try { await saveCircularActivities(); setStatus('✓ Saved'); }
-  catch (e) { setStatus('Not saved: ' + (e.message || e) + (/mode/i.test(e.message || '') ? ' — run circular-migration-v3.sql in Supabase' : ''), true); }
+  catch (e) { setStatus('Not saved: ' + (e.message || e) + (/mode/i.test(e.message || '') ? ' — run circular-migration-v3.sql in Supabase' : /contract_ids/i.test(e.message || '') ? ' — run circular-migration-v4.sql in Supabase' : ''), true); }
   finally { _circSaving = false; if (_circSaveAgain) { _circSaveAgain = false; _circRunSave(); } }
 }
 async function saveCircularActivities() {
@@ -3084,6 +3676,7 @@ async function saveCircularActivities() {
       description: a.description || '', stages: a.stages, outcomes: a.outcomes, item_types: a.item_types,
       fields: a.fields, links: (a.links || []).filter(l => l.to), active: true, sort: CIRC.indexOf(a), updated_at: new Date().toISOString() };
     if (a.mode) row.mode = a.mode;
+    if (Array.isArray(a.contract_ids)) row.contract_ids = a.contract_ids;
     if (a.id) {
       const { error } = await sb.from('circular_activities').update(row).eq('id', a.id);
       if (error) throw error;
