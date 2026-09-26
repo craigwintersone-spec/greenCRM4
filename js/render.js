@@ -2125,7 +2125,7 @@ async function saveSettings() {
       logo_url: logoUrl
     };
 
-    if (_modState.circular !== false && typeof saveCircularActivities === 'function') await saveCircularActivities();
+    if (_modState.circular !== false && typeof _circRunSave === 'function') { clearTimeout(_circSaveTimer); await _circRunSave(); }
 
     await sbUpdate('organisations', d, orgId);
     currentOrg = Object.assign({}, currentOrg, d);
@@ -2333,22 +2333,22 @@ function circAddTemplate(key){
   // Anything already added that finishes into nothing: offer collections → this
   CIRC.forEach(x=>{if(x.template==='collections'&&x.links.length&&!x.links[0].to)x.links[0].to=a.key});
   CIRC.push(a);
-  renderCircSettings();
+  renderCircSettings();_circQueueSave();
 }
 function circAddCustom(){
   CIRC.push({key:_circUniqueKey('custom'),template:null,name:'New activity',icon:'♻️',description:'',
     stages:[{key:_circRid('st'),label:'Received'},{key:_circRid('st'),label:'Ready'}],
     outcomes:[{key:_circRid('oc'),label:'Reused',type:'reuse'},{key:_circRid('oc'),label:'Recycled',type:'recycle'}],
     item_types:[],fields:[],links:[],_open:true});
-  renderCircSettings();
+  renderCircSettings();_circQueueSave();
 }
-function circTop(ai,f,v){CIRC[ai][f]=v;if(f!=='icon'||v)renderCircSettings()}
-function circSet(ai,list,i,f,v){CIRC[ai][list][i][f]=v;if(f==='label'&&list!=='item_types'&&list!=='fields')renderCircSettings()}
+function circTop(ai,f,v){CIRC[ai][f]=v;if(f!=='icon'||v)renderCircSettings();_circQueueSave()}
+function circSet(ai,list,i,f,v){CIRC[ai][list][i][f]=v;if(f==='label'&&list!=='item_types'&&list!=='fields')renderCircSettings();_circQueueSave()}
 function circMove(ai,list,i,d){
   const arr=CIRC[ai][list],j=i+d;if(j<0||j>=arr.length)return;
-  [arr[i],arr[j]]=[arr[j],arr[i]];renderCircSettings();
+  [arr[i],arr[j]]=[arr[j],arr[i]];renderCircSettings();_circQueueSave();
 }
-function circDel(ai,list,i){CIRC[ai][list].splice(i,1);renderCircSettings()}
+function circDel(ai,list,i){CIRC[ai][list].splice(i,1);renderCircSettings();_circQueueSave()}
 function circAdd(ai,list){
   const a=CIRC[ai];
   if(list==='stages')a.stages.push({key:_circRid('st'),label:'New stage'});
@@ -2356,7 +2356,7 @@ function circAdd(ai,list){
   if(list==='item_types')a.item_types.push({key:_circRid('it'),label:'New item',weight_kg:0,co2e_kg:0,value_gbp:0,source:'Set by organisation'});
   if(list==='fields')a.fields.push({key:_circRid('f'),label:'New field',type:'text'});
   if(list==='links')a.links.push({on:'end',to:''});
-  renderCircSettings();
+  renderCircSettings();_circQueueSave();
 }
 function circRemove(ai){
   const a=CIRC[ai];
@@ -2364,7 +2364,23 @@ function circRemove(ai){
   if(a.id)CIRC_REMOVED.push(a.id);
   CIRC.splice(ai,1);
   CIRC.forEach(x=>x.links=x.links.filter(l=>l.to!==a.key));
-  renderCircSettings();
+  renderCircSettings();_circQueueSave();
+}
+// Auto-save: every change is saved a moment after it's made
+let _circSaveTimer=null,_circSaving=false,_circSaveAgain=false;
+function _circStatus(t,err){const el=$('cx-save-status');if(el){el.textContent=t;el.style.color=err?'var(--red)':'var(--em)'}}
+function _circQueueSave(){
+  if(!CIRC_READY)return;
+  _circStatus('Saving…');
+  clearTimeout(_circSaveTimer);
+  _circSaveTimer=setTimeout(_circRunSave,700);
+}
+async function _circRunSave(){
+  if(_circSaving){_circSaveAgain=true;return}
+  _circSaving=true;
+  try{await saveCircularActivities();_circStatus('✓ Saved')}
+  catch(e){_circStatus('Not saved: '+(e.message||e),true)}
+  finally{_circSaving=false;if(_circSaveAgain){_circSaveAgain=false;_circRunSave()}}
 }
 // Item types edited by hand lose the starter-estimate label
 function _circMarkEdited(){
@@ -2445,7 +2461,8 @@ function renderCircularSettingsCard(){
   if(!on)return;
   card.innerHTML=
     '<div class="card-title">♻️ Circular activities</div>'+
-    '<div class="cx-hint" style="margin-bottom:14px">Add the activities you run. Each comes pre-set with stages, outcomes and item types. Change anything to match how you work, or build your own. Saved with <strong>Save settings</strong>.</div>'+
+    '<div class="cx-hint" style="margin-bottom:14px">Add the activities you run. Each comes pre-set with stages, outcomes and item types. Change anything to match how you work, or build your own. Changes save automatically.</div>'+
+    '<div id="cx-save-status" style="font-size:12px;font-weight:700;min-height:16px;margin:-8px 0 10px"></div>'+
     '<div id="cx-missing" style="display:none;background:#FEF2F2;border:1px solid #FECACA;color:#B91C1C;padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>'+
     '<div id="cx-body">'+
       '<div class="cx-tpl-grid" id="cx-tpl-grid"><div class="cx-hint">Loading…</div></div>'+
