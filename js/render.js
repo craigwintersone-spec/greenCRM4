@@ -778,78 +778,215 @@ function renderFeedback() {
 // ─────────────────────────────────────────────────────────────
 
 let _fqRows = null;   // working copy while editing
+let _fqOpen = -1;     // which question is expanded
+let _fqSugg = null;   // AI suggestions waiting to be added
+let _fqDrag = -1;
+let _fqTimer = null, _fqSaving = false, _fqAgain = false;
+
+function fqKindLabel(k) { const f = MEASURE_KINDS.find(x => x[0] === (k || 'text')); return f ? f[1] : k; }
+function fqMapLabel(k) { const f = MEASURE_MAPS.find(x => x[0] === (k || '')); return f ? f[1] : ''; }
 
 function renderFeedbackQuestionsCard() {
-  const settingsPage = $('page-settings'); if (!settingsPage) return;
-  let card = $('settings-feedback-card');
-  if (!card) {
-    card = document.createElement('div');
-    card.id = 'settings-feedback-card';
-    card.className = 'card';
-    const saveBtn = $('set-save-btn');
-    if (saveBtn) settingsPage.insertBefore(card, saveBtn); else settingsPage.appendChild(card);
-  }
+  const body = $('st-body');
+  if (!body || _setSection !== 'feedback') return;
   if (!_fqRows) _fqRows = (DB.survey_measures || []).slice().sort((a, b) => (a.sort || 0) - (b.sort || 0)).map(m => Object.assign({}, m));
+  const e = escapeHTML;
 
-  const rows = _fqRows.map((m, i) =>
-    '<div style="display:grid;grid-template-columns:1fr 150px 170px 32px 32px;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--border)">' +
-      '<input data-fq="q" data-i="' + i + '" value="' + escapeHTML(m.question) + '" placeholder="Question as you ask it" style="font-size:13px"' + (m.id ? ' title="Changing the wording starts a new question; old answers stay with the old wording"' : '') + '/>' +
-      '<select data-fq="kind" data-i="' + i + '">' + MEASURE_KINDS.map(k => '<option value="' + k[0] + '"' + ((m.kind || 'text') === k[0] ? ' selected' : '') + '>' + k[1] + '</option>').join('') + '</select>' +
-      '<select data-fq="maps" data-i="' + i + '">' + MEASURE_MAPS.map(k => '<option value="' + k[0] + '"' + ((m.maps_to || '') === k[0] ? ' selected' : '') + '>' + k[1] + '</option>').join('') + '</select>' +
-      '<input type="checkbox" data-fq="active" data-i="' + i + '"' + (m.active !== false ? ' checked' : '') + ' title="Active — asked on the form and shown in reports" style="width:auto"/>' +
-      '<button class="btn btn-ghost btn-sm" data-fq="del" data-i="' + i + '" title="Remove">×</button>' +
-    '</div>'
-  ).join('');
+  let h = '<div class="st-actions">' +
+    '<button class="btn btn-ghost btn-sm" onclick="fqSuggest()" id="fq-sugg-btn">✨ Suggest questions</button>' +
+    '<button class="btn btn-ghost btn-sm" onclick="fqCopyOpen()">📋 Copy from a form</button>' +
+    '<button class="btn btn-ghost btn-sm" onclick="fqAdd()">+ Add question</button>' +
+    (_fqRows.length ? '<button class="btn btn-ghost btn-sm" onclick="fqPreview()">📱 Preview form</button>' : '') +
+  '</div>';
 
-  card.innerHTML =
-    '<div class="card-title">💬 Feedback questions</div>' +
-    '<div style="font-size:13px;color:var(--txt3);margin-bottom:12px;line-height:1.5">Your own questions, asked on the feedback form and on the QR feedback page, matched when you import a survey file, and turned into the numbers on your Feedback page and reports. Untick to retire a question — its old answers stay.</div>' +
-    (_fqRows.length
-      ? '<div style="display:grid;grid-template-columns:1fr 150px 170px 32px 32px;gap:8px;font-size:11px;color:var(--txt3);font-weight:600;text-transform:uppercase;letter-spacing:.4px"><div>Question</div><div>Type</div><div>Counts as</div><div>On</div><div></div></div>' + rows
-      : '<div style="font-size:13px;color:var(--txt2);padding:10px;background:var(--bg);border-radius:8px;margin-bottom:8px">No questions yet. Start from Vorlana\'s standard set, or import a survey file on the Feedback page and the questions are lifted from it.</div>') +
-    '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center">' +
-      '<button class="btn btn-ghost btn-sm" onclick="fqAdd()">+ Add question</button>' +
-      (_fqRows.length ? '' : '<button class="btn btn-ghost btn-sm" onclick="fqUseDefaults()">Use Vorlana\'s standard questions</button>') +
-      '<button class="btn btn-p btn-sm" id="fq-save-btn" onclick="fqSave()">Save questions</button>' +
-      '<span id="fq-msg" style="font-size:12px;color:var(--txt3)"></span>' +
+  if (_fqSugg && _fqSugg.length) {
+    h += '<div class="st-sugg"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+      '<b style="font-size:13px">✨ Suggested</b><div style="display:flex;gap:6px"><button class="btn btn-p btn-sm" onclick="fqAddSugg(-1)">Add all</button>' +
+      '<button class="btn btn-ghost btn-sm" onclick="_fqSugg=null;renderFeedbackQuestionsCard()">Dismiss</button></div></div>' +
+      _fqSugg.map((s, i) => '<div class="st-sugg-row"><div><div class="st-q-t">' + e(s.question) + '</div><div class="st-q-m">' + e(fqKindLabel(s.kind)) +
+        (s.maps_to ? ' · ' + e(fqMapLabel(s.maps_to)) : '') + (s.why ? ' · ' + e(s.why) : '') + '</div></div>' +
+        '<button class="btn btn-ghost btn-sm" onclick="fqAddSugg(' + i + ')">+ Add</button></div>').join('') + '</div>';
+  }
+
+  if (!_fqRows.length) {
+    h += '<div style="font-size:13px;color:var(--txt2);padding:14px;background:var(--bg);border-radius:10px;margin-bottom:8px">No questions yet. ' +
+      '<a href="#" onclick="fqUseDefaults();return false">Use Vorlana\'s standard set</a>, or let ✨ suggest some for you.</div>';
+  }
+
+  h += _fqRows.map((m, i) => {
+    const on = m.active !== false;
+    const meta = fqKindLabel(m.kind) + (m.maps_to ? ' · ' + fqMapLabel(m.maps_to) : '');
+    return '<div class="st-q ' + (on ? '' : 'off') + '" draggable="true" data-i="' + i + '">' +
+      '<div class="st-q-row" onclick="fqToggleOpen(' + i + ')"><span class="grip" title="Drag to reorder">⋮⋮</span>' +
+        '<div style="flex:1;min-width:0"><div class="st-q-t">' + (m.question ? e(m.question) : '<em>New question</em>') + '</div><div class="st-q-m">' + e(meta) + '</div></div>' +
+        '<span class="st-pill ' + (on ? 'on' : 'off') + '" onclick="event.stopPropagation();fqSet(' + i + ',\'active\',' + !on + ')">' + (on ? 'On' : 'Off') + '</span></div>' +
+      (_fqOpen === i ?
+        '<div class="st-q-edit">' +
+          '<div class="form-row"><label>Question</label><input id="fq-q-' + i + '" value="' + e(m.question || '') + '" placeholder="As people will read it" onchange="fqSet(' + i + ',\'question\',this.value)"/>' +
+          (m.id ? '<div style="font-size:11px;color:var(--txt3);margin-top:4px">Changing the wording starts a new question in reports.</div>' : '') + '</div>' +
+          '<div class="form-grid-2">' +
+            '<div class="form-row"><label>Answer type</label><select onchange="fqSet(' + i + ',\'kind\',this.value)">' + MEASURE_KINDS.map(k => '<option value="' + k[0] + '"' + ((m.kind || 'text') === k[0] ? ' selected' : '') + '>' + k[1] + '</option>').join('') + '</select></div>' +
+            '<div class="form-row"><label>Counts in reports as</label><select onchange="fqSet(' + i + ',\'maps_to\',this.value||null)">' + MEASURE_MAPS.map(k => '<option value="' + k[0] + '"' + ((m.maps_to || '') === k[0] ? ' selected' : '') + '>' + k[1] + '</option>').join('') + '</select></div>' +
+          '</div>' +
+          '<div style="display:flex;gap:6px;justify-content:space-between"><div style="display:flex;gap:6px">' +
+            '<button class="btn btn-ghost btn-sm" onclick="fqMove(' + i + ',-1)" title="Move up">↑</button><button class="btn btn-ghost btn-sm" onclick="fqMove(' + i + ',1)" title="Move down">↓</button></div>' +
+            '<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="fqDel(' + i + ')">Remove</button></div>' +
+        '</div>' : '') +
     '</div>';
+  }).join('');
 
-  card.querySelectorAll('[data-fq]').forEach(el => {
-    const i = +el.getAttribute('data-i'), what = el.getAttribute('data-fq');
-    if (what === 'del') el.addEventListener('click', () => { _fqRows.splice(i, 1); renderFeedbackQuestionsCard(); });
-    else el.addEventListener('change', () => {
-      const r = _fqRows[i]; if (!r) return;
-      if (what === 'q') r.question = el.value.trim();
-      else if (what === 'kind') r.kind = el.value;
-      else if (what === 'maps') r.maps_to = el.value || null;
-      else if (what === 'active') r.active = el.checked;
+  body.innerHTML = h;
+
+  // Drag to reorder
+  body.querySelectorAll('.st-q[draggable]').forEach(el => {
+    const i = +el.getAttribute('data-i');
+    el.addEventListener('dragstart', ev => { _fqDrag = i; ev.dataTransfer.effectAllowed = 'move'; });
+    el.addEventListener('dragover', ev => { ev.preventDefault(); el.classList.add('drag-over'); });
+    el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+    el.addEventListener('drop', ev => {
+      ev.preventDefault(); el.classList.remove('drag-over');
+      if (_fqDrag < 0 || _fqDrag === i) return;
+      const [row] = _fqRows.splice(_fqDrag, 1); _fqRows.splice(i, 0, row);
+      _fqOpen = -1; _fqDrag = -1;
+      renderFeedbackQuestionsCard(); fqQueueSave();
     });
   });
+  if (_fqOpen >= 0 && _fqRows[_fqOpen] && !_fqRows[_fqOpen].question) { const q = $('fq-q-' + _fqOpen); if (q) q.focus(); }
 }
-function fqAdd() { _fqRows.push({ question: '', kind: 'score', maps_to: null, active: true, sort: _fqRows.length }); renderFeedbackQuestionsCard(); }
-function fqUseDefaults() { _fqRows = DEFAULT_MEASURES.map((m, i) => Object.assign({ active: true, sort: i }, m)); renderFeedbackQuestionsCard(); }
+
+function fqToggleOpen(i) { _fqOpen = _fqOpen === i ? -1 : i; renderFeedbackQuestionsCard(); }
+function fqSet(i, f, v) {
+  const r = _fqRows[i]; if (!r) return;
+  r[f] = f === 'question' ? String(v || '').trim() : v;
+  renderFeedbackQuestionsCard(); fqQueueSave();
+}
+function fqMove(i, d) {
+  const j = i + d; if (j < 0 || j >= _fqRows.length) return;
+  [_fqRows[i], _fqRows[j]] = [_fqRows[j], _fqRows[i]]; _fqOpen = j;
+  renderFeedbackQuestionsCard(); fqQueueSave();
+}
+function fqDel(i) {
+  if (!confirm('Remove this question? Past answers stay in your data.')) return;
+  _fqRows.splice(i, 1); _fqOpen = -1;
+  renderFeedbackQuestionsCard(); fqQueueSave();
+}
+function fqAdd() { _fqRows.push({ question: '', kind: 'score', maps_to: null, active: true }); _fqOpen = _fqRows.length - 1; renderFeedbackQuestionsCard(); }
+function fqUseDefaults() { _fqRows = DEFAULT_MEASURES.map((m, i) => Object.assign({ active: true, sort: i }, m)); renderFeedbackQuestionsCard(); fqQueueSave(); }
+
+function fqQueueSave() {
+  setStatus('Saving…');
+  clearTimeout(_fqTimer);
+  _fqTimer = setTimeout(fqSave, 700);
+}
 async function fqSave() {
-  const btn = $('fq-save-btn'), msg = $('fq-msg');
-  const rows = _fqRows.filter(r => r.question && r.question.trim()).map((r, i) => {
-    const o = { org_id: orgId, question: r.question.trim(), kind: r.kind || 'text', maps_to: r.maps_to || null, label: r.label || r.question.trim().slice(0, 60), active: r.active !== false, sort: i };
-    if (r.id) o.id = r.id;
-    return o;
-  });
-  const keepIds = rows.filter(r => r.id).map(r => r.id);
-  btn.disabled = true; msg.textContent = 'Saving…';
+  if (_fqSaving) { _fqAgain = true; return; }
+  _fqSaving = true;
   try {
-    const gone = (DB.survey_measures || []).filter(m => !keepIds.includes(m.id)).map(m => m.id);
+    const saved = DB.survey_measures || [];
+    const rows = _fqRows.filter(r => r.question && r.question.trim()).map((r, i) => {
+      const o = { org_id: orgId, question: r.question.trim(), kind: r.kind || 'text', maps_to: r.maps_to || null, label: r.question.trim().slice(0, 60), active: r.active !== false, sort: i };
+      const orig = r.id && saved.find(m => m.id === r.id);
+      if (orig && orig.question === o.question) o.id = r.id;   // reworded = new question
+      return o;
+    });
+    const keepIds = rows.filter(r => r.id).map(r => r.id);
+    const gone = saved.filter(m => !keepIds.includes(m.id) && !rows.some(r => r.question === m.question)).map(m => m.id);
     if (gone.length) { const d = await sb.from('survey_measures').delete().in('id', gone); if (d.error) throw d.error; }
     if (rows.length) { const r = await sb.from('survey_measures').upsert(rows, { onConflict: 'org_id,question' }); if (r.error) throw r.error; }
     await refreshTable('survey_measures');
-    _fqRows = null;
-    renderFeedbackQuestionsCard();
-    const m2 = $('fq-msg'); if (m2) m2.textContent = '✓ Saved';
-    renderFeedback(); renderImpact();
+    // Pick up new ids without disturbing the editor
+    (DB.survey_measures || []).forEach(m => { const w = _fqRows.find(r => r.question === m.question); if (w) w.id = m.id; });
+    setStatus('✓ Saved');
+    try { renderFeedback(); renderImpact(); } catch (e) { /* pages may not be open */ }
   } catch (e) {
-    msg.textContent = 'Could not save: ' + (e.message || e) + (/survey_measures|active|sort/i.test(e.message || '') ? ' — run sql/import-v3.sql (with the v3.1 additions) in Supabase.' : '');
-    btn.disabled = false;
+    setStatus('Not saved: ' + (e.message || e) + (/survey_measures|active|sort/i.test(e.message || '') ? ' — run sql/import-v3.sql in Supabase' : ''), true);
+  } finally {
+    _fqSaving = false;
+    if (_fqAgain) { _fqAgain = false; fqSave(); }
   }
+}
+
+// ✨ Suggest questions
+function fqAIRules() {
+  return 'Allowed kind values: ' + MEASURE_KINDS.filter(k => k[0] !== 'ignore').map(k => k[0] + ' (' + k[1] + ')').join(', ') +
+    '. Allowed maps_to values: ' + MEASURE_MAPS.filter(k => k[0]).map(k => k[0] + ' (' + k[1] + ')').join(', ') + ', or "" for the organisation\'s own measure.' +
+    ' Return JSON only: {"questions":[{"question":"","kind":"","maps_to":"","why":"max 6 words"}]}';
+}
+function fqClean(list) {
+  const have = new Set(_fqRows.map(r => (r.question || '').toLowerCase().trim()));
+  return (list || []).filter(q => q && q.question && !have.has(q.question.toLowerCase().trim())).map(q => ({
+    question: String(q.question).trim(),
+    kind: MEASURE_KINDS.some(k => k[0] === q.kind) ? q.kind : 'text',
+    maps_to: MEASURE_MAPS.some(k => k[0] === q.maps_to) && q.maps_to ? q.maps_to : null,
+    why: q.why || ''
+  }));
+}
+async function fqSuggest() {
+  const btn = $('fq-sugg-btn'); if (btn) { btn.disabled = true; btn.textContent = '✨ Thinking…'; }
+  try {
+    const mods = (typeof SET_MODULES !== 'undefined' ? SET_MODULES : []).filter(m => _modState[m.k]).map(m => m.n).join(', ');
+    const acts = (typeof CIRC !== 'undefined' && CIRC.length ? CIRC.map(a => a.name).join(', ') : '');
+    const j = await vAI(
+      'You design short, respectful feedback forms for UK charities and community groups. Plain English, under 12 words per question, no jargon. Suggest 5 to 7 questions that funders value: wellbeing, confidence, skills, connection, plus one open question for quotes. Never duplicate existing questions.',
+      'Organisation: ' + (currentOrg.name || '') + ' (' + (currentOrg.sector || '') + ').\nWhat they do: ' + mods + (acts ? '\nCircular activities: ' + acts : '') +
+      '\nExisting questions: ' + (_fqRows.map(r => r.question).filter(Boolean).join(' | ') || 'none') + '\n' + fqAIRules(), 900);
+    _fqSugg = fqClean(j.questions);
+    if (!_fqSugg.length) setStatus('No new suggestions — your set already covers it');
+  } catch (e) { setStatus('Could not suggest: ' + e.message, true); }
+  renderFeedbackQuestionsCard();
+}
+function fqAddSugg(i) {
+  const add = i < 0 ? _fqSugg : [_fqSugg[i]];
+  add.forEach(s => _fqRows.push({ question: s.question, kind: s.kind, maps_to: s.maps_to, active: true }));
+  _fqSugg = i < 0 ? null : _fqSugg.filter((_, x) => x !== i);
+  if (_fqSugg && !_fqSugg.length) _fqSugg = null;
+  renderFeedbackQuestionsCard(); fqQueueSave();
+}
+
+// 📋 Copy from a form
+function fqCopyOpen() {
+  setModal('<h2>Copy questions from a form</h2>' +
+    '<div style="font-size:13px;color:var(--txt3);margin-bottom:12px;line-height:1.5">Paste the questions from your paper form, Google Form or SurveyMonkey, or upload a CSV export. ✨ picks out the questions and answer types.</div>' +
+    '<div class="form-row"><label>Paste here</label><textarea id="fq-paste" style="min-height:160px" placeholder="1. How much did you enjoy today? (1-5)&#10;2. Did you learn something new? Yes / No&#10;…"></textarea></div>' +
+    '<div class="form-row"><label>Or upload a CSV / text export</label><input type="file" id="fq-file" accept=".csv,.txt,text/csv,text/plain"/></div>' +
+    '<div id="fq-copy-msg" style="font-size:12px;color:var(--txt3)"></div>' +
+    '<div class="modal-footer"><button class="btn btn-ghost" onclick="setCloseModal()">Cancel</button><button class="btn btn-p" id="fq-copy-btn" onclick="fqCopyRun()">Find questions</button></div>');
+}
+async function fqCopyRun() {
+  const btn = $('fq-copy-btn'), msg = $('fq-copy-msg');
+  let text = $('fq-paste').value.trim();
+  const f = $('fq-file').files && $('fq-file').files[0];
+  if (f) {
+    const raw = await f.text();
+    // CSV export: the questions are the column headers
+    text += '\n' + (/\.csv$/i.test(f.name) ? raw.split(/\r?\n/)[0] : raw.slice(0, 8000));
+  }
+  if (!text.trim()) { msg.textContent = 'Paste some questions or choose a file.'; return; }
+  btn.disabled = true; btn.textContent = 'Reading…';
+  try {
+    const j = await vAI('You extract feedback questions from a pasted form or survey export for a UK charity. Ignore names, emails, dates, timestamps and consent tick boxes. Keep the wording as written, tidied only for spelling.',
+      'Form content:\n' + text.slice(0, 12000) + '\n' + fqAIRules(), 1500);
+    _fqSugg = fqClean(j.questions);
+    setCloseModal();
+    if (!_fqSugg.length) setStatus('No new questions found');
+    renderFeedbackQuestionsCard();
+  } catch (e) { msg.textContent = 'Could not read it: ' + e.message; btn.disabled = false; btn.textContent = 'Find questions'; }
+}
+
+// 📱 Preview
+function fqPreview() {
+  const qs = _fqRows.filter(r => r.active !== false && r.question && r.kind !== 'ignore');
+  const logo = typeof getOrgLogoUrl === 'function' ? getOrgLogoUrl(currentOrg) : '';
+  const ans = k => k === 'score' ? '<div class="st-dots">' + [1, 2, 3, 4, 5].map(n => '<span>' + n + '</span>').join('') + '</div>'
+    : k === 'yesno' ? '<div class="st-dots"><span style="width:auto;padding:0 16px;border-radius:17px">Yes</span><span style="width:auto;padding:0 16px;border-radius:17px">No</span></div>'
+    : k === 'choice' ? '<div style="font-size:12px;color:#777">○ Option A<br>○ Option B</div>'
+    : '<div style="border:1px solid #ddd;border-radius:8px;height:56px"></div>';
+  setModal('<h2>How the form looks on a phone</h2><div class="st-phone">' +
+    (logo ? '<div style="text-align:center;margin-bottom:10px"><img src="' + escapeHTML(logo) + '" style="max-height:34px;max-width:140px"/></div>' : '') +
+    '<div style="font-size:15px;font-weight:700;text-align:center;margin-bottom:16px;color:#222">How was today?</div>' +
+    qs.map(q => '<div class="st-phone-q"><p>' + escapeHTML(q.question) + '</p>' + ans(q.kind) + '</div>').join('') +
+    '<div style="background:' + escapeHTML(currentOrg.brand_color || '#1F6F6D') + ';color:#fff;text-align:center;padding:11px;border-radius:10px;font-weight:700;font-size:14px">Send</div></div>' +
+    '<div class="modal-footer"><button class="btn btn-p" onclick="setCloseModal()">Done</button></div>', 380);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -876,7 +1013,7 @@ function cxAct(id) { return CX.acts.find(a => a.id === id); }
 function cxColAct() { return CX.acts.find(a => a.template === 'collections'); }
 function cxItemActs() { return CX.acts.filter(a => a.template !== 'collections'); }
 function cxType(act, key) { return act && (act.item_types || []).find(t => t.key === key); }
-function cxPerKg(t) { return !!t && /per\s*kg/i.test(t.label || ''); }
+function cxPerKg(t) { return !!t && (t.unit === 'kg' || (t.unit !== 'each' && /per\s*kg/i.test(t.label || ''))); }
 function cxStage(act, key) { return act && (act.stages || []).find(s => s.key === key); }
 function cxOutcome(act, key) { return act && (act.outcomes || []).find(o => o.key === key); }
 function cxDays(d) { return d ? Math.floor((Date.now() - new Date(d).getTime()) / 86400000) : 0; }
@@ -1000,6 +1137,7 @@ function cxDraw() {
   let h = '<div class="page-header"><div><div class="page-title">♻️ Circular</div>' +
     '<div class="page-sub">Every item has a passport. Every move is logged.</div></div>' +
     '<div class="cxp-btns">' +
+      '<button class="btn btn-ghost btn-sm" onclick="_setSection=\'circular\';go(\'settings\')">⚙️ Set up</button>' +
       '<button class="btn btn-ghost btn-sm" onclick="cxOpenScan()">📷 Scan</button>' +
       (colAct ? '<button class="btn btn-ghost btn-sm" onclick="cxOpenBooking()">🚚 New booking</button>' : '') +
       '<button class="btn btn-p btn-sm" onclick="cxOpenLog({})">+ Log item</button>' +
@@ -1035,7 +1173,7 @@ function cxDraw() {
       : statCard('Value to people', '£' + cxFmt(im.value), im.income ? '£' + cxFmt(im.income) + ' sales income' : cxFmt(im.reused) + ' items reused')) +
     '</div>';
 
-  h += CX.tab === 'all' ? cxSummaryHTML(acts) : cxBoardHTML(act);
+  h += CX.tab === 'all' ? cxSummaryHTML(acts) : cxQuickHTML(act) + (circMode(act) === 'tally' ? cxRecentHTML(act) : cxBoardHTML(act));
   p.innerHTML = h;
 }
 
@@ -1051,8 +1189,10 @@ function cxSummaryHTML(acts) {
     const im = cxImpact(its);
     return '<div class="card" style="cursor:pointer;margin:0" onclick="cxTab(\'' + a.id + '\')">' +
       '<div class="card-title">' + cxE(a.icon) + ' ' + cxE(a.name) + '</div>' +
-      '<div style="margin:6px 0 8px">' + (a.stages || []).map(s =>
-        '<span class="cxp-chip">' + cxE(s.label) + ' · ' + live.filter(i => i.stage === s.key).length + '</span>').join('') + '</div>' +
+      (circMode(a) === 'tally'
+        ? '<div style="margin:6px 0 8px"><span class="cxp-chip">' + its.filter(cxIsToday).length + ' today</span><span class="cxp-chip">' + cxFmt(its.filter(i => i.created_at && new Date(i.created_at).getMonth() === new Date().getMonth() && new Date(i.created_at).getFullYear() === new Date().getFullYear()).reduce((x, i) => x + (+i.weight_kg || 0), 0), 1) + ' kg this month</span></div>'
+        : '<div style="margin:6px 0 8px">' + (a.stages || []).map(s =>
+        '<span class="cxp-chip">' + cxE(s.label) + ' · ' + live.filter(i => i.stage === s.key).length + '</span>').join('') + '</div>') +
       '<div class="cxp-s">' + cxFmt(im.finished) + ' finished · ' + cxFmt(im.kg, 1) + ' kg diverted' +
       (stuck ? ' · <span style="color:var(--amber);font-weight:700">' + stuck + ' waiting over 14 days</span>' : '') + '</div>' +
     '</div>';
@@ -1091,6 +1231,326 @@ function cxCardHTML(i) {
   return '<div class="cxp-card ' + (d > 14 ? 'stuck' : '') + '" onclick="cxOpenItem(\'' + i.id + '\')">' +
     '<div class="cxp-t">' + cxE(i.name || 'Item') + (+i.quantity > 1 ? ' ×' + cxFmt(i.quantity) : '') + '</div>' +
     '<div class="cxp-s"><span class="cxp-code">' + cxE(i.passport_code) + '</span> · ' + (d ? d + 'd here' : 'today') + '</div></div>';
+}
+
+// ── Quick log (photo → check → one tap) ──────────────────────
+// Same screen for every activity. Quick tally: the tap finishes
+// the entry. Tracked: the tap puts the item at a step and offers
+// its QR label.
+CX.q = {};
+CX.undo = null;
+function cxQ(act) {
+  if (!CX.q[act.id]) CX.q[act.id] = { type: ((act.item_types || [])[0] || {}).key || '', amt: '', batch: false, tell: false };
+  return CX.q[act.id];
+}
+function cxIsToday(i) { const d = i.created_at || i.updated_at; return d && new Date(d).toDateString() === new Date().toDateString(); }
+
+function cxQuickHTML(act) {
+  cxInjectQuickStyle();
+  const e = cxE, q = cxQ(act), id = act.id;
+  const tracked = circMode(act) === 'tracked';
+  const types = act.item_types || [];
+  if (q.type && !cxType(act, q.type)) q.type = (types[0] || {}).key || '';
+  const t = cxType(act, q.type), kg = cxPerKg(t);
+  const today = CX.items.filter(i => i.activity_id === id && cxIsToday(i));
+  const food = ['food', 'growing'].includes(act.template);
+  const todayKg = today.reduce((a, i) => a + (+i.weight_kg || 0), 0);
+  const todayN = today.reduce((a, i) => a + (+i.quantity || 1), 0);
+  let big, small;
+  if (act.template === 'repair_cafe') { const fx = today.filter(i => i.outcome_type === 'repair').reduce((a, i) => a + (+i.quantity || 1), 0); big = fx + ' fixed'; small = 'of ' + todayN + ' today'; }
+  else if (tracked) { big = cxFmt(today.length); small = 'logged today'; }
+  else { big = cxFmt(todayKg, 1) + ' kg'; small = food ? '≈ ' + cxFmt(todayKg / CX_KG_PER_MEAL) + ' meals today' : cxFmt(todayN) + ' entries today'; }
+  const speech = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+
+  let h = '<div class="card cxq"><div class="cxq-top"><div><div class="cxq-k">' + e(act.icon) + ' ' + e(act.name) + '</div><div class="cxq-h">' + (tracked ? 'Add an item' : 'Log it') + '</div></div>' +
+    '<div style="text-align:right"><div class="cxq-big">' + big + '</div><div class="cxq-small">' + small + '</div></div></div>';
+
+  h += '<div class="cxq-cap">' +
+    '<label class="cxq-cam"><span>📷</span> Photo' + (kg || !t ? ' on the scales' : '') + '<input type="file" accept="image/*" capture="environment" style="display:none" onchange="cxQPhoto(event,\'' + id + '\')"/></label>' +
+    '<button class="cxq-tellbtn" onclick="cxQ(cxAct(\'' + id + '\')).tell=!cxQ(cxAct(\'' + id + '\')).tell;cxDraw()">✍️ Just tell it</button></div>';
+  if (q.status) h += '<div class="cxq-status ' + (q.statusErr ? 'err' : '') + '">' + q.status + '</div>';
+  if (q.newType) h += '<div class="cxq-status">Not on your list: <b>' + e(q.newType.label) + '</b> <button class="btn btn-ghost btn-sm" onclick="cxAddTypeFromAI(\'' + id + '\')">+ Add it</button></div>';
+
+  if (q.tell) {
+    h += '<div class="cxq-tell"><textarea id="cxq-text-' + id + '" placeholder="' + (tracked ? 'e.g. 3 laptops and a monitor from Ealing, all booked in' : food ? 'e.g. 12 kg tomatoes to the food bank, 5 kg courgettes shared' : act.template === 'repair_cafe' ? 'e.g. 14 items tonight, 11 fixed, 3 kettles not fixable' : 'e.g. 20 kg clothing reused, 5 kg recycled') + '">' + e(q.text || '') + '</textarea>' +
+      '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px">' + (speech ? '<button class="btn btn-ghost btn-sm" id="cxq-mic-' + id + '" onclick="cxQMic(\'' + id + '\')">🎤 Speak</button>' : '') +
+      '<button class="btn btn-p btn-sm" id="cxq-go-' + id + '" onclick="cxQTell(\'' + id + '\')">Read it</button></div></div>';
+  }
+  if (q.pending && q.pending.length) {
+    h += '<div class="cxq-pend"><div class="cxq-k" style="margin-bottom:6px">Check, then log</div>' + q.pending.map(p => {
+      const tt = cxType(act, p.item_type);
+      const dest = cxOutcome(act, p.to) || cxStage(act, p.to);
+      return '<div class="cxq-pend-row"><span>' + e(tt ? tt.label : p.new_item || '?') + ' · ' + cxFmt(p.amount, 1) + ' ' + (p.unit === 'kg' ? 'kg' : '') + '</span><span class="cxq-dest">' + e(dest ? dest.label : '—') + '</span></div>';
+    }).join('') +
+      '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:8px"><button class="btn btn-ghost btn-sm" onclick="cxQ(cxAct(\'' + id + '\')).pending=null;cxDraw()">Cancel</button><button class="btn btn-p btn-sm" onclick="cxQConfirm(\'' + id + '\')">✓ Log all</button></div></div>';
+  }
+
+  h += '<div class="cxq-chips">' + types.map(x => '<button class="cxq-chip ' + (x.key === q.type ? 'on' : '') + '" onclick="cxQ(cxAct(\'' + id + '\')).type=\'' + e(x.key) + '\';cxDraw()">' + e(x.label) + '</button>').join('') +
+    (types.length ? '' : '<span class="cxp-s">No items yet — add them in ⚙️ Set up, or take a photo.</span>') + '</div>';
+
+  if (!q.batch) {
+    if (!tracked || kg) {
+      h += '<div class="cxq-amt"><input id="cxq-amt-' + id + '" type="number" inputmode="decimal" min="0" step="' + (kg ? '0.1' : '1') + '" placeholder="' + (kg ? '0.0' : '1') + '" value="' + e(q.amt) + '" oninput="cxQ(cxAct(\'' + id + '\')).amt=this.value"/><span>' + (kg ? 'kg' : 'items') + '</span></div>';
+    }
+    if (tracked) {
+      const show = q.more || q.brand || q.model || q.serial;
+      h += show ? '<div class="cxq-more"><input placeholder="Brand" value="' + e(q.brand || '') + '" oninput="cxQ(cxAct(\'' + id + '\')).brand=this.value"/><input placeholder="Model" value="' + e(q.model || '') + '" oninput="cxQ(cxAct(\'' + id + '\')).model=this.value"/><input placeholder="Serial" value="' + e(q.serial || '') + '" oninput="cxQ(cxAct(\'' + id + '\')).serial=this.value"/></div>'
+        : '<div style="margin:-4px 0 10px"><a href="#" class="cxp-s" onclick="cxQ(cxAct(\'' + id + '\')).more=true;cxDraw();return false">+ Brand, model, serial</a></div>';
+    }
+    const opts = tracked ? (act.stages || []) : (act.outcomes || []);
+    h += '<div class="cxq-lbl">' + (tracked ? 'Where is it now?' : act.template === 'repair_cafe' ? 'How did it go?' : 'Where did it go?') + '</div>' +
+      '<div class="cxq-btns">' + opts.map((o, i) => '<button class="cxq-btn ' + (i === 0 ? 'first' : '') + '" onclick="cxQuickLog(\'' + id + '\',\'' + (tracked ? 'stage' : 'outcome') + '\',\'' + e(o.key) + '\')">' + e(o.label) + '</button>').join('') + '</div>';
+    if (!tracked) h += '<div style="text-align:center;margin-top:10px"><a href="#" class="cxp-s" onclick="cxQ(cxAct(\'' + id + '\')).batch=true;cxDraw();return false">Enter totals for a whole session instead</a></div>';
+  } else {
+    h += '<div class="cxq-lbl">Totals for ' + e(t ? t.label : 'this item') + ' (' + (kg ? 'kg' : 'items') + ')</div>' +
+      '<div class="cxq-batch">' + (act.outcomes || []).map(o => '<label><span>' + e(o.label) + '</span><input type="number" min="0" step="' + (kg ? '0.1' : '1') + '" data-out="' + e(o.key) + '" class="cxq-b-' + id + '"/></label>').join('') + '</div>' +
+      '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:10px"><button class="btn btn-ghost btn-sm" onclick="cxQ(cxAct(\'' + id + '\')).batch=false;cxDraw()">Back</button><button class="btn btn-p btn-sm" onclick="cxBatchLog(\'' + id + '\')">Log totals</button></div>';
+  }
+  h += '</div>';
+
+  if (CX.undo && CX.undo.act === id && Date.now() - CX.undo.at < 12000) {
+    h += '<div class="cxq-toast"><span>✓ ' + e(CX.undo.text) + '</span><span>' +
+      (CX.undo.label ? '<a href="#" onclick="cxPrintLabels([\'' + CX.undo.ids[0] + '\']);return false">🏷️ Label</a> · <a href="#" onclick="cxOpenItem(\'' + CX.undo.ids[0] + '\');return false">Open</a> · ' : '') +
+      '<a href="#" onclick="cxUndo();return false">Undo</a></span></div>';
+  }
+  return h;
+}
+
+function cxInjectQuickStyle() {
+  if (document.getElementById('cxq-style')) return;
+  const st = document.createElement('style'); st.id = 'cxq-style';
+  st.textContent = `
+.cxq{max-width:640px}
+.cxq-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
+.cxq-k{font-size:12px;color:var(--txt3)}
+.cxq-h{font-size:18px;font-weight:700;color:var(--txt)}
+.cxq-big{font-size:22px;font-weight:700;color:var(--em)}
+.cxq-small{font-size:11px;color:var(--txt3)}
+.cxq-cap{display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-bottom:10px}
+.cxq-cam{display:flex;align-items:center;justify-content:center;gap:8px;height:64px;border-radius:12px;background:rgba(31,111,109,.08);border:1.5px dashed rgba(31,111,109,.35);color:var(--em);font-weight:700;font-size:14px;cursor:pointer}
+.cxq-cam span{font-size:22px}
+.cxq-tellbtn{height:64px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--txt2);font-weight:600;font-size:13px}
+.cxq-status{font-size:12px;color:var(--em);background:rgba(31,111,109,.06);border-radius:8px;padding:8px 10px;margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cxq-status.err{color:var(--red);background:#FEF2F2}
+.cxq-tell textarea{min-height:70px;font-size:14px}
+.cxq-tell{margin-bottom:10px}
+.cxq-pend{border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px;background:var(--bg)}
+.cxq-pend-row{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid var(--border)}
+.cxq-dest{color:var(--em);font-weight:600}
+.cxq-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.cxq-chip{border:1px solid var(--border);background:var(--surface);border-radius:18px;padding:7px 13px;font-size:13px;color:var(--txt2)}
+.cxq-chip.on{background:var(--em);border-color:var(--em);color:#fff;font-weight:600}
+.cxq-amt{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.cxq-amt input{font-size:26px;font-weight:700;padding:10px 14px;height:58px;border-radius:12px}
+.cxq-amt span{font-size:15px;color:var(--txt3);font-weight:600;min-width:44px}
+.cxq-more{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:12px}
+.cxq-more input{font-size:13px;padding:8px 10px}
+.cxq-lbl{font-size:12px;color:var(--txt3);margin-bottom:6px}
+.cxq-btns{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.cxq-btn{height:56px;border-radius:12px;border:1px solid var(--border);background:var(--surface);font-size:14px;font-weight:600;color:var(--txt)}
+.cxq-btn.first{background:var(--em);border-color:var(--em);color:#fff}
+.cxq-btn:active{transform:scale(.97)}
+.cxq-batch{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.cxq-batch label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--txt2)}
+.cxq-batch input{font-size:18px;font-weight:700;height:46px}
+.cxq-toast{max-width:640px;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;background:#1F2937;color:#fff;border-radius:10px;padding:10px 14px;font-size:13px;margin:-6px 0 16px}
+.cxq-toast a{color:#9FE3D6;font-weight:700;text-decoration:none}
+@media(max-width:600px){.cxq-cap{grid-template-columns:1fr 1fr}.cxq-more{grid-template-columns:1fr}.cxq-btns{grid-template-columns:1fr 1fr}}`;
+  document.head.appendChild(st);
+}
+
+// Core insert used by one-tap, totals and "just tell it"
+async function cxQInsert(act, typeKey, amount, kind, key, extra) {
+  const t = cxType(act, typeKey);
+  if (!t) throw new Error('Pick what it is first');
+  const kg = cxPerKg(t);
+  const amt = +amount || 0;
+  if (kg && !amt) throw new Error('Enter the weight in kg');
+  const qty = kg ? 1 : Math.max(1, Math.round(amt || 1));
+  const weight = kg ? amt : +((+t.weight_kg || 0) * qty).toFixed(2);
+  const f = cxCalc(act, t.key, qty, weight);
+  const now = new Date().toISOString();
+  const d = Object.assign({
+    org_id: orgId, activity_id: act.id, item_type: t.key, name: t.label, category: act.name,
+    quantity: qty, weight_kg: weight, co2e_kg: f.co2, value_gbp: f.value, custom: {}, updated_at: now
+  }, extra || {});
+  if (kind === 'outcome') {
+    const o = cxOutcome(act, key);
+    Object.assign(d, { outcome: key, outcome_type: o.type, outcome_at: now, status: o.label, stage: null });
+  } else {
+    const s = cxStage(act, key);
+    Object.assign(d, { stage: key, status: s ? s.label : '' });
+  }
+  const { data, error } = await sb.from('circular_items').insert([d]).select().single();
+  if (error) throw error;
+  await cxLog(data, kind === 'outcome' ? 'tallied' : 'logged', null, key, { item_type: t.key, quantity: qty, weight_kg: weight, via: (extra && extra._via) || 'quick' });
+  CX.items.unshift(data);
+  return { row: data, text: (kg ? cxFmt(weight, 1) + ' kg ' : (qty > 1 ? qty + ' × ' : '')) + t.label };
+}
+
+async function cxQuickLog(actId, kind, key) {
+  const act = cxAct(actId), q = cxQ(act);
+  try {
+    const extra = {};
+    if (kind === 'stage') { ['brand', 'model', 'serial'].forEach(k => { if (q[k]) extra[k] = q[k].trim(); }); if (q.name) extra.name = q.name; }
+    const r = await cxQInsert(act, q.type, q.amt, kind, key, extra);
+    const dest = cxOutcome(act, key) || cxStage(act, key);
+    CX.undo = { act: actId, ids: [r.row.id], at: Date.now(), text: r.text + ' → ' + (dest ? dest.label : ''), label: kind === 'stage' };
+    Object.assign(q, { amt: '', brand: '', model: '', serial: '', name: '', status: '', newType: null, more: false });
+    cxDraw(); cxUndoTimer();
+    const a = $('cxq-amt-' + actId); if (a && kind === 'outcome') a.focus();
+  } catch (e) { q.status = e.message || String(e); q.statusErr = true; cxDraw(); q.statusErr = false; }
+}
+
+async function cxBatchLog(actId) {
+  const act = cxAct(actId), q = cxQ(act);
+  const inputs = Array.from(document.querySelectorAll('.cxq-b-' + actId)).filter(i => +i.value > 0);
+  if (!inputs.length) { q.status = 'Enter at least one total'; q.statusErr = true; cxDraw(); q.statusErr = false; return; }
+  const ids = [];
+  try {
+    for (const inp of inputs) { const r = await cxQInsert(act, q.type, +inp.value, 'outcome', inp.getAttribute('data-out'), { _via: 'totals' }); ids.push(r.row.id); }
+    const t = cxType(act, q.type);
+    CX.undo = { act: actId, ids, at: Date.now(), text: 'Session totals logged for ' + (t ? t.label : '') };
+    q.batch = false; cxDraw(); cxUndoTimer();
+  } catch (e) { q.status = e.message; q.statusErr = true; cxDraw(); q.statusErr = false; }
+}
+
+let _cxUndoT = null;
+function cxUndoTimer() { clearTimeout(_cxUndoT); _cxUndoT = setTimeout(() => { if (CX.undo && Date.now() - CX.undo.at >= 12000) { CX.undo = null; if (CX.tab !== 'all') cxDraw(); } }, 12200); }
+async function cxUndo() {
+  const u = CX.undo; if (!u) return;
+  CX.undo = null;
+  for (const id of u.ids) {
+    const it = CX.items.find(i => String(i.id) === String(id));
+    const { error } = await sb.from('circular_items').delete().eq('id', id);
+    if (!error && it) { await cxLog(it, 'undone', null, null, {}); CX.items = CX.items.filter(i => i !== it); }
+  }
+  cxDraw();
+}
+
+// 📷 Photo: identify + read the scale
+async function cxQPhoto(ev, actId) {
+  const file = ev.target.files && ev.target.files[0]; if (!file) return;
+  const act = cxAct(actId), q = cxQ(act), tracked = circMode(act) === 'tracked';
+  q.status = '✨ Looking at the photo…'; q.newType = null; cxDraw();
+  try {
+    const b64 = await cxResize(file, 1200, 0.72);
+    const list = (act.item_types || []).map(t => t.key + ' = ' + t.label + ' (' + (cxPerKg(t) ? 'weighed' : 'counted') + ')').join('; ');
+    const j = await vAI(
+      'You help a UK community organisation log what is in a photo for their "' + act.name + '" activity. Reply with JSON only.',
+      [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
+       { type: 'text', text: 'Their list: ' + (list || 'empty') + '.\nReturn {"item_type": key from the list or "", "new_item": short name if nothing on the list fits else "", "unit": "kg" or "each", "scale_kg": the number shown on a weighing scale display converted to kg, or null if no scale display is readable, "count": how many of the main item you can see, "name": short description, ' +
+         (tracked ? '"brand": "", "model": "", "serial": only text you can actually read on a label else "", ' : '') +
+         '"hazards": e.g. "lithium battery" or "", "confidence": "high", "medium" or "low"}. Never guess a scale reading or serial number.' }], 400);
+    let typeKey = j.item_type && cxType(act, j.item_type) ? j.item_type : '';
+    if (!typeKey && j.new_item) {
+      const match = (act.item_types || []).find(t => t.label.toLowerCase() === String(j.new_item).toLowerCase());
+      if (match) typeKey = match.key; else q.newType = { label: String(j.new_item).trim(), unit: j.unit === 'kg' ? 'kg' : 'each' };
+    }
+    if (typeKey) q.type = typeKey;
+    const t = cxType(act, q.type);
+    const kg = q.newType ? q.newType.unit === 'kg' : cxPerKg(t);
+    let how = '';
+    if (kg && +j.scale_kg > 0) { q.amt = String(+(+j.scale_kg).toFixed(2)); how = 'scale reads ' + q.amt + ' kg'; }
+    else if (!kg && +j.count > 0) { q.amt = String(Math.round(j.count)); how = q.amt + ' counted'; }
+    else if (kg) how = 'no scale reading — enter the weight';
+    if (tracked) { ['brand', 'model', 'serial'].forEach(k => { if (j[k]) q[k] = j[k]; }); if (j.name) q.name = j.name; }
+    const label = q.newType ? q.newType.label : t ? t.label : (j.name || 'Item');
+    q.status = '✨ <b>' + cxE(label) + '</b>' + (how ? ' · ' + cxE(how) : '') + (j.confidence === 'low' ? ' · not sure, please check' : '') +
+      (j.hazards ? ' · <b style="color:var(--red)">⚠ ' + cxE(j.hazards) + '</b>' : '');
+  } catch (e) { q.status = 'Could not read the photo: ' + cxE(e.message || e); q.statusErr = true; }
+  cxDraw(); q.statusErr = false;
+}
+
+async function cxAddTypeFromAI(actId) {
+  const act = cxAct(actId), q = cxQ(act); if (!q.newType) return;
+  const key = _circSlug(q.newType.label) + '_' + Math.random().toString(36).slice(2, 5);
+  const t = { key, label: q.newType.label, unit: q.newType.unit, weight_kg: 1, co2e_kg: 0, value_gbp: 0, source: 'Set by organisation' };
+  const types = (act.item_types || []).concat(t);
+  const { error } = await sb.from('circular_activities').update({ item_types: types }).eq('id', act.id);
+  if (error) { q.status = 'Could not add: ' + cxE(error.message); q.statusErr = true; cxDraw(); q.statusErr = false; return; }
+  act.item_types = types; q.type = key; q.newType = null; q.status = '✓ Added ' + cxE(t.label) + ' to your list';
+  cxDraw();
+}
+
+// ✍️ Just tell it
+async function cxQTell(actId) {
+  const act = cxAct(actId), q = cxQ(act), tracked = circMode(act) === 'tracked';
+  const ta = $('cxq-text-' + actId); q.text = ta ? ta.value.trim() : '';
+  if (!q.text) return;
+  const btn = $('cxq-go-' + actId); if (btn) { btn.disabled = true; btn.textContent = 'Reading…'; }
+  try {
+    const types = (act.item_types || []).map(t => t.key + ' = ' + t.label + ' (' + (cxPerKg(t) ? 'kg' : 'each') + ')').join('; ');
+    const dests = (tracked ? act.stages : act.outcomes || []).map(o => o.key + ' = ' + o.label).join('; ');
+    const j = await vAI('You turn a short note from a UK community organisation into log entries. Reply with JSON only. Use only numbers stated in the note. Never invent amounts.',
+      'Activity: ' + act.name + '\nItems: ' + (types || 'none') + '\n' + (tracked ? 'Steps' : 'Where it can go') + ': ' + dests +
+      '\nNote: "' + q.text + '"\nReturn {"entries":[{"item_type": key or "", "new_item": name if not on the list else "", "amount": number, "unit": "kg" or "each", "to": key from ' + (tracked ? 'steps' : 'where it can go') + '}]}. ' +
+      'If the note gives a total and a part (e.g. 14 items, 11 fixed), split it (11 fixed, 3 into the remaining outcome stated or implied).', 900);
+    const ok = (j.entries || []).filter(p => +p.amount > 0 && (tracked ? cxStage(act, p.to) : cxOutcome(act, p.to)));
+    if (!ok.length) throw new Error('Could not find amounts and destinations in that — try adding them');
+    q.pending = ok; q.tell = false; q.status = '';
+  } catch (e) { q.status = cxE(e.message || e); q.statusErr = true; }
+  cxDraw(); q.statusErr = false;
+}
+async function cxQConfirm(actId) {
+  const act = cxAct(actId), q = cxQ(act), tracked = circMode(act) === 'tracked';
+  const ids = [];
+  try {
+    for (const p of q.pending) {
+      let key = p.item_type && cxType(act, p.item_type) ? p.item_type : '';
+      if (!key && p.new_item) {
+        const m = (act.item_types || []).find(t => t.label.toLowerCase() === String(p.new_item).toLowerCase());
+        if (m) key = m.key;
+        else { q.newType = { label: p.new_item, unit: p.unit === 'kg' ? 'kg' : 'each' }; await cxAddTypeFromAI(actId); key = q.type; }
+      }
+      const n = tracked && !cxPerKg(cxType(act, key)) ? Math.max(1, Math.round(+p.amount)) : 1;
+      for (let k = 0; k < n; k++) {   // tracked items get one passport each
+        const r = await cxQInsert(act, key, tracked && n > 1 ? 1 : p.amount, tracked ? 'stage' : 'outcome', p.to, { _via: 'told' });
+        ids.push(r.row.id);
+      }
+    }
+    CX.undo = { act: actId, ids, at: Date.now(), text: ids.length + ' entr' + (ids.length === 1 ? 'y' : 'ies') + ' logged' };
+    q.pending = null; q.text = ''; q.status = '';
+    cxDraw(); cxUndoTimer();
+  } catch (e) { q.status = cxE(e.message || e); q.statusErr = true; cxDraw(); q.statusErr = false; }
+}
+let _cxRec = null;
+function cxQMic(actId) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition; if (!SR) return;
+  const btn = $('cxq-mic-' + actId), ta = $('cxq-text-' + actId);
+  if (_cxRec) { _cxRec.stop(); _cxRec = null; if (btn) btn.textContent = '🎤 Speak'; return; }
+  _cxRec = new SR(); _cxRec.lang = 'en-GB'; _cxRec.interimResults = true; _cxRec.continuous = false;
+  const base = ta.value ? ta.value + ' ' : '';
+  _cxRec.onresult = ev => { ta.value = base + Array.from(ev.results).map(r => r[0].transcript).join(' '); };
+  _cxRec.onend = () => { _cxRec = null; if (btn) btn.textContent = '🎤 Speak'; };
+  _cxRec.start(); if (btn) btn.textContent = '■ Stop';
+}
+
+// Recent entries for quick-tally activities
+function cxRecentHTML(act) {
+  const its = CX.items.filter(i => i.activity_id === act.id);
+  const done = its.filter(i => i.outcome_type).slice(0, 30);
+  const open = its.filter(i => !i.outcome_type);
+  let h = '<div class="card" style="max-width:640px"><div class="card-title">Recent</div>';
+  if (open.length) h += '<div class="cxp-warn">' + open.length + ' earlier entr' + (open.length === 1 ? 'y has' : 'ies have') + ' no destination yet: ' +
+    open.slice(0, 8).map(i => '<a href="#" onclick="cxOpenItem(\'' + i.id + '\');return false">' + cxE(i.name) + '</a>').join(', ') + '</div>';
+  h += done.length ? done.map(i => {
+    const o = cxOutcome(act, i.outcome); const t = cxType(act, i.item_type);
+    const d = new Date(i.outcome_at || i.created_at);
+    return '<div class="cxp-list-row"><div><div class="cxp-t">' + (cxPerKg(t) ? cxFmt(i.weight_kg, 1) + ' kg ' : (+i.quantity > 1 ? cxFmt(i.quantity) + ' × ' : '')) + cxE(i.name) + '</div>' +
+      '<div class="cxp-s">' + (cxIsToday(i) ? 'Today ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString('en-GB')) + '</div></div>' +
+      '<div style="display:flex;align-items:center;gap:10px"><span class="cxp-chip">' + cxE(o ? o.label : i.status) + '</span>' +
+      '<button class="btn btn-ghost btn-sm" title="Delete" onclick="cxDelEntry(\'' + i.id + '\')">×</button></div></div>';
+  }).join('') : renderEmpty('Nothing logged yet.');
+  return h + '</div>';
+}
+async function cxDelEntry(id) {
+  const it = CX.items.find(i => String(i.id) === String(id)); if (!it) return;
+  if (!confirm('Delete this entry?')) return;
+  const { error } = await sb.from('circular_items').delete().eq('id', it.id);
+  if (error) { alert('Could not delete: ' + error.message); return; }
+  await cxLog(it, 'deleted', null, null, { name: it.name, weight_kg: it.weight_kg });
+  CX.items = CX.items.filter(i => i !== it); cxDraw();
 }
 
 // ── Log / edit item ──────────────────────────────────────────
@@ -1921,555 +2381,711 @@ function switchHRTab(name, btn) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// SETTINGS — UNCHANGED (your existing code)
+// SETTINGS v2 — one section at a time, autosave everywhere
+// Sections: Organisation · What you do · Look and feel ·
+// Feedback questions · Circular activities · Team · Demo mode
 // ─────────────────────────────────────────────────────────────
 
 const _modState = {};
+let _setSection = 'org';
+const SET_SECTIONS = [
+  ['org', '🏢', 'Organisation'],
+  ['modules', '🧩', 'What you do'],
+  ['look', '🎨', 'Look and feel'],
+  ['feedback', '💬', 'Feedback questions'],
+  ['circular', '♻️', 'Circular activities'],
+  ['team', '👥', 'Team'],
+  ['demo', '🎭', 'Demo mode']
+];
+const SET_MOD_GROUPS = [
+  ['People', ['participants', 'volunteers', 'contacts', 'employers']],
+  ['Delivery', ['events', 'circular', 'evidence']],
+  ['Reporting', ['impact', 'funders', 'demographics']],
+  ['Growth', ['social', 'bd']]
+];
+
+function setInjectStyle() {
+  if (document.getElementById('st-style')) return;
+  const st = document.createElement('style'); st.id = 'st-style';
+  st.textContent = `
+.st-wrap{display:grid;grid-template-columns:210px minmax(0,1fr);gap:18px;align-items:start}
+.st-nav{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px;position:sticky;top:12px}
+.st-nav button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:none;border-radius:8px;padding:9px 10px;font-size:13px;color:var(--txt2);cursor:pointer}
+.st-nav button:hover{background:var(--bg)}
+.st-nav button.on{background:var(--bg);color:var(--txt);font-weight:700}
+.st-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:4px}
+.st-h{font-size:18px;font-weight:700;color:var(--txt)}
+.st-sub{font-size:13px;color:var(--txt3);line-height:1.5;margin-bottom:18px}
+.st-status{font-size:12px;font-weight:700;color:var(--em);white-space:nowrap;min-height:16px}
+.st-group{font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 8px}
+.st-group:first-child{margin-top:0}
+.st-mods{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}
+.st-mod{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface);cursor:pointer}
+.st-mod.on{border-color:rgba(31,111,109,.35);background:rgba(31,111,109,.04)}
+.st-mod-n{font-size:13px;font-weight:600;color:var(--txt)}
+.st-mod-d{font-size:11px;color:var(--txt3);margin-top:2px}
+.st-sw{position:relative;width:40px;height:22px;border-radius:11px;background:#E0DAD0;flex-shrink:0;transition:background .2s}
+.st-sw:after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:left .2s}
+.st-sw.on{background:var(--em)}
+.st-sw.on:after{left:21px}
+.st-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.st-q{border:1px solid var(--border);border-radius:10px;background:var(--surface);margin-bottom:6px}
+.st-q-row{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer}
+.st-q-row .grip{color:var(--txt3);cursor:grab;font-size:15px;user-select:none}
+.st-q-t{font-size:13px;color:var(--txt);font-weight:600}
+.st-q-m{font-size:11px;color:var(--txt3);margin-top:2px}
+.st-q.off .st-q-t{color:var(--txt3);font-weight:400}
+.st-q.drag-over{border-color:var(--em);box-shadow:0 0 0 2px rgba(31,111,109,.15)}
+.st-q-edit{padding:4px 12px 12px;border-top:1px solid var(--border)}
+.st-pill{font-size:11px;padding:2px 9px;border-radius:10px;font-weight:600;white-space:nowrap}
+.st-pill.on{background:rgba(31,111,109,.1);color:var(--em)}
+.st-pill.off{background:var(--bg);color:var(--txt3);border:1px solid var(--border)}
+.st-sugg{border:1px dashed var(--em);border-radius:10px;padding:12px;margin-bottom:14px;background:rgba(31,111,109,.03)}
+.st-sugg-row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)}
+.st-sugg-row:last-child{border-bottom:none}
+.st-phone{width:300px;margin:0 auto;border:8px solid #222;border-radius:28px;background:#fff;padding:18px 14px;max-height:540px;overflow-y:auto}
+.st-phone-q{margin-bottom:16px}
+.st-phone-q p{font-size:13px;font-weight:600;margin:0 0 8px;color:#222}
+.st-dots{display:flex;gap:6px}.st-dots span{width:34px;height:34px;border-radius:50%;border:1.5px solid #ccc;display:flex;align-items:center;justify-content:center;font-size:13px;color:#555}
+.st-brand{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.st-prev{border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-top:16px}
+.st-prev-bar{height:40px;display:flex;align-items:center;padding:0 12px;color:#fff;font-size:12px;font-weight:700;gap:10px}
+.st-prev-body{display:grid;grid-template-columns:90px 1fr;height:90px;background:var(--bg)}
+.st-prev-side{background:var(--surface);border-right:1px solid var(--border);display:flex;align-items:flex-start;justify-content:center;padding-top:10px}
+/* circular */
+.st-circ{display:grid;grid-template-columns:230px minmax(0,1fr);gap:14px;align-items:start}
+.st-tile{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface);cursor:pointer;margin-bottom:8px}
+.st-tile.on{border:2px solid var(--em);padding:9px 11px}
+.st-tile-i{font-size:20px}
+.st-tile-n{font-size:13px;font-weight:700;color:var(--txt)}
+.st-tile-d{font-size:11px;color:var(--txt3)}
+.st-add{display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border:1px dashed var(--border);border-radius:10px;font-size:13px;color:var(--txt2);cursor:pointer;background:none;width:100%}
+.st-panel{border:1px solid var(--border);border-radius:10px;background:var(--surface);padding:14px}
+.st-seg{display:flex;gap:3px;background:var(--bg);border-radius:8px;padding:3px;margin:10px 0 16px}
+.st-seg button{flex:1;border:none;background:none;border-radius:6px;padding:7px 4px;font-size:12px;color:var(--txt2);cursor:pointer}
+.st-seg button.on{background:var(--surface);color:var(--txt);font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.st-lbl{font-size:12px;color:var(--txt3);margin:0 0 6px}
+.st-mode{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
+.st-mode div{padding:10px 12px;border:1px solid var(--border);border-radius:10px;cursor:pointer}
+.st-mode div.on{border:2px solid var(--em);padding:9px 11px}
+.st-mode b{display:block;font-size:13px;color:var(--txt)}
+.st-mode span{font-size:11px;color:var(--txt3)}
+.st-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.st-chip{font-size:12px;padding:5px 11px;border-radius:14px;border:1px solid var(--border);background:var(--surface);color:var(--txt);cursor:pointer}
+.st-chip.fill{background:rgba(31,111,109,.08);border-color:rgba(31,111,109,.25);color:var(--em)}
+.st-chip.sel{box-shadow:0 0 0 2px var(--em)}
+.st-chip.new{border-style:dashed;color:var(--txt2)}
+.st-chip small{opacity:.7;margin-left:4px}
+.st-edit{background:var(--bg);border-radius:10px;padding:10px 12px;margin:-4px 0 14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.st-edit input,.st-edit select{padding:6px 9px;font-size:13px;width:auto;flex:1;min-width:120px}
+.st-fig{width:100%;border-collapse:collapse;font-size:12px}
+.st-fig th{text-align:left;color:var(--txt3);font-weight:600;padding:4px 6px}
+.st-fig td{padding:3px 6px}
+.st-fig input{padding:5px 7px;font-size:12px}
+.st-tpls{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
+.st-tpl{padding:10px 12px;border:1px solid var(--border);border-radius:10px;cursor:pointer}
+.st-tpl.on{border:2px solid var(--em);padding:9px 11px;background:rgba(31,111,109,.04)}
+.st-tpl.had{opacity:.5;cursor:default}
+.st-tpl b{font-size:13px;display:block}
+.st-tpl span{font-size:11px;color:var(--txt3);line-height:1.4}
+.st-back{display:none}
+@media(max-width:760px){
+  .st-wrap{grid-template-columns:1fr}
+  .st-nav{display:flex;overflow-x:auto;position:static;padding:6px;gap:4px}
+  .st-nav button{white-space:nowrap;width:auto}
+  .st-brand{grid-template-columns:1fr}
+  .st-circ{grid-template-columns:1fr}
+  .st-circ.open .st-tiles{display:none}
+  .st-circ:not(.open) .st-panel{display:none}
+  .st-back{display:inline-block}
+}`;
+  document.head.appendChild(st);
+}
+
+function setStatus(t, err) {
+  const el = $('st-status'); if (!el) return;
+  el.textContent = t || ''; el.style.color = err ? 'var(--red)' : 'var(--em)';
+  if (t && !err && /Saved/.test(t)) setTimeout(() => { if (el.textContent === t) el.textContent = ''; }, 2500);
+}
+
+function setModal(html, maxW) {
+  let m = $('st-modal');
+  if (!m) {
+    m = document.createElement('div'); m.className = 'modal-overlay'; m.id = 'st-modal';
+    m.addEventListener('click', e => { if (e.target === m) setCloseModal(); });
+    document.body.appendChild(m);
+  }
+  m.innerHTML = '<div class="modal" style="max-width:' + (maxW || 560) + 'px">' + html + '</div>';
+  m.classList.add('open');
+}
+function setCloseModal() { const m = $('st-modal'); if (m) m.classList.remove('open'); }
+
+// Shared AI helper: returns parsed JSON from Claude
+async function vAI(system, content, maxTokens) {
+  const { data: { session } } = await sb.auth.getSession();
+  const res = await fetch('/api/claude', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': session ? 'Bearer ' + session.access_token : '' },
+    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: maxTokens || 800, system, messages: [{ role: 'user', content }] })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.type === 'error') throw new Error((data.error && (data.error.message || data.error)) || 'AI is not available on this plan');
+  const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+  const clean = text.replace(/```json|```/g, '').trim();
+  const start = clean.search(/[\[{]/);
+  return JSON.parse(start > 0 ? clean.slice(start) : clean);
+}
 
 function renderSettings() {
   if (!currentOrg) return;
+  setInjectStyle();
   const m = currentOrg.modules || {};
+  if (typeof SET_MODULES !== 'undefined') SET_MODULES.forEach(mod => { _modState[mod.k] = m[mod.k] != null ? m[mod.k] : true; });
+  const page = $('page-settings'); if (!page) return;
+  const secs = SET_SECTIONS.filter(s => s[0] !== 'circular' || _modState.circular !== false);
+  if (!secs.some(s => s[0] === _setSection)) _setSection = 'org';
+  page.innerHTML =
+    '<div class="page-header"><div><div class="page-title">Settings</div><div class="page-sub">Changes save automatically</div></div></div>' +
+    '<div class="st-wrap"><nav class="st-nav" id="st-nav">' +
+      secs.map(s => '<button data-sec="' + s[0] + '" onclick="setOpen(\'' + s[0] + '\')"><span>' + s[1] + '</span><span>' + s[2] + '</span></button>').join('') +
+    '</nav><div class="card" style="margin:0" id="st-main"></div></div>';
+  setOpen(_setSection);
+}
 
-  // Org details
-  if ($('set-name'))   $('set-name').value   = currentOrg.name || '';
-  if ($('set-sector')) try { $('set-sector').value = currentOrg.sector || 'Charity / VCSE'; } catch (e) { /* ignore */ }
-  if ($('set-plan'))   $('set-plan').textContent = currentOrg.plan === 'pro' ? 'Pro ✦'
-                                                  : currentOrg.plan === 'network' ? 'Network'
-                                                  : currentOrg.plan === 'starter' ? 'Starter'
-                                                  : 'Free';
-  if ($('set-status')) $('set-status').textContent = currentOrg.status || 'active';
+function setOpen(sec) {
+  _setSection = sec;
+  document.querySelectorAll('#st-nav button').forEach(b => b.classList.toggle('on', b.getAttribute('data-sec') === sec));
+  const s = SET_SECTIONS.find(x => x[0] === sec);
+  const subs = {
+    org: 'Your details. Used on reports, forms and legal pages.',
+    modules: 'Switch on what you do. Only these show in the menu.',
+    look: 'Your logo and colour appear in the menu, banner, forms and reports.',
+    feedback: 'What people are asked after a session. Used on QR forms, imports and reports.',
+    circular: 'The circular activities you run and how you record them.',
+    team: 'Invite staff and set what they can see.',
+    demo: 'Explore every feature with sample data.'
+  };
+  $('st-main').innerHTML =
+    '<div class="st-head"><div class="st-h">' + s[1] + ' ' + s[2] + '</div><div class="st-status" id="st-status"></div></div>' +
+    '<div class="st-sub">' + subs[sec] + '</div><div id="st-body"></div>';
+  const body = $('st-body');
+  if (sec === 'org') setOrgHTML(body);
+  if (sec === 'modules') setModulesHTML(body);
+  if (sec === 'look') setLookHTML(body);
+  if (sec === 'feedback') { _fqRows = null; renderFeedbackQuestionsCard(); }
+  if (sec === 'circular') renderCircularSettingsCard();
+  if (sec === 'team') body.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap"><div style="font-size:13px;color:var(--txt2);line-height:1.6">Invite advisors and admin staff, manage roles, and remove team members.</div><a href="team.html" class="btn btn-p" style="text-decoration:none;white-space:nowrap">👥 Manage team →</a></div>';
+  if (sec === 'demo') setDemoHTML(body);
+}
 
-  // Modules grid
-  if (typeof SET_MODULES !== 'undefined' && $('set-modules-grid')) {
-    SET_MODULES.forEach(mod => { _modState[mod.k] = m[mod.k] != null ? m[mod.k] : true; });
-    $('set-modules-grid').innerHTML = SET_MODULES.map(mod => {
-      const on = _modState[mod.k];
-      return '<div class="mod-item ' + (on ? 'on' : '') + '" id="set-mod-item-' + mod.k + '">' +
-        '<div><div style="font-size:13px;font-weight:600;color:var(--txt)">' + mod.n + '</div>' +
-        '<div style="font-size:11px;color:var(--txt3);margin-top:2px">' + mod.d + '</div></div>' +
-        '<div style="position:relative;width:44px;height:24px;flex-shrink:0;cursor:pointer" onclick="toggleMod(\'' + mod.k + '\')">' +
-          '<div id="set-mod-track-' + mod.k + '" style="position:absolute;inset:0;border-radius:12px;background:' + (on ? '#1F6F6D' : '#E0DAD0') + ';transition:background .2s"></div>' +
-          '<div id="set-mod-thumb-' + mod.k + '" style="position:absolute;top:3px;left:' + (on ? '23' : '3') + 'px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;pointer-events:none;box-shadow:0 1px 2px rgba(0,0,0,.1)"></div>' +
-        '</div></div>';
-    }).join('');
-  }
-
-  // ── BRANDING CARD ──────────────────────────────────────────
-  let brandCard = $('settings-branding-card');
-  if (!brandCard) {
-    brandCard = document.createElement('div');
-    brandCard.id = 'settings-branding-card';
-    brandCard.className = 'card';
-    const settingsPage = $('page-settings');
-    const saveBtn = $('set-save-btn');
-    if (settingsPage && saveBtn) settingsPage.insertBefore(brandCard, saveBtn);
-    else if (settingsPage) settingsPage.appendChild(brandCard);
-  }
-  brandCard.innerHTML =
-    '<div class="card-title">🎨 Logo & brand colour</div>' +
-    '<div style="font-size:13px;color:var(--txt3);margin-bottom:18px;line-height:1.5">' +
-      'Upload your organisation\'s logo and choose an accent colour. Both appear in the sidebar, banner and reports.' +
+// ── Organisation ─────────────────────────────────────────────
+function setOrgHTML(body) {
+  const sectors = ['Charity / VCSE', 'Social enterprise', 'Local authority', 'Housing association', 'Education', 'Health', 'Community group', 'Other'];
+  const cur = currentOrg.sector || 'Charity / VCSE';
+  if (!sectors.includes(cur)) sectors.push(cur);
+  const plan = currentOrg.plan === 'pro' ? 'Pro ✦' : currentOrg.plan === 'network' ? 'Network' : currentOrg.plan === 'starter' ? 'Starter' : 'Free';
+  body.innerHTML =
+    '<div class="form-grid-2">' +
+      '<div class="form-row"><label>Organisation name</label><input id="set-name" value="' + escapeHTML(currentOrg.name || '') + '" onchange="setSaveOrg()"/></div>' +
+      '<div class="form-row"><label>Sector</label><select id="set-sector" onchange="setSaveOrg()">' + sectors.map(x => '<option' + (x === cur ? ' selected' : '') + '>' + escapeHTML(x) + '</option>').join('') + '</select></div>' +
     '</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px" class="set-brand-grid">' +
-      '<div>' +
-        '<label style="display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;font-weight:600">Logo</label>' +
-        '<div id="set-logo-drop" style="border:2px dashed var(--border);border-radius:10px;background:var(--bg);padding:18px;text-align:center;cursor:pointer" onclick="document.getElementById(\'set-logo-input\').click()">' +
-          '<div id="set-logo-preview" style="width:100%;height:100px;display:flex;align-items:center;justify-content:center;background:#fff;border-radius:6px;margin-bottom:10px;overflow:hidden;border:1px solid var(--border)">' +
-            (typeof getOrgLogoUrl === 'function' && getOrgLogoUrl(currentOrg)
-              ? '<img src="' + escapeHTML(getOrgLogoUrl(currentOrg)) + '" style="max-width:100%;max-height:100%;object-fit:contain"/>'
-              : '<span style="color:var(--txt3);font-size:13px">No logo yet</span>') +
-          '</div>' +
-          '<button type="button" class="btn btn-ghost btn-sm" onclick="event.stopPropagation();document.getElementById(\'set-logo-input\').click()">Choose file</button>' +
-          '<input type="file" id="set-logo-input" accept="image/png,image/jpeg,image/svg+xml,image/webp" style="display:none" onchange="handleSetLogoSelect(event)"/>' +
-          '<div style="font-size:11px;color:var(--txt3);margin-top:6px">PNG, JPG, SVG or WebP · max 2MB</div>' +
-          '<div id="set-logo-status" style="font-size:12px;font-weight:600;margin-top:6px;min-height:16px"></div>' +
-        '</div>' +
-      '</div>' +
-      '<div>' +
-        '<label style="display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;font-weight:600">Accent colour</label>' +
-        '<div id="set-colour-swatches" style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px"></div>' +
-        '<div style="display:flex;align-items:center;gap:10px;margin-top:12px">' +
-          '<div id="set-colour-preview" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--border);flex-shrink:0;background:' + (currentOrg.brand_color || '#1F6F6D') + '"></div>' +
-          '<input type="text" id="set-colour-hex" placeholder="#1F6F6D" value="' + (currentOrg.brand_color || '#1F6F6D') + '" oninput="onSetHexInput(this.value)" style="max-width:130px"/>' +
-        '</div>' +
-      '</div>' +
-    '</div>';
-
-  if (typeof _selectedLogoFile !== 'undefined') _selectedLogoFile = null;
-  if (typeof _selectedColour !== 'undefined') _selectedColour = currentOrg.brand_color || '#1F6F6D';
-  if (typeof renderSetSwatches === 'function') renderSetSwatches();
-
-  // Feedback questions card
-  _fqRows = null;
-  try { renderFeedbackQuestionsCard(); } catch (e) { console.error('[feedback questions]', e); }
-
-  // Circular activities card
-  try { renderCircularSettingsCard(); } catch (e) { console.error('[circular settings]', e); }
-
-  // Demo mode card
-  let demoCard = $('demo-mode-card');
-  if (!demoCard) {
-    demoCard = document.createElement('div');
-    demoCard.id = 'demo-mode-card';
-    demoCard.className = 'card';
-    const settingsPage = $('page-settings');
-    const saveBtn = $('set-save-btn');
-    if (settingsPage && saveBtn) settingsPage.insertBefore(demoCard, saveBtn);
-  }
-  demoCard.innerHTML =
-    '<div class="card-title">🎭 Demo mode</div>' +
-    '<div style="display:flex;justify-content:space-between;align-items:center;gap:14px">' +
-      '<div style="font-size:13px;color:var(--txt2);line-height:1.6;flex:1">Show sample participants, events, feedback and a demo MoJ contract so you can explore every feature without real data. <strong style="color:var(--txt)">Nothing is saved to your database while demo mode is on.</strong></div>' +
-      '<div style="position:relative;width:44px;height:24px;flex-shrink:0;cursor:pointer" id="demo-toggle" onclick="toggleDemoMode(' + (!_demoMode) + ')">' +
-        '<div id="demo-toggle-track" style="position:absolute;inset:0;border-radius:12px;background:' + (_demoMode ? '#F59E0B' : '#E0DAD0') + ';transition:background .2s"></div>' +
-        '<div id="demo-toggle-thumb" style="position:absolute;top:3px;left:' + (_demoMode ? '23' : '3') + 'px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;pointer-events:none;box-shadow:0 1px 2px rgba(0,0,0,.1)"></div>' +
-      '</div>' +
+    '<div class="form-grid-2">' +
+      '<div class="form-row"><label>Plan</label><div style="font-size:14px;font-weight:700;color:var(--em);padding:8px 0">' + plan + '</div></div>' +
+      '<div class="form-row"><label>Status</label><div style="font-size:14px;color:var(--txt2);padding:8px 0">' + escapeHTML(currentOrg.status || 'active') + '</div></div>' +
     '</div>';
 }
+async function setSaveOrg() {
+  const d = { name: $('set-name').value.trim(), sector: $('set-sector').value };
+  if (!d.name) { setStatus('Name cannot be blank', true); return; }
+  setStatus('Saving…');
+  try {
+    await sbUpdate('organisations', d, orgId);
+    currentOrg = Object.assign({}, currentOrg, d);
+    if ($('ob-txt')) $('ob-txt').textContent = currentOrg.name;
+    setStatus('✓ Saved');
+  } catch (e) { setStatus('Not saved: ' + e.message, true); }
+}
 
-// ─────────────────────────────────────────────────────────────
-// SETTINGS HELPERS — UNCHANGED
-// ─────────────────────────────────────────────────────────────
+// ── What you do (modules) ────────────────────────────────────
+function setModulesHTML(body) {
+  const mods = typeof SET_MODULES !== 'undefined' ? SET_MODULES : [];
+  const used = new Set();
+  const groups = SET_MOD_GROUPS.map(g => [g[0], g[1].map(k => mods.find(x => x.k === k)).filter(Boolean)]);
+  groups.forEach(g => g[1].forEach(x => used.add(x.k)));
+  const rest = mods.filter(x => !used.has(x.k));
+  if (rest.length) groups.push(['Other', rest]);
+  body.innerHTML = groups.map(g =>
+    '<div class="st-group">' + g[0] + '</div><div class="st-mods">' + g[1].map(mod =>
+      '<div class="st-mod ' + (_modState[mod.k] ? 'on' : '') + '" onclick="toggleMod(\'' + mod.k + '\')">' +
+        '<div style="flex:1;min-width:0"><div class="st-mod-n">' + escapeHTML(mod.n) + '</div><div class="st-mod-d">' + escapeHTML(mod.d) + '</div></div>' +
+        '<div class="st-sw ' + (_modState[mod.k] ? 'on' : '') + '"></div></div>').join('') + '</div>').join('');
+}
+let _modSaveTimer = null;
+function toggleMod(key) {
+  _modState[key] = !_modState[key];
+  if (_setSection === 'modules') setModulesHTML($('st-body'));
+  setStatus('Saving…');
+  clearTimeout(_modSaveTimer);
+  _modSaveTimer = setTimeout(async () => {
+    const mods = {};
+    SET_MODULES.forEach(mod => mods[mod.k] = _modState[mod.k] != null ? _modState[mod.k] : true);
+    try {
+      await sbUpdate('organisations', { modules: mods }, orgId);
+      currentOrg = Object.assign({}, currentOrg, { modules: mods });
+      if (typeof applyModules === 'function') applyModules(mods, currentOrg.plan);
+      // Circular section appears / disappears in the menu
+      const nav = $('st-nav');
+      if (nav) {
+        const has = !!nav.querySelector('[data-sec="circular"]');
+        if (has !== (mods.circular !== false)) { renderSettings(); setOpen('modules'); }
+      }
+      setStatus('✓ Saved');
+    } catch (e) { setStatus('Not saved: ' + e.message, true); }
+  }, 400);
+}
 
+// ── Look and feel ────────────────────────────────────────────
+function setLookHTML(body) {
+  _selectedColour = currentOrg.brand_color || '#1F6F6D';
+  const logo = typeof getOrgLogoUrl === 'function' ? getOrgLogoUrl(currentOrg) : currentOrg.logo_url;
+  body.innerHTML =
+    '<div class="st-brand"><div>' +
+      '<div class="st-lbl">Logo</div>' +
+      '<div style="border:2px dashed var(--border);border-radius:10px;background:var(--bg);padding:16px;text-align:center;cursor:pointer" onclick="$(\'set-logo-input\').click()">' +
+        '<div id="set-logo-preview" style="height:90px;display:flex;align-items:center;justify-content:center;background:#fff;border-radius:6px;margin-bottom:10px;overflow:hidden;border:1px solid var(--border)">' +
+          (logo ? '<img src="' + escapeHTML(logo) + '" style="max-width:100%;max-height:100%;object-fit:contain"/>' : '<span style="color:var(--txt3);font-size:13px">No logo yet</span>') + '</div>' +
+        '<span class="btn btn-ghost btn-sm">Choose file</span>' +
+        '<input type="file" id="set-logo-input" accept="image/png,image/jpeg,image/svg+xml,image/webp" style="display:none" onchange="handleSetLogoSelect(event)"/>' +
+        '<div style="font-size:11px;color:var(--txt3);margin-top:6px">PNG, JPG, SVG or WebP · max 2MB</div>' +
+      '</div></div><div>' +
+      '<div class="st-lbl">Colour</div>' +
+      '<div id="set-colour-swatches" style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px"></div>' +
+      '<div style="display:flex;align-items:center;gap:10px;margin-top:12px">' +
+        '<div id="set-colour-preview" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--border);flex-shrink:0;background:' + escapeHTML(_selectedColour) + '"></div>' +
+        '<input type="text" id="set-colour-hex" value="' + escapeHTML(_selectedColour) + '" oninput="onSetHexInput(this.value)" style="max-width:130px"/>' +
+      '</div></div></div>' +
+    '<div class="st-lbl" style="margin-top:18px">Preview</div><div class="st-prev" id="st-prev"></div>';
+  renderSetSwatches(); setLookPreview();
+}
+function setLookPreview() {
+  const p = $('st-prev'); if (!p) return;
+  const logo = typeof getOrgLogoUrl === 'function' ? getOrgLogoUrl(currentOrg) : currentOrg.logo_url;
+  p.innerHTML = '<div class="st-prev-bar" style="background:linear-gradient(90deg,#1F4F4D,' + escapeHTML(_selectedColour) + ')">' + escapeHTML(currentOrg.name || '') + '</div>' +
+    '<div class="st-prev-body"><div class="st-prev-side">' + (logo ? '<img src="' + escapeHTML(logo) + '" style="max-width:70px;max-height:34px;object-fit:contain"/>' : '') + '</div>' +
+    '<div style="padding:12px"><span style="display:inline-block;padding:6px 12px;border-radius:6px;background:' + escapeHTML(_selectedColour) + ';color:#fff;font-size:12px;font-weight:700">Button</span></div></div>';
+}
 function renderSetSwatches() {
-  const wrap = $('set-colour-swatches'); if (!wrap) return;
-  if (typeof BRAND_COLOURS === 'undefined') return;
+  const wrap = $('set-colour-swatches'); if (!wrap || typeof BRAND_COLOURS === 'undefined') return;
   wrap.innerHTML = BRAND_COLOURS.map(c =>
-    '<div style="width:100%;aspect-ratio:1;border-radius:6px;cursor:pointer;background:' + c.hex +
-    ';border:3px solid ' + (c.hex.toLowerCase() === _selectedColour.toLowerCase() ? 'var(--txt)' : 'transparent') +
-    ';transition:all .15s;position:relative" title="' + escapeHTML(c.name) +
+    '<div style="width:100%;aspect-ratio:1;border-radius:6px;cursor:pointer;background:' + c.hex + ';border:3px solid ' +
+    (c.hex.toLowerCase() === _selectedColour.toLowerCase() ? 'var(--txt)' : 'transparent') + ';position:relative" title="' + escapeHTML(c.name) +
     '" onclick="pickSetColour(\'' + c.hex + '\')">' +
-    (c.hex.toLowerCase() === _selectedColour.toLowerCase()
-      ? '<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;text-shadow:0 1px 2px rgba(0,0,0,.4)">✓</span>'
-      : '') +
-    '</div>'
-  ).join('');
+    (c.hex.toLowerCase() === _selectedColour.toLowerCase() ? '<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700">✓</span>' : '') +
+    '</div>').join('');
 }
-
+let _colourSaveTimer = null;
+function setSaveColour() {
+  setStatus('Saving…');
+  clearTimeout(_colourSaveTimer);
+  _colourSaveTimer = setTimeout(async () => {
+    try {
+      await sbUpdate('organisations', { brand_color: _selectedColour }, orgId);
+      currentOrg = Object.assign({}, currentOrg, { brand_color: _selectedColour });
+      if (typeof applyBranding === 'function') applyBranding(currentOrg);
+      setStatus('✓ Saved');
+    } catch (e) { setStatus('Not saved: ' + e.message, true); }
+  }, 500);
+}
 function pickSetColour(hex) {
   _selectedColour = hex;
   if ($('set-colour-hex')) $('set-colour-hex').value = hex;
   if ($('set-colour-preview')) $('set-colour-preview').style.background = hex;
-  renderSetSwatches();
+  renderSetSwatches(); setLookPreview(); setSaveColour();
 }
-
 function onSetHexInput(v) {
   v = (v || '').trim();
   if (/^#[0-9A-Fa-f]{6}$/.test(v)) {
     _selectedColour = v;
     if ($('set-colour-preview')) $('set-colour-preview').style.background = v;
-    renderSetSwatches();
+    renderSetSwatches(); setLookPreview(); setSaveColour();
   }
 }
+async function handleSetLogoSelect(ev) {
+  const file = ev.target.files && ev.target.files[0]; if (!file) return;
+  if (file.size > 2 * 1024 * 1024) { setStatus('Logo too large (max 2MB)', true); return; }
+  setStatus('Uploading logo…');
+  try {
+    const ext = (file.name.split('.').pop() || 'png').toLowerCase();
+    const path = orgId + '/logo-' + Date.now() + '.' + ext;
+    const { error } = await sb.storage.from('org-logos').upload(path, file, { cacheControl: '3600', upsert: false });
+    if (error) throw new Error('Logo upload failed: ' + error.message);
+    const { data } = sb.storage.from('org-logos').getPublicUrl(path);
+    await sbUpdate('organisations', { logo_url: data.publicUrl }, orgId);
+    currentOrg = Object.assign({}, currentOrg, { logo_url: data.publicUrl });
+    if (typeof applyBranding === 'function') applyBranding(currentOrg);
+    setLookHTML($('st-body'));
+    setStatus('✓ Saved');
+  } catch (e) { setStatus(e.message, true); }
+}
 
-function handleSetLogoSelect(ev) {
-  const file = ev.target.files && ev.target.files[0];
-  if (!file) return;
-  const status = $('set-logo-status');
-  if (file.size > 2 * 1024 * 1024) {
-    status.textContent = '⚠ File too large (max 2MB)';
-    status.style.color = 'var(--red)';
-    _selectedLogoFile = null;
+// ── Demo mode ────────────────────────────────────────────────
+function setDemoHTML(body) {
+  body.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:14px">' +
+      '<div style="font-size:13px;color:var(--txt2);line-height:1.6;flex:1">Show sample participants, events, feedback and a demo contract. Your real data is not changed.</div>' +
+      '<div style="position:relative;width:44px;height:24px;flex-shrink:0;cursor:pointer" id="demo-toggle" onclick="toggleDemoMode(' + (!_demoMode) + ');setTimeout(()=>{if(_setSection===\'demo\')setOpen(\'demo\')},300)">' +
+        '<div id="demo-toggle-track" style="position:absolute;inset:0;border-radius:12px;background:' + (_demoMode ? '#F59E0B' : '#E0DAD0') + ';transition:background .2s"></div>' +
+        '<div id="demo-toggle-thumb" style="position:absolute;top:3px;left:' + (_demoMode ? '23' : '3') + 'px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.2)"></div>' +
+      '</div></div>';
+}
+
+// Kept for anything that still calls it — everything autosaves now
+async function saveSettings() { setStatus('✓ Saved'); }
+
+// ─────────────────────────────────────────────────────────────
+// CIRCULAR ACTIVITIES — settings (v2: tiles + panel, autosave)
+// Stored in circular_activities (see circular-migration.sql).
+// mode column: circular-migration-v3.sql
+// ─────────────────────────────────────────────────────────────
+
+const CIRC_OUT_TYPES = [
+  ['reuse', 'Reused'], ['repair', 'Repaired'], ['share', 'Shared (food)'], ['loan', 'Loaned'],
+  ['return', 'Returned to owner'], ['recycle', 'Recycled'], ['dispose', 'Disposed'], ['other', 'Other']
+];
+const CIRC_FIELD_TYPES = [['text', 'Text'], ['number', 'Number'], ['date', 'Date'], ['yesno', 'Yes / no']];
+const CIRC_STARTER = 'Vorlana starter estimate';
+const CIRC_TALLY_DEFAULT = ['growing', 'food', 'textiles', 'scrap_store', 'repair_cafe'];
+
+function _circSlug(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40) || 'x'; }
+function _circRid(p) { return p + '_' + Math.random().toString(36).slice(2, 8); }
+function circMode(a) { return a.mode || (CIRC_TALLY_DEFAULT.includes(a.template) ? 'tally' : 'tracked'); }
+
+// Item rows: [label, unit ('kg' or 'each'), kg each, CO₂e kg avoided per unit, £ value per unit]
+function _circT(key, name, icon, desc, stages, outcomes, items, fields, links) {
+  return {
+    key, name, icon, desc,
+    stages: stages.map(s => ({ key: _circSlug(s), label: s })),
+    outcomes: outcomes.map(o => ({ key: _circSlug(o[0]), label: o[0], type: o[1] })),
+    item_types: items.map(i => ({ key: _circSlug(i[0]), label: i[0], unit: i[1], weight_kg: i[2], co2e_kg: i[3], value_gbp: i[4], source: CIRC_STARTER })),
+    fields: (fields || []).map(f => ({ key: _circSlug(f[0]), label: f[0], type: f[1] })),
+    links: links || []
+  };
+}
+
+const CIRC_TEMPLATES = [
+  _circT('collections', 'Collections', '🚚', 'Donors, councils and businesses book a pickup. Items are collected and booked in.',
+    ['Requested', 'Scheduled', 'Collected', 'Booked in'], [['Passed to activity', 'other'], ['Declined', 'other']], [], [], [{ on: 'end', to: '' }]),
+  _circT('device_reuse', 'Device reuse', '💻', 'Laptops, phones and tablets: wiped, tested, refurbished, then donated or resold.',
+    ['Booked in', 'Data wiped', 'Tested', 'Refurbished', 'Ready'],
+    [['Donated', 'reuse'], ['Resold', 'reuse'], ['Parts harvested', 'recycle'], ['Recycled', 'recycle']],
+    [['Laptop', 'each', 2.2, 250, 200], ['Desktop PC', 'each', 8, 300, 150], ['Monitor', 'each', 5, 200, 60], ['Tablet', 'each', 0.5, 90, 120], ['Smartphone', 'each', 0.2, 55, 100], ['Printer', 'each', 7, 60, 50]],
+    [['Wipe method', 'text'], ['Wipe certificate ref', 'text'], ['PAT result', 'yesno']]),
+  _circT('repair_cafe', 'Repair café', '🔧', 'Items brought to a session. Fixed or not, back to the owner.',
+    ['Brought in', 'Being repaired'],
+    [['Fixed', 'repair'], ['Partly fixed', 'repair'], ['Not fixable', 'return'], ['Referred on', 'other']],
+    [['Kettle', 'each', 1.2, 10, 20], ['Toaster', 'each', 1.5, 12, 20], ['Vacuum cleaner', 'each', 5, 35, 80], ['Lamp', 'each', 1, 8, 15], ['Hairdryer', 'each', 0.6, 6, 15], ['Radio / speaker', 'each', 1.5, 15, 30], ['Clothing', 'each', 0.5, 8, 15], ['Bike', 'each', 15, 100, 150]]),
+  _circT('furniture', 'Furniture & household', '🛋️', 'Checked, cleaned, then rehomed, sold or recycled.',
+    ['Booked in', 'Checked', 'Cleaned / repaired', 'Ready'],
+    [['Rehomed', 'reuse'], ['Sold', 'reuse'], ['Recycled', 'recycle'], ['Disposed', 'dispose']],
+    [['Sofa', 'each', 40, 90, 250], ['Chair', 'each', 7, 15, 40], ['Table', 'each', 20, 35, 80], ['Wardrobe', 'each', 50, 80, 150], ['Bed frame', 'each', 35, 60, 120], ['Mattress', 'each', 25, 60, 150]],
+    [['Fire safety label present', 'yesno']]),
+  _circT('textiles', 'Textiles & clothing', '👕', 'Sorted, then reused, swapped, sold or recycled.',
+    ['Received', 'Sorted'],
+    [['Reused', 'reuse'], ['Swapped', 'reuse'], ['Sold', 'reuse'], ['Recycled', 'recycle']],
+    [['Clothing', 'kg', 1, 15, 10], ['Shoes', 'each', 1, 10, 15], ['Bedding & linen', 'kg', 1, 10, 8]]),
+  _circT('bikes', 'Bikes', '🚲', 'Safety checked and refurbished, then sold, donated or loaned.',
+    ['Booked in', 'Safety checked', 'Refurbished', 'Ready'],
+    [['Sold', 'reuse'], ['Donated', 'reuse'], ['Loaned', 'loan'], ['Stripped for parts', 'recycle'], ['Recycled', 'recycle']],
+    [['Adult bike', 'each', 15, 100, 150], ['Child bike', 'each', 8, 50, 60]],
+    [['Frame number', 'text']]),
+  _circT('food', 'Food surplus', '🥕', 'Surplus food collected and shared with households or partners.',
+    ['Collected', 'Stored'],
+    [['Shared', 'share'], ['Given to partner', 'share'], ['Composted', 'recycle'], ['Disposed', 'dispose']],
+    [['Fresh produce', 'kg', 1, 2.5, 3], ['Bread & bakery', 'kg', 1, 2.5, 3], ['Chilled', 'kg', 1, 2.5, 4], ['Tins & dry goods', 'kg', 1, 2.5, 3]]),
+  _circT('growing', 'Growing', '🌱', 'Food grown and harvested, then shared, sold or given to food banks.',
+    ['Planted', 'Growing', 'Harvested'],
+    [['Shared', 'share'], ['Food bank', 'share'], ['Sold', 'share'], ['Compost', 'recycle']],
+    [['Tomatoes', 'kg', 1, 0, 3], ['Potatoes', 'kg', 1, 0, 1.5], ['Courgettes', 'kg', 1, 0, 2.5], ['Salad leaves', 'kg', 1, 0, 8], ['Beans', 'kg', 1, 0, 5], ['Fruit', 'kg', 1, 0, 4]]),
+  _circT('tool_library', 'Library of things', '🧰', 'Tools and equipment loaned out and returned.',
+    ['Available', 'On loan', 'Under repair'],
+    [['Retired', 'recycle']],
+    [['Power tool', 'each', 2, 25, 60], ['Garden tool', 'each', 2, 10, 25], ['Event / camping kit', 'each', 5, 20, 50]],
+    [['Borrower', 'text'], ['Due back', 'date']]),
+  _circT('scrap_store', 'Scrap store & upcycling', '🎨', 'Materials received, sorted and used in workshops or passed on.',
+    ['Received', 'Sorted', 'In stock'],
+    [['Used in workshop', 'reuse'], ['Given to groups', 'reuse'], ['Sold', 'reuse'], ['Recycled', 'recycle']],
+    [['Materials', 'kg', 1, 1, 2]])
+];
+
+let CIRC = [];
+let CIRC_REMOVED = [];
+let CIRC_READY = false;
+let _circSel = 0, _circTab = 'basics', _circEdit = null, _circOpenMobile = false;
+
+async function loadCircSettings() {
+  const { data, error } = await sb.from('circular_activities').select('*').eq('org_id', orgId).order('sort');
+  if (error) {
+    CIRC_READY = false;
+    const b = $('st-body');
+    if (b && _setSection === 'circular') b.innerHTML = '<div class="alert alert-warn">Circular set-up needs the database update. Run circular-migration.sql in Supabase, then refresh.</div>';
     return;
   }
-  _selectedLogoFile = file;
-  const reader = new FileReader();
-  reader.onload = e => {
-    $('set-logo-preview').innerHTML =
-      '<img src="' + e.target.result + '" style="max-width:100%;max-height:100%;object-fit:contain"/>';
-  };
-  reader.readAsDataURL(file);
-  status.textContent = '✓ ' + file.name + ' ready';
-  status.style.color = 'var(--em)';
-}
-
-function toggleMod(key) {
-  _modState[key] = !_modState[key];
-  const track = $('set-mod-track-' + key);
-  const thumb = $('set-mod-thumb-' + key);
-  const item  = $('set-mod-item-' + key);
-  if (track) track.style.background = _modState[key] ? '#1F6F6D' : '#E0DAD0';
-  if (thumb) thumb.style.left = _modState[key] ? '23px' : '3px';
-  if (item)  item.classList.toggle('on', _modState[key]);
-  if (key === 'circular' && typeof renderCircularSettingsCard === 'function') renderCircularSettingsCard();
-}
-
-async function saveSettings() {
-  const btn = $('set-save-btn');
-  btn.textContent = 'Saving…';
-  btn.disabled = true;
-  try {
-    let logoUrl = currentOrg.logo_url || null;
-    if (_selectedLogoFile) {
-      const ext = (_selectedLogoFile.name.split('.').pop() || 'png').toLowerCase();
-      const path = orgId + '/logo-' + Date.now() + '.' + ext;
-      const { error: upErr } = await sb.storage.from('org-logos').upload(path, _selectedLogoFile, {
-        cacheControl: '3600',
-        upsert: false
-      });
-      if (upErr) throw new Error('Logo upload failed: ' + upErr.message);
-      const { data: urlData } = sb.storage.from('org-logos').getPublicUrl(path);
-      logoUrl = urlData.publicUrl;
-    }
-
-    const mods = {};
-    if (typeof SET_MODULES !== 'undefined') {
-      SET_MODULES.forEach(mod => mods[mod.k] = _modState[mod.k] != null ? _modState[mod.k] : true);
-    }
-
-    const d = {
-      name: $('set-name').value,
-      sector: $('set-sector').value,
-      modules: mods,
-      brand_color: _selectedColour,
-      logo_url: logoUrl
-    };
-
-    if (_modState.circular !== false && typeof _circRunSave === 'function') { clearTimeout(_circSaveTimer); await _circRunSave(); }
-
-    await sbUpdate('organisations', d, orgId);
-    currentOrg = Object.assign({}, currentOrg, d);
-
-    if (typeof applyModules === 'function') applyModules(mods);
-    if (typeof applyBranding === 'function') applyBranding(currentOrg);
-    if ($('ob-txt')) $('ob-txt').textContent = currentOrg.name;
-
-    _selectedLogoFile = null;
-    if ($('set-logo-status')) $('set-logo-status').textContent = '';
-    $('set-save-msg').style.display = 'flex';
-    setTimeout(() => $('set-save-msg').style.display = 'none', 3000);
-  } catch (e) {
-    alert('Save failed: ' + e.message);
-  } finally {
-    btn.textContent = 'Save settings';
-    btn.disabled = false;
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// CIRCULAR ACTIVITIES — settings builder
-// Stored in circular_activities (see circular-migration.sql).
-// ─────────────────────────────────────────────────────────────
-
-// ── Circular activities ─────────────────────────────────────
-// Templates. Item rows: [label, kg, CO₂e kg avoided if reused, £ value to a household].
-// Outcome types drive impact: reuse / repair / share count CO₂e and £; recycle counts kg only.
-const CIRC_OUT_TYPES=[
-  ['reuse','Reused'],['repair','Repaired'],['share','Shared (food)'],['loan','Loaned'],
-  ['return','Returned to owner'],['recycle','Recycled'],['dispose','Disposed'],['other','Other']
-];
-const CIRC_FIELD_TYPES=[['text','Text'],['number','Number'],['date','Date'],['yesno','Yes / no']];
-const CIRC_STARTER='Vorlana starter estimate';
-
-function _circT(key,name,icon,desc,stages,outcomes,items,fields,links){
-  return{key,name,icon,desc,
-    stages:stages.map(s=>({key:_circSlug(s),label:s})),
-    outcomes:outcomes.map(o=>({key:_circSlug(o[0]),label:o[0],type:o[1]})),
-    item_types:items.map(i=>({key:_circSlug(i[0]),label:i[0],weight_kg:i[1],co2e_kg:i[2],value_gbp:i[3],source:CIRC_STARTER})),
-    fields:(fields||[]).map(f=>({key:_circSlug(f[0]),label:f[0],type:f[1]})),
-    links:links||[]};
-}
-function _circSlug(s){return String(s).toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'').slice(0,40)||'x'}
-function _circRid(p){return p+'_'+Math.random().toString(36).slice(2,8)}
-
-const CIRC_TEMPLATES=[
-  _circT('collections','Collections','🚚','Donors, councils and businesses book a pickup. Items are collected, booked in and passed on.',
-    ['Requested','Scheduled','Collected','Booked in'],
-    [['Passed to activity','other'],['Declined','other']],
-    [],[['Donor reference','text']],[{on:'end',to:''}]),
-  _circT('device_reuse','Device reuse','💻','Laptops, phones and tablets: data wiped, tested, refurbished, then donated or resold.',
-    ['Booked in','Data wiped','Tested','Refurbished','Ready'],
-    [['Donated','reuse'],['Resold','reuse'],['Parts harvested','recycle'],['Recycled','recycle']],
-    [['Laptop',2.2,250,200],['Desktop PC',8,300,150],['Monitor',5,200,60],['Tablet',0.5,90,120],['Smartphone',0.2,55,100],['Printer',7,60,50]],
-    [['Wipe method','text'],['Wipe certificate ref','text'],['PAT result','yesno']]),
-  _circT('repair_cafe','Repair café','🔧','Items brought to a session. Fixed or not, back to the owner with advice.',
-    ['Brought in','Diagnosed','Being repaired'],
-    [['Fixed','repair'],['Partly fixed','repair'],['Not fixable – advice given','return'],['Referred on','other']],
-    [['Kettle',1.2,10,20],['Toaster',1.5,12,20],['Vacuum cleaner',5,35,80],['Lamp',1,8,15],['Hairdryer',0.6,6,15],['Radio / speaker',1.5,15,30],['Clothing item',0.5,8,15],['Bike',15,100,150]],
-    [['Fault','text'],['Fixer','text']]),
-  _circT('furniture','Furniture & household','🛋️','Furniture and household goods checked, cleaned, then rehomed, sold or recycled.',
-    ['Booked in','Checked','Cleaned / repaired','Ready'],
-    [['Rehomed','reuse'],['Sold','reuse'],['Recycled','recycle'],['Disposed','dispose']],
-    [['Sofa',40,90,250],['Chair',7,15,40],['Table',20,35,80],['Wardrobe',50,80,150],['Bed frame',35,60,120],['Mattress',25,60,150]],
-    [['Fire safety label present','yesno']]),
-  _circT('textiles','Textiles & clothing','👕','Clothing and textiles sorted, then reused, swapped, sold or recycled.',
-    ['Received','Sorted'],
-    [['Reused','reuse'],['Swapped','reuse'],['Sold','reuse'],['Recycled','recycle']],
-    [['Clothing (per kg)',1,15,10],['Shoes (pair)',1,10,15],['Bedding / linen (per kg)',1,10,8]],
-    []),
-  _circT('bikes','Bikes','🚲','Bikes safety checked and refurbished, then sold, donated or loaned.',
-    ['Booked in','Safety checked','Refurbished','Ready'],
-    [['Sold','reuse'],['Donated','reuse'],['Loaned','loan'],['Stripped for parts','recycle'],['Recycled','recycle']],
-    [['Adult bike',15,100,150],['Child bike',8,50,60]],
-    [['Frame number','text']]),
-  _circT('food','Food surplus','🥕','Surplus food collected, stored and shared with households or partners.',
-    ['Collected','Stored'],
-    [['Shared with households','share'],['Given to partner','share'],['Composted','recycle'],['Disposed','dispose']],
-    [['Food (per kg)',1,2.5,3]],
-    [['Use-by date','date']]),
-  _circT('growing','Growing','🌱','Food grown, harvested and shared, sold or given to food banks.',
-    ['Planted','Growing','Harvested'],
-    [['Shared','share'],['Given to food bank','share'],['Sold','share'],['Composted','recycle']],
-    [['Produce (per kg)',1,0,3]],
-    [['Crop','text']]),
-  _circT('tool_library','Library of things','🧰','Tools and equipment loaned out and returned.',
-    ['Available','On loan','Returned','Under repair'],
-    [['Retired','recycle']],
-    [['Power tool',2,25,60],['Garden tool',2,10,25],['Event / camping kit',5,20,50]],
-    [['Borrower','text'],['Due back','date']]),
-  _circT('scrap_store','Scrap store & upcycling','🎨','Materials received, sorted and used in workshops or passed to groups.',
-    ['Received','Sorted','In stock'],
-    [['Used in workshop','reuse'],['Given to groups / schools','reuse'],['Sold','reuse'],['Recycled','recycle']],
-    [['Materials (per kg)',1,1,2]],
-    [])
-];
-
-let CIRC=[];          // org's activities (loaded + edited)
-let CIRC_REMOVED=[];  // saved ids removed this session
-let CIRC_READY=false;
-
-async function loadCircSettings(){
-  const{data,error}=await sb.from('circular_activities').select('*').eq('org_id',orgId).order('sort');
-  if(error){
-    $('cx-missing').textContent='Circular set-up needs the database update. Run circular-migration.sql in Supabase, then refresh.';
-    $('cx-missing').style.display='block';
-    if($('cx-body'))$('cx-body').style.display='none';
-    CIRC_READY=false;
-  }else{
-    CIRC=(data||[]).filter(a=>a.active);
-    CIRC_READY=true;
-  }
+  CIRC = (data || []).filter(a => a.active);
+  CIRC.forEach(a => (a.item_types || []).forEach(t => { if (!t.unit) t.unit = /per\s*kg/i.test(t.label || '') ? 'kg' : 'each'; }));
+  CIRC_READY = true;
   renderCircSettings();
 }
 
-function renderCircSettings(){
-  const active=new Set(CIRC.map(a=>a.template).filter(Boolean));
-  $('cx-tpl-grid').innerHTML=CIRC_TEMPLATES.map(t=>{
-    const on=active.has(t.key);
-    return `<div class="cx-tpl ${on?'on':''}">
-      <div class="cx-tpl-name">${t.icon} ${escapeHTML(t.name)}</div>
-      <div class="cx-tpl-desc">${escapeHTML(t.desc)}</div>
-      <div>${on?'<span class="cx-chip">Added</span>':`<button class="btn btn-ghost btn-sm" onclick="circAddTemplate('${t.key}')">Add</button>`}</div>
-    </div>`;
-  }).join('')+
-  `<div class="cx-tpl"><div class="cx-tpl-name">✏️ Build your own</div>
-    <div class="cx-tpl-desc">Start blank and set your own stages, outcomes and items.</div>
-    <div><button class="btn btn-ghost btn-sm" onclick="circAddCustom()">Create</button></div></div>`;
+function renderCircularSettingsCard() {
+  const b = $('st-body'); if (!b || _setSection !== 'circular') return;
+  b.innerHTML = '<div class="cx-hint" style="font-size:13px;color:var(--txt3)">Loading…</div>';
+  CIRC = []; CIRC_REMOVED = []; CIRC_READY = false; _circEdit = null;
+  loadCircSettings();
+}
 
-  if(!CIRC.length){
-    $('cx-act-list').innerHTML='<div class="cx-hint">No activities yet. Add one above.</div>';
-    return;
+function renderCircSettings() {
+  const b = $('st-body'); if (!b || _setSection !== 'circular' || !CIRC_READY) return;
+  const e = escapeHTML;
+  if (_circSel >= CIRC.length) _circSel = Math.max(0, CIRC.length - 1);
+  const tiles = CIRC.map((a, i) => {
+    const d = a.template === 'collections' ? 'Bookings and pickups'
+      : (circMode(a) === 'tally' ? 'Quick tally' : 'Tracked · ' + (a.stages || []).length + ' steps') + ' · ' + (a.item_types || []).length + ' items';
+    return '<div class="st-tile ' + (i === _circSel ? 'on' : '') + '" onclick="circPick(' + i + ')"><span class="st-tile-i">' + e(a.icon || '♻️') + '</span>' +
+      '<div style="flex:1;min-width:0"><div class="st-tile-n">' + e(a.name) + '</div><div class="st-tile-d">' + e(d) + '</div></div><span style="color:var(--txt3)">›</span></div>';
+  }).join('');
+  b.innerHTML = '<div class="st-circ ' + (_circOpenMobile ? 'open' : '') + '">' +
+    '<div class="st-tiles">' + (tiles || '<div style="font-size:13px;color:var(--txt3);margin-bottom:10px">No activities yet.</div>') +
+      '<button class="st-add" onclick="circAddOpen()">+ Add activity</button></div>' +
+    '<div class="st-panel" id="st-circ-panel">' + (CIRC.length ? circPanelHTML(CIRC[_circSel], _circSel) : '<div style="font-size:13px;color:var(--txt3)">Add an activity to set it up.</div>') + '</div>' +
+  '</div>';
+}
+
+function circPick(i) { _circSel = i; _circTab = 'basics'; _circEdit = null; _circOpenMobile = true; renderCircSettings(); }
+
+function circPanelHTML(a, ai) {
+  const e = escapeHTML;
+  const isCol = a.template === 'collections';
+  const tracked = circMode(a) === 'tracked';
+  const tabs = isCol ? [['basics', 'Basics'], ['more', 'More']] : [['basics', 'Basics'], ['items', 'Items'], ['goes', 'Where it goes'], ['more', 'More']];
+  if (!tabs.some(t => t[0] === _circTab)) _circTab = 'basics';
+  let h = '<div style="display:flex;align-items:center;gap:8px"><button class="btn btn-ghost btn-sm st-back" onclick="_circOpenMobile=false;renderCircSettings()">‹ Back</button>' +
+    '<div style="font-size:15px;font-weight:700;flex:1">' + e(a.icon || '♻️') + ' ' + e(a.name) + '</div></div>' +
+    '<div class="st-seg">' + tabs.map(t => '<button class="' + (t[0] === _circTab ? 'on' : '') + '" onclick="_circTab=\'' + t[0] + '\';_circEdit=null;renderCircSettings()">' + t[1] + '</button>').join('') + '</div>';
+
+  if (_circTab === 'basics') {
+    h += '<div style="display:grid;grid-template-columns:70px 1fr;gap:8px;margin-bottom:14px">' +
+      '<div class="form-row" style="margin:0"><label>Icon</label><input value="' + e(a.icon || '') + '" maxlength="4" onchange="circTop(' + ai + ',\'icon\',this.value)"/></div>' +
+      '<div class="form-row" style="margin:0"><label>Name</label><input value="' + e(a.name) + '" onchange="circTop(' + ai + ',\'name\',this.value)"/></div></div>';
+    if (isCol) {
+      const others = CIRC.filter(x => x.template !== 'collections');
+      const cur = ((a.links || []).find(l => l.on === 'end') || {}).to || '';
+      h += '<div class="st-lbl">Collected items go to</div><select onchange="circColTarget(' + ai + ',this.value)" style="margin-bottom:14px"><option value="">Choose when booking in</option>' +
+        others.map(x => '<option value="' + e(x.key) + '"' + (x.key === cur ? ' selected' : '') + '>' + e(x.icon + ' ' + x.name) + '</option>').join('') + '</select>';
+    } else {
+      h += '<div class="st-lbl">How do you record it?</div><div class="st-mode">' +
+        '<div class="' + (!tracked ? 'on' : '') + '" onclick="circSetMode(' + ai + ',\'tally\')"><b>Quick tally</b><span>Weigh or count, tap where it went</span></div>' +
+        '<div class="' + (tracked ? 'on' : '') + '" onclick="circSetMode(' + ai + ',\'tracked\')"><b>Track each item</b><span>QR label, steps and full history</span></div></div>';
+    }
+    h += '<div style="text-align:right"><button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="circRemove(' + ai + ')">Remove activity</button></div>';
   }
-  $('cx-act-list').innerHTML=CIRC.map((a,ai)=>_circActHTML(a,ai)).join('');
-}
 
-function _circOpt(list,val){return list.map(([v,l])=>`<option value="${v}" ${v===val?'selected':''}>${escapeHTML(l)}</option>`).join('')}
+  if (_circTab === 'items') {
+    h += '<div class="st-lbl">' + (a.template === 'growing' ? 'Crops' : 'Items') + ' — tap to edit</div>' +
+      '<div class="st-chips">' + (a.item_types || []).map((t, i) =>
+        '<span class="st-chip fill ' + (_circEdit && _circEdit.list === 'item_types' && _circEdit.i === i ? 'sel' : '') + '" onclick="circChip(\'item_types\',' + i + ')">' + e(t.label) + '<small>' + (t.unit === 'kg' ? 'kg' : 'each') + '</small></span>').join('') +
+      '<span class="st-chip new" onclick="circAdd(' + ai + ',\'item_types\')">+ Add</span></div>';
+    if (_circEdit && _circEdit.list === 'item_types' && a.item_types[_circEdit.i]) {
+      const t = a.item_types[_circEdit.i], i = _circEdit.i;
+      h += '<div class="st-edit"><input value="' + e(t.label) + '" onchange="circSet(' + ai + ',\'item_types\',' + i + ',\'label\',this.value)"/>' +
+        '<select style="flex:0 0 130px" onchange="circSet(' + ai + ',\'item_types\',' + i + ',\'unit\',this.value)"><option value="kg"' + (t.unit === 'kg' ? ' selected' : '') + '>Weighed (kg)</option><option value="each"' + (t.unit !== 'kg' ? ' selected' : '') + '>Counted</option></select>' +
+        '<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="circDel(' + ai + ',\'item_types\',' + i + ')">Remove</button></div>';
+    }
+    h += '<div style="font-size:12px;color:var(--txt3)">Weights, CO₂e and £ values are pre-filled. Change them under More.</div>';
+  }
 
-function _circActHTML(a,ai){
-  const e=escapeHTML;
-  const stages=a.stages.map((s,i)=>`<div class="cx-row">
-      <input value="${e(s.label)}" onchange="circSet(${ai},'stages',${i},'label',this.value)"/>
-      <button class="cx-ib" title="Move up" onclick="circMove(${ai},'stages',${i},-1)">↑</button>
-      <button class="cx-ib" title="Move down" onclick="circMove(${ai},'stages',${i},1)">↓</button>
-      <button class="cx-ib" title="Remove" onclick="circDel(${ai},'stages',${i})">×</button></div>`).join('');
-  const outs=a.outcomes.map((o,i)=>`<div class="cx-row">
-      <input value="${e(o.label)}" onchange="circSet(${ai},'outcomes',${i},'label',this.value)"/>
-      <select style="width:170px;flex-shrink:0" onchange="circSet(${ai},'outcomes',${i},'type',this.value)">${_circOpt(CIRC_OUT_TYPES,o.type)}</select>
-      <button class="cx-ib" title="Remove" onclick="circDel(${ai},'outcomes',${i})">×</button></div>`).join('');
-  const items=a.item_types.map((t,i)=>`<div class="cx-row">
-      <input value="${e(t.label)}" onchange="circSet(${ai},'item_types',${i},'label',this.value)"/>
-      <input class="cx-n" type="number" step="0.1" min="0" value="${t.weight_kg??''}" onchange="circSet(${ai},'item_types',${i},'weight_kg',+this.value)"/>
-      <input class="cx-n" type="number" step="0.1" min="0" value="${t.co2e_kg??''}" onchange="circSet(${ai},'item_types',${i},'co2e_kg',+this.value)"/>
-      <input class="cx-n" type="number" step="1" min="0" value="${t.value_gbp??''}" onchange="circSet(${ai},'item_types',${i},'value_gbp',+this.value)"/>
-      <button class="cx-ib" title="Remove" onclick="circDel(${ai},'item_types',${i})">×</button></div>`).join('');
-  const fields=a.fields.map((f,i)=>`<div class="cx-row">
-      <input value="${e(f.label)}" onchange="circSet(${ai},'fields',${i},'label',this.value)"/>
-      <select style="width:130px;flex-shrink:0" onchange="circSet(${ai},'fields',${i},'type',this.value)">${_circOpt(CIRC_FIELD_TYPES,f.type)}</select>
-      <button class="cx-ib" title="Remove" onclick="circDel(${ai},'fields',${i})">×</button></div>`).join('');
-
-  const others=CIRC.filter((x,xi)=>xi!==ai).map(x=>[x.key,x.icon+' '+x.name]);
-  const onOpts=[['end','Finishes the last stage']].concat(a.outcomes.map(o=>['outcome:'+o.key,'Outcome: '+o.label]));
-  const links=a.links.map((l,i)=>`<div class="cx-row">
-      <select onchange="circSet(${ai},'links',${i},'on',this.value)">${_circOpt(onOpts,l.on)}</select>
-      <span style="font-size:13px;color:var(--txt3)">→</span>
-      <select onchange="circSet(${ai},'links',${i},'to',this.value)"><option value="">Choose activity…</option>${_circOpt(others,l.to)}</select>
-      <button class="cx-ib" title="Remove" onclick="circDel(${ai},'links',${i})">×</button></div>`).join('');
-
-  return `<details class="cx-act" ${a._open?'open':''} ontoggle="CIRC[${ai}]._open=this.open">
-    <summary>${e(a.icon||'♻️')} ${e(a.name)}<span class="cx-meta">${a.stages.length} stages · ${a.outcomes.length} outcomes · ${a.item_types.length} item types</span></summary>
-    <div class="cx-act-body">
-      <div class="cx-sec" style="display:grid;grid-template-columns:70px 1fr;gap:8px">
-        <div><label>Icon</label><input value="${e(a.icon||'')}" maxlength="4" onchange="circTop(${ai},'icon',this.value)"/></div>
-        <div><label>Name</label><input value="${e(a.name)}" onchange="circTop(${ai},'name',this.value)"/></div>
-      </div>
-      <div class="cx-sec"><div class="cx-sec-h">Stages</div>${stages||'<div class="cx-hint">No stages.</div>'}
-        <button class="btn btn-ghost btn-sm" onclick="circAdd(${ai},'stages')">+ Stage</button></div>
-      <div class="cx-sec"><div class="cx-sec-h">Outcomes</div>${outs||'<div class="cx-hint">No outcomes.</div>'}
-        <button class="btn btn-ghost btn-sm" onclick="circAdd(${ai},'outcomes')">+ Outcome</button></div>
-      <div class="cx-sec"><div class="cx-sec-h">Item types</div>
-        ${a.item_types.length?'<div class="cx-cols"><span style="flex:1">Item</span><span style="width:84px">Weight kg</span><span style="width:84px">CO₂e kg</span><span style="width:84px">Value £</span><span style="width:30px"></span></div>':''}
-        ${items||'<div class="cx-hint">No item types.</div>'}
-        <button class="btn btn-ghost btn-sm" onclick="circAdd(${ai},'item_types')">+ Item type</button></div>
-      <div class="cx-sec"><div class="cx-sec-h">Extra fields</div>${fields||'<div class="cx-hint">None. Add any detail you need to record per item.</div>'}
-        <button class="btn btn-ghost btn-sm" onclick="circAdd(${ai},'fields')">+ Field</button></div>
-      <div class="cx-sec"><div class="cx-sec-h">Links to other activities</div>${links||'<div class="cx-hint">No links. Items stay in this activity.</div>'}
-        <button class="btn btn-ghost btn-sm" onclick="circAdd(${ai},'links')" ${others.length?'':'disabled title="Add another activity first"'}>+ Link</button></div>
-      <div class="cx-sec" style="text-align:right"><button class="btn btn-ghost btn-sm" style="color:var(--red);border-color:var(--red)" onclick="circRemove(${ai})">Remove activity</button></div>
-    </div>
-  </details>`;
-}
-
-function _circUniqueKey(base){
-  let k=_circSlug(base),n=2;
-  while(CIRC.some(a=>a.key===k))k=_circSlug(base)+'_'+(n++);
-  return k;
-}
-function circAddTemplate(key){
-  const t=JSON.parse(JSON.stringify(CIRC_TEMPLATES.find(x=>x.key===key)));
-  const a={key:_circUniqueKey(t.key),template:t.key,name:t.name,icon:t.icon,description:t.desc,
-    stages:t.stages,outcomes:t.outcomes,item_types:t.item_types,fields:t.fields,links:t.links,_open:true};
-  // Collections: default hand-over to the first other activity
-  if(key==='collections'){const other=CIRC.find(x=>x.template!=='collections');a.links=[{on:'end',to:other?other.key:''}]}
-  // Anything already added that finishes into nothing: offer collections → this
-  CIRC.forEach(x=>{if(x.template==='collections'&&x.links.length&&!x.links[0].to)x.links[0].to=a.key});
-  CIRC.push(a);
-  renderCircSettings();_circQueueSave();
-}
-function circAddCustom(){
-  CIRC.push({key:_circUniqueKey('custom'),template:null,name:'New activity',icon:'♻️',description:'',
-    stages:[{key:_circRid('st'),label:'Received'},{key:_circRid('st'),label:'Ready'}],
-    outcomes:[{key:_circRid('oc'),label:'Reused',type:'reuse'},{key:_circRid('oc'),label:'Recycled',type:'recycle'}],
-    item_types:[],fields:[],links:[],_open:true});
-  renderCircSettings();_circQueueSave();
-}
-function circTop(ai,f,v){CIRC[ai][f]=v;if(f!=='icon'||v)renderCircSettings();_circQueueSave()}
-function circSet(ai,list,i,f,v){CIRC[ai][list][i][f]=v;if(f==='label'&&list!=='item_types'&&list!=='fields')renderCircSettings();_circQueueSave()}
-function circMove(ai,list,i,d){
-  const arr=CIRC[ai][list],j=i+d;if(j<0||j>=arr.length)return;
-  [arr[i],arr[j]]=[arr[j],arr[i]];renderCircSettings();_circQueueSave();
-}
-function circDel(ai,list,i){CIRC[ai][list].splice(i,1);renderCircSettings();_circQueueSave()}
-function circAdd(ai,list){
-  const a=CIRC[ai];
-  if(list==='stages')a.stages.push({key:_circRid('st'),label:'New stage'});
-  if(list==='outcomes')a.outcomes.push({key:_circRid('oc'),label:'New outcome',type:'reuse'});
-  if(list==='item_types')a.item_types.push({key:_circRid('it'),label:'New item',weight_kg:0,co2e_kg:0,value_gbp:0,source:'Set by organisation'});
-  if(list==='fields')a.fields.push({key:_circRid('f'),label:'New field',type:'text'});
-  if(list==='links')a.links.push({on:'end',to:''});
-  renderCircSettings();_circQueueSave();
-}
-function circRemove(ai){
-  const a=CIRC[ai];
-  if(!confirm('Remove '+a.name+'? Items already logged keep their history.'))return;
-  if(a.id)CIRC_REMOVED.push(a.id);
-  CIRC.splice(ai,1);
-  CIRC.forEach(x=>x.links=x.links.filter(l=>l.to!==a.key));
-  renderCircSettings();_circQueueSave();
-}
-// Auto-save: every change is saved a moment after it's made
-let _circSaveTimer=null,_circSaving=false,_circSaveAgain=false;
-function _circStatus(t,err){const el=$('cx-save-status');if(el){el.textContent=t;el.style.color=err?'var(--red)':'var(--em)'}}
-function _circQueueSave(){
-  if(!CIRC_READY)return;
-  _circStatus('Saving…');
-  clearTimeout(_circSaveTimer);
-  _circSaveTimer=setTimeout(_circRunSave,700);
-}
-async function _circRunSave(){
-  if(_circSaving){_circSaveAgain=true;return}
-  _circSaving=true;
-  try{await saveCircularActivities();_circStatus('✓ Saved')}
-  catch(e){_circStatus('Not saved: '+(e.message||e),true)}
-  finally{_circSaving=false;if(_circSaveAgain){_circSaveAgain=false;_circRunSave()}}
-}
-// Item types edited by hand lose the starter-estimate label
-function _circMarkEdited(){
-  CIRC.forEach(a=>a.item_types.forEach(t=>{
-    const tpl=CIRC_TEMPLATES.find(x=>x.key===a.template);
-    const orig=tpl&&tpl.item_types.find(o=>o.key===t.key);
-    if(orig&&(orig.weight_kg!==t.weight_kg||orig.co2e_kg!==t.co2e_kg||orig.value_gbp!==t.value_gbp))t.source='Set by organisation';
-  }));
-}
-
-async function saveCircularActivities(){
-  if(!CIRC_READY)return;
-  _circMarkEdited();
-  for(const a of CIRC){
-    if(!a.name.trim())throw new Error('Every circular activity needs a name');
-    const row={org_id:orgId,key:a.key,template:a.template,name:a.name.trim(),icon:a.icon||'♻️',
-      description:a.description||'',stages:a.stages,outcomes:a.outcomes,item_types:a.item_types,
-      fields:a.fields,links:a.links.filter(l=>l.to),active:true,sort:CIRC.indexOf(a),updated_at:new Date().toISOString()};
-    if(a.id){
-      const{error}=await sb.from('circular_activities').update(row).eq('id',a.id);
-      if(error)throw error;
-    }else{
-      const{data,error}=await sb.from('circular_activities').insert([row]).select('id').single();
-      if(error)throw error;
-      a.id=data.id;
+  if (_circTab === 'goes') {
+    if (tracked) {
+      h += '<div class="st-lbl">Steps along the way — tap to edit</div><div class="st-chips">' + (a.stages || []).map((s, i) =>
+        '<span class="st-chip ' + (_circEdit && _circEdit.list === 'stages' && _circEdit.i === i ? 'sel' : '') + '" onclick="circChip(\'stages\',' + i + ')">' + (i + 1) + '. ' + e(s.label) + '</span>').join('') +
+        '<span class="st-chip new" onclick="circAdd(' + ai + ',\'stages\')">+ Add</span></div>';
+      if (_circEdit && _circEdit.list === 'stages' && a.stages[_circEdit.i]) {
+        const i = _circEdit.i;
+        h += '<div class="st-edit"><input value="' + e(a.stages[i].label) + '" onchange="circSet(' + ai + ',\'stages\',' + i + ',\'label\',this.value)"/>' +
+          '<button class="btn btn-ghost btn-sm" onclick="circMove(' + ai + ',\'stages\',' + i + ',-1)">←</button><button class="btn btn-ghost btn-sm" onclick="circMove(' + ai + ',\'stages\',' + i + ',1)">→</button>' +
+          '<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="circDel(' + ai + ',\'stages\',' + i + ')">Remove</button></div>';
+      }
+    }
+    h += '<div class="st-lbl">' + (tracked ? 'How it leaves' : 'Where it goes') + ' — these are the buttons people tap</div><div class="st-chips">' + (a.outcomes || []).map((o, i) =>
+      '<span class="st-chip ' + (_circEdit && _circEdit.list === 'outcomes' && _circEdit.i === i ? 'sel' : '') + '" onclick="circChip(\'outcomes\',' + i + ')">' + e(o.label) + '</span>').join('') +
+      '<span class="st-chip new" onclick="circAdd(' + ai + ',\'outcomes\')">+ Add</span></div>';
+    if (_circEdit && _circEdit.list === 'outcomes' && a.outcomes[_circEdit.i]) {
+      const o = a.outcomes[_circEdit.i], i = _circEdit.i;
+      h += '<div class="st-edit"><input value="' + e(o.label) + '" onchange="circSet(' + ai + ',\'outcomes\',' + i + ',\'label\',this.value)"/>' +
+        '<select style="flex:0 0 170px" title="How it counts in reports" onchange="circSet(' + ai + ',\'outcomes\',' + i + ',\'type\',this.value)">' + CIRC_OUT_TYPES.map(x => '<option value="' + x[0] + '"' + (x[0] === o.type ? ' selected' : '') + '>Counts as: ' + x[1] + '</option>').join('') + '</select>' +
+        '<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="circDel(' + ai + ',\'outcomes\',' + i + ')">Remove</button></div>';
     }
   }
-  for(const id of CIRC_REMOVED){
-    const{error}=await sb.from('circular_activities').update({active:false}).eq('id',id);
-    if(error)throw error;
+
+  if (_circTab === 'more') {
+    if (!isCol && (a.item_types || []).length) {
+      h += '<div class="st-lbl">Figures used in reports (per kg for weighed items, per item for counted)</div>' +
+        '<div style="overflow-x:auto;margin-bottom:6px"><table class="st-fig"><tr><th>Item</th><th>kg each</th><th>CO₂e kg</th><th>Value £</th></tr>' +
+        a.item_types.map((t, i) => '<tr><td style="font-size:12px">' + e(t.label) + '</td>' +
+          '<td><input type="number" step="0.1" min="0" ' + (t.unit === 'kg' ? 'value="1" disabled' : 'value="' + (t.weight_kg ?? '') + '"') + ' onchange="circSet(' + ai + ',\'item_types\',' + i + ',\'weight_kg\',+this.value)"/></td>' +
+          '<td><input type="number" step="0.1" min="0" value="' + (t.co2e_kg ?? '') + '" onchange="circSet(' + ai + ',\'item_types\',' + i + ',\'co2e_kg\',+this.value)"/></td>' +
+          '<td><input type="number" step="0.5" min="0" value="' + (t.value_gbp ?? '') + '" onchange="circSet(' + ai + ',\'item_types\',' + i + ',\'value_gbp\',+this.value)"/></td></tr>').join('') +
+        '</table></div><div style="font-size:11px;color:var(--txt3);margin-bottom:16px">Starter figures are Vorlana estimates. Once you change one it shows as "set by your organisation" in reports.</div>';
+    }
+    if (!isCol && tracked) {
+      h += '<div class="st-lbl">Extra details recorded per item</div><div class="st-chips">' + (a.fields || []).map((f, i) =>
+        '<span class="st-chip ' + (_circEdit && _circEdit.list === 'fields' && _circEdit.i === i ? 'sel' : '') + '" onclick="circChip(\'fields\',' + i + ')">' + e(f.label) + '</span>').join('') +
+        '<span class="st-chip new" onclick="circAdd(' + ai + ',\'fields\')">+ Add</span></div>';
+      if (_circEdit && _circEdit.list === 'fields' && a.fields[_circEdit.i]) {
+        const f = a.fields[_circEdit.i], i = _circEdit.i;
+        h += '<div class="st-edit"><input value="' + e(f.label) + '" onchange="circSet(' + ai + ',\'fields\',' + i + ',\'label\',this.value)"/>' +
+          '<select style="flex:0 0 120px" onchange="circSet(' + ai + ',\'fields\',' + i + ',\'type\',this.value)">' + CIRC_FIELD_TYPES.map(x => '<option value="' + x[0] + '"' + (x[0] === f.type ? ' selected' : '') + '>' + x[1] + '</option>').join('') + '</select>' +
+          '<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="circDel(' + ai + ',\'fields\',' + i + ')">Remove</button></div>';
+      }
+    }
+    const others = CIRC.filter(x => x !== a && x.template !== 'collections');
+    if (!isCol && others.length) {
+      h += '<div class="st-lbl">Pass items on to another activity</div>' +
+        (a.links || []).map((l, i) => '<div class="st-edit" style="margin:0 0 8px">' +
+          '<select onchange="circSet(' + ai + ',\'links\',' + i + ',\'on\',this.value)">' +
+            [['end', 'After the last step']].concat((a.outcomes || []).map(o => ['outcome:' + o.key, 'When: ' + o.label])).map(x => '<option value="' + e(x[0]) + '"' + (x[0] === l.on ? ' selected' : '') + '>' + e(x[1]) + '</option>').join('') +
+          '</select><select onchange="circSet(' + ai + ',\'links\',' + i + ',\'to\',this.value)"><option value="">→ choose</option>' +
+            others.map(x => '<option value="' + e(x.key) + '"' + (x.key === l.to ? ' selected' : '') + '>→ ' + e(x.icon + ' ' + x.name) + '</option>').join('') +
+          '</select><button class="btn btn-ghost btn-sm" onclick="circDel(' + ai + ',\'links\',' + i + ')">×</button></div>').join('') +
+        '<button class="btn btn-ghost btn-sm" onclick="circAdd(' + ai + ',\'links\')">+ Add a hand-over</button>';
+    }
+    if (isCol) h += '<div style="font-size:13px;color:var(--txt2)">Bookings, run sheets and donor details are handled on the Circular page. Nothing else to set up here.</div>';
   }
-  CIRC_REMOVED=[];
+  return h;
 }
 
-// ── Settings card: circular activities ──────────────────────
-function _circInjectStyle(){
-  if(document.getElementById('cx-style'))return;
-  const st=document.createElement('style');st.id='cx-style';
-  st.textContent=`
-.cx-tpl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
-.cx-tpl{padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-direction:column;gap:6px}
-.cx-tpl.on{border-color:rgba(31,111,109,.35);background:rgba(31,111,109,.05)}
-.cx-tpl-name{font-size:13px;font-weight:700}
-.cx-tpl-desc{font-size:12px;color:var(--txt3);line-height:1.45;flex:1}
-.cx-act{border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;background:var(--surface)}
-.cx-act>summary{list-style:none;cursor:pointer;padding:12px 14px;display:flex;align-items:center;gap:10px;font-weight:700;font-size:14px}
-.cx-act>summary::-webkit-details-marker{display:none}
-.cx-meta{font-weight:400;font-size:12px;color:var(--txt3);margin-left:auto}
-.cx-act-body{padding:4px 14px 14px;border-top:1px solid var(--border)}
-.cx-sec{margin-top:14px}
-.cx-sec label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;font-weight:600}
-.cx-sec-h{font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
-.cx-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
-.cx-row input,.cx-row select{padding:6px 9px}
-.cx-n{width:84px!important;flex-shrink:0}
-.cx-ib{background:var(--bg);border:1px solid var(--border);border-radius:6px;width:30px;height:30px;flex-shrink:0;color:var(--txt2);font-size:13px}
-.cx-ib:hover{border-color:var(--em);color:var(--em)}
-.cx-chip{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--border);color:var(--txt2)}
-.cx-cols{display:flex;gap:6px;font-size:11px;color:var(--txt3);margin-bottom:4px}
-.cx-hint{font-size:12px;color:var(--txt3);line-height:1.5}`;
-  document.head.appendChild(st);
+function circChip(list, i) {
+  _circEdit = _circEdit && _circEdit.list === list && _circEdit.i === i ? null : { list, i };
+  renderCircSettings();
 }
 
-function renderCircularSettingsCard(){
-  _circInjectStyle();
-  let card=$('circ-settings-card');
-  if(!card){
-    card=document.createElement('div');
-    card.id='circ-settings-card';
-    card.className='card';
-    const page=$('page-settings'),saveBtn=$('set-save-btn'),demo=$('demo-mode-card');
-    if(page&&demo)page.insertBefore(card,demo);
-    else if(page&&saveBtn)page.insertBefore(card,saveBtn);
-    else if(page)page.appendChild(card);
+// Add activity: "What do you do?"
+let _circPickT = [];
+function circAddOpen() {
+  _circPickT = [];
+  const had = new Set(CIRC.map(a => a.template).filter(Boolean));
+  setModal('<h2>What do you do?</h2><div style="font-size:13px;color:var(--txt3);margin-bottom:14px">Tick everything that applies. Each one comes ready to use.</div>' +
+    '<div class="st-tpls" id="st-tpls">' + CIRC_TEMPLATES.map(t =>
+      '<div class="st-tpl ' + (had.has(t.key) ? 'had' : '') + '" data-k="' + t.key + '" onclick="circTplToggle(this)"><b>' + t.icon + ' ' + escapeHTML(t.name) + '</b><span>' + (had.has(t.key) ? 'Already added' : escapeHTML(t.desc)) + '</span></div>').join('') +
+      '<div class="st-tpl" data-k="__custom" onclick="circTplToggle(this)"><b>✏️ Something else</b><span>Start blank and name it yourself</span></div></div>' +
+    '<div class="modal-footer"><button class="btn btn-ghost" onclick="setCloseModal()">Cancel</button><button class="btn btn-p" onclick="circAddSelected()">Add</button></div>', 680);
+}
+function circTplToggle(el) {
+  if (el.classList.contains('had')) return;
+  const k = el.getAttribute('data-k');
+  el.classList.toggle('on');
+  _circPickT = el.classList.contains('on') ? _circPickT.concat(k) : _circPickT.filter(x => x !== k);
+}
+function circAddSelected() {
+  if (!_circPickT.length) { setCloseModal(); return; }
+  _circPickT.filter(k => k !== '__custom').forEach(k => circAddTemplate(k, true));
+  if (_circPickT.includes('__custom')) circAddCustom(true);
+  setCloseModal();
+  _circSel = CIRC.length - 1; _circTab = 'basics'; _circOpenMobile = true;
+  renderCircSettings(); _circQueueSave();
+}
+function _circUniqueKey(base) {
+  let k = _circSlug(base), n = 2;
+  while (CIRC.some(a => a.key === k)) k = _circSlug(base) + '_' + (n++);
+  return k;
+}
+function circAddTemplate(key, quiet) {
+  const t = JSON.parse(JSON.stringify(CIRC_TEMPLATES.find(x => x.key === key)));
+  const a = { key: _circUniqueKey(t.key), template: t.key, name: t.name, icon: t.icon, description: t.desc,
+    stages: t.stages, outcomes: t.outcomes, item_types: t.item_types, fields: t.fields, links: t.links };
+  if (key === 'collections') { const other = CIRC.find(x => x.template !== 'collections'); a.links = [{ on: 'end', to: other ? other.key : '' }]; }
+  CIRC.forEach(x => { if (x.template === 'collections' && (!x.links.length || !x.links[0].to)) x.links = [{ on: 'end', to: a.key }]; });
+  CIRC.push(a);
+  if (!quiet) { renderCircSettings(); _circQueueSave(); }
+}
+function circAddCustom(quiet) {
+  CIRC.push({ key: _circUniqueKey('custom'), template: null, name: 'New activity', icon: '♻️', description: '', mode: null,
+    stages: [{ key: _circRid('st'), label: 'Received' }, { key: _circRid('st'), label: 'Ready' }],
+    outcomes: [{ key: _circRid('oc'), label: 'Reused', type: 'reuse' }, { key: _circRid('oc'), label: 'Recycled', type: 'recycle' }],
+    item_types: [], fields: [], links: [] });
+  if (!quiet) { renderCircSettings(); _circQueueSave(); }
+}
+
+function circTop(ai, f, v) { CIRC[ai][f] = v; renderCircSettings(); _circQueueSave(); }
+function circSetMode(ai, m) { CIRC[ai].mode = m; renderCircSettings(); _circQueueSave(); }
+function circColTarget(ai, key) { CIRC[ai].links = [{ on: 'end', to: key }]; _circQueueSave(); }
+function circSet(ai, list, i, f, v) {
+  const row = CIRC[ai][list][i]; row[f] = v;
+  if (list === 'item_types' && ['weight_kg', 'co2e_kg', 'value_gbp'].includes(f)) row.source = 'Set by organisation';
+  if (list === 'item_types' && f === 'unit' && v === 'kg') row.weight_kg = 1;
+  renderCircSettings(); _circQueueSave();
+}
+function circMove(ai, list, i, d) {
+  const arr = CIRC[ai][list], j = i + d; if (j < 0 || j >= arr.length) return;
+  [arr[i], arr[j]] = [arr[j], arr[i]]; _circEdit = { list, i: j };
+  renderCircSettings(); _circQueueSave();
+}
+function circDel(ai, list, i) { CIRC[ai][list].splice(i, 1); _circEdit = null; renderCircSettings(); _circQueueSave(); }
+function circAdd(ai, list) {
+  const a = CIRC[ai];
+  if (list === 'stages') a.stages.push({ key: _circRid('st'), label: 'New step' });
+  if (list === 'outcomes') a.outcomes.push({ key: _circRid('oc'), label: 'New', type: 'reuse' });
+  if (list === 'item_types') a.item_types.push({ key: _circRid('it'), label: 'New item', unit: circMode(a) === 'tally' ? 'kg' : 'each', weight_kg: 1, co2e_kg: 0, value_gbp: 0, source: 'Set by organisation' });
+  if (list === 'fields') a.fields.push({ key: _circRid('f'), label: 'New detail', type: 'text' });
+  if (list === 'links') { a.links.push({ on: 'end', to: '' }); renderCircSettings(); return; }
+  _circEdit = { list, i: a[list].length - 1 };
+  renderCircSettings(); _circQueueSave();
+  setTimeout(() => { const inp = document.querySelector('.st-edit input'); if (inp) { inp.focus(); inp.select(); } }, 30);
+}
+function circRemove(ai) {
+  const a = CIRC[ai];
+  if (!confirm('Remove ' + a.name + '? Items already logged keep their history.')) return;
+  if (a.id) CIRC_REMOVED.push(a.id);
+  CIRC.splice(ai, 1);
+  CIRC.forEach(x => x.links = (x.links || []).filter(l => l.to !== a.key));
+  _circSel = 0; _circOpenMobile = false;
+  renderCircSettings(); _circQueueSave();
+}
+
+// Autosave
+let _circSaveTimer = null, _circSaving = false, _circSaveAgain = false;
+function _circQueueSave() {
+  if (!CIRC_READY) return;
+  setStatus('Saving…');
+  clearTimeout(_circSaveTimer);
+  _circSaveTimer = setTimeout(_circRunSave, 700);
+}
+async function _circRunSave() {
+  if (_circSaving) { _circSaveAgain = true; return; }
+  _circSaving = true;
+  try { await saveCircularActivities(); setStatus('✓ Saved'); }
+  catch (e) { setStatus('Not saved: ' + (e.message || e) + (/mode/i.test(e.message || '') ? ' — run circular-migration-v3.sql in Supabase' : ''), true); }
+  finally { _circSaving = false; if (_circSaveAgain) { _circSaveAgain = false; _circRunSave(); } }
+}
+async function saveCircularActivities() {
+  if (!CIRC_READY) return;
+  for (const a of CIRC) {
+    if (!String(a.name || '').trim()) throw new Error('Every activity needs a name');
+    const row = { org_id: orgId, key: a.key, template: a.template, name: a.name.trim(), icon: a.icon || '♻️',
+      description: a.description || '', stages: a.stages, outcomes: a.outcomes, item_types: a.item_types,
+      fields: a.fields, links: (a.links || []).filter(l => l.to), active: true, sort: CIRC.indexOf(a), updated_at: new Date().toISOString() };
+    if (a.mode) row.mode = a.mode;
+    if (a.id) {
+      const { error } = await sb.from('circular_activities').update(row).eq('id', a.id);
+      if (error) throw error;
+    } else {
+      const { data, error } = await sb.from('circular_activities').insert([row]).select('id').single();
+      if (error) throw error;
+      a.id = data.id;
+    }
   }
-  const on=_modState.circular!==false;
-  card.style.display=on?'':'none';
-  if(!on)return;
-  card.innerHTML=
-    '<div class="card-title">♻️ Circular activities</div>'+
-    '<div class="cx-hint" style="margin-bottom:14px">Add the activities you run. Each comes pre-set with stages, outcomes and item types. Change anything to match how you work, or build your own. Changes save automatically.</div>'+
-    '<div id="cx-save-status" style="font-size:12px;font-weight:700;min-height:16px;margin:-8px 0 10px"></div>'+
-    '<div id="cx-missing" style="display:none;background:#FEF2F2;border:1px solid #FECACA;color:#B91C1C;padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>'+
-    '<div id="cx-body">'+
-      '<div class="cx-tpl-grid" id="cx-tpl-grid"><div class="cx-hint">Loading…</div></div>'+
-      '<div class="cx-sec-h" style="margin-top:20px">Set up each activity</div>'+
-      '<div id="cx-act-list"></div>'+
-      '<div class="cx-hint" style="margin-top:10px">Weights, CO₂e and £ values are Vorlana starter estimates. Replace them with your own or your funder\'s figures. Reports always show the source.</div>'+
-    '</div>';
-  CIRC=[];CIRC_REMOVED=[];CIRC_READY=false;
-  loadCircSettings();
+  for (const id of CIRC_REMOVED) {
+    const { error } = await sb.from('circular_activities').update({ active: false }).eq('id', id);
+    if (error) throw error;
+  }
+  CIRC_REMOVED = [];
 }
