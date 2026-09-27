@@ -241,6 +241,7 @@ const SET_SECTIONS = [
   ['feedback', '💬', 'Feedback questions'],
   ['circular', '♻️', 'Circular activities'],
   ['team', '👥', 'Team'],
+  ['access', '🔐', 'Team access'],
   ['demo', '🎭', 'Demo mode']
 ];
 const SET_MOD_GROUPS = [
@@ -399,7 +400,8 @@ function renderSettings() {
   const m = currentOrg.modules || {};
   if (typeof SET_MODULES !== 'undefined') SET_MODULES.forEach(mod => { _modState[mod.k] = m[mod.k] != null ? m[mod.k] : true; });
   const page = $('page-settings'); if (!page) return;
-  const secs = SET_SECTIONS.filter(s => s[0] !== 'circular' || _modState.circular !== false);
+  const mgr = typeof isAdviserRole === 'function' ? !isAdviserRole() : true;
+  const secs = SET_SECTIONS.filter(s => (s[0] !== 'circular' || _modState.circular !== false) && (s[0] !== 'access' || mgr));
   if (!secs.some(s => s[0] === _setSection)) _setSection = 'org';
   page.innerHTML =
     '<div class="page-header"><div><div class="page-title">Settings</div><div class="page-sub">Changes save automatically</div></div></div>' +
@@ -420,6 +422,7 @@ function setOpen(sec) {
     feedback: 'What people are asked after a session. Used on QR forms, imports and reports.',
     circular: 'The circular activities you run and how you record them.',
     team: 'Invite staff and set what they can see.',
+    access: 'Choose which pages advisers can open. Managers and admins always see everything.',
     demo: 'Explore every feature with sample data.'
   };
   $('st-main').innerHTML =
@@ -433,6 +436,7 @@ function setOpen(sec) {
   if (sec === 'circular') renderCircularSettingsCard();
   if (sec === 'team') body.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap"><div style="font-size:13px;color:var(--txt2);line-height:1.6">Invite advisors and admin staff, manage roles, and remove team members.</div><a href="team.html" class="btn btn-p" style="text-decoration:none;white-space:nowrap">👥 Manage team →</a></div>';
   if (sec === 'demo') setDemoHTML(body);
+  if (sec === 'access') setAccessHTML(body);
 }
 
 // ── Organisation ─────────────────────────────────────────────
@@ -595,6 +599,41 @@ function setDemoHTML(body) {
         '<div id="demo-toggle-thumb" style="position:absolute;top:3px;left:' + (_demoMode ? '23' : '3') + 'px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.2)"></div>' +
       '</div></div>';
 }
+
+// ── Team access: which pages advisers can open ──────────────
+function setAccessHTML(body) {
+  const on = new Set(adviserPages());
+  const groups = [
+    ['Caseload', ['participants', 'pipeline', 'referrals', 'partnerrefs', 'outcomes', 'safeguarding', 'evidence']],
+    ['Delivery', ['events', 'feedback', 'volunteers', 'circular']],
+    ['People & partners', ['contacts', 'employers']],
+    ['Reporting & money', ['impact', 'rag', 'demographics', 'reports', 'funders', 'funding']],
+    ['Growth & admin', ['social', 'bd', 'hr', 'settings']]
+  ];
+  const label = k => (PAGE_LIST.find(p => p[0] === k) || [k, k])[1];
+  body.innerHTML = '<div style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:6px">Advisers can open the pages switched on here. The dashboard is always available. Whatever is chosen, everyone only ever sees your organisation\'s data, and deleting participants, contracts, funders or evidence always needs a manager.</div>' +
+    groups.map(g => '<div class="st-group">' + g[0] + '</div><div class="st-mods">' + g[1].map(k =>
+      '<div class="st-mod ' + (on.has(k) ? 'on' : '') + '" onclick="toggleAccess(\'' + k + '\')"><div style="flex:1;min-width:0"><div class="st-mod-n">' + escapeHTML(label(k)) + '</div></div><div class="st-sw ' + (on.has(k) ? 'on' : '') + '"></div></div>').join('') + '</div>').join('') +
+    '<div style="margin-top:14px"><a href="#" onclick="resetAccess();return false" style="font-size:12.5px;color:var(--txt3)">Reset to the recommended set</a></div>';
+}
+let _accessTimer = null;
+async function saveAccess(pages) {
+  const settings = Object.assign({}, currentOrg.settings || {}, { adviser_pages: pages });
+  currentOrg = Object.assign({}, currentOrg, { settings });
+  setAccessHTML($('st-body'));
+  setStatus('Saving…');
+  clearTimeout(_accessTimer);
+  _accessTimer = setTimeout(async () => {
+    try { await sbUpdate('organisations', { settings }, orgId); setStatus('✓ Saved'); if (typeof applyModules === 'function') applyModules(currentOrg.modules || {}); }
+    catch (e) { setStatus('Not saved: ' + e.message, true); }
+  }, 400);
+}
+function toggleAccess(k) {
+  const set = new Set(adviserPages());
+  set.has(k) ? set.delete(k) : set.add(k);
+  saveAccess(Array.from(set));
+}
+function resetAccess() { saveAccess(ADVISER_DEFAULT_PAGES.slice()); }
 
 // Kept for anything that still calls it — everything autosaves now
 async function saveSettings() { setStatus('✓ Saved'); }
