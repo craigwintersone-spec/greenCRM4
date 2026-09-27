@@ -241,7 +241,6 @@ const SET_SECTIONS = [
   ['feedback', '💬', 'Feedback questions'],
   ['circular', '♻️', 'Circular activities'],
   ['team', '👥', 'Team'],
-  ['access', '🔐', 'Team access'],
   ['demo', '🎭', 'Demo mode']
 ];
 const SET_MOD_GROUPS = [
@@ -434,7 +433,7 @@ function setOpen(sec) {
   if (sec === 'look') setLookHTML(body);
   if (sec === 'feedback') { _fqRows = null; renderFeedbackQuestionsCard(); }
   if (sec === 'circular') renderCircularSettingsCard();
-  if (sec === 'team') body.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap"><div style="font-size:13px;color:var(--txt2);line-height:1.6">Invite advisors and admin staff, manage roles, and remove team members.</div><a href="team.html" class="btn btn-p" style="text-decoration:none;white-space:nowrap">👥 Manage team →</a></div>';
+  if (sec === 'team') body.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap"><div style="font-size:13px;color:var(--txt2);line-height:1.6">Invite advisors and admin staff, manage roles, choose which pages each person can open, and remove team members.</div><a href="team.html" class="btn btn-p" style="text-decoration:none;white-space:nowrap">👥 Manage team →</a></div>';
   if (sec === 'demo') setDemoHTML(body);
   if (sec === 'access') setAccessHTML(body);
 }
