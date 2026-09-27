@@ -326,7 +326,7 @@ function cxQuickHTML(act) {
     '<label class="cxq-cam"><span>📷</span> Photo' + (kg || !t ? ' on the scales' : '') + '<input type="file" accept="image/*" capture="environment" style="display:none" onchange="cxQPhoto(event,\'' + id + '\')"/></label>' +
     '<button class="cxq-tellbtn" onclick="cxQ(cxAct(\'' + id + '\')).tell=!cxQ(cxAct(\'' + id + '\')).tell;cxDraw()">✍️ Just tell it</button></div>';
   if (q.status) h += '<div class="cxq-status ' + (q.statusErr ? 'err' : '') + '">' + q.status + '</div>';
-  if (q.newType) h += '<div class="cxq-status">Not on your list: <b>' + e(q.newType.label) + '</b> <button class="btn btn-ghost btn-sm" onclick="cxAddTypeFromAI(\'' + id + '\')">+ Add it</button></div>';
+  if (q.newType) h += '<div class="cxq-status"><b>' + e(q.newType.label) + '</b> isn\'t on your list yet <button class="btn btn-p btn-sm" onclick="cxAddTypeFromAI(\'' + id + '\')">+ Add ' + e(q.newType.label) + '</button></div>';
 
   if (q.tell) {
     h += '<div class="cxq-tell"><textarea id="cxq-text-' + id + '" placeholder="' + (tracked ? 'e.g. 3 laptops and a monitor from Ealing, all booked in' : food ? 'e.g. 12 kg tomatoes to the food bank, 5 kg courgettes shared' : act.template === 'repair_cafe' ? 'e.g. 14 items tonight, 11 fixed, 3 kettles not fixable' : 'e.g. 20 kg clothing reused, 5 kg recycled') + '">' + e(q.text || '') + '</textarea>' +
@@ -342,7 +342,7 @@ function cxQuickHTML(act) {
       '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:8px"><button class="btn btn-ghost btn-sm" onclick="cxQ(cxAct(\'' + id + '\')).pending=null;cxDraw()">Cancel</button><button class="btn btn-p btn-sm" onclick="cxQConfirm(\'' + id + '\')">✓ Log all</button></div></div>';
   }
 
-  h += '<div class="cxq-chips">' + types.map(x => '<button class="cxq-chip ' + (x.key === q.type ? 'on' : '') + '" onclick="cxQ(cxAct(\'' + id + '\')).type=\'' + e(x.key) + '\';cxDraw()">' + e(x.label) + '</button>').join('') +
+  h += '<div class="cxq-chips">' + types.map(x => '<button class="cxq-chip ' + (x.key === q.type ? 'on' : '') + '" onclick="cxQ(cxAct(\'' + id + '\')).type=\'' + e(x.key) + '\';cxDraw()">' + e(cxLbl(x)) + '</button>').join('') +
     (types.length ? '' : '<span class="cxp-s">No items yet — add them in ⚙️ Set up, or take a photo.</span>') + '</div>';
 
   if (!q.batch) {
@@ -431,7 +431,7 @@ async function cxQInsert(act, typeKey, amount, kind, key, extra) {
   const now = new Date().toISOString();
   const qs = CX.q[act.id];
   const d = Object.assign({
-    org_id: orgId, activity_id: act.id, item_type: t.key, name: t.label, category: act.name,
+    org_id: orgId, activity_id: act.id, item_type: t.key, name: cxLbl(t), category: act.name,
     event_id: qs && qs.event ? qs.event : null,
     quantity: qty, weight_kg: weight, co2e_kg: f.co2, value_gbp: f.value, custom: {}, updated_at: now
   }, extra || {});
@@ -446,7 +446,7 @@ async function cxQInsert(act, typeKey, amount, kind, key, extra) {
   if (error) throw error;
   await cxLog(data, kind === 'outcome' ? 'tallied' : 'logged', null, key, { item_type: t.key, quantity: qty, weight_kg: weight, via: (extra && extra._via) || 'quick' });
   CX.items.unshift(data);
-  return { row: data, text: (kg ? cxFmt(weight, 1) + ' kg ' : (qty > 1 ? qty + ' × ' : '')) + t.label };
+  return { row: data, text: (kg ? cxFmt(weight, 1) + ' kg ' : (qty > 1 ? qty + ' × ' : '')) + cxLbl(t) };
 }
 
 async function cxQuickLog(actId, kind, key) {
@@ -494,34 +494,61 @@ async function cxUndo() {
 }
 
 // 📷 Photo: identify + read the scale
+// Item names without the old "(per kg)" suffix
+function cxLbl(v) { return String((v && v.label) != null ? v.label : (v || '')).replace(/\s*\(per\s*kg\)/i, '').trim(); }
+
 async function cxQPhoto(ev, actId) {
   const file = ev.target.files && ev.target.files[0]; if (!file) return;
+  ev.target.value = '';   // same photo can be picked again
   const act = cxAct(actId), q = cxQ(act), tracked = circMode(act) === 'tracked';
   q.status = '✨ Looking at the photo…'; q.newType = null; cxDraw();
   try {
-    const b64 = await cxResize(file, 1024, 0.7);
-    const list = (act.item_types || []).map(t => t.key + ' = ' + t.label + ' (' + (cxPerKg(t) ? 'weighed' : 'counted') + ')').join('; ');
+    // Sharp enough to read a scale display, small enough for the AI request limit
+    const b64 = await cxResize(file, 1400, 0.8, 185000);
+    const list = (act.item_types || []).map(t => t.key + ' = ' + cxLbl(t) + ' (' + (cxPerKg(t) ? 'weighed' : 'counted') + ')').join('; ');
     const j = await vAI(
-      'You help a UK community organisation log what is in a photo for their "' + act.name + '" activity. Reply with JSON only.',
+      'You help a UK community organisation log what is in a photo for their "' + act.name + '" activity. Look carefully at any weighing scale display and read its digits exactly. Reply with JSON only.',
       [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
-       { type: 'text', text: 'Their list: ' + (list || 'empty') + '.\nReturn {"item_type": key from the list or "", "new_item": short name if nothing on the list fits else "", "unit": "kg" or "each", "scale_kg": the number shown on a weighing scale display converted to kg, or null if no scale display is readable, "count": how many of the main item you can see, "name": short description, ' +
+       { type: 'text', text: 'Their list: ' + (list || 'empty') + '.\nReturn {' +
+         '"seen": the specific thing in the photo in plain words, e.g. "Tomatoes", "Runner beans", "Kettle", ' +
+         '"item_type": key of the list entry that is the same thing, or failing that the broader list entry it belongs to (e.g. tomatoes → a "Produce" entry), or "", ' +
+         '"match": "exact" if that list entry is the same thing, "category" if it is only a broader group, "none" if nothing fits, ' +
+         '"unit": "kg" or "each", ' +
+         '"scale_visible": true if a weighing scale is in the photo, ' +
+         '"scale_reading": the number shown on the scale display exactly as shown, or null if you cannot read it clearly, ' +
+         '"scale_units": the units on the display: "kg", "g", "lb" or "oz", ' +
+         '"count": how many of the main item you can see, ' +
          (tracked ? '"brand": "", "model": "", "serial": only text you can actually read on a label else "", ' : '') +
-         '"hazards": e.g. "lithium battery" or "", "confidence": "high", "medium" or "low"}. Never guess a scale reading or serial number.' }], 400);
+         '"hazards": e.g. "lithium battery" or "", "confidence": "high", "medium" or "low"}. Never guess a scale reading or a serial number.' }], 450);
+
+    const seen = String(j.seen || '').trim();
     let typeKey = j.item_type && cxType(act, j.item_type) ? j.item_type : '';
-    if (!typeKey && j.new_item) {
-      const match = (act.item_types || []).find(t => t.label.toLowerCase() === String(j.new_item).toLowerCase());
-      if (match) typeKey = match.key; else q.newType = { label: String(j.new_item).trim(), unit: j.unit === 'kg' ? 'kg' : 'each' };
+    if (!typeKey && seen) { const m = (act.item_types || []).find(t => cxLbl(t).toLowerCase() === seen.toLowerCase()); if (m) typeKey = m.key; }
+    const unit = j.unit === 'each' ? 'each' : 'kg';
+    // Nothing fits, or only a broad group fits: offer the specific thing as its own item
+    if (seen && (!typeKey || j.match === 'category') && !(act.item_types || []).some(t => cxLbl(t).toLowerCase() === seen.toLowerCase())) {
+      q.newType = { label: seen.replace(/^./, c => c.toUpperCase()), unit };
     }
     if (typeKey) q.type = typeKey;
     const t = cxType(act, q.type);
-    const kg = q.newType ? q.newType.unit === 'kg' : cxPerKg(t);
+    const kg = typeKey ? cxPerKg(t) : unit === 'kg';
+
+    // Scale → kg
     let how = '';
-    if (kg && +j.scale_kg > 0) { q.amt = String(+(+j.scale_kg).toFixed(2)); how = 'scale reads ' + q.amt + ' kg'; }
-    else if (!kg && +j.count > 0) { q.amt = String(Math.round(j.count)); how = q.amt + ' counted'; }
-    else if (kg) how = 'no scale reading — enter the weight';
-    if (tracked) { ['brand', 'model', 'serial'].forEach(k => { if (j[k]) q[k] = j[k]; }); if (j.name) q.name = j.name; }
-    const label = q.newType ? q.newType.label : t ? t.label : (j.name || 'Item');
-    q.status = '✨ <b>' + cxE(label) + '</b>' + (how ? ' · ' + cxE(how) : '') + (j.confidence === 'low' ? ' · not sure, please check' : '') +
+    const raw = j.scale_reading == null ? null : parseFloat(String(j.scale_reading).replace(',', '.'));
+    if (kg && raw != null && !isNaN(raw) && raw > 0) {
+      const u = String(j.scale_units || 'kg').toLowerCase();
+      const v = u === 'g' ? raw / 1000 : u === 'lb' ? raw * 0.453592 : u === 'oz' ? raw * 0.0283495 : raw;
+      q.amt = String(+v.toFixed(2));
+      how = 'scale reads ' + raw + ' ' + u + (u !== 'kg' ? ' = ' + q.amt + ' kg' : '');
+    } else if (!kg && +j.count > 0) { q.amt = String(Math.round(j.count)); how = q.amt + ' counted'; }
+    else if (kg && j.scale_visible) how = 'I can see the scale but not read the numbers — take the photo closer to the display, or type the weight';
+    else if (kg) how = 'no scale in the photo — type the weight';
+
+    if (tracked) { ['brand', 'model', 'serial'].forEach(k => { if (j[k]) q[k] = j[k]; }); if (seen) q.name = seen; }
+    const shown = seen || (t ? cxLbl(t) : 'Item');
+    const filedAs = t && j.match === 'category' ? ' (logged as ' + cxLbl(t) + ')' : '';
+    q.status = '✨ <b>' + cxE(shown) + '</b>' + cxE(filedAs) + (how ? ' · ' + cxE(how) : '') + (j.confidence === 'low' ? ' · not sure, please check' : '') +
       (j.hazards ? ' · <b style="color:var(--red)">⚠ ' + cxE(j.hazards) + '</b>' : '');
   } catch (e) { q.status = 'Could not read the photo: ' + cxE(e.message || e); q.statusErr = true; }
   cxDraw(); q.statusErr = false;
@@ -602,7 +629,7 @@ function cxRecentHTML(act) {
   h += done.length ? done.map(i => {
     const o = cxOutcome(act, i.outcome); const t = cxType(act, i.item_type);
     const d = new Date(i.outcome_at || i.created_at);
-    return '<div class="cxp-list-row"><div><div class="cxp-t">' + (cxPerKg(t) ? cxFmt(i.weight_kg, 1) + ' kg ' : (+i.quantity > 1 ? cxFmt(i.quantity) + ' × ' : '')) + cxE(i.name) + '</div>' +
+    return '<div class="cxp-list-row"><div><div class="cxp-t">' + (cxPerKg(t) ? cxFmt(i.weight_kg, 1) + ' kg ' : (+i.quantity > 1 ? cxFmt(i.quantity) + ' × ' : '')) + cxE(cxLbl(i.name)) + '</div>' +
       '<div class="cxp-s">' + (cxIsToday(i) ? 'Today ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString('en-GB')) + '</div></div>' +
       '<div style="display:flex;align-items:center;gap:10px"><span class="cxp-chip">' + cxE(o ? o.label : i.status) + '</span>' +
       '<button class="btn btn-ghost btn-sm" title="Delete" onclick="cxDelEntry(\'' + i.id + '\')">×</button></div></div>';
