@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Vorlana</title>
 <link rel="icon" type="image/png" href="logo-mark.png"/>
+<link rel="manifest" href="/manifest.webmanifest"/>
+<meta name="theme-color" content="#1F6F6D"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="apple-mobile-web-app-title" content="Vorlana"/>
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>
 <link rel="stylesheet" href="css/app.css"/>
 
 <!-- EOI form-reading libraries (Word + PDF) — added for the EOI form-fill feature -->
@@ -91,7 +98,7 @@
         <button class="btn btn-ai btn-sm" onclick="runMorningBriefing()">↻ Refresh</button>
       </div>
     </div>
-    <div id="mb-body"><div style="color:var(--txt3);font-size:13px">Add participants or events to see your morning briefing.</div></div>
+    <div id="mb-body"><div style="color:var(--txt3);font-size:13px">Your morning briefing covers the areas you work in — add some records to get started.</div></div>
   </div>
   <div class="stats-grid" id="dash-stats"></div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
@@ -774,16 +781,16 @@ Accreditations: Matrix, Investors in People, Cyber Essentials…"></textarea></d
 <script src="js/auth.js?v=19"></script>
 
 <!-- AI + branding -->
-<script src="js/agents.js?v=34"></script>
+<script src="js/agents.js?v=36"></script>
 <script src="js/branding.js?v=19"></script>
 
 <!-- UI logic -->
-<script src="js/render.js?v=54"></script>
-<script src="js/settings.js?v=1"></script>
-<script src="js/circular.js?v=2"></script>
+<script src="js/render.js?v=55"></script>
+<script src="js/settings.js?v=3"></script>
+<script src="js/circular.js?v=6"></script>
 <script src="js/modals.js?v=43"></script>
-<script src="js/demo.js?v=19"></script>
-<script src="js/router.js?v=19"></script>
+<script src="js/demo.js?v=22"></script>
+<script src="js/router.js?v=20"></script>
 
 <!-- Module visibility — shows/hides sidebar items per currentOrg.modules -->
 <script>
@@ -799,7 +806,7 @@ function applyModules(mods) {
 </script>
 
 <!-- Entry point -->
-<script src="js/boot.js?v=19"></script>
+<script src="js/boot.js?v=20"></script>
 
 <!-- Auto-fill paperwork (Start & End Form + job evidence) -->
 <script>
@@ -1175,8 +1182,8 @@ function applyModules(mods) {
 <script src="js/extensions/partner-portal.js?v=15"></script>
 <script src="js/extensions/volunteers-plus.js?v=37"></script>
 <script src="js/extensions/event-qr.js?v=20"></script>
-<script src="js/extensions/delivery-report.js?v=43"></script>
-<script src="js/extensions/event-contracts.js?v=18"></script>
+<script src="js/extensions/delivery-report.js?v=44"></script>
+<script src="js/extensions/event-contracts.js?v=19"></script>
 <script src="js/extensions/historic-import.js?v=46"></script>
 <script src="js/extensions/feedback-funders.js?v=17"></script>
 
@@ -1568,5 +1575,6 @@ function applyModules(mods) {
 })();
 </script>
 
+<script src="js/pwa.js?v=1"></script>
 </body>
 </html>
