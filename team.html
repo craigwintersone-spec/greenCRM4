@@ -226,7 +226,7 @@ async function loadTeam(){
   let rows=[];
   try{
     const{data,error}=await sb.from('memberships')
-      .select('id,user_id,role,status,joined_at')
+      .select('*')
       .eq('org_id',MY.orgId)
       .order('joined_at',{ascending:true});
     if(error)throw error;
@@ -253,7 +253,14 @@ async function loadTeam(){
     const roleCls={manager:'b-manager',advisor:'b-advisor',admin:'b-admin'}[r.role]||'b-advisor';
     const isMe=r.user_id===MY.userId;
     const statusBadge=r.status==='suspended'?'<span class="badge b-suspended">suspended</span>':'';
-    const removeBtn=(!isMe&&MY.role==='manager')
+    const isMgr=/manager|admin|owner|super/i.test(MY.role||'');
+    const pages=Array.isArray(r.page_access)?r.page_access:null;
+    const accessTxt=pages?pages.length+' pages':(/manager|admin|owner/i.test(r.role)?'All pages':'Adviser default');
+    const accessBtn=(!isMe&&isMgr)
+      ?'<button class="btn btn-ghost btn-sm" onclick="openAccess(\''+r.id+'\')" title="Choose which pages '+escapeHTML(name).replace(/"/g,'')+' can open">🔐 '+accessTxt+'</button> '
+      :'<span style="font-size:11px;color:var(--txt3);margin-right:6px">'+accessTxt+'</span>';
+    TEAM_ROWS[r.id]={name:name,role:r.role,pages:pages};
+    const removeBtn=(!isMe&&isMgr)
       ?'<button class="btn btn-danger btn-sm" onclick="removeMember(\''+r.id+'\',\''+escapeHTML(name).replace(/'/g,'')+'\')">Remove</button>'
       :'';
     return '<div class="member-row">'+
@@ -262,9 +269,59 @@ async function loadTeam(){
         '<div class="member-name">'+escapeHTML(name)+(isMe?' <span style="color:var(--txt3);font-weight:400">(you)</span>':'')+'</div>'+
         '<div class="member-email">'+escapeHTML(email)+'</div>'+
       '</div>'+
-      '<span class="badge '+roleCls+'">'+escapeHTML(r.role)+'</span> '+statusBadge+removeBtn+
+      accessBtn+'<span class="badge '+roleCls+'">'+escapeHTML(r.role)+'</span> '+statusBadge+removeBtn+
     '</div>';
   }).join('');
+}
+
+// ── Page access, set person by person ──────────────────────
+const TEAM_ROWS={};
+const PAGES=[
+  ['Caseload',[['participants','Participants'],['pipeline','Pipeline'],['referrals','Referrals'],['partnerrefs','Partner referrals'],['outcomes','Outcomes'],['safeguarding','Safeguarding'],['evidence','Evidence hub']]],
+  ['Delivery',[['events','Events'],['feedback','Feedback'],['volunteers','Volunteers'],['circular','Circular economy']]],
+  ['People & partners',[['contacts','Contacts & donors'],['employers','Employers']]],
+  ['Reporting & money',[['impact','Social impact'],['rag','RAG dashboard'],['demographics','Demographics'],['reports','Reports'],['funders','Funders'],['funding','Contracts']]],
+  ['Growth & admin',[['social','Social media'],['bd','BD manager'],['hr','HR'],['settings','Settings']]]
+];
+const ALL_PAGES=[].concat(...PAGES.map(g=>g[1].map(x=>x[0])));
+const PRESETS={
+  'Adviser':['participants','pipeline','referrals','partnerrefs','outcomes','safeguarding','evidence','events','feedback','volunteers','contacts','employers','circular'],
+  'Caseload only':['participants','pipeline','referrals','partnerrefs','outcomes','safeguarding','evidence'],
+  'Delivery only':['events','feedback','volunteers','circular'],
+  'Everything':ALL_PAGES
+};
+let ACC={id:null,set:null};
+function openAccess(memId){
+  const r=TEAM_ROWS[memId];if(!r)return;
+  const start=r.pages||(/manager|admin|owner/i.test(r.role)?ALL_PAGES:PRESETS['Adviser']);
+  ACC={id:memId,set:new Set(start)};
+  let m=document.getElementById('acc-modal');
+  if(!m){m=document.createElement('div');m.id='acc-modal';m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:flex-start;justify-content:center;padding:30px 14px;overflow:auto;z-index:500';m.onclick=e=>{if(e.target===m)m.remove()};document.body.appendChild(m);}
+  drawAccess();
+}
+function drawAccess(){
+  const r=TEAM_ROWS[ACC.id];const m=document.getElementById('acc-modal');
+  m.innerHTML='<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;padding:22px">'+
+    '<h2 style="margin:0 0 4px;font-size:18px">What can '+escapeHTML(r.name)+' open?</h2>'+
+    '<div style="font-size:12.5px;color:var(--txt3);margin-bottom:12px">The dashboard is always available. They only ever see your organisation\'s data, and deleting participants, contracts, funders or evidence always needs a manager.</div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">'+Object.keys(PRESETS).map(k=>'<button class="btn btn-ghost btn-sm" onclick="accPreset(\''+k+'\')">'+k+'</button>').join('')+'</div>'+
+    PAGES.map(g=>'<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 6px">'+g[0]+'</div>'+
+      '<div style="display:flex;flex-wrap:wrap;gap:6px">'+g[1].map(([k,l])=>{const on=ACC.set.has(k);
+        return '<button onclick="accToggle(\''+k+'\')" style="border:1px solid '+(on?'#1F6F6D':'#E0DAD0')+';background:'+(on?'#1F6F6D':'#fff')+';color:'+(on?'#fff':'#4A5552')+';border-radius:16px;padding:6px 12px;font-size:12.5px;cursor:pointer">'+(on?'✓ ':'')+escapeHTML(l)+'</button>'}).join('')+'</div>').join('')+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:8px;flex-wrap:wrap">'+
+      '<a href="#" onclick="accSave(null);return false" style="font-size:12.5px;color:var(--txt3)">Use the default for their role</a>'+
+      '<span><button class="btn btn-ghost" onclick="document.getElementById(\'acc-modal\').remove()">Cancel</button> <button class="btn btn-p" onclick="accSave(Array.from(ACC.set))">Save</button></span></div></div>';
+}
+function accToggle(k){ACC.set.has(k)?ACC.set.delete(k):ACC.set.add(k);drawAccess();}
+function accPreset(k){ACC.set=new Set(PRESETS[k]);drawAccess();}
+async function accSave(pages){
+  try{
+    const{error}=await sb.from('memberships').update({page_access:pages}).eq('id',ACC.id);
+    if(error)throw error;
+    document.getElementById('acc-modal').remove();
+    showOk('✓ Access saved for '+TEAM_ROWS[ACC.id].name+' — they\'ll see it next time they open Vorlana');
+    loadTeam();
+  }catch(e){showErr(/page_access/.test(e.message||'')?'Run member-access.sql in Supabase first, then try again.':'Could not save: '+e.message);}
 }
 
 async function removeMember(memId,name){
