@@ -45,8 +45,9 @@ let _eoiFunderPriorities = ''; // funder priorities, auto-fetched before draftin
 let _eoiPrioritiesFunder = ''; // which funder name the loaded priorities belong to
 let _bdOpps = {};              // found funding opportunities, keyed for the "Draft EOI" buttons
 
-// UK Living Wage (Living Wage Foundation, 2024/25) — used to value volunteer time.
-const VOL_HOUR_RATE = 12.60;
+// UK real Living Wage (Living Wage Foundation, 2025/26 — announced Oct 2025) — used to value volunteer time.
+// Update each October when the Foundation announces the new rate.
+const VOL_HOUR_RATE = 13.45;
 
 // ── Plan gate ─────────────────────────────────────────────────
 function checkAIAccess() {
@@ -306,102 +307,171 @@ function _inRange(dateStr, from, to) {
 
 // Morning briefing — reads caseload AND events, feedback, volunteer hours.
 // Every fact is computed here; the AI only turns it into a briefing.
+// Which parts of Vorlana this organisation uses (Settings → What you do).
+// Agents only read and talk about switched-on areas.
+function orgUses(k) {
+  const m = (typeof currentOrg !== 'undefined' && currentOrg && currentOrg.modules) || {};
+  return m[k] !== false;
+}
+function orgPeople() { return orgUses('participants') ? (DB.participants || []) : []; }
+
+// Circular facts every agent can use (figures calculated in circular.js)
+async function orgCircularFacts(from, to) {
+  if (!orgUses('circular') || typeof cxReportLoad !== 'function') return null;
+  try { await cxReportLoad(); } catch (e) { return null; }
+  if (typeof CXR === 'undefined' || !CXR.ok) return null;
+  const s = cxReportStats({ from: from || null, to: to || null });
+  return s && s.entries ? s : null;
+}
+
 async function runMorningBriefing() {
   const el = $('mb-body'); if (!el) return;
 
-  const P  = DB.participants || [];
-  const E  = DB.events || [];
-  const FB = DB.feedback || [];
-  const H  = DB.volunteer_hours || [];
-  const C  = DB.contracts || [];
+  const uses = { people: orgUses('participants'), events: orgUses('events'), vols: orgUses('volunteers'), funders: orgUses('funders'), circular: orgUses('circular') };
+  const P  = uses.people ? (DB.participants || []) : [];
+  const E  = uses.events ? (DB.events || []) : [];
+  const FB = uses.events ? (DB.feedback || []) : [];
+  const H  = uses.vols ? (DB.volunteer_hours || []) : [];
+  const C  = uses.funders ? (DB.contracts || []) : [];
 
   const now = new Date();
   const today = _isoDay(now);
   const in7 = new Date(now); in7.setDate(in7.getDate() + 7);
   const ago30 = new Date(now); ago30.setDate(ago30.getDate() - 30);
   const from30 = _isoDay(ago30);
-
-  // caseload
-  const active = P.filter(p => p.stage !== 'Closed');
-  const atRisk = active.filter(p => p.risk === 'High' || days(p.last_contact) > 21);
-  const jobReady = P.filter(p => p.stage === 'Job Ready');
-
-  // events
-  const upcoming = E.filter(e => e.date && e.date >= today && e.date <= _isoDay(in7))
-                    .sort((a, b) => a.date.localeCompare(b.date));
-  const recent = E.filter(e => e.date && e.date >= from30 && e.date <= today);
-  const recentAtt = recent.reduce((a, e) => a + num(e.attendees), 0);
-
-  const fbByEvent = {};
-  FB.forEach(f => { const k = _fbEventId(f); fbByEvent[k] = (fbByEvent[k] || 0) + 1; });
-  const hoursByEvent = {};
-  H.forEach(h => { if (h.event_id) hoursByEvent[String(h.event_id)] = 1; });
-
-  const noFeedback = recent.filter(e => !fbByEvent[String(e.id)]);
-  const noHours = recent.filter(e => !hoursByEvent[String(e.id)]);
-
-  // feedback from recent events
-  const recentIds = {};
-  recent.forEach(e => { recentIds[String(e.id)] = 1; });
-  const recentFb = FB.filter(f => recentIds[_fbEventId(f)]);
-  const fbN = recentFb.length;
-  const cb = fbN ? _r1(recentFb.reduce((a, f) => a + num(f.cb), 0) / fbN) : 0;
-  const ca = fbN ? _r1(recentFb.reduce((a, f) => a + num(f.ca), 0) / fbN) : 0;
-
-  // volunteer hours, last 30 days
-  const recentHours = H.filter(h => _inRange(h.date, from30, today));
-  const hrs30 = _r1(recentHours.reduce((a, h) => a + num(h.hours), 0));
-  const perVol = {};
-  recentHours.forEach(h => { const k = String(h.volunteer_id); perVol[k] = (perVol[k] || 0) + num(h.hours); });
-  const topId = Object.keys(perVol).sort((a, b) => perVol[b] - perVol[a])[0];
-  const topVol = topId ? (DB.volunteers || []).find(v => String(v.id) === topId) : null;
-
   const fmtDay = d => new Date(d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
   const names = arr => arr.map(p => p.first_name + ' ' + p.last_name).join(', ') || 'none';
+  const lines = ['Today: ' + now.toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long' })];
+  const steps = [];
+  let chase = 0;
 
-  const steps = [
-    { label: 'Reading caseload', meta: active.length + ' active participants' },
-    { label: 'Reading events & feedback', meta: recent.length + ' events in last 30 days · ' + upcoming.length + ' this week' },
-    { label: "Spotting today's priorities", meta: (atRisk.length + noFeedback.length) + ' things to chase' },
-    { label: 'Ready', meta: '' }
-  ];
+  // ── Caseload ──
+  if (uses.people) {
+    const active = P.filter(p => p.stage !== 'Closed');
+    const atRisk = active.filter(p => p.risk === 'High' || days(p.last_contact) > 21);
+    const jobReady = P.filter(p => p.stage === 'Job Ready');
+    chase += atRisk.length;
+    steps.push({ label: 'Reading caseload', meta: active.length + ' active participants' });
+    lines.push('', 'CASELOAD', 'Active participants: ' + active.length, 'At risk (high risk or no contact 21+ days): ' + names(atRisk), 'Job ready: ' + names(jobReady));
+  }
 
-  const sys = 'Generate a warm, practical morning briefing for a UK charity manager. Use **bold** for names and figures. ' +
+  // ── Events and feedback ──
+  if (uses.events) {
+    const upcoming = E.filter(e => e.date && e.date >= today && e.date <= _isoDay(in7)).sort((a, b) => a.date.localeCompare(b.date));
+    const recent = E.filter(e => e.date && e.date >= from30 && e.date <= today);
+    const recentAtt = recent.reduce((a, e) => a + num(e.attendees), 0);
+    const fbByEvent = {};
+    FB.forEach(f => { const k = _fbEventId(f); fbByEvent[k] = (fbByEvent[k] || 0) + 1; });
+    const hoursByEvent = {};
+    H.forEach(h => { if (h.event_id) hoursByEvent[String(h.event_id)] = 1; });
+    const noFeedback = recent.filter(e => !fbByEvent[String(e.id)]);
+    const noHours = uses.vols ? recent.filter(e => !hoursByEvent[String(e.id)]) : [];
+    const recentIds = {}; recent.forEach(e => { recentIds[String(e.id)] = 1; });
+    const recentFb = FB.filter(f => recentIds[_fbEventId(f)]);
+    const fbN = recentFb.length;
+    const withCb = recentFb.filter(f => f.cb != null && f.ca != null);
+    const cb = withCb.length ? _r1(withCb.reduce((a, f) => a + num(f.cb), 0) / withCb.length) : 0;
+    const ca = withCb.length ? _r1(withCb.reduce((a, f) => a + num(f.ca), 0) / withCb.length) : 0;
+    chase += noFeedback.length;
+    steps.push({ label: 'Reading events & feedback', meta: recent.length + ' events in last 30 days · ' + upcoming.length + ' this week' });
+    lines.push('', 'EVENTS',
+      'Coming up in the next 7 days: ' + (upcoming.map(e => e.name + ' (' + fmtDay(e.date) + ')').join(', ') || 'none'),
+      'Delivered in the last 30 days: ' + recent.length + ' events, ' + recentAtt + ' attendances',
+      'Recent sessions with NO feedback collected: ' + (noFeedback.map(e => e.name).join(', ') || 'none'),
+      uses.vols ? 'Recent sessions with NO volunteer hours logged: ' + (noHours.map(e => e.name).join(', ') || 'none') : '',
+      '', 'FEEDBACK (last 30 days)',
+      fbN ? (fbN + ' responses' + (withCb.length ? '; confidence ' + cb + ' → ' + ca + ' out of 5' : '')) : 'No feedback in the last 30 days');
+  }
+
+  // ── Volunteers ──
+  if (uses.vols) {
+    const recentHours = H.filter(h => _inRange(h.date, from30, today));
+    const hrs30 = _r1(recentHours.reduce((a, h) => a + num(h.hours), 0));
+    const perVol = {};
+    recentHours.forEach(h => { const k = String(h.volunteer_id); perVol[k] = (perVol[k] || 0) + num(h.hours); });
+    const topId = Object.keys(perVol).sort((a, b) => perVol[b] - perVol[a])[0];
+    const topVol = topId ? (DB.volunteers || []).find(v => String(v.id) === topId) : null;
+    steps.push({ label: 'Reading volunteer hours', meta: hrs30 + ' hours in 30 days' });
+    lines.push('', 'VOLUNTEERS (last 30 days)', hrs30 ? (hrs30 + ' hours from ' + Object.keys(perVol).length + ' volunteers') : 'No volunteer hours logged',
+      topVol ? ('Most hours: ' + topVol.name + ' (' + _r1(perVol[topId]) + 'h)') : '');
+  }
+
+  // ── Circular economy ──
+  if (uses.circular && typeof cxReportLoad === 'function') {
+    try {
+      await cxReportLoad();
+      if (typeof CXR !== 'undefined' && CXR.ok && CXR.items.length) {
+        const acts = {}; CXR.acts.forEach(a => { acts[a.id] = a; });
+        const items = CXR.items.filter(i => acts[i.activity_id]);
+        const open = items.filter(i => !i.outcome_type);
+        const tracked = open.filter(i => circMode(acts[i.activity_id]) === 'tracked');
+        const stuck = tracked.filter(i => cxDays(i.updated_at) > 14);
+        const byStage = {};
+        stuck.forEach(i => { const s = cxStage(acts[i.activity_id], i.stage); const k = acts[i.activity_id].name + ' — ' + (s ? s.label : 'unknown step'); byStage[k] = (byStage[k] || 0) + 1; });
+        const undecided = open.filter(i => circMode(acts[i.activity_id]) === 'tally');
+        const lastStage = i => { const st = acts[i.activity_id].stages || []; return st.length && i.stage === st[st.length - 1].key; };
+        const ready = tracked.filter(lastStage);
+        // details that should have been recorded at a step the item has passed
+        let missing = 0;
+        tracked.concat(items.filter(i => i.outcome_type && circMode(acts[i.activity_id]) === 'tracked')).forEach(i => {
+          const a = acts[i.activity_id], st = a.stages || [];
+          const cur = i.outcome_type ? st.length : st.findIndex(s => s.key === i.stage);
+          (a.fields || []).forEach(f => { const at = cxFieldStage(a, f); const idx = st.findIndex(s => s.key === at); if (at && idx >= 0 && cur > idx) { const v = (i.custom || {})[f.key]; if (v == null || v === '') missing++; } });
+        });
+        const week = cxReportStats({ from: _isoDay(new Date(Date.now() - 7 * 864e5)), to: today });
+        let colsSoon = [], colsWaiting = 0;
+        try {
+          const { data } = await cxFrom('circular_collections').select('*').eq('org_id', orgId);
+          (data || []).forEach(c => {
+            if (c.status === 'scheduled' && c.scheduled_date && c.scheduled_date >= today && c.scheduled_date <= _isoDay(in7)) colsSoon.push((c.donor_org || c.donor_name || 'Donor') + ' (' + fmtDay(c.scheduled_date) + ')');
+            if (c.status === 'requested') colsWaiting++;
+          });
+        } catch (e) { /* collections optional */ }
+        chase += stuck.length + (undecided.length ? 1 : 0) + colsWaiting;
+        steps.push({ label: 'Reading circular activity', meta: open.length + ' items in progress · ' + cxFmt(week ? week.kg : 0, 1) + ' kg this week' });
+        lines.push('', 'CIRCULAR ECONOMY',
+          'Last 7 days: ' + (week && week.entries ? week.finished + ' entries finished, ' + week.kg + ' kg diverted' + (week.foodKg ? ', ' + week.foodKg + ' kg food shared (about ' + week.meals + ' meals)' : '') + (week.fixRate != null ? ', repair fix rate ' + week.fixRate + '%' : '') : 'nothing logged'),
+          'Items waiting more than 14 days at a step: ' + (stuck.length ? Object.keys(byStage).map(k => byStage[k] + ' at ' + k).join('; ') : 'none'),
+          'Items ready to go out (at the last step): ' + (ready.length || 'none'),
+          'Entries with no destination recorded (need sorting): ' + (undecided.length || 'none'),
+          'Details missing at steps already passed (e.g. wipe certificate, PAT): ' + (missing || 'none'),
+          'Collections booked for the next 7 days: ' + (colsSoon.join(', ') || 'none'),
+          'Collection requests not yet scheduled: ' + (colsWaiting || 'none'));
+      }
+    } catch (e) { console.warn('[briefing] circular skipped', e); }
+  }
+
+  // ── Contracts ──
+  if (uses.funders && C.length) {
+    const prog = C.filter(c => c.status !== 'closed').map(c => {
+      const bits = [];
+      if (num(c.target_starts)) bits.push(num(c.actual_starts) + '/' + num(c.target_starts) + ' starts');
+      if (num(c.target_outcomes)) bits.push(num(c.actual_outcomes) + '/' + num(c.target_outcomes) + ' outcomes');
+      let elapsed = '';
+      if (c.start_date && c.end_date) { const a = new Date(c.start_date), b = new Date(c.end_date); elapsed = ', ' + Math.max(0, Math.min(100, Math.round((now - a) / (b - a) * 100))) + '% of the contract period gone'; }
+      return c.name + (bits.length ? ': ' + bits.join(', ') : ': no numeric targets') + elapsed;
+    });
+    steps.push({ label: 'Checking contracts', meta: C.length + ' contracts' });
+    lines.push('', 'CONTRACTS', prog.join('\n') || 'none');
+  }
+
+  if (steps.length === 0) { el.innerHTML = '<div class="alert alert-info">Switch on the areas you work in (Settings → What you do) and the briefing will cover them.</div>'; return; }
+  steps.push({ label: "Spotting today's priorities", meta: chase + ' things to chase' }, { label: 'Ready', meta: '' });
+
+  const areas = [uses.people && 'caseload', uses.events && 'events and feedback', uses.vols && 'volunteers', uses.circular && 'circular economy (reuse, repair, growing, collections)', uses.funders && 'contracts'].filter(Boolean).join(', ');
+  const sys = 'Generate a warm, practical morning briefing for a UK charity or community organisation manager. Use **bold** for names and figures. ' +
     'Three short sections: Priority actions today, Wins to celebrate, One observation. ' +
-    'Priority actions must be concrete and doable today — chase named at-risk people, collect feedback for named sessions, ' +
-    'log volunteer hours for named sessions, prepare for named upcoming events. ' +
-    'Use ONLY the facts given; never invent people, events or numbers. If a list says none, do not mention it. ' +
+    'This organisation works in: ' + areas + '. Only talk about those areas — never mention participants, caseload or anything else not listed. ' +
+    'Priority actions must be concrete and doable today, taken from the facts: e.g. chase named people, collect feedback for named sessions, log hours, ' +
+    'move items that have waited too long, sort entries with no destination, fill in missing wipe certificates, confirm upcoming collections. ' +
+    'Use ONLY the facts given; never invent people, events, items or numbers. If a line says none, do not mention it. ' +
     'Max 220 words. Do not use ## headings or hashtags.';
-
-  const prompt = [
-    'Today: ' + now.toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long' }),
-    '',
-    'CASELOAD',
-    'Active participants: ' + active.length,
-    'At risk (high risk or no contact 21+ days): ' + names(atRisk),
-    'Job ready: ' + names(jobReady),
-    '',
-    'EVENTS',
-    'Coming up in the next 7 days: ' + (upcoming.map(e => e.name + ' (' + fmtDay(e.date) + ')').join(', ') || 'none'),
-    'Delivered in the last 30 days: ' + recent.length + ' events, ' + recentAtt + ' attendances',
-    'Recent sessions with NO feedback collected: ' + (noFeedback.map(e => e.name).join(', ') || 'none'),
-    'Recent sessions with NO volunteer hours logged: ' + (noHours.map(e => e.name).join(', ') || 'none'),
-    '',
-    'FEEDBACK (last 30 days)',
-    fbN ? (fbN + ' responses; confidence ' + cb + ' → ' + ca + ' out of 5') : 'No feedback in the last 30 days',
-    '',
-    'VOLUNTEERS (last 30 days)',
-    hrs30 ? (hrs30 + ' hours from ' + Object.keys(perVol).length + ' volunteers') : 'No volunteer hours logged',
-    topVol ? ('Most hours: ' + topVol.name + ' (' + _r1(perVol[topId]) + 'h)') : '',
-    '',
-    'Contracts: ' + (C.map(c => c.name).join(', ') || 'none')
-  ].filter(Boolean).join('\n');
 
   const raw = await runAgent({
     container: el,
     headerLabel: 'Org Brain — Morning Briefing',
-    headerSub: 'Reading caseload, events, feedback and volunteer hours',
-    steps, sys, prompt, maxTok: 380
+    headerSub: 'Reading ' + areas,
+    steps, sys, prompt: lines.join('\n').replace(/\n{3,}/g, '\n\n'), maxTok: 420
   });
   if (raw) aiResult(el, raw);
 }
@@ -568,6 +638,7 @@ async function runFeedbackAnalyst() {
 
 async function runOutcomesAnalyst() {
   const el = $('outcomes-analyst-result'); if (!el) return;
+  if (!orgUses('participants')) { el.innerHTML = '<div class="alert alert-info">This agent works on your caseload. Switch on Participants in Settings → What you do to use it.</div>'; return; }
   const P = DB.participants;
   if (!P.length) { el.innerHTML = '<div class="alert alert-info">No participant data yet.</div>'; return; }
   const rate = pct(P.filter(p => p.outcomes.length > 0).length, P.length);
@@ -592,6 +663,7 @@ async function runOutcomesAnalyst() {
 
 async function runEmployerMatcher() {
   const el = $('employer-matcher-result'); if (!el) return;
+  if (!orgUses('participants')) { el.innerHTML = '<div class="alert alert-info">This agent works on your caseload. Switch on Participants in Settings → What you do to use it.</div>'; return; }
   const jr = DB.participants.filter(p => p.stage === 'Job Ready' || p.stage === 'Outcome Achieved');
   const emp = DB.employers.filter(e => e.vacancies > 0);
   if (!jr.length || !emp.length) {
@@ -651,6 +723,7 @@ async function runLanguageCoach() {
 
 async function runEquityAnalysis() {
   const el = $('equity-result'); if (!el) return;
+  if (!orgUses('participants')) { el.innerHTML = '<div class="alert alert-info">This agent works on your caseload. Switch on Participants in Settings → What you do to use it.</div>'; return; }
   const P = DB.participants;
   if (!P.length) { el.innerHTML = '<div class="alert alert-info">No participant data yet.</div>'; return; }
   const rate = pct(P.filter(p => p.outcomes.length > 0).length, P.length);
@@ -680,6 +753,7 @@ async function runEquityAnalysis() {
 
 async function runBenchmarking() {
   const el = $('benchmark-result'); if (!el) return;
+  if (!orgUses('participants')) { el.innerHTML = '<div class="alert alert-info">This agent works on your caseload. Switch on Participants in Settings → What you do to use it.</div>'; return; }
   const P = DB.participants;
   const rate = P.length ? pct(P.filter(p => p.outcomes.length > 0).length, P.length) : 0;
   const steps = [
@@ -852,7 +926,7 @@ function _impactRange(key) {
 }
 
 function _impactStats(r) {
-  const P = (DB.participants || []).filter(p => !r.from || _inRange(p.last_contact || p.created_at, r.from, r.to));
+  const P = orgPeople().filter(p => !r.from || _inRange(p.last_contact || p.created_at, r.from, r.to));
   const E = (DB.events || []).filter(e => _inRange(e.date, r.from, r.to));
   const evIds = {};
   E.forEach(e => { evIds[String(e.id)] = 1; });
@@ -1079,6 +1153,7 @@ function _socialToday() { return _isoDay(new Date()); }
 
 // Called when the Social Media page opens (from the sidebar button).
 function renderSocial() {
+  if (orgUses('circular') && typeof cxReportLoad === 'function') cxReportLoad().then(() => { try { socialRefreshFacts(); } catch (e) { /* page may have changed */ } });
   const evSel = $('sm-event');
   if (evSel) {
     const cur = evSel.value;
@@ -1177,12 +1252,20 @@ function _socialFacts() {
     if (s.events) out.lines.push('Events delivered: ' + s.events + ' with ' + s.attendances + ' attendances');
     if (s.volunteers) out.lines.push('Volunteers: ' + s.volunteers + ' giving ' + s.hours + ' hours');
     if (s.fbN) out.lines.push('Confidence before ' + s.cb + ' → after ' + s.ca + ' across ' + s.fbN + ' responses');
+    const cx = (orgUses('circular') && typeof CXR !== 'undefined' && CXR.ok) ? cxReportStats({ from: s.range.from || null, to: s.range.to || null }) : null;
+    if (cx && cx.entries) {
+      out.lines.push('Diverted from waste: ' + cx.kg + ' kg' + (cx.reused ? ', ' + cx.reused + ' items reused or repaired' : ''));
+      if (cx.foodKg) out.lines.push('Food shared: ' + cx.foodKg + ' kg (about ' + cx.meals + ' meals)');
+      if (cx.co2) out.lines.push('Estimated CO2e avoided: ' + (Math.round(cx.co2 / 100) / 10) + ' tonnes (say it is an estimate)');
+    }
     if (s.connected) out.lines.push(s.connected + '% felt more connected');
     out.chips = [
       s.participants ? ['👥', s.participants + ' supported'] : null,
       s.events ? ['📅', s.events + ' events'] : null,
       s.hours ? ['🙋', s.hours + 'h volunteered'] : null,
-      s.fbN ? ['📈', 'confidence ' + s.cb + ' → ' + s.ca] : null
+      s.fbN ? ['📈', 'confidence ' + s.cb + ' → ' + s.ca] : null,
+      cx && cx.entries ? ['♻️', cx.kg + ' kg saved from waste'] : null,
+      cx && cx.foodKg ? ['🥕', cx.meals + ' meals shared'] : null
     ].filter(Boolean);
     out.quotes = s.quotes;
     return out;
@@ -1209,7 +1292,12 @@ function _socialFacts() {
   }
 
   // custom
-  out.lines.push('Organisation totals — people supported: ' + (DB.participants || []).length + ', events: ' + (DB.events || []).length);
+  const tot = [];
+  if (orgUses('participants')) tot.push('people supported: ' + (DB.participants || []).length);
+  if (orgUses('events')) tot.push('events: ' + (DB.events || []).length);
+  const cxAll = (orgUses('circular') && typeof CXR !== 'undefined' && CXR.ok) ? cxReportStats({}) : null;
+  if (cxAll && cxAll.entries) tot.push('diverted from waste: ' + cxAll.kg + ' kg' + (cxAll.foodKg ? ', food shared: ' + cxAll.foodKg + ' kg' : ''));
+  out.lines.push('Organisation totals — ' + (tot.join(', ') || 'none recorded yet'));
   out.quotes = FB.filter(f => f.quote && String(f.quote).trim().length > 10).map(f => String(f.quote).trim());
   return out;
 }
@@ -1615,13 +1703,15 @@ function saveOrgProfileFromField() {
 // IMPORTANT: only emit metrics that are > 0. Broadcasting zeros makes a bid
 // read as "we have done nothing" — which sinks it.
 function buildEOIEvidence() {
-  const P = DB.participants || [];
-  const E = DB.events || [];
+  const P = orgPeople();
+  const E = orgUses('events') ? (DB.events || []) : [];
+  const H = orgUses('volunteers') ? (DB.volunteer_hours || []) : [];
+  const cx = (orgUses('circular') && typeof CXR !== 'undefined' && CXR.ok) ? cxReportStats({}) : null;
   const FB = DB.feedback || [];
   const C = DB.contracts || [];
 
   const total = P.length;
-  if (!total && !E.length && !FB.length && !C.length) {
+  if (!total && !E.length && !FB.length && !C.length && !(cx && cx.entries) && !H.length) {
     return 'VERIFIED CRM DATA: none recorded in the system yet — rely on the KNOWN ORGANISATION FACTS above and use [INSERT: ...] placeholders for any specific figures. Do not state or imply that figures are zero or that the organisation has no track record.';
   }
 
@@ -1649,12 +1739,12 @@ function buildEOIEvidence() {
   const contractLines = [];
   let totalValue = 0, totalActualOutcomes = 0;
   C.forEach(c => {
-    totalValue += num(c.value);
-    totalActualOutcomes += num(c.actual_outcomes);
-    contractLines.push(
-      c.name + ': ' + num(c.actual_starts) + '/' + num(c.target_starts) + ' starts, ' +
-      num(c.actual_outcomes) + '/' + num(c.target_outcomes) + ' outcomes'
-    );
+    // cost per outcome only means something for contracts with outcome targets
+    if (num(c.target_outcomes)) { totalValue += num(c.value); totalActualOutcomes += num(c.actual_outcomes); }
+    const bits = [];
+    if (num(c.target_starts)) bits.push(num(c.actual_starts) + '/' + num(c.target_starts) + ' starts');
+    if (num(c.target_outcomes)) bits.push(num(c.actual_outcomes) + '/' + num(c.target_outcomes) + ' outcomes');
+    if (bits.length) contractLines.push(c.name + ': ' + bits.join(', '));
   });
   const costPerOutcome = totalActualOutcomes ? Math.round(totalValue / totalActualOutcomes) : null;
 
@@ -1675,6 +1765,15 @@ function buildEOIEvidence() {
   if (topBarriers) lines.push('- Priority-group reach (top barriers in caseload): ' + topBarriers);
   if (avgCB && avgCA) lines.push('- Distance travelled (confidence): ' + avgCB + ' -> ' + avgCA + ' /5 across ' + FB.length + ' responses');
   if (E.length) lines.push('- Events/workshops delivered: ' + E.length);
+  const hrs = Math.round(H.reduce((a, h) => a + num(h.hours), 0));
+  if (hrs) lines.push('- Volunteer hours given: ' + hrs + ' (valued at about £' + Math.round(hrs * VOL_HOUR_RATE).toLocaleString() + ' at the Living Wage)');
+  if (cx && cx.entries) {
+    lines.push('- Diverted from waste: ' + cx.kg + ' kg' + (cx.reused ? ' (' + cx.reused + ' items reused or repaired)' : ''));
+    if (cx.foodKg) lines.push('- Food grown/shared: ' + cx.foodKg + ' kg (about ' + cx.meals + ' meals)');
+    if (cx.fixRate != null) lines.push('- Repair fix rate: ' + cx.fixRate + '% (' + cx.repairFixed + ' of ' + cx.repairTried + ')');
+    if (cx.co2) lines.push('- Estimated CO2e avoided: ' + (Math.round(cx.co2 / 100) / 10) + ' tonnes (an estimate from per-item factors)');
+    if (cx.income) lines.push('- Income from resale: £' + Math.round(cx.income).toLocaleString());
+  }
   if (contractLines.length) lines.push('- Contract delivery vs target: ' + contractLines.join(' | '));
   if (costPerOutcome) lines.push('- Approx cost per outcome (funded contracts): £' + costPerOutcome.toLocaleString());
   if (caseStudy) lines.push('- Anonymised case-study facts: a participant ' + caseStudy);
@@ -1865,6 +1964,7 @@ async function researchEOIFunder() {
 
 // Draft — one grounded call per question, respecting word limits
 async function runEOIFormFill() {
+  if (orgUses('circular') && typeof cxReportLoad === 'function') { try { await cxReportLoad(); } catch (e) { /* optional */ } }
   if (!_eoiQuestions.length) { alert('Parse a form first.'); return; }
   _eoiQuestions.forEach(q => _syncEOIQuestion(q.id)); // pull any edits
 
@@ -2046,6 +2146,7 @@ async function runEOIQualitySupervisor() {
 
 // Legacy brief-based EOI — now grounded + anti-fabrication
 async function runEOIGenerator() {
+  if (orgUses('circular') && typeof cxReportLoad === 'function') { try { await cxReportLoad(); } catch (e) { /* optional */ } }
   const funder = $('eoi-funder').value.trim();
   const brief = $('eoi-brief').value.trim();
   if (!funder || !brief) { alert('Please enter funder and brief.'); return; }
@@ -2056,7 +2157,7 @@ async function runEOIGenerator() {
 
   const steps = [
     { label: 'Reading the brief', meta: brief.length + ' characters' },
-    { label: 'Pulling your organisation facts + CRM data', meta: DB.participants.length + ' participants' },
+    { label: 'Pulling your organisation facts + CRM data', meta: [orgUses('participants') ? orgPeople().length + ' participants' : '', orgUses('events') ? (DB.events || []).length + ' events' : ''].filter(Boolean).join(' · ') || 'your records' },
     { label: 'Writing to the funder\'s priorities', meta: '' },
     { label: 'Quality check — claims and limits', meta: '' },
     { label: 'Ready', meta: '' }
