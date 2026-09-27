@@ -41,7 +41,7 @@ async function loadUserAccess() {
   // Memberships
   try {
     const memRes = await sb.from('memberships')
-      .select('org_id,role,status')
+      .select('*')
       .eq('user_id', currentUser.id)
       .eq('status', 'active');
     const memOrgIds = (memRes.data || []).map(m => m.org_id);
@@ -58,6 +58,7 @@ async function loadUserAccess() {
         org_id: m.org_id,
         role: m.role,
         status: m.status,
+        page_access: Array.isArray(m.page_access) ? m.page_access : null,   // set per person on the Team page
         org_name: (o && o.name) || 'Unnamed org'
       };
     });
