@@ -35,7 +35,7 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const TICK_ON = '\u2612';   // ☒
 const TICK_OFF = '\u2610';  // ☐
 
-const FILL_FORM_VERSION = '4.2-ticks';
+const FILL_FORM_VERSION = '5.0-mapped';
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -82,6 +82,28 @@ module.exports = async (req, res) => {
     const docFile = zip.file('word/document.xml');
     if (!docFile) return res.status(400).json({ ok: false, error: 'That .docx has no document.xml.' });
     let xml = docFile.asText();
+    const hash = formHash(xml);
+
+    // ---- Branch: set up a form once ----
+    if (body.action === 'map') {
+      const items = await suggestMap(buildFormItems(extractParagraphs(xml)));
+      return res.status(200).json({ ok: true, version: FILL_FORM_VERSION, formHash: hash,
+        items: items.map(({ _g, cells, ...it }) => it), fields: FIELD_CATALOG });
+    }
+
+    // ---- Branch: fill from a saved map (no AI) ----
+    if (body.map && Array.isArray(body.map.items)) {
+      if (body.map.formHash && body.map.formHash !== hash) {
+        return res.status(409).json({ ok: false, error: 'This form has changed since it was set up — set it up again.', formHash: hash });
+      }
+      const all = extractParagraphs(xml);
+      const { preview, missing } = fillFromMap(all, body.map.items, Object.assign({}, rawData, { answers: body.answers || rawData.answers || {} }));
+      xml = applyEdits(xml, all.concat(...all.map(p => p.boxes || [])));
+      zip.file('word/document.xml', xml);
+      return res.status(200).json({ ok: true, version: FILL_FORM_VERSION, formHash: hash,
+        filename: (body.filename || 'funder-form').replace(/\.docx$/i, '') + '-FILLED.docx',
+        filledBase64: zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' }).toString('base64'), preview, missing, warnings: [] });
+    }
 
     // Only lines with text, plus empty answer cells beside a label
     const paragraphs = extractParagraphs(xml).filter(p => p.text || p.answerFor);
@@ -115,7 +137,7 @@ module.exports = async (req, res) => {
     // 1b) Tick-box questions (gender, right to work, basic skills…) are ticked by code
     tickBoxes(paragraphs, scope, handled, preview);
 
-    const remaining = paragraphs.filter(p => !handled.has(p.index));
+    const remaining = paragraphs.filter(p => !handled.has(p.index) && !p.tickQuestion && !p.inBoxes && p.tickQuestionOf == null);
     const toLearn = [];
     if (remaining.length) {
       const lines = remaining.map(p => `[${p.index}] ` + (p.answerFor ? `{EMPTY ANSWER CELL} for "${p.answerFor}"` + (p.boxes && p.boxes.length && p.spread ? ` (a row of ${p.boxes.length + 1} single-character boxes — give the whole answer, it is spread across the boxes for you)` : '') + (p.placeholder ? ` (currently shows Word placeholder "${p.text}")` : '') : p.text)).join('\n');
@@ -147,6 +169,16 @@ module.exports = async (req, res) => {
     if (toLearn.length) { try { await saveTemplates(orgId, toLearn); } catch (_) {} }
 
     // 4) Lines that look like fields but got no answer -> alerts for review
+    // Tick grids: "English — yes" cells ticked from an answer saved against "English"
+    const gridKey = x => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    paragraphs.forEach(p => {
+      const m = p.answerFor && /^(.+?) — (.+)$/.exec(p.answerFor);
+      if (!m || handled.has(p.index)) return;
+      const key = Object.keys(scope).find(k => gridKey(k) === gridKey(m[1]));
+      if (!key || !scope[key]) return;
+      if (gridKey(scope[key]) === gridKey(m[2])) { p.newText = TICK_ON; preview.push({ before: p.answerFor, after: m[1] + ': ' + m[2], source: 'tick' }); }
+      handled.add(p.index);
+    });
     // rows of a tick grid where one box was ticked are answered
     const rowDone = new Set(paragraphs.filter(p => handled.has(p.index) && p.cell).map(p => p.cell.t + ':' + p.cell.r));
     paragraphs.forEach(p => { if (p.answerFor && p.cell && rowDone.has(p.cell.t + ':' + p.cell.r) && / — /.test(p.answerFor)) handled.add(p.index); });
@@ -154,10 +186,19 @@ module.exports = async (req, res) => {
     paragraphs.forEach(p => { if (p.tickQuestionOf != null) handled.add(p.index); });
     const seenLabel = new Set();
     const missing = paragraphs
-      .filter(p => !handled.has(p.index) && !p.isLabel && !p.inBoxes && !p.office &&
+      .filter(p => !handled.has(p.index) && !p.isLabel && !(p.inBoxes && !p.tickQuestion) && !p.office &&
         (p.tickQuestion ? true : p.answerFor ? !isNoiseLine(p.answerFor) && p.answerFor.length <= 80 : /[:?]\s*$|_{2,}|\.{3,}/.test(p.text) && !isNoiseLine(p.text)))
       .filter(p => !(p.answerFor && /^[^a-z]{12,}$/.test(p.answerFor)))   // ALL-CAPS headings next to logos
-      .map(p => ({ index: p.index, text: p.tickQuestion || p.answerFor || p.text }))
+      // signatures, declarations and staff-only checks are for a person to complete
+      .filter(p => !/signature|signed|print name|^date:?$|certify|by signing|key worker|position in organisation|email address of|ea email|evidence you have seen|\bcheck:?$|phone number:?$/i.test(p.tickQuestion || p.answerFor || p.text))
+      .map(p => {
+        const g = p.answerFor && /^(.+?) — (.+)$/.exec(p.answerFor);
+        if (g && !p.tickQuestion) {
+          const opts = paragraphs.filter(q => q.answerFor && q.cell && p.cell && q.cell.t === p.cell.t && q.cell.r === p.cell.r && / — /.test(q.answerFor)).map(q => q.answerFor.split(' — ')[1]);
+          return { index: p.index, text: g[1], options: opts.map(o => o.replace(/^./, c => c.toUpperCase())) };
+        }
+        return { index: p.index, text: p.tickQuestion || p.answerFor || p.text, options: p.tickOptions || null };
+      })
       .filter(m => { const k = normalise(m.text).replace(/[:?_.\s]+$/, ''); if (seenLabel.has(k)) return false; seenLabel.add(k); return true; });
     if (missing.length) {
       warnings.push(`${missing.length} field(s) had no data or were unclear — review, correct once, and the agent learns them.`);
@@ -383,7 +424,7 @@ function buildScope(d) {
 // Walks the document in order, noting which table/row/cell each paragraph
 // sits in. Blank answer cells (next to or under a label cell) are kept and
 // tagged with that label, so tables like "Surname | [blank]" get filled.
-const PLACEHOLDER_RE = /^(click|tap)(\s+or\s+tap)?\s+(here\s+)?to\s+enter\b|^(choose an item|enter text|select date)\.?$/i;
+const PLACEHOLDER_RE = /^(click|tap)\b.{0,30}\b(here|to enter|to start|to select|to choose)\b|^(choose an item|enter text|select date)\.?$/i;
 function extractParagraphs(xml) {
   const out = [];
   const tok = /<w:tbl(?=[\s>])[^>]*>|<\/w:tbl>|<w:tr(?=[\s>])[^>]*>|<w:tc(?=[\s>])[^>]*>|<w:p(?=[\s>\/])(?:\s[^>]*)?\/>|<w:p(?=[\s>])[^>]*>[\s\S]*?<\/w:p>/g;
@@ -392,10 +433,13 @@ function extractParagraphs(xml) {
   const cellsOf = [];      // per table
   const widthsOf = [];     // cell widths (twips) per table, to spot letter-per-box rows
   const officeOf = [];     // tables under a "For office use" heading are skipped
+  const hasTableIn = {};   // cells that hold a nested table are containers, not answers
   while ((m = tok.exec(xml)) !== null) {
     const t = m[0];
     if (t.startsWith('<w:tbl')) {
       const id = tables++;
+      const parent = stack[stack.length - 1];
+      if (parent) hasTableIn[parent.id + ':' + parent.r + ':' + parent.c] = true;
       const prev = out.slice().reverse().find(q => q.text);
       stack.push({ id, r: -1, c: -1, office: !!(prev && /office use|for official use/i.test(prev.text)) });
       cellsOf[id] = {}; widthsOf[id] = {}; officeOf[id] = stack[stack.length - 1].office;
@@ -437,19 +481,36 @@ function extractParagraphs(xml) {
       // one of a row of boxes (e.g. NI number written one letter per box)
       const ownHead = r > 0 ? cellText(t, 0, c) : '';
       if (run && run.r === r && run.c === c - 1 && !(ownHead && !isBlank(ownHead) && ownHead !== run.head)) {
-        run.first.boxes.push(cells[k][0]); run.c = c; cells[k].forEach(q => { q.inBoxes = true; });
-        if ((widthsOf[t][k] || 0) > 900) run.first.spread = false;
+        cells[k].forEach(q => { q.inBoxes = true; });
+        run.c = c;
+        const wide = (widthsOf[t][k] || 0) > 900;
+        if (run.first.spread && wide) { run.closed = true; return; }       // letter boxes end here
+        if (!run.closed) { run.first.boxes.push(cells[k][0]); if (wide) run.first.spread = false; }
         return;
       }
       let label = '', left = false;
-      for (let cc = c - 1; cc >= 0 && !label; cc--) { const lt = cellText(t, r, cc); if (!isBlank(lt)) { label = lt; left = true; (cells[r + ':' + cc] || []).forEach(q => { q.isLabel = true; }); } }
+      for (let cc = c - 1; cc >= 0 && !label; cc--) {
+        const lt = cellText(t, r, cc);
+        // a real blank cell (or a cell holding a table) in between means this isn't our label
+        if (isBlank(lt)) {
+          const colHead = r > 0 ? cellText(t, 0, cc) : '';
+          if (hasTableIn[t + ':' + r + ':' + cc] || ((widthsOf[t][r + ':' + cc] || 0) > 400 && isBlank(colHead))) break;   // a spacer, not another answer column
+          continue;
+        }
+        // "Provider Name | ACTION WEST LONDON | [blank]": the middle cell is a printed value, not a question
+        let valueCell = false;
+        if (cc > 0) { const x = cellText(t, r, cc - 1); if (!isBlank(x) && !/^\d+$/.test(x)) valueCell = true; }   // only the cell right next to it
+        if (valueCell && !/[:?]\s*$/.test(lt)) { label = '__skip__'; break; }
+        label = lt; left = true; (cells[r + ':' + cc] || []).forEach(q => { q.isLabel = true; });
+      }
+      if (label === '__skip__') { run = null; return; }
       const above = r > 0 ? cellText(t, 0, c) : '';
       // Column headings only label the first row under them (not every row of a grid)
       if (above && !isBlank(above) && (left || r === 1)) {
         (cells['0:' + c] || []).forEach(q => { q.isLabel = true; });
         if (above !== label) label = label ? label + ' — ' + above : above;
       }
-      if (!label || label.length > 120) { run = null; return; }
+      if (!label || label.length > 120 || HAS_BOX.test(label) || hasTableIn[t + ':' + k] || /^(letters?|numbers?|digits?)$/i.test(label.trim())) { run = null; return; }
       const first = cells[k][0];
       first.answerFor = label.replace(/\s+/g, ' ').slice(0, 160);
       first.placeholder = !!first.text && PLACEHOLDER_RE.test(first.text);
@@ -492,7 +553,8 @@ function newParagraphXml(para, newText) {
     newFull = para.full.replace(/<\/w:p>$/, run + '</w:p>');
   }
 
-  return newFull;
+  // Filled text should look like normal text, not grey placeholder text
+  return newFull.replace(/<w:rStyle w:val="PlaceholderText"\s*\/>/g, '');
 }
 
 // ------------------------------------------------------------------
@@ -512,45 +574,108 @@ const TICK_FIELDS = [
   [/ethnic/i, 'ethnicity'],
   [/\bage\b/i, 'age_band'],
 ];
-function tickBoxes(paragraphs, scope, handled, preview) {
+function buildTickGroups(paragraphs) {
   const lines = paragraphs.filter(p => !p.office);
+  const boxCount = p => Math.max((p.text.match(BOX_RE) || []).length, (p.full.match(/<w:checkBox\b/g) || []).length, (p.full.match(/<w14:checkbox\b/g) || []).length);
+  // Build groups: [{ paras:[{p, n}], opts:[{p, k, text}], anchor, question }]
+  const groups = [], used = new Set();
   lines.forEach((p, i) => {
-    const boxes = (p.text.match(BOX_RE) || []).length;
-    const legacy = (p.full.match(/<w:checkBox\b/g) || []).length;
-    const ctrls = (p.full.match(/<w14:checkbox\b/g) || []).length;
-    const n = Math.max(boxes, legacy, ctrls);
-    if (n < 2 && !(n === 1 && /yes|no/i.test(p.text))) return;
-    // options: the words after each box
-    const parts = p.text.split(BOX_RE);
-    let question = parts.shift().trim();
-    let opts = parts.map(x => x.replace(/\*.*$/, '').replace(/\s+/g, ' ').trim()).filter((x, k) => k < n);
-    if (!opts.length || opts.every(o => !o)) return;
+    if (used.has(p.index)) return;
+    const n = boxCount(p); if (!n) return;
+    let members = [p];
+    if (p.cell) {
+      members = lines.filter(q => q.cell && q.cell.t === p.cell.t && q.cell.r === p.cell.r && q.cell.c === p.cell.c && boxCount(q));
+    }
+    members.forEach(q => used.add(q.index));
+    const opts = [];
+    members.forEach(q => {
+      const parts = q.text.split(BOX_RE); const lead = parts.shift();
+      parts.slice(0, boxCount(q)).forEach((t, k) => opts.push({ p: q, k, text: t.replace(/\*.*$/, '').replace(/\s+/g, ' ').trim(), lead }));
+    });
+    if (opts.length < 2 && !(opts.length === 1 && /^(yes|no)\b/i.test(opts[0].text))) return;
+    // The question: text before the first box, else the label cell on the left, else the line above
+    let question = (opts[0].lead || '').trim();
+    if (!question && p.cell) {
+      for (let c = p.cell.c - 1; c >= 0 && !question; c--) {
+        const labs = lines.filter(q => q.cell && q.cell.t === p.cell.t && q.cell.r === p.cell.r && q.cell.c === c && q.text && !/^\d+$/.test(q.text));
+        if (labs.length) { question = labs.map(q => q.text).join(' '); labs.forEach(q => { q.tickQuestionOf = p.index; }); }
+      }
+    }
     if (!question) {
       const prev = lines.slice(Math.max(0, i - 3), i).reverse().find(q => q.text && !HAS_BOX.test(q.text));
       if (prev) { question = prev.text; prev.tickQuestionOf = p.index; }
-      else if (p.cell) question = (lines.find(q => q.isLabel && q.cell && q.cell.t === p.cell.t && q.cell.r === p.cell.r) || {}).text || '';
     }
-    p.tickQuestion = question || opts.join(' / ');
-    const f = TICK_FIELDS.find(x => x[0].test(question));
-    if (!f) return;
-    const want = String(scope[f[1]] || '').trim().toLowerCase();
-    if (!want) return;
-    const norm = x => x.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-    const w = norm(want);
-    let k = opts.findIndex(o => norm(o) === w);
-    if (k < 0) k = opts.findIndex(o => norm(o).startsWith(w) || w.startsWith(norm(o)) && norm(o).length > 1);
-    if (k < 0 && /^(yes|y|true)$/.test(w)) k = opts.findIndex(o => /^yes\b/i.test(o));
-    if (k < 0 && /^(no|n|false)$/.test(w)) k = opts.findIndex(o => /^no\b/i.test(o));
-    if (k < 0 && /prefer not|chose not|not say/.test(w)) k = opts.findIndex(o => /not to say|chose not|prefer not/i.test(o));
+    question = question.replace(/\s+/g, ' ').trim();
+    groups.push({ members, opts, question, anchor: p });
+  });
+  // "Is the person homeless? Is the person a refugee? …" in one tall cell with a
+  // row of boxes for each: give each row its own question
+  for (let i = 0; i < groups.length; i++) {
+    const g = groups[i];
+    const qs = g.question.split(/(?<=\?)\s+/).filter(x => /\?$/.test(x.trim()));
+    if (qs.length < 2 || !g.anchor.cell) continue;
+    const next = [];
+    for (let j = i + 1; j < groups.length && next.length < qs.length - 1; j++) {
+      const h = groups[j];
+      if (!h.anchor.cell || h.anchor.cell.t !== g.anchor.cell.t) break;
+      if (h.question && !qs.some(x => h.question.includes(x))) break;
+      next.push(h);
+    }
+    if (next.length !== qs.length - 1) continue;
+    g.question = qs[0].trim();
+    next.forEach((h, n) => { h.question = qs[n + 1].trim(); });
+  }
+
+  return groups;
+}
+
+// Pick the option that matches a value ("Male", "Yes", "White British"…); -1 if unsure
+function chooseOption(optTexts, value) {
+  const norm = x => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const words = x => norm(x).split(' ').filter(w => w.length > 2 && !/^(and|the|other|or)$/.test(w));
+  const w = norm(value); if (!w) return -1;
+  const O = optTexts.map(norm);
+  let k = O.findIndex(o => o === w);
+  if (k < 0) k = O.findIndex(o => o && (o.startsWith(w) || w.startsWith(o)) && o.length > 1);
+  if (k < 0 && /^(yes|y|true)$/.test(w)) k = O.findIndex(o => /^yes\b/.test(o));
+  if (k < 0 && /^(no|n|false|none)$/.test(w)) k = O.findIndex(o => /^no\b/.test(o));
+  if (k < 0 && /prefer not|chose not|not say|not disclosed/.test(w)) k = O.findIndex(o => /not to say|chose not|prefer not/.test(o));
+  if (k < 0) {
+    const ww = words(value);
+    const scores = optTexts.map(o => { const ow = words(o); return ww.filter(x => ow.includes(x)).length; });
+    const best = Math.max(0, ...scores);
+    if (best >= 1 && scores.filter(x => x === best).length === 1 && best >= Math.ceil(ww.length / 2)) k = scores.indexOf(best);
+  }
+  return k;
+}
+
+function tickBoxes(paragraphs, scope, handled, preview) {
+  const groups = buildTickGroups(paragraphs);
+  const norm = x => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  groups.forEach(g => {
+    g.anchor.tickQuestion = g.question || g.opts.map(o => o.text).join(' / ');
+    g.anchor.tickOptions = g.opts.map(o => o.text).filter(Boolean);
+    g.members.forEach(m => { if (m !== g.anchor) m.inBoxes = true; });
+    const f = TICK_FIELDS.find(x => x[0].test(g.question));
+    let want = f ? scope[f[1]] : '';
+    if (!want) {
+      const qn = norm(g.question);
+      const key = Object.keys(scope).find(k => norm(k) === qn || (qn.length > 12 && norm(k).startsWith(qn.slice(0, 40))));
+      if (key) want = scope[key];
+    }
+    const k = chooseOption(g.opts.map(o => o.text), want);
     if (k < 0) return;
-    const xmlNew = tickInXml(p.full, k);
-    if (!xmlNew || xmlNew === p.full) return;
-    p.newXml = xmlNew;
-    handled.add(p.index);
-    if (p.tickQuestionOf == null) { /* question on the same line */ }
-    preview.push({ before: p.text, after: p.tickQuestion + ': ' + opts[k], source: 'tick' });
+    if (tickOption(g, k)) { g.members.forEach(m => handled.add(m.index)); preview.push({ before: g.question, after: g.question + ': ' + g.opts[k].text, source: 'tick' }); }
   });
 }
+function tickOption(g, k) {
+  const o = g.opts[k]; if (!o) return false;
+  const xmlNew = tickInXml(o.p.newXml || o.p.full, o.k);
+  if (!xmlNew || xmlNew === o.p.full) return false;
+  o.p.newXml = xmlNew;
+  return true;
+}
+
 // Tick the k-th box in a paragraph's XML, whatever kind of box it is
 function tickInXml(pxml, k) {
   if (/<w14:checkbox\b/.test(pxml)) {
@@ -575,8 +700,12 @@ function spreadBoxes(p, answer) {
   if (!p.boxes || !p.boxes.length || !p.spread) return;
   const total = p.boxes.length + 1;
   let chars = String(answer || '').replace(/\s+/g, '');
-  const digits = chars.replace(/\D/g, '');
-  if (/^\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}$/.test(chars) && (total === 8 || total === 6)) chars = total === 8 ? digits.padStart(8, '0') : digits.slice(0, 4) + digits.slice(-2);
+  // Dates go in as digits: 6–7 boxes → DDMMYY, 8+ boxes → DDMMYYYY
+  const dm = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/.exec(chars);
+  if (dm) {
+    const dd = dm[1].padStart(2, '0'), mm = dm[2].padStart(2, '0'), yy = dm[3].length === 2 ? '20' + dm[3] : dm[3];
+    if (total >= 8) chars = dd + mm + yy; else if (total >= 6) chars = dd + mm + yy.slice(-2); else return;
+  }
   if (chars.length < 2 || chars.length > total) return;   // not a box answer — leave it all in the first box
   p.newText = chars[0];
   p.boxes.forEach((b, i) => { if (chars[i + 1] != null) b.newText = chars[i + 1]; });
@@ -626,3 +755,178 @@ function stripDataUri(s) {
 function escapeXml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 function escapeRe(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 function normalise(s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
+
+// ==================================================================
+// FORM SET-UP ("learn a form once")
+// action "map": read the form, list every question (text, letter boxes,
+//   tick boxes, yes/no grids, inline "Label:" lines) and suggest which
+//   Vorlana field answers each one. The app shows this list once for
+//   checking and saves it (form_maps table).
+// fill with body.map: answers come straight from the saved map — no AI,
+//   the same result every time. Unanswered questions are returned with
+//   their options so the app can ask with buttons.
+// ==================================================================
+const FIELD_CATALOG = {
+  title: 'Title (Mr, Ms…)', forename: 'First name', surname: 'Last name', full_name: 'Full name', dob: 'Date of birth',
+  ni: 'National Insurance number', phone: 'Phone number', email: 'Email address', address: 'Home address (no postcode)', postcode: 'Home postcode',
+  participant_id: 'Participant ID / reference', start_date: 'Programme start date', gender: 'Gender', ethnicity: 'Ethnicity', disability: 'Disability (from equality data)',
+  age_band: 'Age group', right_to_work: 'Right to live and work in the UK (Yes/No)', basic_skills: 'Has basic skills in maths and English (Yes/No)',
+  labour_status: 'Labour market status (Unemployed / Economically inactive / Employed)', interpersonal: 'Needs interpersonal skills support (Yes/No)',
+  support_needs: 'List of support needs areas (English, Maths, Digital, Communication, Confidence, Working with others, Time management, Motivation to work, Motivation to do training, CV writing, Interview skills) — for yes/no grids of needs',
+  education_level: 'Highest educational attainment (ISCED level)', in_education: 'Currently in education or training (Yes/No)',
+  jobless_household: 'Lives in a jobless household (Yes/No)', single_adult_dependants: 'Single adult household with dependent children (Yes/No)',
+  health_condition: 'Has a disability or long-term health condition (Yes/No/Prefer not to say)', sen: 'Has a special educational need (Yes/No)',
+  offender: 'Offender or ex-offender (Yes/No/Prefer not to say)', homeless: 'Homeless (Yes/No)', refugee: 'Refugee (Yes/No)',
+  adult_social_care: 'Known to Adult Social Care (Yes/No)', care_leaver: 'Care leaver (Yes/No)', caring_responsibilities: 'Has caring responsibilities (Yes/No)',
+  evidence_seen: 'Evidence of eligibility seen (short text)', lms_evidence: 'Evidence of labour market status (short text)',
+  assessment_postcode: 'Postcode where the initial assessment meeting took place',
+  provider: 'Delivery organisation name', project: 'Programme / project name', referral_source: 'Referral source', adviser: 'Adviser / key worker assigned',
+  keyworker_name: 'Name of the staff member filling in the form', keyworker_email: 'Email of that staff member', keyworker_phone: 'Phone of that staff member',
+  employer: 'Employer (job outcome)', job_title: 'Job title', job_start: 'Job start date', hours: 'Hours per week', pay: 'Pay', exit_date: 'Exit / leaving date',
+  leave_reason: 'Reason for leaving', outcome_type: 'Outcome type', today: "Today's date", organisation: 'Our organisation name'
+};
+
+function formHash(xml) { return require('crypto').createHash('sha1').update(xml).digest('hex').slice(0, 16); }
+
+function buildFormItems(paragraphs) {
+  const live = paragraphs.filter(p => !p.office);
+  const groups = buildTickGroups(live);
+  const used = new Set();
+  const items = [];
+  groups.forEach(g => {
+    g.members.forEach(m => used.add(m.index));
+    live.filter(q => q.tickQuestionOf === g.anchor.index).forEach(q => used.add(q.index));
+    items.push({ id: 'g' + g.anchor.index, type: 'choice', label: g.question || g.opts.map(o => o.text).join(' / '), options: g.opts.map(o => o.text), _g: g });
+  });
+  // yes/no grids: "English — yes" / "English — no"
+  const rows = {};
+  live.forEach(p => {
+    const m = p.answerFor && !used.has(p.index) && /^(.*?) — (yes|no|y|n)$/i.exec(p.answerFor);
+    if (!m || !p.cell) return;
+    const key = p.cell.t + ':' + p.cell.r;
+    const r = rows[key] || (rows[key] = { label: m[1], cells: {}, first: p });
+    r.cells[/^y/i.test(m[2]) ? 'yes' : 'no'] = p.index;
+    used.add(p.index);
+  });
+  Object.values(rows).forEach(r => {
+    const before = live.filter(q => q.index < r.first.index && q.text && !q.answerFor).slice(-3).map(q => q.text).join(' / ');
+    items.push({ id: 'r' + r.first.index, type: 'grid', label: r.label, context: before.slice(0, 200), cells: r.cells });
+  });
+  // text answer cells
+  live.forEach(p => {
+    if (used.has(p.index) || !p.answerFor || p.inBoxes) return;
+    items.push({ id: 'c' + p.index, type: 'text', label: p.answerFor, boxes: p.spread ? p.boxes.length + 1 : 0 });
+    used.add(p.index);
+  });
+  // inline lines: "Name of Key Worker:", "Date ________", Word placeholders outside answer cells
+  live.forEach(p => {
+    if (used.has(p.index) || p.isLabel || p.inBoxes || p.answerFor || !p.text || HAS_BOX.test(p.text)) return;
+    if (/[:]\s*$|_{3,}|\.{4,}/.test(p.text) || PLACEHOLDER_RE.test(p.text)) {
+      items.push({ id: 'l' + p.index, type: 'inline', label: p.text.replace(/[_.…]{3,}/g, '').trim(), placeholder: PLACEHOLDER_RE.test(p.text) });
+      used.add(p.index);
+    }
+  });
+  return items.sort((a, b) => parseInt(a.id.slice(1), 10) - parseInt(b.id.slice(1), 10));
+}
+
+// A first guess without AI, so set-up still works if the AI is unavailable
+function guessUse(it) {
+  const L = it.label.toLowerCase();
+  if (/signature|signed|sign here|print name|position in organisation|certify|by signing|declaration/.test(L)) return { use: 'sign' };
+  if (isNoiseLine(it.label) || /^part\s*\d+\s*:?$/i.test(it.label.trim()) || /check:\s*$/i.test(it.label.trim())) return { use: 'skip' };
+  if (/\b(as defined|definitions?)\b/i.test(it.label)) return { use: 'skip' };
+  if (it.type === 'inline' && it.label.length > 90 && !/please (detail|provide|describe|state|give)/i.test(it.label)) return { use: 'skip' };
+  if (it.type === 'grid') return { use: 'field', field: 'support_needs' };
+  const table = [
+    [/^title\b/, 'title'], [/forename|first name|given name/, 'forename'], [/surname|last name|family name/, 'surname'], [/full name|^name$|participant name/, 'full_name'],
+    [/labour market status check|evidence.*(labour|employment status)|labour market.*evidence/, 'lms_evidence'],
+    [/date of birth|\bdob\b/, 'dob'], [/\bni\b|national insurance/, 'ni'], [/key ?worker.*email|email.*key ?worker/, 'keyworker_email'], [/key ?worker.*(phone|tel)|^phone number/, 'keyworker_phone'],
+    [/name of key ?worker|key ?worker name/, 'keyworker_name'], [/tele?phone|mobile|contact no/, 'phone'], [/e-?mail/, 'email'], [/assessment/, 'assessment_postcode'],
+    [/post ?code/, 'postcode'], [/address/, 'address'], [/participant id|reference/, 'participant_id'], [/start date/, 'start_date'], [/provider/, 'provider'],
+    [/project|programme name/, 'project'], [/gender|\bsex\b/, 'gender'], [/ethnic/, 'ethnicity'], [/right to (live|work)/, 'right_to_work'],
+    [/basic skills/, 'basic_skills'], [/labour market/, 'labour_status'], [/interpersonal/, 'interpersonal'], [/educational attainment|highest (level of )?education/, 'education_level'],
+    [/engaged in education|in education or training/, 'in_education'], [/jobless household/, 'jobless_household'], [/single adult household/, 'single_adult_dependants'],
+    [/disabilit|health condition/, 'health_condition'], [/special education/, 'sen'], [/offender/, 'offender'], [/homeless/, 'homeless'], [/refugee/, 'refugee'],
+    [/adult social care/, 'adult_social_care'], [/care leaver/, 'care_leaver'], [/caring responsibilit/, 'caring_responsibilities'],
+    [/labour market status check|evidence.*(labour|employment status)/, 'lms_evidence'], [/eligibility|evidence you have seen/, 'evidence_seen'],
+    [/employer/, 'employer'], [/job title/, 'job_title'], [/hours/, 'hours'], [/\bpay\b|wage|salary/, 'pay'], [/^date$|^date:$/, 'today']
+  ];
+  const hit = table.find(t => t[0].test(L));
+  return hit ? { use: 'field', field: hit[1] } : { use: 'ask' };
+}
+
+async function suggestMap(items) {
+  items.forEach(it => Object.assign(it, guessUse(it)));
+  try {
+    const list = items.map(it => ({ id: it.id, type: it.type, label: it.label.slice(0, 160), options: it.options ? it.options.slice(0, 12) : undefined, context: it.context || undefined }));
+    const ai = await callClaude(`You are setting up a UK funder form so it can be filled automatically from a participant record.
+For each form item choose how it is answered:
+- "field": a Vorlana field answers it (give "field" from the catalogue below)
+- "ask": the answer is not held in Vorlana — staff will be asked the first time for each participant
+- "sign": signatures, "print name", dates signed, declarations, certifications, anything completed by hand at signing
+- "skip": headings, logos, spacer cells, instructions, office-use items, anything that is not a question
+Yes/no grids of needs (English, Maths, Digital, Confidence, CV writing…) use field "support_needs".
+Return JSON only: {"map":[{"id":"…","use":"field|ask|sign|skip","field":"catalogue key or empty"}]}
+
+Field catalogue:
+${Object.entries(FIELD_CATALOG).map(([k, v]) => k + ' — ' + v).join('\n')}
+
+Form items:
+${JSON.stringify(list)}`);
+    const plan = JSON.parse(String(ai).replace(/```json|```/g, '').slice(String(ai).indexOf('{'), String(ai).lastIndexOf('}') + 1));
+    (plan.map || []).forEach(m => {
+      const it = items.find(x => x.id === m.id); if (!it) return;
+      if (m.use === 'field' && FIELD_CATALOG[m.field]) { it.use = 'field'; it.field = m.field; }
+      else if (['ask', 'sign', 'skip'].includes(m.use)) { it.use = m.use; delete it.field; }
+    });
+  } catch (e) { /* keep the guesses */ }
+  return items;
+}
+
+function fmtVal(v) {
+  if (Array.isArray(v)) return v.join(', ');
+  const s = String(v == null ? '' : v).trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  return m ? m[3] + '/' + m[2] + '/' + m[1] : s;
+}
+
+// Fill using a saved map. data = participant fields; data.answers = { itemId: value } for "ask" items
+function fillFromMap(paragraphs, savedItems, data) {
+  const live = paragraphs.filter(p => !p.office);
+  const byIdx = new Map(paragraphs.map(p => [p.index, p]));
+  const built = buildFormItems(paragraphs);
+  const byId = new Map(built.map(it => [it.id, it]));
+  const answers = data.answers || {};
+  const preview = [], missing = [];
+  savedItems.forEach(s => {
+    const it = byId.get(s.id); if (!it) return;
+    if (s.use === 'sign' || s.use === 'skip') return;
+    let v = s.use === 'field' ? data[s.field] : answers[s.id];
+    if (s.use === 'field' && (v == null || v === '' || (Array.isArray(v) && !v.length)) && answers[s.id] != null) v = answers[s.id];
+    const empty = v == null || v === '' || (Array.isArray(v) && !v.length && it.type !== 'grid');
+    const miss = () => missing.push({ id: s.id, text: it.label, type: it.type, options: it.options || (it.type === 'grid' ? ['Yes', 'No'] : null), field: s.use === 'field' ? s.field : null });
+    if (it.type === 'grid') {
+      let yes;
+      if (Array.isArray(v)) yes = v.map(x => String(x).toLowerCase()).some(x => x && (it.label.toLowerCase().includes(x) || x.includes(it.label.toLowerCase().split(' ')[0])));
+      else if (v != null && v !== '') yes = /^(y|yes|true|1)$/i.test(String(v)) || String(v).toLowerCase().includes(it.label.toLowerCase());
+      if (answers[s.id] != null && answers[s.id] !== '') yes = /^(y|yes|true|1)$/i.test(String(answers[s.id]));
+      if (yes === undefined) return miss();
+      const cell = byIdx.get(it.cells[yes ? 'yes' : 'no']);
+      if (cell) { cell.newText = TICK_ON; preview.push({ before: it.label, after: it.label + ': ' + (yes ? 'Yes' : 'No'), source: 'map' }); }
+      return;
+    }
+    if (empty) return miss();
+    if (it.type === 'choice') {
+      const k = chooseOption(it.options, fmtVal(v));
+      if (k < 0 || !tickOption(it._g, k)) return miss();
+      preview.push({ before: it.label, after: it.label + ': ' + it.options[k], source: 'map' });
+      return;
+    }
+    const val = fmtVal(v);
+    const p = byIdx.get(parseInt(s.id.slice(1), 10)); if (!p) return;
+    if (it.type === 'text') { p.newText = val; spreadBoxes(p, val); }
+    else if (it.type === 'inline') p.newText = it.placeholder ? val : p.text.replace(/[_.…]{3,}\s*$/, '').replace(/\s*$/, '') + (/:$/.test(p.text.trim()) ? ' ' : ': ') + val;
+    preview.push({ before: it.label, after: it.label + ': ' + val, source: 'map' });
+  });
+  return { preview, missing };
+}
