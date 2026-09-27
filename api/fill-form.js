@@ -35,7 +35,7 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const TICK_ON = '\u2612';   // ☒
 const TICK_OFF = '\u2610';  // ☐
 
-const FILL_FORM_VERSION = '4.1-boxes';
+const FILL_FORM_VERSION = '4.2-ticks';
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -112,6 +112,9 @@ module.exports = async (req, res) => {
     }
 
     // 2) AI reads the rest and fills the participant's answers directly
+    // 1b) Tick-box questions (gender, right to work, basic skills…) are ticked by code
+    tickBoxes(paragraphs, scope, handled, preview);
+
     const remaining = paragraphs.filter(p => !handled.has(p.index));
     const toLearn = [];
     if (remaining.length) {
@@ -123,7 +126,8 @@ module.exports = async (req, res) => {
       for (const edit of plan.edits) {
         const p = byIndex.get(Number(edit.index));
         if (!p || handled.has(p.index)) continue;
-        if (!p.answerFor && normalise(edit.before) !== normalise(p.text)) {
+        const loose = x => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+        if (!p.answerFor && edit.before && loose(edit.before) !== loose(p.text)) {
           warnings.push(`Line ${edit.index} shifted — left untouched for safety.`);
           continue;
         }
@@ -143,11 +147,17 @@ module.exports = async (req, res) => {
     if (toLearn.length) { try { await saveTemplates(orgId, toLearn); } catch (_) {} }
 
     // 4) Lines that look like fields but got no answer -> alerts for review
+    // rows of a tick grid where one box was ticked are answered
+    const rowDone = new Set(paragraphs.filter(p => handled.has(p.index) && p.cell).map(p => p.cell.t + ':' + p.cell.r));
+    paragraphs.forEach(p => { if (p.answerFor && p.cell && rowDone.has(p.cell.t + ':' + p.cell.r) && / — /.test(p.answerFor)) handled.add(p.index); });
+    // a question line followed by its tick options is reported once, by its options line
+    paragraphs.forEach(p => { if (p.tickQuestionOf != null) handled.add(p.index); });
     const seenLabel = new Set();
     const missing = paragraphs
       .filter(p => !handled.has(p.index) && !p.isLabel && !p.inBoxes && !p.office &&
-        (p.answerFor ? !isNoiseLine(p.answerFor) && p.answerFor.length <= 80 : /[:?]\s*$|_{2,}|\.{3,}/.test(p.text) && !isNoiseLine(p.text)))
-      .map(p => ({ index: p.index, text: p.answerFor || p.text }))
+        (p.tickQuestion ? true : p.answerFor ? !isNoiseLine(p.answerFor) && p.answerFor.length <= 80 : /[:?]\s*$|_{2,}|\.{3,}/.test(p.text) && !isNoiseLine(p.text)))
+      .filter(p => !(p.answerFor && /^[^a-z]{12,}$/.test(p.answerFor)))   // ALL-CAPS headings next to logos
+      .map(p => ({ index: p.index, text: p.tickQuestion || p.answerFor || p.text }))
       .filter(m => { const k = normalise(m.text).replace(/[:?_.\s]+$/, ''); if (seenLabel.has(k)) return false; seenLabel.add(k); return true; });
     if (missing.length) {
       warnings.push(`${missing.length} field(s) had no data or were unclear — review, correct once, and the agent learns them.`);
@@ -196,6 +206,7 @@ Write the participant's answers directly into the lines. Rules:
 - Free-text field ("Surname:", "Date of birth ___"): append or insert the answer, e.g. "Surname: Doe".
 - Lines marked {EMPTY ANSWER CELL} for "<label>" are the blank table cells where the answer to <label> goes. For these, "before" is "" and "after" is ONLY the answer (e.g. "Doe") — not the label. If it shows a Word placeholder, "after" replaces it with the answer.
 - Dates as DD/MM/YYYY. Yes/No answers as "Yes" or "No".
+- Tick grids: cells labelled like "English — Yes" / "English — No" are boxes to tick. Put ${TICK_ON} in the ONE cell that matches the participant (e.g. basic_skills "Yes" → the Yes cells for English and Maths) and leave the others unchanged.
 - Tick-box / choice lines (Gender, Yes/No, Employed/Unemployed, etc.): put ${TICK_ON} next to the option that matches the participant's data and ${TICK_OFF} next to the others. Example: "Male ${TICK_OFF}  Female ${TICK_ON}".
 - Use ONLY the participant data given. If you don't have a value for a field, leave that line unchanged (do not invent anything).
 - Never change headings, instructions, declarations, or signature lines.
@@ -484,6 +495,81 @@ function newParagraphXml(para, newText) {
   return newFull;
 }
 
+// ------------------------------------------------------------------
+// Tick boxes. Lines like "☐ Male ☐ Female ☐ Other" are matched to the
+// question they answer and the right box is ticked in the Word XML itself
+// (plain ☐ characters, Word checkbox controls and old-style form fields).
+// ------------------------------------------------------------------
+const BOX_RE = /[\u2610\u2611\u2612\u25A1\u25A2\u25FB\u274F]/g;   // ☐ ☑ ☒ □ ▢ ◻ ❏
+const HAS_BOX = /[\u2610\u2611\u2612\u25A1\u25A2\u25FB\u274F]/;
+const TICK_FIELDS = [
+  [/\bgender\b|\bsex\b/i, 'gender'],
+  [/right to (live|work)/i, 'right_to_work'],
+  [/basic skills|maths and english|english and maths|esol/i, 'basic_skills'],
+  [/labour market|employment status|economically|currently (un)?employed|employment situation/i, 'labour_status'],
+  [/interpersonal/i, 'interpersonal'],
+  [/disab/i, 'disability'],
+  [/ethnic/i, 'ethnicity'],
+  [/\bage\b/i, 'age_band'],
+];
+function tickBoxes(paragraphs, scope, handled, preview) {
+  const lines = paragraphs.filter(p => !p.office);
+  lines.forEach((p, i) => {
+    const boxes = (p.text.match(BOX_RE) || []).length;
+    const legacy = (p.full.match(/<w:checkBox\b/g) || []).length;
+    const ctrls = (p.full.match(/<w14:checkbox\b/g) || []).length;
+    const n = Math.max(boxes, legacy, ctrls);
+    if (n < 2 && !(n === 1 && /yes|no/i.test(p.text))) return;
+    // options: the words after each box
+    const parts = p.text.split(BOX_RE);
+    let question = parts.shift().trim();
+    let opts = parts.map(x => x.replace(/\*.*$/, '').replace(/\s+/g, ' ').trim()).filter((x, k) => k < n);
+    if (!opts.length || opts.every(o => !o)) return;
+    if (!question) {
+      const prev = lines.slice(Math.max(0, i - 3), i).reverse().find(q => q.text && !HAS_BOX.test(q.text));
+      if (prev) { question = prev.text; prev.tickQuestionOf = p.index; }
+      else if (p.cell) question = (lines.find(q => q.isLabel && q.cell && q.cell.t === p.cell.t && q.cell.r === p.cell.r) || {}).text || '';
+    }
+    p.tickQuestion = question || opts.join(' / ');
+    const f = TICK_FIELDS.find(x => x[0].test(question));
+    if (!f) return;
+    const want = String(scope[f[1]] || '').trim().toLowerCase();
+    if (!want) return;
+    const norm = x => x.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const w = norm(want);
+    let k = opts.findIndex(o => norm(o) === w);
+    if (k < 0) k = opts.findIndex(o => norm(o).startsWith(w) || w.startsWith(norm(o)) && norm(o).length > 1);
+    if (k < 0 && /^(yes|y|true)$/.test(w)) k = opts.findIndex(o => /^yes\b/i.test(o));
+    if (k < 0 && /^(no|n|false)$/.test(w)) k = opts.findIndex(o => /^no\b/i.test(o));
+    if (k < 0 && /prefer not|chose not|not say/.test(w)) k = opts.findIndex(o => /not to say|chose not|prefer not/i.test(o));
+    if (k < 0) return;
+    const xmlNew = tickInXml(p.full, k);
+    if (!xmlNew || xmlNew === p.full) return;
+    p.newXml = xmlNew;
+    handled.add(p.index);
+    if (p.tickQuestionOf == null) { /* question on the same line */ }
+    preview.push({ before: p.text, after: p.tickQuestion + ': ' + opts[k], source: 'tick' });
+  });
+}
+// Tick the k-th box in a paragraph's XML, whatever kind of box it is
+function tickInXml(pxml, k) {
+  if (/<w14:checkbox\b/.test(pxml)) {
+    let i = 0;
+    return pxml.replace(/<w14:checked\s+w14:val="[01]"\s*\/>/g, m => (i++ === k ? '<w14:checked w14:val="1"/>' : m))
+      .replace(/(<w:sdtContent>[\s\S]*?<w:t[^>]*>)([\u2610\u2612])(<\/w:t>)/g, (() => { let j = 0; return (m, a, g, c) => a + (j++ === k ? TICK_ON : g) + c; })());
+  }
+  if (/<w:checkBox\b/.test(pxml)) {
+    let i = 0;
+    return pxml.replace(/<w:checkBox\b[^>]*>[\s\S]*?<\/w:checkBox>|<w:checkBox\b[^>]*\/>/g, m => {
+      if (i++ !== k) return m;
+      if (/<w:checked\b/.test(m)) return m;
+      return m.replace(/<w:default\s+w:val="0"\s*\/>/, '<w:default w:val="1"/>').replace(/(<\/w:checkBox>)$/, '<w:checked/>$1');
+    });
+  }
+  let i = 0;
+  return pxml.replace(/(<w:t\b[^>]*>)([\s\S]*?)(<\/w:t>)/g, (m, a, txt, c) => a + txt.replace(BOX_RE, g => (i++ === k ? TICK_ON : (g === TICK_ON ? TICK_OFF : g))) + c);
+}
+
 // One letter per box: "AB123456C" across 9 boxes; dates as digits across 6 or 8 boxes
 function spreadBoxes(p, answer) {
   if (!p.boxes || !p.boxes.length || !p.spread) return;
@@ -499,7 +585,7 @@ function spreadBoxes(p, answer) {
 // Apply every edit by its position in the original XML, last first, so
 // identical-looking paragraphs (e.g. many blank cells) are never mixed up.
 function applyEdits(xml, paragraphs) {
-  const todo = paragraphs.filter(p => p.newText != null).sort((a, b) => b.at - a.at);
+  const todo = paragraphs.filter(p => p.newText != null || p.newXml).sort((a, b) => b.at - a.at);
   for (const p of todo) {
     if (xml.substr(p.at, p.full.length) !== p.full) continue;   // safety
     let head = xml.slice(0, p.at);
@@ -508,7 +594,7 @@ function applyEdits(xml, paragraphs) {
       const sdt = head.lastIndexOf('<w:sdtPr'), closed = head.lastIndexOf('</w:sdt>');
       if (sdt > closed) head = head.slice(0, sdt) + head.slice(sdt).replace(/<w:showingPlcHdr\s*\/>/, '');
     }
-    xml = head + newParagraphXml(p, p.newText) + xml.slice(p.at + p.full.length);
+    xml = head + (p.newXml || newParagraphXml(p, p.newText)) + xml.slice(p.at + p.full.length);
   }
   return xml;
 }
