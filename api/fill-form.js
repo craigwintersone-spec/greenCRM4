@@ -35,7 +35,7 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const TICK_ON = '\u2612';   // ☒
 const TICK_OFF = '\u2610';  // ☐
 
-const FILL_FORM_VERSION = '5.0-mapped';
+const FILL_FORM_VERSION = '5.2-signature-boxes';
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -97,8 +97,11 @@ module.exports = async (req, res) => {
         return res.status(409).json({ ok: false, error: 'This form has changed since it was set up — set it up again.', formHash: hash });
       }
       const all = extractParagraphs(xml);
-      const { preview, missing } = fillFromMap(all, body.map.items, Object.assign({}, rawData, { answers: body.answers || rawData.answers || {} }));
+      const { preview, missing, sigTargets } = fillFromMap(all, body.map.items, Object.assign({}, rawData, { answers: body.answers || rawData.answers || {} }));
+      const signing = sigTargets.length && /^data:image\/png;base64,/.test(String(rawData.signature_png || ''));
+      if (signing) { addSignature(zip, xml, sigTargets, rawData.signature_png); placeSignature(sigTargets); }
       xml = applyEdits(xml, all.concat(...all.map(p => p.boxes || [])));
+      if (signing) xml = ensureDrawingNs(xml);
       zip.file('word/document.xml', xml);
       return res.status(200).json({ ok: true, version: FILL_FORM_VERSION, formHash: hash,
         filename: (body.filename || 'funder-form').replace(/\.docx$/i, '') + '-FILLED.docx',
@@ -433,7 +436,9 @@ function extractParagraphs(xml) {
   const cellsOf = [];      // per table
   const widthsOf = [];     // cell widths (twips) per table, to spot letter-per-box rows
   const officeOf = [];     // tables under a "For office use" heading are skipped
-  const hasTableIn = {};   // cells that hold a nested table are containers, not answers
+  const hasTableIn = {};
+  const borderOf = [];    // per table: "r:c" → the cell has its own box border
+  const gridOf = [];      // per table: "r:c" → { g: first grid column, span }   // cells that hold a nested table are containers, not answers
   while ((m = tok.exec(xml)) !== null) {
     const t = m[0];
     if (t.startsWith('<w:tbl')) {
@@ -442,17 +447,28 @@ function extractParagraphs(xml) {
       if (parent) hasTableIn[parent.id + ':' + parent.r + ':' + parent.c] = true;
       const prev = out.slice().reverse().find(q => q.text);
       stack.push({ id, r: -1, c: -1, office: !!(prev && /office use|for official use/i.test(prev.text)) });
-      cellsOf[id] = {}; widthsOf[id] = {}; officeOf[id] = stack[stack.length - 1].office;
+      cellsOf[id] = {}; widthsOf[id] = {}; gridOf[id] = {}; borderOf[id] = {}; officeOf[id] = stack[stack.length - 1].office;
       continue;
     }
     if (t === '</w:tbl>') { stack.pop(); continue; }
     const tb = stack[stack.length - 1];
-    if (t.startsWith('<w:tr')) { if (tb) { tb.r++; tb.c = -1; } continue; }
+    if (t.startsWith('<w:tr')) { if (tb) { tb.r++; tb.c = -1; tb.g = 0; } continue; }
     if (t.startsWith('<w:tc')) {
       if (tb) {
         tb.c++;
         const w = /<w:tcW\b[^>]*w:w="(\d+)"/.exec(xml.slice(m.index, m.index + 500).split('</w:tcPr>')[0]);
         widthsOf[tb.id][tb.r + ':' + tb.c] = w ? +w[1] : 0;
+        // grid column this cell starts at, and how many it spans (for "label above" lookups)
+        const head = xml.slice(m.index, m.index + 600).split('</w:tcPr>')[0];
+        const gs = /<w:gridSpan\b[^>]*w:val="(\d+)"/.exec(head);
+        const gb = /<w:gridBefore\b[^>]*w:val="(\d+)"/.exec(xml.slice(Math.max(0, m.index - 400), m.index));
+        if (tb.c === 0 && gb) tb.g = +gb[1];
+        gridOf[tb.id][tb.r + ':' + tb.c] = { g: tb.g || 0, span: gs ? +gs[1] : 1 };
+        // boxes you write in have their own border; gaps between them don't
+        const bd = /<w:tcBorders>([\s\S]*?)<\/w:tcBorders>/.exec(head);
+        // a gap switches its top/bottom border off; a box keeps the table's lines
+        borderOf[tb.id][tb.r + ':' + tb.c] = !(bd && /<w:(top|bottom)\b[^>]*w:val="(nil|none)"/.test(bd[1]));
+        tb.g = (tb.g || 0) + (gs ? +gs[1] : 1);
       }
       continue;
     }
@@ -461,7 +477,8 @@ function extractParagraphs(xml) {
     const text = (inner.match(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g) || [])
       .map(x => x.replace(/<[^>]+>/g, '')).join('')
       .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'");
-    const p = { index: idx++, full: t, at: m.index, inner, text: text.trim(), selfClosing, office: !!(tb && tb.office), cell: tb ? { t: tb.id, r: tb.r, c: tb.c } : null };
+    const isPh = /<w:rStyle w:val="PlaceholderText"\s*\/>/.test(t) && !/<w:r\b(?:(?!<\/w:r>)[\s\S])*<w:t[^>]*>[^<]+<\/w:t>(?:(?!<\/w:r>)[\s\S])*<\/w:r>/.test(t.replace(/<w:r\b(?:(?!<\/w:r>)[\s\S])*PlaceholderText(?:(?!<\/w:r>)[\s\S])*<\/w:r>/g, ''));
+    const p = { index: idx++, full: t, at: m.index, inner, text: isPh ? '' : text.trim(), phText: isPh ? text.trim() : '', selfClosing, office: !!(tb && tb.office), cell: tb ? { t: tb.id, r: tb.r, c: tb.c } : null };
     out.push(p);
     if (tb) { const k = tb.r + ':' + tb.c; (cellsOf[tb.id][k] = cellsOf[tb.id][k] || []).push(p); }
   }
@@ -471,7 +488,11 @@ function extractParagraphs(xml) {
   cellsOf.forEach((cells, t) => {
     if (officeOf[t]) return;
     // walk cells row by row, left to right, so runs of boxes stay together
-    const keys = Object.keys(cells).map(k => k.split(':').map(Number)).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const consumed = {};
+    const byRow = (a, b) => a[0] - b[0] || a[1] - b[1];
+    const all = Object.keys(cells).map(k => k.split(':').map(Number)).sort(byRow);
+    // placeholder cells first, so a label above them isn't handed to an empty spacer cell as well
+    const keys = all.filter(([r, c]) => (cells[r + ':' + c][0] || {}).phText).concat(all.filter(([r, c]) => !(cells[r + ':' + c][0] || {}).phText));
     let run = null;   // current answer cell collecting single-character boxes
     keys.forEach(([r, c]) => {
       const k = r + ':' + c;
@@ -485,7 +506,7 @@ function extractParagraphs(xml) {
         run.c = c;
         const wide = (widthsOf[t][k] || 0) > 900;
         if (run.first.spread && wide) { run.closed = true; return; }       // letter boxes end here
-        if (!run.closed) { run.first.boxes.push(cells[k][0]); if (wide) run.first.spread = false; }
+        if (!run.closed) { cells[k][0].bordered = !!borderOf[t][k]; run.first.boxes.push(cells[k][0]); if (wide) run.first.spread = false; }
         return;
       }
       let label = '', left = false;
@@ -501,6 +522,7 @@ function extractParagraphs(xml) {
         let valueCell = false;
         if (cc > 0) { const x = cellText(t, r, cc - 1); if (!isBlank(x) && !/^\d+$/.test(x)) valueCell = true; }   // only the cell right next to it
         if (valueCell && !/[:?]\s*$/.test(lt)) { label = '__skip__'; break; }
+        if (consumed[t + ':' + r + ':' + cc]) { label = '__skip__'; break; }   // already the label of a box below it
         label = lt; left = true; (cells[r + ':' + cc] || []).forEach(q => { q.isLabel = true; });
       }
       if (label === '__skip__') { run = null; return; }
@@ -510,9 +532,17 @@ function extractParagraphs(xml) {
         (cells['0:' + c] || []).forEach(q => { q.isLabel = true; });
         if (above !== label) label = label ? label + ' — ' + above : above;
       }
+      if (!label && cells[k][0].phText && r > 0) {
+        const me = gridOf[t][k];
+        const above = Object.keys(cells).filter(kk => +kk.split(':')[0] === r - 1).find(kk => { const o = gridOf[t][kk]; return o && me && o.g <= me.g + me.span - 1 && o.g + o.span - 1 >= me.g && cellText(t, r - 1, +kk.split(':')[1]).length <= 30 && !isBlank(cellText(t, r - 1, +kk.split(':')[1])); });
+        if (above) { label = cellText(t, r - 1, +above.split(':')[1]); consumed[t + ':' + above] = true; (cells[above] || []).forEach(q => { q.isLabel = true; }); }
+      }
       if (!label || label.length > 120 || HAS_BOX.test(label) || hasTableIn[t + ':' + k] || /^(letters?|numbers?|digits?)$/i.test(label.trim())) { run = null; return; }
       const first = cells[k][0];
       first.answerFor = label.replace(/\s+/g, ' ').slice(0, 160);
+      first.width = widthsOf[t][k] || 0;
+      first.bordered = !!borderOf[t][k];
+      if (first.phText) first.placeholder = true;
       first.placeholder = !!first.text && PLACEHOLDER_RE.test(first.text);
       first.boxes = [];
       // Narrow cells (under ~1.6 cm) in a row are boxes for one letter each
@@ -521,6 +551,8 @@ function extractParagraphs(xml) {
       run = { r, c, first, head: ownHead };
     });
   });
+  // A single very narrow blank cell is a spacer, not an answer (letter-box rows are kept)
+  out.forEach(p => { if (p.answerFor && !(p.boxes && p.boxes.length) && p.width > 0 && p.width < 500) { delete p.answerFor; } });
   return out;
 }
 
@@ -554,7 +586,8 @@ function newParagraphXml(para, newText) {
   }
 
   // Filled text should look like normal text, not grey placeholder text
-  return newFull.replace(/<w:rStyle w:val="PlaceholderText"\s*\/>/g, '');
+  const plain = newFull.replace(/<w:rStyle w:val="PlaceholderText"\s*\/>/g, '');
+  return (para.placeholder || para.phText) ? plain.replace(/<w:highlight\b[^>]*\/>/g, '').replace(/(<w:rPr>(?:(?!<\/w:rPr>)[\s\S])*?)<w:shd\b[^>]*w:fill="(?:FFFF00|FFFF99|FFF2CC|yellow)"[^>]*\/>/gi, '$1') : plain;
 }
 
 // ------------------------------------------------------------------
@@ -698,7 +731,10 @@ function tickInXml(pxml, k) {
 // One letter per box: "AB123456C" across 9 boxes; dates as digits across 6 or 8 boxes
 function spreadBoxes(p, answer) {
   if (!p.boxes || !p.boxes.length || !p.spread) return;
-  const total = p.boxes.length + 1;
+  // write only in the cells drawn as boxes (skip the gaps between them) when the form marks them
+  let cellsIn = [p].concat(p.boxes);
+  if (cellsIn.some(c => c.bordered) && cellsIn.some(c => !c.bordered)) cellsIn = cellsIn.filter(c => c.bordered);
+  const total = cellsIn.length;
   let chars = String(answer || '').replace(/\s+/g, '');
   // Dates go in as digits: 6–7 boxes → DDMMYY, 8+ boxes → DDMMYYYY
   const dm = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/.exec(chars);
@@ -707,8 +743,8 @@ function spreadBoxes(p, answer) {
     if (total >= 8) chars = dd + mm + yy; else if (total >= 6) chars = dd + mm + yy.slice(-2); else return;
   }
   if (chars.length < 2 || chars.length > total) return;   // not a box answer — leave it all in the first box
-  p.newText = chars[0];
-  p.boxes.forEach((b, i) => { if (chars[i + 1] != null) b.newText = chars[i + 1]; });
+  if (!cellsIn.includes(p)) p.newText = null;
+  cellsIn.forEach((c, k) => { if (chars[k] != null) c.newText = chars[k]; });
 }
 
 // Apply every edit by its position in the original XML, last first, so
@@ -719,7 +755,7 @@ function applyEdits(xml, paragraphs) {
     if (xml.substr(p.at, p.full.length) !== p.full) continue;   // safety
     let head = xml.slice(0, p.at);
     // A filled Word content control should stop showing as grey placeholder text
-    if (p.placeholder) {
+    if (p.placeholder || p.phText) {
       const sdt = head.lastIndexOf('<w:sdtPr'), closed = head.lastIndexOf('</w:sdt>');
       if (sdt > closed) head = head.slice(0, sdt) + head.slice(sdt).replace(/<w:showingPlcHdr\s*\/>/, '');
     }
@@ -835,6 +871,7 @@ function guessUse(it) {
   if (/signature|signed|sign here|print name|position in organisation|certify|by signing|declaration/.test(L)) return { use: 'sign' };
   if (isNoiseLine(it.label) || /^part\s*\d+\s*:?$/i.test(it.label.trim()) || /check:\s*$/i.test(it.label.trim())) return { use: 'skip' };
   if (/\b(as defined|definitions?)\b/i.test(it.label)) return { use: 'skip' };
+  if (it.type === 'inline' && it.placeholder && /date/i.test(it.label)) return { use: 'field', field: 'today' };
   if (it.type === 'inline' && it.label.length > 90 && !/please (detail|provide|describe|state|give)/i.test(it.label)) return { use: 'skip' };
   if (it.type === 'grid') return { use: 'field', field: 'support_needs' };
   const table = [
@@ -897,10 +934,22 @@ function fillFromMap(paragraphs, savedItems, data) {
   const built = buildFormItems(paragraphs);
   const byId = new Map(built.map(it => [it.id, it]));
   const answers = data.answers || {};
-  const preview = [], missing = [];
+  const preview = [], missing = [], sigTargets = [];
   savedItems.forEach(s => {
     const it = byId.get(s.id); if (!it) return;
-    if (s.use === 'sign' || s.use === 'skip') return;
+    if (s.use === 'skip') return;
+    if (s.use === 'sign') {
+      const L = it.label.toLowerCase();
+      const p = byIdx.get(parseInt(s.id.slice(1), 10));
+      if (!p || !data.signature_png) return;
+      // the participant's own signature and printed name, from their e-signature
+      if (/participant|applicant|learner|client|your signature/.test(L) && /sign/.test(L) && !/key ?worker|adviser|advisor|staff|officer|witness/.test(L)) {
+        sigTargets.push(p); preview.push({ before: it.label, after: it.label + ': signed electronically', source: 'signature' });
+      } else if (/print name|name in capitals|full name/.test(L) && !/key ?worker|adviser|staff/.test(L) && data.signed_name) {
+        p.newText = data.signed_name; preview.push({ before: it.label, after: it.label + ': ' + data.signed_name, source: 'signature' });
+      }
+      return;
+    }
     let v = s.use === 'field' ? data[s.field] : answers[s.id];
     if (s.use === 'field' && (v == null || v === '' || (Array.isArray(v) && !v.length)) && answers[s.id] != null) v = answers[s.id];
     const empty = v == null || v === '' || (Array.isArray(v) && !v.length && it.type !== 'grid');
@@ -928,5 +977,40 @@ function fillFromMap(paragraphs, savedItems, data) {
     else if (it.type === 'inline') p.newText = it.placeholder ? val : p.text.replace(/[_.…]{3,}\s*$/, '').replace(/\s*$/, '') + (/:$/.test(p.text.trim()) ? ' ' : ': ') + val;
     preview.push({ before: it.label, after: it.label + ': ' + val, source: 'map' });
   });
-  return { preview, missing };
+  return { preview, missing, sigTargets };
+}
+
+// Put the participant's signature image into the paragraphs that ask for it
+function addSignature(zip, xml, targets, dataUrl) {
+  if (!targets.length || !dataUrl) return xml;
+  const b64 = String(dataUrl).split(',')[1]; if (!b64) return xml;
+  zip.file('word/media/vorlana-signature.png', Buffer.from(b64, 'base64'));
+  const relsPath = 'word/_rels/document.xml.rels';
+  let rels = zip.file(relsPath) ? zip.file(relsPath).asText() : '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
+  const rid = 'rIdVorlanaSig';
+  if (!rels.includes(rid)) rels = rels.replace('</Relationships>', `<Relationship Id="${rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/vorlana-signature.png"/></Relationships>`);
+  zip.file(relsPath, rels);
+  let ct = zip.file('[Content_Types].xml').asText();
+  if (!/Extension="png"/i.test(ct)) ct = ct.replace('<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">', '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="png" ContentType="image/png"/>');
+  zip.file('[Content_Types].xml', ct);
+  return xml;
+}
+function ensureDrawingNs(xml) {
+  const root = /<w:document\b[^>]*>/.exec(xml)[0];
+  let newRoot = root;
+  [['wp', 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing'], ['a', 'http://schemas.openxmlformats.org/drawingml/2006/main'],
+   ['pic', 'http://schemas.openxmlformats.org/drawingml/2006/picture'], ['r', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships']]
+    .forEach(([ns, uri]) => { if (!new RegExp('xmlns:' + ns + '=').test(newRoot)) newRoot = newRoot.replace(/>$/, ` xmlns:${ns}="${uri}">`); });
+  return xml.replace(root, newRoot);
+}
+function placeSignature(targets) {
+  const rid = 'rIdVorlanaSig';
+  const cx = 1600000, cy = 480000;   // about 4.4 cm × 1.3 cm
+  targets.forEach((p, n) => {
+    const run = `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${9100 + n}" name="Signature ${n + 1}"/>` +
+      `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="${9100 + n}" name="signature.png"/><pic:cNvPicPr/></pic:nvPicPr>` +
+      `<pic:blipFill><a:blip r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`;
+    const base = p.newXml || p.full;
+    p.newXml = /\/>$/.test(base) && !/<\/w:p>$/.test(base) ? base.replace(/\s*\/>$/, '>') + run + '</w:p>' : base.replace(/<\/w:p>$/, run + '</w:p>');
+  });
 }
