@@ -335,7 +335,7 @@ async function sendInvite(){
     try{
       const r=await fetch('/api/send-invite',{
         method:'POST',
-        headers:{'Content-Type':'application/json'},
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+(((await sb.auth.getSession()).data.session||{}).access_token||'')},
         body:JSON.stringify({
           email:email,
           org_name:MY.orgName||'your organisation',
@@ -376,7 +376,7 @@ async function resendInvite(inviteId){
     if(error||!inv)throw new Error((error&&error.message)||'Invite not found');
     const r=await fetch('/api/send-invite',{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+(((await sb.auth.getSession()).data.session||{}).access_token||'')},
       body:JSON.stringify({
         email:inv.email,
         org_name:MY.orgName||'your organisation',
