@@ -1031,10 +1031,20 @@ function renderEvidence() {
     '<td>' + escapeHTML(e.staff || '—') + '</td>' +
     '<td style="font-size:11px;color:var(--txt3)">' + escapeHTML(fmtD(e.evidence_date)) + '</td>' +
     '<td>' + stageBadge(e.status) + '</td>' +
-    '<td style="text-align:right">' +
+    '<td style="text-align:right;white-space:nowrap">' +
+      (e.file_path ? '<button class="btn btn-ghost btn-sm" title="' + escapeHTML(e.file_name || 'Open file') + '" onclick="openEvidFile(\'' + escapeHTML(String(e.id)) + '\')">📄 Open</button> ' : '') +
       '<button class="btn btn-ghost btn-sm" onclick="deleteEvid(\'' + escapeHTML(String(e.id)) + '\')">×</button>' +
     '</td>' +
   '</tr>').join('');
+}
+
+// Files in the Evidence Hub are private: open them with a short-lived link
+async function openEvidFile(id) {
+  const e = (DB.evidence || []).find(x => String(x.id) === String(id)); if (!e || !e.file_path) return;
+  const w = window.open('', '_blank');
+  const { data, error } = await sb.storage.from('participant-docs').createSignedUrl(e.file_path, 120, { download: e.file_name || true });
+  if (error || !data) { if (w) w.close(); alert('Could not open the file: ' + (error ? error.message : 'not found')); return; }
+  if (w) w.location = data.signedUrl; else location.href = data.signedUrl;
 }
 
 // ─────────────────────────────────────────────────────────────
