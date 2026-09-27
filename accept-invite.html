@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>GreenCRM — Accept Invite</title>
+<title>Vorlana — Accept Invite</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#0a0f0a;--card:#182018;--border:#2a3a2a;--em:#10b981;--em2:#059669;--txt:#e2f5eb;--txt2:#9ab8a4;--txt3:#6a8f76;--red:#f87171;--radius:10px}
+:root{--bg:#F5F1EA;--surface:#FFFFFF;--card:#FFFFFF;--border:#E0DAD0;--em:#1F6F6D;--em2:#175655;--em3:#2A9D8F;--txt:#2B2B2B;--txt2:#4A5552;--txt3:#6B7672;--red:#C84545;--amber:#B45309;--blue:#2563EB;--radius:10px;--radiuslg:14px}
 body{background:var(--bg);color:var(--txt);font-family:system-ui,sans-serif;font-size:14px;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
 .box{width:100%;max-width:420px}
 .logo{font-size:26px;font-weight:800;color:var(--em);text-align:center;margin-bottom:4px}
@@ -23,17 +23,17 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 .btn:hover{background:var(--em2)}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .msg{padding:10px 13px;border-radius:var(--radius);font-size:13px;margin-bottom:14px;display:none}
-.msg-ok{background:#1a3a2a;border:1px solid #2a5a3a;color:#34d399}
-.msg-err{background:#2a1a1a;border:1px solid #5a2a2a;color:var(--red)}
+.msg-ok{background:#E6F2EF;border:1px solid #BFDCD5;color:#1F6F6D}
+.msg-err{background:#FDECEC;border:1px solid #F3C5C5;color:var(--red)}
 .invite-box{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:18px}
 .invite-row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px}
 .invite-row .lbl{color:var(--txt3)}
 .invite-row .val{color:var(--txt);font-weight:500}
 .badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px}
-.b-advisor{background:#2a1a3a;color:#a78bfa}
-.b-manager{background:#1a2a3a;color:#60a5fa}
-.b-admin{background:#1a3a2a;color:#34d399}
-.b-readonly{background:#2a2a1a;color:#f59e0b}
+.b-advisor{background:#F1ECFB;color:#7C5BCB}
+.b-manager{background:#E8F0FC;color:#2563EB}
+.b-admin{background:#E6F2EF;color:#1F6F6D}
+.b-readonly{background:#FEF6E4;color:#B45309}
 .spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--em);border-radius:50%;animation:spin .6s linear infinite;display:inline-block;vertical-align:middle;margin-right:6px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .state{display:none}.state.active{display:block}
@@ -44,7 +44,7 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 </head>
 <body>
 <div class="box">
-  <div class="logo">Green<span>CRM</span></div>
+  <div class="logo"><img src="logo-mark.png" alt="" style="height:30px;vertical-align:middle;margin-right:8px"/>Vorlana</div>
   <div class="tagline">You've been invited to join a team</div>
 
   <!-- LOADING -->
@@ -62,7 +62,7 @@ input[readonly]{opacity:.6;cursor:not-allowed}
   <!-- SIGN UP FORM -->
   <div id="s-form" class="state card">
     <div class="card-title">Create your account</div>
-    <div class="card-sub">You've been invited to join GreenCRM. Set your name and password to get started.</div>
+    <div class="card-sub">You've been invited to join Vorlana. Set your name and password to get started.</div>
 
     <div class="invite-box" id="invite-info"></div>
 
@@ -87,7 +87,7 @@ input[readonly]{opacity:.6;cursor:not-allowed}
   <!-- ALREADY MEMBER — just sign in -->
   <div id="s-signin" class="state card">
     <div class="card-title">Welcome back</div>
-    <div class="card-sub">You already have a GreenCRM account. Sign in to access your organisation.</div>
+    <div class="card-sub">You already have a Vorlana account. Sign in to access your organisation.</div>
     <div class="invite-box" id="signin-info"></div>
     <div class="msg msg-err" id="si-err"></div>
     <label>Email</label>
@@ -101,8 +101,8 @@ input[readonly]{opacity:.6;cursor:not-allowed}
   <div id="s-success" class="state card" style="text-align:center">
     <div class="big-icon">🎉</div>
     <div class="card-title">You're all set!</div>
-    <div class="card-sub" style="margin-top:8px">Your account has been created. Taking you to GreenCRM now…</div>
-    <button class="btn" style="margin-top:16px" onclick="goToCRM()">Open GreenCRM →</button>
+    <div class="card-sub" style="margin-top:8px">Your account has been created. Taking you to Vorlana now…</div>
+    <button class="btn" style="margin-top:16px" onclick="goToCRM()">Open Vorlana →</button>
   </div>
 </div>
 
@@ -135,7 +135,7 @@ function checkStrength(){
   if(/[0-9]/.test(pw))score++;
   if(/[^A-Za-z0-9]/.test(pw))score++;
   const pct=Math.round(score/5*100);
-  const col=score<=1?'#f87171':score<=3?'#f59e0b':'#10b981';
+  const col=score<=1?'#C84545':score<=3?'#B45309':'#1F6F6D';
   fill.style.width=pct+'%';
   fill.style.background=col;
 }
@@ -166,7 +166,7 @@ async function init(){
   org=orgData;
 
   const infoHtml=`
-    <div class="invite-row"><span class="lbl">Organisation</span><span class="val">${org?.name||'GreenCRM'}</span></div>
+    <div class="invite-row"><span class="lbl">Organisation</span><span class="val">${org?.name||'Vorlana'}</span></div>
     <div class="invite-row"><span class="lbl">Your role</span><span class="val">${roleBadge(inv.role)}</span></div>
     <div class="invite-row"><span class="lbl">Invited email</span><span class="val">${inv.email}</span></div>`;
 
