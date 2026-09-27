@@ -222,7 +222,7 @@
         try {
           onOpen(name === 'openAddP');
           if (name === 'openAddP' && !window._vorlanaFullAdd) { $id('modal-p').classList.remove('open'); openQuickAdd(); }
-          else { tabify(); intakeBanner(); }
+          else { tabify(); intakeBanner(); caseloadBar(); }
         } catch (e) { console.warn('[onboarding]', e); }
         return r;
       };
@@ -715,9 +715,19 @@
     if (typeof renderContractSelector === 'function') renderContractSelector(QA.contracts);
     const names = [val('mp-fn'), val('mp-ln')];
     const data = gather();
+    // Already supported? Checked on the server so nobody sees a colleague's participant
+    const dupe = await serverDupeCheck(null);
+    let addedAnyway = false;
+    if (dupe.match) {
+      const choice = await askDupe(dupe);
+      if (choice === 'open') { qaClose(); if (dupe.id) openEditP(dupe.id); return; }
+      if (choice === 'stop') { qaClose(); if (typeof toast === 'function') toast('Your manager has been told'); return; }
+      addedAnyway = !dupe.visible;
+    }
     try {
       await window.saveP();
       const p = (DB.participants || []).filter(x => x.first_name === names[0] && x.last_name === names[1]).slice(-1)[0];
+      if (addedAnyway && p) serverDupeCheck(p.id);   // flag the second record for a manager to check
       let msg = '✓ Added ' + names.join(' ');
       if (QA.contracts.length && openAfter !== 'link') {   // with a link, the form is filled once they've signed
         btn.textContent = 'Filling start form…';
@@ -1081,9 +1091,176 @@
     };
   }
 
+  // ═══ Caseloads: separate per adviser, shared per project, duplicates to managers ═══
+  const separateOn = () => !!(currentOrg && currentOrg.settings && currentOrg.settings.separate_caseloads);
+  let TEAM = null;   // [{user_id, name, role, is_dsl, is_triage}]
+  async function loadTeam() {
+    if (TEAM) return TEAM;
+    try {
+      const { data: mem } = await sb.from('memberships').select('*').eq('org_id', orgId).eq('status', 'active');
+      const ids = (mem || []).map(m => m.user_id);
+      const { data: prof } = ids.length ? await sb.from('profiles').select('id,full_name,email').in('id', ids) : { data: [] };
+      TEAM = (mem || []).map(m => { const p = (prof || []).find(x => x.id === m.user_id) || {}; return { user_id: m.user_id, name: p.full_name || p.email || 'Team member', role: m.role, is_dsl: m.is_dsl, is_triage: m.is_triage }; });
+    } catch (e) { TEAM = []; }
+    return TEAM;
+  }
+  const personName = uid => ((TEAM || []).find(t => t.user_id === uid) || {}).name || 'a colleague';
+  const contractName = cid => ((DB.contracts || []).find(c => String(c.id) === String(cid)) || {}).name || '';
+
+  // Before adding: is this person already supported? (checked on the server — never shows someone else's participant)
+  async function serverDupeCheck(newId) {
+    try {
+      const { data, error } = await sb.rpc('check_duplicate', { p_org: orgId, p_first: val('mp-fn'), p_last: val('mp-ln'), p_dob: val('mp-dob') || null, p_ni: val('mp-ni') || null, p_contracts: QA.contracts || [], p_new: newId || null });
+      if (error) return { match: false };
+      return data || { match: false };
+    } catch (e) { return { match: false }; }
+  }
+  function askDupe(res) {
+    return new Promise(resolve => {
+      if (res.visible) {
+        ffModal('<h2>Already on your caseload</h2><div class="cxp-s" style="font-size:13px;line-height:1.6">Someone with this name' + (val('mp-dob') ? ' and date of birth' : '') + ' is already on your caseload. Open their record instead — you can add this project to it.</div>' +
+          '<div class="modal-footer"><button class="btn btn-ghost" id="dp-new">Add a new record anyway</button><button class="btn btn-p" id="dp-open">Open their record</button></div>');
+        $id('dp-open').onclick = () => { ffClose(); resolve('open'); };
+        $id('dp-new').onclick = () => { ffClose(); resolve('add'); };
+      } else {
+        ffModal('<h2>Already supported by a colleague</h2><div class="cxp-s" style="font-size:13px;line-height:1.6">This person is already supported by another adviser. <b>Your manager has been told</b> and can add you to their record for this project, so everything stays in one place.</div>' +
+          '<div class="modal-footer"><button class="btn btn-ghost" id="dp-new">Not the same person — add them</button><button class="btn btn-p" id="dp-ok">OK, leave it with my manager</button></div>');
+        $id('dp-ok').onclick = () => { ffClose(); resolve('stop'); };
+        $id('dp-new').onclick = () => { ffClose(); resolve('add'); };
+      }
+    });
+  }
+
+  // On a record: who works with this person (managers can share or hand over)
+  async function caseloadBar() {
+    const p = currentParticipant(); const modal = document.querySelector('#modal-p .modal');
+    let bar = $id('cl-bar');
+    if (!modal) return;
+    if (!bar) { bar = document.createElement('div'); bar.id = 'cl-bar'; const at = $id('ik-banner') || $id('pt-bar') || $id('mp-title'); at.parentNode.insertBefore(bar, at); }
+    bar.innerHTML = '';
+    if (!p || String(p.id).indexOf('demo-') === 0) return;
+    try { sb.from('participant_access_log').insert([{ org_id: orgId, participant_id: p.id, action: 'view' }]).then(() => {}, () => {}); } catch (e) { /* optional */ }
+    if (!separateOn()) return;
+    await loadTeam();
+    let rows = [];
+    try { const { data } = await sb.from('participant_access').select('*').eq('participant_id', p.id); rows = data || []; } catch (e) { rows = []; }
+    const who = rows.map(r => esc(personName(r.user_id)) + (r.contract_id && contractName(r.contract_id) ? ' <span style="color:var(--txt3)">(' + esc(contractName(r.contract_id)) + ')</span>' : '')).join(' · ') || '<span style="color:var(--red)">No adviser yet</span>';
+    bar.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:12.5px;margin:0 0 10px;color:var(--txt2)"><span>👥 ' + who + '</span>' +
+      (isManager() ? '<span style="display:flex;gap:6px"><button class="btn btn-ghost btn-sm" type="button" id="cl-share">+ Add adviser / project</button><button class="btn btn-ghost btn-sm" type="button" id="cl-hand">Hand over</button></span>' : '') + '</div>';
+    if (!isManager()) return;
+    const memberOpts = (TEAM || []).map(t => '<option value="' + esc(t.user_id) + '">' + esc(t.name) + ' · ' + esc(t.role) + '</option>').join('');
+    const projOpts = '<option value="">All their projects</option>' + (DB.contracts || []).map(c => '<option value="' + esc(c.id) + '">' + esc(c.name) + '</option>').join('');
+    $id('cl-share').onclick = () => {
+      ffModal('<h2>Add an adviser</h2><div class="cxp-s" style="font-size:13px;margin-bottom:10px">For people on more than one project — each project can have its own adviser. Everyone shares the same record.</div>' +
+        '<div class="form-row"><label>Adviser</label><select id="cl-u">' + memberOpts + '</select></div><div class="form-row"><label>Project</label><select id="cl-c">' + projOpts + '</select></div>' +
+        '<div class="modal-footer"><button class="btn btn-ghost" id="cl-x">Cancel</button><button class="btn btn-p" id="cl-ok">Add</button></div>');
+      $id('cl-x').onclick = ffClose;
+      $id('cl-ok').onclick = async () => {
+        const cid = val('cl-c') || null;
+        const { error } = await sb.from('participant_access').insert([{ org_id: orgId, participant_id: p.id, user_id: val('cl-u'), contract_id: cid }]);
+        if (error && !/duplicate/i.test(error.message)) { alert('Could not add: ' + error.message); return; }
+        if (cid && !(p.contract_ids || []).map(String).includes(String(cid))) {
+          const ids = (p.contract_ids || []).concat(cid); await sb.from('participants').update({ contract_ids: ids }).eq('id', p.id); p.contract_ids = ids;
+          if (typeof renderContractSelector === 'function') renderContractSelector(ids);
+        }
+        ffClose(); caseloadBar();
+      };
+    };
+    $id('cl-hand').onclick = () => {
+      ffModal('<h2>Hand over</h2><div class="cxp-s" style="font-size:13px;margin-bottom:10px">The new adviser takes over this person completely. The handover is recorded.</div>' +
+        '<div class="form-row"><label>New adviser</label><select id="cl-u">' + memberOpts + '</select></div>' +
+        '<div class="modal-footer"><button class="btn btn-ghost" id="cl-x">Cancel</button><button class="btn btn-p" id="cl-ok">Hand over</button></div>');
+      $id('cl-x').onclick = ffClose;
+      $id('cl-ok').onclick = async () => {
+        const to = val('cl-u');
+        await sb.from('participant_access').delete().eq('participant_id', p.id);
+        await sb.from('participant_access').insert([{ org_id: orgId, participant_id: p.id, user_id: to }]);
+        await sb.from('participants').update({ created_by: to }).eq('id', p.id);
+        sb.from('participant_access_log').insert([{ org_id: orgId, participant_id: p.id, action: 'handed over to ' + personName(to) }]).then(() => {}, () => {});
+        ffClose(); caseloadBar();
+      };
+    };
+  }
+
+  // Participants page (managers): possible duplicates and people without an adviser
+  async function managerCaseloadPanel() {
+    const page = $id('page-participants'); if (!page || !isManager()) return;
+    let box = $id('cl-panel');
+    if (!box) { box = document.createElement('div'); box.id = 'cl-panel'; const hdr = page.querySelector('.page-header'); hdr ? hdr.parentNode.insertBefore(box, hdr.nextSibling) : page.prepend(box); }
+    let flags = [], assigned = new Set();
+    try { const { data } = await sb.from('duplicate_flags').select('*').eq('org_id', orgId).eq('status', 'open').order('created_at'); flags = data || []; } catch (e) { flags = []; }
+    if (separateOn()) { try { const { data } = await sb.from('participant_access').select('participant_id').eq('org_id', orgId); (data || []).forEach(r => assigned.add(String(r.participant_id))); } catch (e) { /* ignore */ } }
+    const unassigned = separateOn() ? (DB.participants || []).filter(p => String(p.id).indexOf('demo-') !== 0 && !assigned.has(String(p.id))) : [];
+    if (!flags.length && !unassigned.length) { box.innerHTML = ''; return; }
+    box.innerHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">' +
+      (flags.length ? '<button class="btn btn-sm" style="background:#FFFBEB;border:1px solid #FDE68A;color:#92400E" id="cl-dupes">⚠ ' + flags.length + ' possible duplicate' + (flags.length === 1 ? '' : 's') + ' to check</button>' : '') +
+      (unassigned.length ? '<button class="btn btn-sm" style="background:#FEF2F2;border:1px solid #FECACA;color:#B91C1C" id="cl-unas">👤 ' + unassigned.length + ' without an adviser</button>' : '') + '</div>';
+    if ($id('cl-dupes')) $id('cl-dupes').onclick = () => showDupes(flags);
+    if ($id('cl-unas')) $id('cl-unas').onclick = () => showUnassigned(unassigned);
+  }
+  async function showDupes(flags) {
+    await loadTeam();
+    const pName = id => { const p = (DB.participants || []).find(x => String(x.id) === String(id)); return p ? p.first_name + ' ' + p.last_name : 'a participant'; };
+    ffModal('<h2>Possible duplicates</h2><div class="cxp-s" style="font-size:13px;margin-bottom:10px">An adviser tried to add someone who is already on file. Keep one record per person — add them as an adviser for their project instead.</div>' +
+      flags.map(f => {
+        const d = f.details || {};
+        return '<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:13px">' +
+          '<b>' + esc(personName(f.requested_by)) + '</b> tried to add <b>' + esc([d.first_name, d.last_name].filter(Boolean).join(' ')) + '</b>' + (d.dob ? ' (born ' + esc(d.dob) + ')' : '') +
+          (d.contract_ids && d.contract_ids.length ? ' for ' + esc(d.contract_ids.map(contractName).filter(Boolean).join(', ')) : '') +
+          ' — already on file as <b>' + esc(pName(f.participant_id)) + '</b>' + (f.duplicate_id ? ' <span style="color:#B45309">(a second record was added)</span>' : '') +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">' +
+            '<button class="btn btn-p btn-sm" data-act="share" data-id="' + esc(f.id) + '">Add ' + esc(personName(f.requested_by)) + ' as their adviser</button>' +
+            (f.duplicate_id ? '<button class="btn btn-ghost btn-sm" data-act="merge" data-id="' + esc(f.id) + '">Merge the two records</button>' : '') +
+            '<button class="btn btn-ghost btn-sm" data-act="dismiss" data-id="' + esc(f.id) + '">Not the same person</button></div></div>';
+      }).join('') + '<div class="modal-footer"><button class="btn btn-ghost" id="cl-x">Close</button></div>', 620);
+    $id('cl-x').onclick = ffClose;
+    document.querySelectorAll('#ff-modal [data-act]').forEach(b => b.onclick = async () => {
+      const f = flags.find(x => x.id === b.dataset.id); const d = f.details || {}; b.disabled = true;
+      try {
+        if (b.dataset.act === 'share' || b.dataset.act === 'merge') {
+          const cids = (d.contract_ids || []).filter(Boolean);
+          for (const cid of (cids.length ? cids : [null])) await sb.from('participant_access').insert([{ org_id: orgId, participant_id: f.participant_id, user_id: f.requested_by, contract_id: cid }]).then(() => {}, () => {});
+          const keep = (DB.participants || []).find(x => String(x.id) === String(f.participant_id));
+          let ids = (keep && keep.contract_ids || []).map(String);
+          if (b.dataset.act === 'merge' && f.duplicate_id) {
+            const dup = (DB.participants || []).find(x => String(x.id) === String(f.duplicate_id));
+            ids = ids.concat((dup && dup.contract_ids || []).map(String));
+            await sb.from('evidence').update({ participant_id: String(f.participant_id) }).eq('participant_id', String(f.duplicate_id));
+            await sb.from('intake_requests').update({ participant_id: String(f.participant_id) }).eq('participant_id', String(f.duplicate_id));
+            await sb.from('participants').delete().eq('id', f.duplicate_id);
+          }
+          ids = Array.from(new Set(ids.concat(cids.map(String))));
+          if (keep) await sb.from('participants').update({ contract_ids: ids }).eq('id', f.participant_id);
+        }
+        await sb.from('duplicate_flags').update({ status: b.dataset.act === 'dismiss' ? 'dismissed' : 'resolved', resolution: b.dataset.act, resolved_at: new Date().toISOString() }).eq('id', f.id);
+        b.closest('div[style*="border:1px"]').style.opacity = .45; b.parentNode.innerHTML = '<span class="cxp-s">✓ Done</span>';
+        if (typeof refreshTable === 'function') refreshTable('participants').then(() => { try { renderParticipants(); } catch (e) { /* page changed */ } });
+      } catch (e) { alert('Could not finish: ' + (e.message || e)); b.disabled = false; }
+    });
+  }
+  async function showUnassigned(list) {
+    await loadTeam();
+    const groups = {};
+    list.forEach(p => { const k = p.advisor || 'Unassigned'; (groups[k] = groups[k] || []).push(p); });
+    const opts = '<option value="">Choose…</option>' + (TEAM || []).map(t => '<option value="' + esc(t.user_id) + '">' + esc(t.name) + '</option>').join('');
+    const guess = name => { const t = (TEAM || []).find(x => x.name && name && x.name.toLowerCase().split(' ')[0] === String(name).toLowerCase().split(/[ .]/)[0]); return t ? t.user_id : ''; };
+    ffModal('<h2>Give everyone an adviser</h2><div class="cxp-s" style="font-size:13px;margin-bottom:10px">With separate caseloads on, people without an adviser are only seen by managers, safeguarding leads and triage. Match each old "Adviser" name to a team member.</div>' +
+      Object.keys(groups).map((k, i) => '<div class="form-row" style="display:flex;gap:10px;align-items:center;justify-content:space-between"><span style="font-size:13px"><b>' + esc(k) + '</b> · ' + groups[k].length + ' people</span><select data-g="' + i + '" style="max-width:240px">' + opts.replace('value="' + guess(k) + '"', 'value="' + guess(k) + '" selected') + '</select></div>').join('') +
+      '<div class="modal-footer"><button class="btn btn-ghost" id="cl-x">Cancel</button><button class="btn btn-p" id="cl-ok">Assign</button></div>', 560);
+    $id('cl-x').onclick = ffClose;
+    $id('cl-ok').onclick = async () => {
+      const rows = [];
+      document.querySelectorAll('#ff-modal select[data-g]').forEach(s => { const uid = s.value; if (!uid) return; groups[Object.keys(groups)[+s.dataset.g]].forEach(p => rows.push({ org_id: orgId, participant_id: p.id, user_id: uid })); });
+      for (let i = 0; i < rows.length; i += 200) { const { error } = await sb.from('participant_access').insert(rows.slice(i, i + 200)); if (error && !/duplicate/i.test(error.message)) { alert('Could not assign: ' + error.message); return; } }
+      ffClose(); managerCaseloadPanel();
+    };
+  }
+
   function install() {
     wrapOpeners(); wrapSave(); wrapConvert();
     window.civaraFillFunderForm = openFill;
+    const rp = window.renderParticipants;
+    if (typeof rp === 'function' && !rp._cl) { window.renderParticipants = function () { const r = rp.apply(this, arguments); setTimeout(managerCaseloadPanel, 30); return r; }; window.renderParticipants._cl = true; }
     const rf = window.renderFunding;
     if (typeof rf === 'function' && !rf._ob) { window.renderFunding = function () { const r = rf.apply(this, arguments); setTimeout(addSetupButtons, 50); setTimeout(addSetupButtons, 1800); return r; }; window.renderFunding._ob = true; }
     setTimeout(addSetupButtons, 2000);
