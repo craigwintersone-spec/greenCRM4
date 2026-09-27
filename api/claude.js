@@ -31,6 +31,7 @@ const DEFAULT_MODEL = 'claude-sonnet-4-6';
 const MAX_TOKENS_CEILING = 2000;   // server-enforced output cap per call
 const MAX_MESSAGES = 30;           // sane conversation length
 const MAX_BODY_CHARS = 200_000;    // ~50k tokens of input, generous
+const MAX_FILE_BODY_CHARS = 3_500_000; // one photo or PDF (Vercel's request limit is 4.5 MB)
 const DAILY_CALLS_PER_ORG = 300;   // quota; tune per plan later
 // ────────────────────────────────────────────────────────────────
 
@@ -124,7 +125,9 @@ module.exports = async function handler(req, res) {
 
   // 0. Reject oversized payloads before doing any work.
   try {
-    if (JSON.stringify(req.body || {}).length > MAX_BODY_CHARS) {
+    // Photos and PDFs (e.g. a scanned referral form) need a bigger allowance than text
+    const hasFile = Array.isArray((req.body || {}).messages) && req.body.messages.some(m => Array.isArray(m.content) && m.content.some(b => b && (b.type === 'image' || b.type === 'document')));
+    if (JSON.stringify(req.body || {}).length > (hasFile ? MAX_FILE_BODY_CHARS : MAX_BODY_CHARS)) {
       return res.status(413).json({ error: 'Request too large.' });
     }
   } catch (_) {
