@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="robots" content="noindex"/>
+<title>Your details</title>
+<link rel="icon" type="image/png" href="logo-mark.png"/>
+<style>
+  :root{--c:#1F6F6D;--bg:#F5F1EA;--txt:#1F2A2A;--txt2:#4A5552;--txt3:#6B7672;--bd:#E0DAD0;--red:#C84545}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+  .wrap{max-width:560px;margin:0 auto;padding:18px 16px calc(110px + env(safe-area-inset-bottom,0px))}
+  header{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+  header img{max-height:40px;max-width:130px;object-fit:contain}
+  header b{font-size:15px}
+  .bar{height:6px;background:#E6DFD5;border-radius:3px;overflow:hidden;margin:6px 0 18px}
+  .bar i{display:block;height:100%;background:var(--c);transition:width .3s}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:var(--txt3);font-size:14px;margin:0 0 18px}
+  .q{background:#fff;border:1px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:10px}
+  .q label{display:block;font-weight:600;font-size:15px;margin-bottom:8px}
+  .q .hint{font-size:12.5px;color:var(--txt3);margin:-4px 0 8px}
+  .q input{width:100%;font-size:17px;padding:12px;border:1px solid var(--bd);border-radius:10px;background:#fff;color:var(--txt)}
+  .q input:focus{outline:2px solid var(--c);border-color:transparent}
+  .opts{display:flex;flex-wrap:wrap;gap:8px}
+  .opts button{font-size:15px;padding:10px 14px;border-radius:22px;border:1px solid var(--bd);background:#fff;color:var(--txt2);cursor:pointer}
+  .opts button.on{background:var(--c);border-color:var(--c);color:#fff;font-weight:600}
+  .req{color:var(--red)}
+  .foot{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.96);border-top:1px solid var(--bd);padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px))}
+  .foot .in{max-width:560px;margin:0 auto;display:flex;gap:10px}
+  .btn{flex:1;font-size:17px;font-weight:700;padding:14px;border-radius:12px;border:none;background:var(--c);color:#fff;cursor:pointer}
+  .btn.g{flex:0 0 auto;background:#fff;color:var(--txt2);border:1px solid var(--bd);font-weight:600}
+  .btn:disabled{opacity:.5}
+  .err{color:var(--red);font-size:14px;margin:8px 0 0;min-height:18px}
+  .sig{background:#fff;border:1.5px dashed var(--c);border-radius:12px;touch-action:none;width:100%;height:180px;display:block}
+  .sigbar{display:flex;justify-content:space-between;font-size:13px;color:var(--txt3);margin-top:6px}
+  .sigbar a{color:var(--c)}
+  .consent{font-size:14px;color:var(--txt2);background:#fff;border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
+  .center{text-align:center;padding-top:40px}
+  .center .big{font-size:56px}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><div class="center"><p class="sub">Loading…</p></div></div>
+<div class="foot" id="foot" style="display:none"><div class="in"><button class="btn g" id="back">Back</button><button class="btn" id="next">Next</button></div></div>
+<script>
+(function () {
+  'use strict';
+  var T = (new URLSearchParams(location.search).get('t') || '').replace(/[^A-Za-z0-9]/g, '');
+  var S = { info: null, step: 0, data: {}, sig: null, sections: [] };
+  var app = document.getElementById('app'), foot = document.getElementById('foot');
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function msg(icon, title, text) { foot.style.display = 'none'; app.innerHTML = '<div class="center"><div class="big">' + icon + '</div><h1>' + esc(title) + '</h1><p class="sub">' + esc(text) + '</p></div>'; }
+
+  fetch('/api/intake?t=' + T).then(function (r) { return r.json(); }).then(function (j) {
+    if (!j.ok) return msg('⚠️', 'Link not working', j.error || 'Ask for a new link.');
+    if (j.done) return msg('✅', 'Already sent', 'Thank you — your details have been received.');
+    S.info = j;
+    document.documentElement.style.setProperty('--c', j.org.colour || '#1F6F6D');
+    Object.keys(j.prefill || {}).forEach(function (k) { if (j.prefill[k]) S.data[k] = j.prefill[k]; });
+    var order = [];
+    j.questions.forEach(function (q) { if (order.indexOf(q.section) < 0) order.push(q.section); });
+    S.sections = order.map(function (name) { return { name: name, qs: j.questions.filter(function (q) { return q.section === name; }) }; });
+    S.sections.push({ name: 'Check and sign', sign: true });
+    draw();
+  }).catch(function () { msg('⚠️', 'No connection', 'Check your signal and open the link again.'); });
+
+  function draw() {
+    var sec = S.sections[S.step], org = S.info.org;
+    var h = '<header>' + (org.logo ? '<img src="' + esc(org.logo) + '" alt=""/>' : '') + '<b>' + esc(org.name) + '</b></header>' +
+      '<div class="bar"><i style="width:' + Math.round((S.step + 1) / S.sections.length * 100) + '%"></i></div>' +
+      '<h1>' + esc(sec.name) + '</h1>';
+    if (!sec.sign) {
+      h += '<p class="sub">' + (S.step === 0 ? 'This takes about 5 minutes. Only answer what you\'re comfortable with — you can choose "Prefer not to say".' : 'Step ' + (S.step + 1) + ' of ' + S.sections.length) + '</p>';
+      sec.qs.forEach(function (q) {
+        var v = S.data[q.key];
+        h += '<div class="q" data-k="' + esc(q.key) + '"><label>' + esc(q.label) + (q.required ? ' <span class="req">*</span>' : '') + '</label>' + (q.hint ? '<div class="hint">' + esc(q.hint) + '</div>' : '');
+        if (q.type === 'choice' || q.type === 'multi') {
+          h += '<div class="opts" data-multi="' + (q.type === 'multi' ? 1 : 0) + '">' + q.options.map(function (o) {
+            var on = q.type === 'multi' ? (v || []).indexOf(o) >= 0 : v === o;
+            return '<button type="button" class="' + (on ? 'on' : '') + '" data-v="' + esc(o) + '">' + esc(o) + '</button>';
+          }).join('') + '</div>';
+        } else {
+          var type = q.type === 'date' ? 'date' : q.type === 'tel' ? 'tel' : q.type === 'email' ? 'email' : 'text';
+          h += '<input type="' + type + '" value="' + esc(v || '') + '"' + (q.key === 'postcode' || q.key === 'ni' ? ' style="text-transform:uppercase"' : '') + (type === 'tel' ? ' inputmode="tel"' : '') + ' autocomplete="' + ({ forename: 'given-name', surname: 'family-name', email: 'email', phone: 'tel', address: 'street-address', postcode: 'postal-code', dob: 'bday' }[q.key] || 'off') + '"/>';
+        }
+        h += '</div>';
+      });
+    } else {
+      h += '<p class="sub">Please read, then sign with your finger.</p><div class="consent">' + esc(S.info.consent) + '</div>' +
+        '<div class="q"><label>Your signature <span class="req">*</span></label><canvas class="sig" id="sig"></canvas><div class="sigbar"><span>Sign above</span><a href="#" id="clear">Clear</a></div></div>' +
+        '<div class="q"><label>Type your full name <span class="req">*</span></label><input id="signed-name" value="' + esc(S.data.signed_name || [S.data.forename, S.data.surname].filter(Boolean).join(' ')) + '"/></div>';
+    }
+    h += '<p class="err" id="err"></p>';
+    app.innerHTML = h;
+    foot.style.display = '';
+    document.getElementById('back').style.display = S.step ? '' : 'none';
+    document.getElementById('next').textContent = sec.sign ? 'Send' : 'Next';
+    window.scrollTo(0, 0);
+    app.querySelectorAll('.opts').forEach(function (box) {
+      box.onclick = function (e) {
+        var b = e.target.closest('button'); if (!b) return;
+        var k = box.parentNode.getAttribute('data-k');
+        if (box.getAttribute('data-multi') === '1') { b.classList.toggle('on'); S.data[k] = Array.prototype.map.call(box.querySelectorAll('button.on'), function (x) { return x.getAttribute('data-v'); }); }
+        else { var was = b.classList.contains('on'); box.querySelectorAll('button').forEach(function (x) { x.classList.remove('on'); }); if (!was) b.classList.add('on'); S.data[k] = was ? '' : b.getAttribute('data-v'); }
+      };
+    });
+    app.querySelectorAll('.q input').forEach(function (inp) {
+      inp.oninput = function () { var k = inp.parentNode.getAttribute('data-k'); if (k) S.data[k] = inp.value.trim(); };
+    });
+    if (sec.sign) pad();
+  }
+
+  function pad() {
+    var c = document.getElementById('sig'), ctx, drawing = false, last = null, dirty = false;
+    function size() { var r = c.getBoundingClientRect(), d = window.devicePixelRatio || 1; c.width = r.width * d; c.height = r.height * d; ctx = c.getContext('2d'); ctx.scale(d, d); ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#111'; }
+    size();
+    function pt(e) { var r = c.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+    c.onpointerdown = function (e) { drawing = true; last = pt(e); c.setPointerCapture(e.pointerId); };
+    c.onpointermove = function (e) { if (!drawing) return; var p = pt(e); ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke(); last = p; dirty = true; };
+    c.onpointerup = c.onpointercancel = function () { drawing = false; if (dirty) S.sig = c.toDataURL('image/png'); };
+    document.getElementById('clear').onclick = function (e) { e.preventDefault(); ctx.clearRect(0, 0, c.width, c.height); S.sig = null; dirty = false; };
+  }
+
+  document.getElementById('back').onclick = function () { if (S.step) { S.step--; draw(); } };
+  document.getElementById('next').onclick = function () {
+    var sec = S.sections[S.step], err = document.getElementById('err');
+    if (!sec.sign) {
+      var miss = sec.qs.filter(function (q) { return q.required && !(S.data[q.key] && String(S.data[q.key]).trim()); });
+      if (miss.length) { err.textContent = 'Please answer: ' + miss.map(function (q) { return q.label; }).join(', '); return; }
+      S.step++; draw(); return;
+    }
+    var name = document.getElementById('signed-name').value.trim();
+    if (!S.sig) { err.textContent = 'Please sign in the box.'; return; }
+    if (!name) { err.textContent = 'Please type your name.'; return; }
+    var btn = this; btn.disabled = true; btn.textContent = 'Sending…';
+    fetch('/api/intake', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ t: T, data: S.data, signature: S.sig, signed_name: name, consent: S.info.consent }) })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j.ok) { err.textContent = j.error || 'Could not send — try again.'; btn.disabled = false; btn.textContent = 'Send'; return; }
+        msg('✅', 'Thank you!', 'Your details have been sent to ' + (S.info.org.name || 'your adviser') + '. You can close this page.');
+      })
+      .catch(function () { err.textContent = 'No connection — try again.'; btn.disabled = false; btn.textContent = 'Send'; });
+  };
+})();
+</script>
+</body>
+</html>
