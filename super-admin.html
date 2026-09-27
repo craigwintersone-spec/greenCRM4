@@ -618,7 +618,7 @@ async function createOrg(){
       try{
         const r=await fetch('/api/send-invite',{
           method:'POST',
-          headers:{'Content-Type':'application/json'},
+          headers:{'Content-Type':'application/json','Authorization':'Bearer '+(((await sb.auth.getSession()).data.session||{}).access_token||'')},
           body:JSON.stringify({
             email:mgrEmail.toLowerCase(),
             org_name:name,
