@@ -158,7 +158,7 @@ function eventStats(ev) {
 
   var totalHours = hours.reduce(function (a, h) { return a + n(h.hours); }, 0);
   var rateEl = $('dr-rate');
-  var rate = (rateEl && parseFloat(rateEl.value)) || 12.60;
+  var rate = (rateEl && parseFloat(rateEl.value)) || ((typeof VOL_HOUR_RATE !== 'undefined') ? VOL_HOUR_RATE : 13.45);
 
   var cons = eventContracts(ev).map(function (id) { return byIdIn(contractsList(), id); }).filter(Boolean);
 
