@@ -172,9 +172,10 @@ async function init(){
   // Look up the invite in the REAL table: invitations (keyed by token)
   let inv=null;
   try{
-    const{data,error}=await sb.from('invitations').select('*').eq('token',token).maybeSingle();
+    // Checked on the server: the browser can't read the invitations table directly
+    const{data,error}=await sb.rpc('get_invitation',{p_token:token});
     if(error) throw error;
-    inv=data;
+    inv=data&&data.ok?{email:data.email,role:data.role,org_id:data.org_id,accepted_at:data.used?true:null,expires_at:data.expired?'2000-01-01':null,org_name:data.org_name,org_sector:data.org_sector}:null;
   }catch(e){
     showInvalid('We couldn\u2019t check this invite right now. Please try again in a moment.');
     return;
@@ -188,13 +189,10 @@ async function init(){
   }
 
   invite=inv;
+  invite.token=token;
   orgId=inv.org_id;
 
-  // Load org name for display
-  try{
-    const{data:orgData}=await sb.from('organisations').select('id,name,sector').eq('id',inv.org_id).maybeSingle();
-    org=orgData;
-  }catch(e){ org=null; }
+  org={id:inv.org_id,name:inv.org_name,sector:inv.org_sector};
 
   const infoHtml=`
     <div class="invite-row"><span class="lbl">Organisation</span><span class="val">${(org&&org.name)||'Vorlana'}</span></div>
@@ -211,17 +209,10 @@ async function init(){
 // Create the membership row that actually links the user to the org.
 // Upsert-safe: the table has a unique (user_id, org_id) constraint.
 async function linkMembership(userId){
-  const row={
-    user_id:userId,
-    org_id:invite.org_id,
-    role:invite.role,
-    status:'active',
-    invited_by:invite.invited_by||null,
-    invited_at:invite.created_at||null,
-    joined_at:new Date().toISOString()
-  };
-  const{error}=await sb.from('memberships').upsert(row,{onConflict:'user_id,org_id'});
+  // The server checks the invite, its expiry and that it's for this email, then adds you to the organisation
+  const{data,error}=await sb.rpc('accept_invitation',{p_token:invite.token});
   if(error) throw error;
+  if(!data||!data.ok) throw new Error((data&&data.reason)||'This invite could not be accepted');
 }
 
 // Keep a profiles row too, if your app reads names/emails from it.
@@ -235,11 +226,7 @@ async function upsertProfile(userId,fullName){
   }catch(e){ /* profiles is optional for login; ignore if it fails */ }
 }
 
-async function markAccepted(){
-  try{
-    await sb.from('invitations').update({accepted_at:new Date().toISOString()}).eq('id',invite.id);
-  }catch(e){ /* non-fatal */ }
-}
+async function markAccepted(){ /* done by accept_invitation on the server */ }
 
 async function createAccount(){
   const name=$('f-name').value.trim();
