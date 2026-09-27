@@ -67,15 +67,62 @@ async function callClaudeServer(system, prompt, maxTok = 600) {
   return (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
 }
 
-async function runChiefOfStaffBriefing() {
-  const orgs = await sbSelect('organisations', 'select=id,name,sector,plan,status,created_at&order=created_at.desc');
-  const counts = await sbSelect('participants', 'select=org_id,created_at&order=created_at.desc&limit=2000');
+// ── Activity across everything an organisation can record ─────
+// Organisations switch areas on and off (organisations.modules), so a
+// circular-only or events-only customer must not look "empty" just
+// because it has no participants. Activity = newest record in any
+// table that belongs to a switched-on area.
+const ACTIVITY_TABLES = [
+  { table: 'participants',    module: 'participants', label: 'participants' },
+  { table: 'events',          module: 'events',       label: 'events' },
+  { table: 'feedback',        module: 'events',       label: 'feedback responses' },
+  { table: 'volunteer_hours', module: 'volunteers',   label: 'volunteer sessions' },
+  { table: 'circular_items',  module: 'circular',     label: 'circular entries' },
+];
+function uses(org, mod) { const m = (org && org.modules) || {}; return m[mod] !== false; }
 
-  const byOrg = {};
-  counts.forEach(p => {
-    if (!byOrg[p.org_id]) byOrg[p.org_id] = { total: 0 };
-    byOrg[p.org_id].total++;
+const _activityMemo = {};   // one lookup per organisation per run (Hobby plan time limit)
+function orgActivity(org) {
+  if (!_activityMemo[org.id]) _activityMemo[org.id] = (async () => {
+    const out = { total: 0, last: null, byLabel: {} };
+    await Promise.all(ACTIVITY_TABLES.filter(t => uses(org, t.module)).map(async t => {
+      try {
+        const [rows, cnt] = await Promise.all([
+          sbSelect(t.table, `select=created_at&org_id=eq.${org.id}&order=created_at.desc&limit=1`),
+          sbCount(t.table, org.id)
+        ]);
+        if (!rows.length) return;
+        out.byLabel[t.label] = cnt;
+        out.total += cnt;
+        const d = rows[0].created_at;
+        if (d && (!out.last || d > out.last)) out.last = d;
+      } catch (e) { /* table may not exist on older databases */ }
+    }));
+    return out;
+  })();
+  return _activityMemo[org.id];
+}
+async function sbCount(table, orgId) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=id&org_id=eq.${orgId}&limit=1`, {
+    headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, Prefer: 'count=exact', Range: '0-0' },
   });
+  const cr = r.headers.get('content-range') || '';
+  const n = parseInt(cr.split('/')[1], 10);
+  return isNaN(n) ? 0 : n;
+}
+function describeActivity(a) {
+  const bits = Object.keys(a.byLabel).map(k => `${a.byLabel[k]} ${k}`);
+  return bits.length ? bits.join(', ') : 'no records yet';
+}
+function describeModules(org) {
+  const names = { participants: 'caseload', events: 'events', volunteers: 'volunteers', circular: 'circular economy', funders: 'funders' };
+  return Object.keys(names).filter(k => uses(org, k)).map(k => names[k]).join(', ');
+}
+
+async function runChiefOfStaffBriefing() {
+  const orgs = await sbSelect('organisations', 'select=id,name,sector,plan,status,created_at,modules&order=created_at.desc');
+  const byOrg = {};
+  await Promise.all(orgs.slice(0, 30).map(async o => { byOrg[o.id] = await orgActivity(o); }));
 
   const totalOrgs = orgs.length;
   const paidOrgs = orgs.filter(o => ['pro', 'network', 'starter'].includes(o.plan)).length;
@@ -83,12 +130,14 @@ async function runChiefOfStaffBriefing() {
   const newThisWeek = orgs.filter(o => Date.now() - new Date(o.created_at).getTime() < 7*24*60*60*1000).length;
 
   const orgSummary = orgs.slice(0, 30).map(o => {
-    const c = byOrg[o.id] || { total: 0 };
-    return `- ${o.name} (${o.plan || 'free'}, ${o.sector || 'unknown'}): ${c.total} participants`;
+    const a = byOrg[o.id] || { byLabel: {}, last: null };
+    const lastTxt = a.last ? `, last activity ${Math.floor((Date.now() - new Date(a.last).getTime()) / 86400000)} days ago` : '';
+    return `- ${o.name} (${o.plan || 'free'}, ${o.sector || 'unknown'}; uses ${describeModules(o) || 'nothing switched on'}): ${describeActivity(a)}${lastTxt}`;
   }).join('\n');
 
   const sys =
     'You are the Chief of Staff for a solo founder running Vorlana, a UK CRM SaaS for charities. ' +
+    'Customers switch areas on and off — only judge each customer on the areas it uses (never flag missing participants for a customer that does not use the caseload). ' +
     'Generate a warm, specific morning briefing in clean British English. Three short sections: ' +
     '1) Overnight summary (2 sentences), 2) What needs attention today (3 bullets max), ' +
     '3) One strategic observation. Use **bold** for emphasis. No hashtags, no markdown headings, ' +
@@ -118,20 +167,21 @@ async function runChiefOfStaffBriefing() {
 }
 
 async function runChurnDetector() {
-  const orgs = await sbSelect('organisations', 'select=id,name,plan,status,created_at&plan=in.(pro,network,starter)');
+  const orgs = await sbSelect('organisations', 'select=id,name,plan,status,created_at,modules&plan=in.(pro,network,starter)');
   const decisions = [];
   const now = Date.now();
   let inactive = 0;
+  await Promise.all(orgs.map(orgActivity));
 
   for (const org of orgs) {
-    const ps = await sbSelect('participants', `select=created_at&org_id=eq.${org.id}&order=created_at.desc&limit=1`);
-    if (!ps.length) {
+    const act = await orgActivity(org);
+    if (!act.last) {
       const ageDays = Math.floor((now - new Date(org.created_at).getTime()) / 86400000);
       if (ageDays > 14) {
         decisions.push({
           agent: 'Customer Success', tier: 'high',
-          title: `${org.name} has zero participants — ${ageDays} days since signup`,
-          description: `Paid customer (${org.plan}) hasn't added any data. Strong onboarding-stalled signal.`,
+          title: `${org.name} has no records yet — ${ageDays} days since signup`,
+          description: `Paid customer (${org.plan}) using ${describeModules(org) || 'no areas'} hasn't added any data. Strong onboarding-stalled signal.`,
           primary_action: 'Send check-in email', secondary_action: 'Schedule call',
           org_id: org.id, status: 'pending',
           metadata: { signal: 'onboarding_stalled', age_days: ageDays },
@@ -140,12 +190,12 @@ async function runChurnDetector() {
       }
       continue;
     }
-    const daysSince = Math.floor((now - new Date(ps[0].created_at).getTime()) / 86400000);
+    const daysSince = Math.floor((now - new Date(act.last).getTime()) / 86400000);
     if (daysSince > 21) {
       decisions.push({
         agent: 'Customer Success', tier: daysSince > 35 ? 'urgent' : 'high',
         title: `${org.name} silent for ${daysSince} days`,
-        description: `No new participant data in ${daysSince} days. ${org.plan} plan. Pattern suggests churn risk.`,
+        description: `Nothing new recorded in ${daysSince} days across ${describeModules(org) || 'their areas'} (${describeActivity(act)}). ${org.plan} plan. Pattern suggests churn risk.`,
         primary_action: 'Send check-in email', secondary_action: 'Call instead',
         org_id: org.id, status: 'pending',
         metadata: { signal: 'inactivity', days_since_last: daysSince },
@@ -160,13 +210,14 @@ async function runChurnDetector() {
 }
 
 async function runOnboardingScan() {
-  const orgs = await sbSelect('organisations', 'select=id,name,plan,status,created_at');
+  const orgs = await sbSelect('organisations', 'select=id,name,plan,status,created_at,modules');
   let stalled = 0;
+  await Promise.all(orgs.map(orgActivity));
   for (const org of orgs) {
     const ageDays = Math.floor((Date.now() - new Date(org.created_at).getTime()) / 86400000);
     if (ageDays > 3 && ageDays <= 14) {
-      const ps = await sbSelect('participants', `select=id&org_id=eq.${org.id}&limit=1`);
-      if (!ps.length) stalled++;
+      const act = await orgActivity(org);
+      if (!act.last) stalled++;
     }
   }
   await logAction('Onboarding', 'Ran onboarding scan', `${orgs.length} customers · ${stalled} not activated`, null, 0);
@@ -174,24 +225,23 @@ async function runOnboardingScan() {
 }
 
 async function runInsights() {
-  const orgs = await sbSelect('organisations', 'select=id,name,plan,sector,created_at');
-  const ps = await sbSelect('participants', 'select=org_id&limit=2000');
+  const orgs = await sbSelect('organisations', 'select=id,name,plan,sector,created_at,modules');
   const contracts = await sbSelect('contracts', 'select=org_id,target_outcomes,actual_outcomes&limit=500');
 
-  const byOrgP = {};
-  ps.forEach(p => { byOrgP[p.org_id] = (byOrgP[p.org_id] || 0) + 1; });
+  const active = {};
+  await Promise.all(orgs.map(async o => { const a = await orgActivity(o); if (a.last) active[o.id] = a; }));
 
   const total = orgs.length;
   const paying = orgs.filter(o => ['pro', 'network', 'starter'].includes(o.plan)).length;
   const free = orgs.filter(o => o.plan === 'free' || !o.plan).length;
-  const empty = orgs.filter(o => !byOrgP[o.id]).length;
+  const empty = orgs.filter(o => !active[o.id]).length;
   const emptyPct = total ? Math.round((empty / total) * 100) : 0;
 
   const insights = [];
   if (emptyPct >= 40) insights.push({
     agent: 'Insights', tier: 'medium',
-    title: `${emptyPct}% of customers have zero participants`,
-    description: `${empty} of your ${total} customers haven't added participant data. Onboarding-to-activation is your biggest leak.`,
+    title: `${emptyPct}% of customers have no records yet`,
+    description: `${empty} of your ${total} customers haven't recorded anything in the areas they use. Onboarding-to-activation is your biggest leak.`,
     primary_action: 'Draft onboarding fix', secondary_action: 'Email affected customers',
     status: 'pending', metadata: { kind: 'insight', signal: 'empty_orgs', empty_pct: emptyPct },
   });
