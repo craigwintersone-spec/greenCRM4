@@ -56,25 +56,40 @@ function go(page) {
   });
 }
 
-// Module visibility — hides nav buttons for disabled modules.
-// Pages are still reachable via direct go() calls (data is RLS-protected
-// at the database level, so this is a UX not a security boundary).
+// Module visibility — hides sidebar buttons for areas the organisation
+// has switched off (Settings → What you do). Pages stay reachable by
+// go() (data is protected by RLS in the database — this is UX, not
+// security).
 //
-// ── LAUNCH SCOPE (dial-down) ────────────────────────────────────────
-// Launching three pillars only: Employability · Funder Reporting · BD Manager.
-// Changes below are DEFAULTS for orgs that haven't set module prefs — orgs
-// with saved prefs keep theirs. Nothing is removed; deferred modules stay in
-// the codebase and can be re-enabled per org in Settings, or by reverting the
-// // launch: comments here. To broaden the product later, undo those lines.
+// No flash on refresh: the last-known switches are saved in the browser
+// and applied the instant this file loads, before the organisation's
+// settings arrive; the real settings then correct them if they changed.
+// Buttons without data-module (Dashboard, Settings) always show.
+const _MODS_KEY = 'vorlana_mods';
+
 function applyModules(mods, plan) {
-  // ── LAUNCH: the sidebar in app.html is the single source of truth. ──
-  // Whatever buttons are in the HTML are the ones we want, so this function
-  // just makes sure they are all VISIBLE. It never hides anything — that is
-  // what stops the "buttons flash on refresh then disappear" glitch.
-  // To take a button out of the product, delete it from app.html's sidebar
-  // (not here). `mods` and `plan` are still accepted so existing calls work,
-  // but they are no longer used to hide anything.
-  document.querySelectorAll('.nav-btn').forEach(function (btn) {
-    btn.style.display = '';
+  mods = mods || {};
+  try { localStorage.setItem(_MODS_KEY, JSON.stringify(mods)); } catch (e) { /* private mode */ }
+  _paintModules(mods);
+}
+
+function _paintModules(mods) {
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    const k = btn.getAttribute('data-module');
+    btn.style.display = k && mods[k] === false ? 'none' : '';
+  });
+  // Hide a section heading when everything under it is hidden
+  document.querySelectorAll('.nav-section').forEach(sec => {
+    let el = sec.nextElementSibling, any = false;
+    while (el && !el.classList.contains('nav-section')) {
+      if (el.classList.contains('nav-btn') && el.style.display !== 'none') { any = true; break; }
+      el = el.nextElementSibling;
+    }
+    sec.style.display = any ? '' : 'none';
   });
 }
+
+// Paint straight away from the last-known switches
+(function () {
+  try { const m = JSON.parse(localStorage.getItem(_MODS_KEY) || 'null'); if (m) _paintModules(m); } catch (e) { /* ignore */ }
+})();
