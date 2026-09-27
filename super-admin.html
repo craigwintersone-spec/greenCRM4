@@ -393,14 +393,13 @@ tr:last-child td{border-bottom:none}
   </div>
   <div style="margin-bottom:8px">
     <label>Modules to enable</label>
-    <div class="mod-grid">
-      <div class="mod-item on" id="cmod-item-participants"><span style="font-size:13px;color:var(--txt)">👤 Participants</span><input type="checkbox" id="cmod-participants" checked style="width:auto;cursor:pointer"/></div>
-      <div class="mod-item on" id="cmod-item-funders"><span style="font-size:13px;color:var(--txt)">💰 Funders & Reports</span><input type="checkbox" id="cmod-funders" checked style="width:auto;cursor:pointer"/></div>
-      <div class="mod-item" id="cmod-item-volunteers"><span style="font-size:13px;color:var(--txt)">🤝 Volunteers</span><input type="checkbox" id="cmod-volunteers" style="width:auto;cursor:pointer"/></div>
-      <div class="mod-item" id="cmod-item-events"><span style="font-size:13px;color:var(--txt)">📅 Events & Feedback</span><input type="checkbox" id="cmod-events" style="width:auto;cursor:pointer"/></div>
-      <div class="mod-item" id="cmod-item-employers"><span style="font-size:13px;color:var(--txt)">🏢 Employers</span><input type="checkbox" id="cmod-employers" style="width:auto;cursor:pointer"/></div>
-      <div class="mod-item" id="cmod-item-circular"><span style="font-size:13px;color:var(--txt)">♻️ Circular Economy</span><input type="checkbox" id="cmod-circular" style="width:auto;cursor:pointer"/></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 8px">
+      <button type="button" class="btn btn-ghost btn-sm" onclick="cmodPreset('employability')">Employability</button>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="cmodPreset('circular')">Circular economy</button>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="cmodPreset('community')">Community group</button>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="cmodPreset('all')">Everything</button>
     </div>
+    <div class="mod-grid" id="cmod-grid"></div>
   </div>
   <div style="margin-top:14px">
     <label>Invite first manager (optional)</label>
@@ -524,7 +523,19 @@ document.addEventListener('keydown', e => {
   if(e.key === 'Enter' && $('auth-screen').style.display !== 'none') doSignIn();
 });
 
-['participants','volunteers','events','employers','circular','funders'].forEach(k=>{
+// All areas a customer can switch on (same keys as js/config.js SET_MODULES)
+const CMODS=[['participants','👤 Participants & caseload'],['volunteers','🤝 Volunteers'],['events','📅 Events & feedback'],['impact','🌿 Social impact'],
+  ['contacts','📋 Contacts & donors'],['employers','🏢 Employers'],['funders','💰 Funders & reporting'],['evidence','🗂️ Evidence hub'],
+  ['demographics','📊 Demographics'],['social','📣 Social media'],['bd','💼 BD manager'],['circular','♻️ Circular economy']];
+const CMOD_PRESETS={
+  employability:['participants','volunteers','events','impact','contacts','employers','funders','evidence','demographics','social','bd'],
+  circular:['volunteers','events','impact','contacts','funders','demographics','social','bd','circular'],
+  community:['volunteers','events','impact','contacts','funders','demographics','social','bd'],
+  all:CMODS.map(m=>m[0])};
+$('cmod-grid').innerHTML=CMODS.map(([k,n])=>'<div class="mod-item" id="cmod-item-'+k+'"><span style="font-size:13px;color:var(--txt)">'+n+'</span><input type="checkbox" id="cmod-'+k+'" style="width:auto;cursor:pointer"/></div>').join('');
+function cmodPreset(name){const on=CMOD_PRESETS[name]||[];CMODS.forEach(([k])=>{const cb=$('cmod-'+k);cb.checked=on.includes(k);$('cmod-item-'+k).classList.toggle('on',cb.checked);});}
+cmodPreset('employability');
+CMODS.map(m=>m[0]).forEach(k=>{
   const cb=$('cmod-'+k);
   if(cb)cb.addEventListener('change',()=>{const item=$('cmod-item-'+k);if(item)item.classList.toggle('on',cb.checked);});
 });
@@ -584,7 +595,7 @@ async function createOrg(){
   ['create-err','create-ok'].forEach(id=>$(id).style.display='none');
   if(!name){$('create-err').textContent='Organisation name is required.';$('create-err').style.display='block';return;}
   const btn=$('create-btn');btn.textContent='Creating…';btn.disabled=true;
-  const modules={participants:$('cmod-participants').checked,volunteers:$('cmod-volunteers').checked,events:$('cmod-events').checked,employers:$('cmod-employers').checked,circular:$('cmod-circular').checked,funders:$('cmod-funders').checked};
+  const modules={};CMODS.forEach(([k])=>{modules[k]=$('cmod-'+k).checked;});
   const{data,error}=await sb.from('organisations').insert([{name,sector:$('co-sector').value,plan:$('co-plan').value,status:$('co-status').value,modules,settings:{}}]).select().single();
   if(error){btn.textContent='Create organisation';btn.disabled=false;$('create-err').textContent='Error: '+error.message;$('create-err').style.display='block';return;}
 
