@@ -40,10 +40,10 @@ function _renderForPage(page) {
 }
 
 // ── Who can open which page ────────────────────────────────
-// Managers, admins and super admins see everything. Advisers see the
-// day-to-day pages; a manager can change the list in Settings → Team access
-// (saved as organisations.settings.adviser_pages). The database still limits
-// everyone to their own organisation — this decides what advisers are shown.
+// Set per person by a manager on the Team page (memberships.page_access).
+// Nobody set yet: managers/admins see everything, advisers see the
+// day-to-day pages. Super admins always see everything. The database still
+// limits everyone to their own organisation — this decides what's shown.
 const PAGE_LIST = [
   ['dashboard', 'Dashboard'], ['participants', 'Participants'], ['pipeline', 'Pipeline'], ['referrals', 'Referrals'], ['partnerrefs', 'Partner referrals'],
   ['outcomes', 'Outcomes'], ['safeguarding', 'Safeguarding'], ['evidence', 'Evidence hub'], ['events', 'Events'], ['feedback', 'Feedback'],
@@ -59,14 +59,20 @@ function isAdviserRole(role) {
   role = role !== undefined ? role : (typeof currentRole !== 'undefined' ? currentRole : '');
   return !!role && !/owner|admin|manager|super/i.test(role);
 }
-function adviserPages() {
-  const s = (typeof currentOrg !== 'undefined' && currentOrg && currentOrg.settings) || {};
-  return Array.isArray(s.adviser_pages) ? s.adviser_pages : ADVISER_DEFAULT_PAGES;
+function adviserPages() { return ADVISER_DEFAULT_PAGES; }
+// This person's own list for the organisation they're in (null = role default)
+function myPageAccess() {
+  if (typeof userMemberships === 'undefined' || typeof orgId === 'undefined') return null;
+  const m = (userMemberships || []).find(x => x.org_id === orgId);
+  return m && Array.isArray(m.page_access) ? m.page_access : null;
 }
 function pageAllowed(page, role, pages) {
   if (page === 'dashboard') return true;
-  if (!isAdviserRole(role)) return true;
-  return (pages || adviserPages()).includes(page);
+  role = role !== undefined ? role : (typeof currentRole !== 'undefined' ? currentRole : '');
+  if (/super/i.test(role || '')) return true;
+  const list = pages !== undefined ? pages : myPageAccess();
+  if (Array.isArray(list)) return list.includes(page);
+  return !isAdviserRole(role) || ADVISER_DEFAULT_PAGES.includes(page);
 }
 
 function go(page) {
@@ -103,7 +109,7 @@ function applyModules(mods, plan) {
   mods = mods || {};
   try {
     localStorage.setItem(_MODS_KEY, JSON.stringify(mods));
-    localStorage.setItem(_ACCESS_KEY, JSON.stringify({ role: typeof currentRole !== 'undefined' ? currentRole : '', pages: adviserPages() }));
+    localStorage.setItem(_ACCESS_KEY, JSON.stringify({ role: typeof currentRole !== 'undefined' ? currentRole : '', pages: myPageAccess() }));
   } catch (e) { /* private mode */ }
   _paintModules(mods);
 }
