@@ -31,7 +31,7 @@ var VERSION = 'v1.3';
 
 // UK Living Wage (Living Wage Foundation, 2024/25). Shown in the
 // report and editable — never present a made-up rate to a funder.
-var DEFAULT_RATE = 12.60;
+var DEFAULT_RATE = (typeof VOL_HOUR_RATE !== 'undefined') ? VOL_HOUR_RATE : 13.45;   // real Living Wage 2025/26
 var RATE_LABEL = 'UK Living Wage (Living Wage Foundation, 2024/25)';
 
 function $(id) { return document.getElementById(id); }
