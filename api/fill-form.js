@@ -45,7 +45,7 @@ module.exports = async (req, res) => {
   }
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-    const orgId = body.orgId || body.org_id || body.org || 'default';
+    let orgId = body.orgId || body.org_id || body.org || 'default';
     const rawData = body.data || body.participant || body.participantData || body.fields || {};
     const scope = buildScope(rawData);
     // Accept the uploaded form under any common field name, and strip an
@@ -61,6 +61,13 @@ module.exports = async (req, res) => {
       if (!tok) return res.status(401).json({ ok: false, error: 'Please sign in again, then retry.' });
       const who = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${tok}` } }).catch(() => null);
       if (!who || !who.ok) return res.status(401).json({ ok: false, error: 'Your sign-in has expired — refresh the page and try again.' });
+      // Saved form lessons belong to an organisation: only use/learn for one this person is really in
+      const user = await who.json().catch(() => ({}));
+      const m = await fetch(`${SUPABASE_URL}/rest/v1/memberships?user_id=eq.${encodeURIComponent(user.id || '')}&org_id=eq.${encodeURIComponent(orgId)}&status=eq.active&select=org_id&limit=1`,
+        { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }).then(r => r.ok ? r.json() : []).catch(() => []);
+      const sa = m.length ? [] : await fetch(`${SUPABASE_URL}/rest/v1/super_admins?user_id=eq.${encodeURIComponent(user.id || '')}&select=user_id&limit=1`,
+        { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }).then(r => r.ok ? r.json() : []).catch(() => []);
+      if (!m.length && !sa.length) orgId = 'none:' + (user.id || 'anon');   // not their org: no shared lessons read or written
     }
 
     // ---- Branch: learn from a human correction ----
