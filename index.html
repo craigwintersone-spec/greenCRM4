@@ -246,6 +246,7 @@
     <nav class="nav-links">
       <a href="#product">What it does</a>
       <a href="#how">How it works</a>
+      <a href="#pricing">Pricing</a>
       <a href="login.html" class="signin">Sign in</a>
       <a href="#" class="btn btn-p" data-demo>Request a demo</a>
     </nav>
@@ -464,6 +465,39 @@
           <div><b>Bring your history with you</b><span>Old spreadsheets of feedback, hours, harvests or repairs come in without matching columns — every row kept, gaps listed for tidying.</span></div>
         </div>
       </div>
+    </div>
+  </section>
+
+
+  <!-- PRICING -->
+  <section id="pricing">
+    <style>
+      .prices{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:40px}
+      .price-card{position:relative;background:#fff;border:1px solid #E6E0D6;border-radius:16px;padding:22px 20px;display:flex;flex-direction:column}
+      .price-card.hot{border:2px solid #2A9D8F;box-shadow:0 12px 30px rgba(31,111,109,.12)}
+      .price-tag{position:absolute;top:-11px;left:20px;background:#2A9D8F;color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:10px}
+      .price-card h3{font-size:18px;margin:0 0 4px}
+      .price-who{font-size:13px;color:#6B7574;min-height:38px}
+      .price-amt{font-size:32px;font-weight:800;color:#1F6F6D;margin:10px 0 14px}
+      .price-amt span{font-size:13px;font-weight:500;color:#6B7574;margin-left:4px}
+      .price-card ul{list-style:none;padding:0;margin:0 0 18px;flex:1}
+      .price-card li{display:flex;gap:8px;align-items:flex-start;font-size:13.5px;line-height:1.45;margin-bottom:8px}
+      .price-card li svg{flex-shrink:0;margin-top:3px}
+      .price-card .btn{text-align:center}
+      .price-note{margin-top:22px;font-size:13.5px;color:#6B7574;line-height:1.6;text-align:center}
+      @media(max-width:980px){.prices{grid-template-columns:1fr 1fr}}
+      @media(max-width:620px){.prices{grid-template-columns:1fr}}
+    </style>
+    <div class="wrap">
+      <span class="sec-eyebrow">Pricing</span>
+      <h2 class="sec-title">Priced against the paperwork it replaces.</h2>
+      <div class="prices">
+        <div class="price-card"><h3>Community</h3><div class="price-who">One activity — a repair café, growing project or single programme.</div><div class="price-amt">£49<span>/month</span></div><ul><li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Everything for one activity</span></li><li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Funder report always ready</span></li><li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>QR feedback, photo logging and the phone app</span></li><li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Up to 3 staff</span></li></ul><a href="#" class="btn btn-g" data-demo>Start with Community</a></div>
+        <div class="price-card hot"><div class="price-tag">Most popular</div><h3>Standard</h3><div class="price-who">Several projects and funders under one roof.</div><div class="price-amt">£149<span>/month</span></div><ul><li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>All activities and projects</span></li><li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Every funder and contract report</span></li><li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>AI briefings, bid writing and social posts</span></li><li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Import your history</span></li><li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Up to 15 staff</span></li></ul><a href="#" class="btn btn-p" data-demo>Talk to us</a></div>
+        <div class="price-card"><h3>Provider</h3><div class="price-who">Employability and reuse providers reporting to contracts.</div><div class="price-amt">£349<span>/month</span></div><ul><li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Contract monitoring and RAG targets</span></li><li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Funder forms filled from the record</span></li><li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Chain of custody and donor certificates</span></li><li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Partner referral portal</span></li><li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Unlimited staff</span></li></ul><a href="#" class="btn btn-g" data-demo>Talk to us</a></div>
+        <div class="price-card"><h3>Partnership</h3><div class="price-who">Consortia, councils and multi-site networks.</div><div class="price-amt">From £8k<span>/year</span></div><ul><li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Several organisations, one view</span></li><li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Shared outcomes framework</span></li><li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Onboarding and data migration</span></li><li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Named support</span></li></ul><a href="#" class="btn btn-g" data-demo>Get a quote</a></div>
+      </div>
+      <p class="price-note">Pay yearly and get two months free. Prices are per organisation. Every plan includes the full circular economy toolkit where you use it, data hosted in the EU/EEA, and help moving your records over.</p>
     </div>
   </section>
 
@@ -810,6 +844,7 @@
       <nav class="foot-links">
         <a href="#product">What it does</a>
         <a href="#how">How it works</a>
+        <a href="#pricing">Pricing</a>
         <a href="#privacy">Privacy</a>
         <a href="#terms">Terms</a>
         <a href="#security">Security</a>
