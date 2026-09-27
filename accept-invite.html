@@ -108,6 +108,10 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script>
+// Older invite links: the secure invite page now handles every invite
+(function(){var q=new URLSearchParams(location.search);var t=q.get('token')||q.get('invite')||'';location.replace('invite.html'+(t?'?token='+encodeURIComponent(t):''));})();
+</script>
+<script>
 'use strict';
 const SB_URL='https://nznfrxzgvcjhfsdaphyp.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw';
