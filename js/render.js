@@ -67,18 +67,36 @@ function renderDashboard() {
     $('dash-sub').textContent = (currentOrg && currentOrg.name) ? currentOrg.name + ' overview' : 'Overview';
   }
 
-  // Stats grid
+  // Stats grid — only for the areas this organisation uses (Settings → What you do)
+  const on = k => typeof orgUses === 'function' ? orgUses(k) : true;
+  const peopleOn = on('participants');
   const active = P.filter(p => p.stage !== 'Closed').length;
   const atRisk = P.filter(p => p.risk === 'High' || days(p.last_contact) > 21).length;
   const outcomesAchieved = P.filter(p => p.outcomes && p.outcomes.length > 0).length;
   const sg = $('dash-stats');
   if (sg) {
-    sg.innerHTML =
-      statCard('Active participants', active, P.length + ' total') +
-      statCard('At-risk', atRisk, 'High risk or 21+ days no contact') +
-      statCard('Outcomes achieved', outcomesAchieved, pct(outcomesAchieved, P.length || 1) + '%') +
-      statCard('Events delivered', E.length, FB.length + ' feedback responses');
+    const cards = [];
+    if (peopleOn) cards.push(statCard('Active participants', active, P.length + ' total'), statCard('At-risk', atRisk, 'High risk or 21+ days no contact'), statCard('Outcomes achieved', outcomesAchieved, pct(outcomesAchieved, P.length || 1) + '%'));
+    if (on('events')) cards.push(statCard('Events delivered', E.length, FB.length + ' feedback responses'));
+    if (on('volunteers')) {
+      const from30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+      const h30 = (DB.volunteer_hours || []).filter(h => (h.date || '') >= from30).reduce((a, h) => a + num(h.hours), 0);
+      cards.push(statCard('Volunteer hours', Math.round(h30 * 10) / 10, 'last 30 days · ' + V.filter(v => v.status !== 'Inactive').length + ' volunteers'));
+    }
+    if (on('circular')) cards.push('<div id="dash-cx-stats" style="display:contents"></div>');
+    sg.innerHTML = cards.slice(0, 6).join('');
+    if (on('circular') && typeof cxReportLoad === 'function') cxReportLoad().then(() => {
+      const el = $('dash-cx-stats'); if (!el || typeof CXR === 'undefined' || !CXR.ok) return;
+      const r = cxReportStats({}); if (!r || !r.entries) { el.innerHTML = statCard('Diverted from waste', '0 kg', 'nothing logged yet'); return; }
+      el.innerHTML = statCard('Diverted from waste', r.kg + ' kg', r.reused + ' items reused or repaired') +
+        (r.foodKg ? statCard('Food shared', r.foodKg + ' kg', '≈ ' + r.meals + ' meals') : statCard('CO₂e avoided', (Math.round(r.co2 / 100) / 10) + ' t', 'estimate'));
+    });
   }
+  // Without a caseload, the two lists show what needs doing across the other areas
+  const t1 = $('dash-risk') && $('dash-risk').previousElementSibling, t2 = $('dash-activity') && $('dash-activity').previousElementSibling;
+  if (t1) t1.textContent = peopleOn ? 'At-risk — chase today' : 'Needs attention';
+  if (t2) t2.textContent = 'Recent activity';
+  if (!peopleOn) { _dashAttention(); return _dashRest(FB); }
 
   // At-risk list
   const riskEl = $('dash-risk');
@@ -121,6 +139,52 @@ function renderDashboard() {
     }
   }
 
+  _dashRest(FB);
+}
+
+// Dashboard lists for organisations without a caseload: what needs doing,
+// and what happened lately, across events and circular activity.
+async function _dashAttention() {
+  const riskEl = $('dash-risk'), actEl = $('dash-activity');
+  if (!riskEl || !actEl) return;
+  const on = k => typeof orgUses === 'function' ? orgUses(k) : true;
+  const today = new Date().toISOString().slice(0, 10);
+  const from30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+  const todo = [], recent = [];
+  const row = (title, sub, act) => '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)' + (act ? ';cursor:pointer" onclick="' + act : '') + '">' +
+    '<div style="min-width:0"><div style="font-size:13px;font-weight:600;color:var(--txt)">' + escapeHTML(title) + '</div><div style="font-size:11px;color:var(--txt3)">' + escapeHTML(sub) + '</div></div></div>';
+  if (on('events')) {
+    const fbBy = {}; (DB.feedback || []).forEach(f => { fbBy[String(f.eventId || f.event_id)] = 1; });
+    (DB.events || []).filter(e => e.date && e.date >= from30 && e.date <= today && !fbBy[String(e.id)])
+      .forEach(e => todo.push(row(e.name, 'No feedback collected yet · ' + fmtD(e.date), "go('events')")));
+    (DB.events || []).filter(e => e.date && e.date <= today).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4)
+      .forEach(e => recent.push([e.date, row(e.name, 'Event · ' + num(e.attendees) + ' attended · ' + fmtD(e.date), "go('events')")]));
+  }
+  if (on('circular') && typeof cxReportLoad === 'function') {
+    try {
+      await cxReportLoad();
+      if (typeof CXR !== 'undefined' && CXR.ok) {
+        const acts = {}; CXR.acts.forEach(a => { acts[a.id] = a; });
+        const items = CXR.items.filter(i => acts[i.activity_id]);
+        const open = items.filter(i => !i.outcome_type);
+        const stuck = open.filter(i => circMode(acts[i.activity_id]) === 'tracked' && cxDays(i.updated_at) > 14);
+        const toSort = open.filter(i => circMode(acts[i.activity_id]) === 'tally');
+        if (stuck.length) todo.push(row(stuck.length + ' item' + (stuck.length === 1 ? '' : 's') + ' waiting over 14 days', 'Circular · longest: ' + (stuck[0].passport_code || stuck[0].name), "go('circular')"));
+        if (toSort.length) todo.push(row(toSort.length + ' entr' + (toSort.length === 1 ? 'y' : 'ies') + ' with no destination', 'Circular · not counted in reports until sorted', "go('circular')"));
+        items.filter(i => i.outcome_type).sort((a, b) => String(b.outcome_at || b.created_at).localeCompare(String(a.outcome_at || a.created_at))).slice(0, 5).forEach(i => {
+          const a = acts[i.activity_id], o = cxOutcome(a, i.outcome);
+          const d = String(i.outcome_at || i.created_at || '').slice(0, 10);
+          recent.push([d, row((cxPerKg(cxType(a, i.item_type)) ? cxFmt(i.weight_kg, 1) + ' kg ' : '') + cxLbl(i.name), (a.icon || '') + ' ' + a.name + ' · ' + (o ? o.label : '') + ' · ' + fmtD(d), "go('circular')")]);
+        });
+      }
+    } catch (e) { /* circular optional */ }
+  }
+  riskEl.innerHTML = todo.length ? todo.slice(0, 6).join('') : renderEmpty('Nothing needs chasing right now.');
+  recent.sort((a, b) => String(b[0]).localeCompare(String(a[0])));
+  actEl.innerHTML = recent.length ? recent.slice(0, 6).map(x => x[1]).join('') : renderEmpty('No recent activity yet.');
+}
+
+function _dashRest(FB) {
   // Feedback highlights
   const fbHi = $('dash-fb-hi');
   if (fbHi) {
