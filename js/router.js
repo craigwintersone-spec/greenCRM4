@@ -39,7 +39,39 @@ function _renderForPage(page) {
   return renders[page];
 }
 
+// ── Who can open which page ────────────────────────────────
+// Managers, admins and super admins see everything. Advisers see the
+// day-to-day pages; a manager can change the list in Settings → Team access
+// (saved as organisations.settings.adviser_pages). The database still limits
+// everyone to their own organisation — this decides what advisers are shown.
+const PAGE_LIST = [
+  ['dashboard', 'Dashboard'], ['participants', 'Participants'], ['pipeline', 'Pipeline'], ['referrals', 'Referrals'], ['partnerrefs', 'Partner referrals'],
+  ['outcomes', 'Outcomes'], ['safeguarding', 'Safeguarding'], ['evidence', 'Evidence hub'], ['events', 'Events'], ['feedback', 'Feedback'],
+  ['volunteers', 'Volunteers'], ['contacts', 'Contacts & donors'], ['employers', 'Employers'], ['circular', 'Circular economy'],
+  ['impact', 'Social impact'], ['rag', 'RAG dashboard'], ['demographics', 'Demographics'], ['reports', 'Reports'], ['funders', 'Funders'],
+  ['funding', 'Contracts'], ['social', 'Social media'], ['bd', 'BD manager'], ['hr', 'HR'], ['settings', 'Settings']
+];
+const ADVISER_DEFAULT_PAGES = ['dashboard', 'participants', 'pipeline', 'referrals', 'partnerrefs', 'outcomes', 'safeguarding', 'evidence',
+  'events', 'feedback', 'volunteers', 'contacts', 'employers', 'circular'];
+const _ACCESS_KEY = 'vorlana_access';
+
+function isAdviserRole(role) {
+  role = role !== undefined ? role : (typeof currentRole !== 'undefined' ? currentRole : '');
+  return !!role && !/owner|admin|manager|super/i.test(role);
+}
+function adviserPages() {
+  const s = (typeof currentOrg !== 'undefined' && currentOrg && currentOrg.settings) || {};
+  return Array.isArray(s.adviser_pages) ? s.adviser_pages : ADVISER_DEFAULT_PAGES;
+}
+function pageAllowed(page, role, pages) {
+  if (page === 'dashboard') return true;
+  if (!isAdviserRole(role)) return true;
+  return (pages || adviserPages()).includes(page);
+}
+
 function go(page) {
+  // Advisers only reach the pages their organisation allows
+  if (!pageAllowed(page)) page = 'dashboard';
   // Hide all pages and clear active nav
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -69,14 +101,21 @@ const _MODS_KEY = 'vorlana_mods';
 
 function applyModules(mods, plan) {
   mods = mods || {};
-  try { localStorage.setItem(_MODS_KEY, JSON.stringify(mods)); } catch (e) { /* private mode */ }
+  try {
+    localStorage.setItem(_MODS_KEY, JSON.stringify(mods));
+    localStorage.setItem(_ACCESS_KEY, JSON.stringify({ role: typeof currentRole !== 'undefined' ? currentRole : '', pages: adviserPages() }));
+  } catch (e) { /* private mode */ }
   _paintModules(mods);
 }
 
-function _paintModules(mods) {
+function _paintModules(mods, access) {
+  let role, pages;
+  if (access) { role = access.role; pages = access.pages; }
   document.querySelectorAll('.nav-btn').forEach(btn => {
     const k = btn.getAttribute('data-module');
-    btn.style.display = k && mods[k] === false ? 'none' : '';
+    const m = /go\('([a-z]+)'\)/.exec(btn.getAttribute('onclick') || '');
+    const byRole = m ? pageAllowed(m[1], role, pages) : true;
+    btn.style.display = (k && mods[k] === false) || !byRole ? 'none' : '';
   });
   // Hide a section heading when everything under it is hidden
   document.querySelectorAll('.nav-section').forEach(sec => {
@@ -91,5 +130,9 @@ function _paintModules(mods) {
 
 // Paint straight away from the last-known switches
 (function () {
-  try { const m = JSON.parse(localStorage.getItem(_MODS_KEY) || 'null'); if (m) _paintModules(m); } catch (e) { /* ignore */ }
+  try {
+    const m = JSON.parse(localStorage.getItem(_MODS_KEY) || 'null');
+    const a = JSON.parse(localStorage.getItem(_ACCESS_KEY) || 'null');
+    if (m) _paintModules(m, a || undefined);
+  } catch (e) { /* ignore */ }
 })();
