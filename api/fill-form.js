@@ -35,7 +35,7 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const TICK_ON = '\u2612';   // ☒
 const TICK_OFF = '\u2610';  // ☐
 
-const FILL_FORM_VERSION = '4.0-tables';
+const FILL_FORM_VERSION = '4.1-boxes';
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -104,6 +104,7 @@ module.exports = async (req, res) => {
         const after = renderTemplate(tpl, scope);
         if (after !== p.text) {
           xml = replaceParagraphText(xml, p, after);
+          spreadBoxes(p, after);
           preview.push({ before: p.text, after, source: 'memory' });
           handled.add(p.index);
         }
@@ -114,7 +115,7 @@ module.exports = async (req, res) => {
     const remaining = paragraphs.filter(p => !handled.has(p.index));
     const toLearn = [];
     if (remaining.length) {
-      const lines = remaining.map(p => `[${p.index}] ` + (p.answerFor ? `{EMPTY ANSWER CELL} for "${p.answerFor}"` + (p.placeholder ? ` (currently shows Word placeholder "${p.text}")` : '') : p.text)).join('\n');
+      const lines = remaining.map(p => `[${p.index}] ` + (p.answerFor ? `{EMPTY ANSWER CELL} for "${p.answerFor}"` + (p.boxes && p.boxes.length && p.spread ? ` (a row of ${p.boxes.length + 1} single-character boxes — give the whole answer, it is spread across the boxes for you)` : '') + (p.placeholder ? ` (currently shows Word placeholder "${p.text}")` : '') : p.text)).join('\n');
       const ai = await callClaude(buildPrompt(lines, scope));
       const plan = parsePlan(ai);
 
@@ -128,7 +129,8 @@ module.exports = async (req, res) => {
         }
         if (!edit.after || edit.after === p.text) continue;   // nothing filled
         xml = replaceParagraphText(xml, p, edit.after);
-        preview.push({ before: p.text, after: edit.after, source: 'ai' });
+        spreadBoxes(p, edit.after);
+        preview.push({ before: p.answerFor || p.text, after: p.answerFor ? p.answerFor + ': ' + edit.after : edit.after, source: 'ai' });
         handled.add(p.index);
 
         // Derive a reusable template (back-map values -> <<field>>) to learn
@@ -141,14 +143,17 @@ module.exports = async (req, res) => {
     if (toLearn.length) { try { await saveTemplates(orgId, toLearn); } catch (_) {} }
 
     // 4) Lines that look like fields but got no answer -> alerts for review
+    const seenLabel = new Set();
     const missing = paragraphs
-      .filter(p => !handled.has(p.index) && !p.isLabel && (p.answerFor ? looksLikeField(p.answerFor + ':') : looksLikeField(p.text)))
-      .map(p => ({ index: p.index, text: p.answerFor || p.text }));
+      .filter(p => !handled.has(p.index) && !p.isLabel && !p.inBoxes && !p.office &&
+        (p.answerFor ? !isNoiseLine(p.answerFor) && p.answerFor.length <= 80 : /[:?]\s*$|_{2,}|\.{3,}/.test(p.text) && !isNoiseLine(p.text)))
+      .map(p => ({ index: p.index, text: p.answerFor || p.text }))
+      .filter(m => { const k = normalise(m.text).replace(/[:?_.\s]+$/, ''); if (seenLabel.has(k)) return false; seenLabel.add(k); return true; });
     if (missing.length) {
       warnings.push(`${missing.length} field(s) had no data or were unclear — review, correct once, and the agent learns them.`);
     }
 
-    xml = applyEdits(xml, paragraphs);
+    xml = applyEdits(xml, paragraphs.concat(...paragraphs.map(p => p.boxes || [])));
     zip.file('word/document.xml', xml);
     const outBuf = zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
 
@@ -374,19 +379,34 @@ function extractParagraphs(xml) {
   const stack = [];        // tables: { id, r, c, cells: {"r:c": [paraIdx]} }
   let tables = 0, m, idx = 0;
   const cellsOf = [];      // per table
+  const widthsOf = [];     // cell widths (twips) per table, to spot letter-per-box rows
+  const officeOf = [];     // tables under a "For office use" heading are skipped
   while ((m = tok.exec(xml)) !== null) {
     const t = m[0];
-    if (t.startsWith('<w:tbl')) { const id = tables++; stack.push({ id, r: -1, c: -1 }); cellsOf[id] = {}; continue; }
+    if (t.startsWith('<w:tbl')) {
+      const id = tables++;
+      const prev = out.slice().reverse().find(q => q.text);
+      stack.push({ id, r: -1, c: -1, office: !!(prev && /office use|for official use/i.test(prev.text)) });
+      cellsOf[id] = {}; widthsOf[id] = {}; officeOf[id] = stack[stack.length - 1].office;
+      continue;
+    }
     if (t === '</w:tbl>') { stack.pop(); continue; }
     const tb = stack[stack.length - 1];
     if (t.startsWith('<w:tr')) { if (tb) { tb.r++; tb.c = -1; } continue; }
-    if (t.startsWith('<w:tc')) { if (tb) tb.c++; continue; }
+    if (t.startsWith('<w:tc')) {
+      if (tb) {
+        tb.c++;
+        const w = /<w:tcW\b[^>]*w:w="(\d+)"/.exec(xml.slice(m.index, m.index + 500).split('</w:tcPr>')[0]);
+        widthsOf[tb.id][tb.r + ':' + tb.c] = w ? +w[1] : 0;
+      }
+      continue;
+    }
     const selfClosing = /\/>$/.test(t) && !/<\/w:p>$/.test(t);
     const inner = selfClosing ? '' : t.replace(/^<w:p[^>]*>/, '').replace(/<\/w:p>$/, '');
     const text = (inner.match(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g) || [])
       .map(x => x.replace(/<[^>]+>/g, '')).join('')
       .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'");
-    const p = { index: idx++, full: t, at: m.index, inner, text: text.trim(), selfClosing, cell: tb ? { t: tb.id, r: tb.r, c: tb.c } : null };
+    const p = { index: idx++, full: t, at: m.index, inner, text: text.trim(), selfClosing, office: !!(tb && tb.office), cell: tb ? { t: tb.id, r: tb.r, c: tb.c } : null };
     out.push(p);
     if (tb) { const k = tb.r + ':' + tb.c; (cellsOf[tb.id][k] = cellsOf[tb.id][k] || []).push(p); }
   }
@@ -394,20 +414,39 @@ function extractParagraphs(xml) {
   const cellText = (t, r, c) => ((cellsOf[t] || {})[r + ':' + c] || []).map(q => q.text).join(' ').trim();
   const isBlank = s => !s || PLACEHOLDER_RE.test(s) || /^[_.\s…]+$/.test(s);
   cellsOf.forEach((cells, t) => {
-    Object.keys(cells).forEach(k => {
-      const [r, c] = k.split(':').map(Number);
+    if (officeOf[t]) return;
+    // walk cells row by row, left to right, so runs of boxes stay together
+    const keys = Object.keys(cells).map(k => k.split(':').map(Number)).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    let run = null;   // current answer cell collecting single-character boxes
+    keys.forEach(([r, c]) => {
+      const k = r + ':' + c;
       const txt = cellText(t, r, c);
-      if (!isBlank(txt)) return;
-      let label = '';
-      for (let cc = c - 1; cc >= 0 && !label; cc--) { const lt = cellText(t, r, cc); if (!isBlank(lt)) { label = lt; (cells[r + ':' + cc] || []).forEach(q => { q.isLabel = true; }); } }
+      if (!isBlank(txt)) { run = null; return; }
+      // A blank cell straight after another blank answer cell with the same label is
+      // one of a row of boxes (e.g. NI number written one letter per box)
+      const ownHead = r > 0 ? cellText(t, 0, c) : '';
+      if (run && run.r === r && run.c === c - 1 && !(ownHead && !isBlank(ownHead) && ownHead !== run.head)) {
+        run.first.boxes.push(cells[k][0]); run.c = c; cells[k].forEach(q => { q.inBoxes = true; });
+        if ((widthsOf[t][k] || 0) > 900) run.first.spread = false;
+        return;
+      }
+      let label = '', left = false;
+      for (let cc = c - 1; cc >= 0 && !label; cc--) { const lt = cellText(t, r, cc); if (!isBlank(lt)) { label = lt; left = true; (cells[r + ':' + cc] || []).forEach(q => { q.isLabel = true; }); } }
       const above = r > 0 ? cellText(t, 0, c) : '';
-      if (above && !isBlank(above)) (cells['0:' + c] || []).forEach(q => { q.isLabel = true; });
-      if (above && !isBlank(above) && above !== label) label = label ? label + ' — ' + above : above;
-      if (!label) return;
+      // Column headings only label the first row under them (not every row of a grid)
+      if (above && !isBlank(above) && (left || r === 1)) {
+        (cells['0:' + c] || []).forEach(q => { q.isLabel = true; });
+        if (above !== label) label = label ? label + ' — ' + above : above;
+      }
+      if (!label || label.length > 120) { run = null; return; }
       const first = cells[k][0];
       first.answerFor = label.replace(/\s+/g, ' ').slice(0, 160);
       first.placeholder = !!first.text && PLACEHOLDER_RE.test(first.text);
+      first.boxes = [];
+      // Narrow cells (under ~1.6 cm) in a row are boxes for one letter each
+      first.spread = (widthsOf[t][k] || 0) > 0 && widthsOf[t][k] <= 900;
       if (/^[_.\s…]+$/.test(first.text)) first.text = '';
+      run = { r, c, first, head: ownHead };
     });
   });
   return out;
@@ -443,6 +482,18 @@ function newParagraphXml(para, newText) {
   }
 
   return newFull;
+}
+
+// One letter per box: "AB123456C" across 9 boxes; dates as digits across 6 or 8 boxes
+function spreadBoxes(p, answer) {
+  if (!p.boxes || !p.boxes.length || !p.spread) return;
+  const total = p.boxes.length + 1;
+  let chars = String(answer || '').replace(/\s+/g, '');
+  const digits = chars.replace(/\D/g, '');
+  if (/^\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}$/.test(chars) && (total === 8 || total === 6)) chars = total === 8 ? digits.padStart(8, '0') : digits.slice(0, 4) + digits.slice(-2);
+  if (chars.length < 2 || chars.length > total) return;   // not a box answer — leave it all in the first box
+  p.newText = chars[0];
+  p.boxes.forEach((b, i) => { if (chars[i + 1] != null) b.newText = chars[i + 1]; });
 }
 
 // Apply every edit by its position in the original XML, last first, so
