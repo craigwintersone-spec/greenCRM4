@@ -35,7 +35,7 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const TICK_ON = '\u2612';   // ☒
 const TICK_OFF = '\u2610';  // ☐
 
-const FILL_FORM_VERSION = '3.2-clean-alerts';
+const FILL_FORM_VERSION = '4.0-tables';
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -54,6 +54,14 @@ module.exports = async (req, res) => {
       body.docxBase64 || body.templateBase64 || body.formBase64 ||
       body.fileBase64 || body.base64 || (body.file && body.file.base64) || ''
     );
+
+    // Only signed-in Vorlana users can run the filler (it costs AI credit)
+    if (SUPABASE_URL && SUPABASE_KEY) {
+      const tok = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+      if (!tok) return res.status(401).json({ ok: false, error: 'Please sign in again, then retry.' });
+      const who = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${tok}` } }).catch(() => null);
+      if (!who || !who.ok) return res.status(401).json({ ok: false, error: 'Your sign-in has expired — refresh the page and try again.' });
+    }
 
     // ---- Branch: learn from a human correction ----
     if (body.action === 'learn') {
@@ -75,7 +83,8 @@ module.exports = async (req, res) => {
     if (!docFile) return res.status(400).json({ ok: false, error: 'That .docx has no document.xml.' });
     let xml = docFile.asText();
 
-    const paragraphs = extractParagraphs(xml);
+    // Only lines with text, plus empty answer cells beside a label
+    const paragraphs = extractParagraphs(xml).filter(p => p.text || p.answerFor);
     if (!paragraphs.length) return res.status(400).json({ ok: false, error: 'No text found in that form.' });
 
     const warnings = [];
@@ -90,7 +99,7 @@ module.exports = async (req, res) => {
     const preview = [];
 
     for (const p of paragraphs) {
-      const tpl = byPattern.get(normalise(p.text));
+      const tpl = byPattern.get(normalise(p.answerFor ? '§cell§' + p.answerFor : p.text));
       if (tpl) {
         const after = renderTemplate(tpl, scope);
         if (after !== p.text) {
@@ -105,14 +114,15 @@ module.exports = async (req, res) => {
     const remaining = paragraphs.filter(p => !handled.has(p.index));
     const toLearn = [];
     if (remaining.length) {
-      const lines = remaining.map(p => `[${p.index}] ${p.text}`).join('\n');
+      const lines = remaining.map(p => `[${p.index}] ` + (p.answerFor ? `{EMPTY ANSWER CELL} for "${p.answerFor}"` + (p.placeholder ? ` (currently shows Word placeholder "${p.text}")` : '') : p.text)).join('\n');
       const ai = await callClaude(buildPrompt(lines, scope));
       const plan = parsePlan(ai);
 
+      const byIndex = new Map(paragraphs.map(q => [q.index, q]));
       for (const edit of plan.edits) {
-        const p = paragraphs[edit.index];
+        const p = byIndex.get(Number(edit.index));
         if (!p || handled.has(p.index)) continue;
-        if (normalise(edit.before) !== normalise(p.text)) {
+        if (!p.answerFor && normalise(edit.before) !== normalise(p.text)) {
           warnings.push(`Line ${edit.index} shifted — left untouched for safety.`);
           continue;
         }
@@ -122,8 +132,8 @@ module.exports = async (req, res) => {
         handled.add(p.index);
 
         // Derive a reusable template (back-map values -> <<field>>) to learn
-        const tpl = templatise(p.text, edit.after, scope);
-        if (tpl) toLearn.push({ before: p.text, template: tpl });
+        const tpl = templatise(p.answerFor ? '' : p.text, edit.after, scope);
+        if (tpl) toLearn.push({ before: p.answerFor ? '§cell§' + p.answerFor : p.text, template: tpl });
       }
     }
 
@@ -132,12 +142,13 @@ module.exports = async (req, res) => {
 
     // 4) Lines that look like fields but got no answer -> alerts for review
     const missing = paragraphs
-      .filter(p => !handled.has(p.index) && looksLikeField(p.text))
-      .map(p => ({ index: p.index, text: p.text }));
+      .filter(p => !handled.has(p.index) && !p.isLabel && (p.answerFor ? looksLikeField(p.answerFor + ':') : looksLikeField(p.text)))
+      .map(p => ({ index: p.index, text: p.answerFor || p.text }));
     if (missing.length) {
       warnings.push(`${missing.length} field(s) had no data or were unclear — review, correct once, and the agent learns them.`);
     }
 
+    xml = applyEdits(xml, paragraphs);
     zip.file('word/document.xml', xml);
     const outBuf = zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
 
@@ -165,7 +176,7 @@ async function callClaude(userContent) {
       'x-api-key': process.env.ANTHROPIC_API_KEY,
       'anthropic-version': '2023-06-01',
     },
-    body: JSON.stringify({ model: MODEL, max_tokens: 4000, messages: [{ role: 'user', content: userContent }] }),
+    body: JSON.stringify({ model: MODEL, max_tokens: 8000, messages: [{ role: 'user', content: userContent }] }),
   });
   if (!r.ok) throw new Error(`Claude API error ${r.status}: ${(await r.text().catch(() => '')).slice(0, 300)}`);
   const data = await r.json();
@@ -178,6 +189,8 @@ function buildPrompt(lines, scope) {
 
 Write the participant's answers directly into the lines. Rules:
 - Free-text field ("Surname:", "Date of birth ___"): append or insert the answer, e.g. "Surname: Doe".
+- Lines marked {EMPTY ANSWER CELL} for "<label>" are the blank table cells where the answer to <label> goes. For these, "before" is "" and "after" is ONLY the answer (e.g. "Doe") — not the label. If it shows a Word placeholder, "after" replaces it with the answer.
+- Dates as DD/MM/YYYY. Yes/No answers as "Yes" or "No".
 - Tick-box / choice lines (Gender, Yes/No, Employed/Unemployed, etc.): put ${TICK_ON} next to the option that matches the participant's data and ${TICK_OFF} next to the others. Example: "Male ${TICK_OFF}  Female ${TICK_ON}".
 - Use ONLY the participant data given. If you don't have a value for a field, leave that line unchanged (do not invent anything).
 - Never change headings, instructions, declarations, or signature lines.
@@ -332,23 +345,71 @@ function buildScope(d) {
     gender: pick('gender', 'sex'),
     right_to_work: pick('right_to_work', 'rtw'),
     basic_skills: pick('basic_skills', 'english_maths'),
+    employer: pick('employer', 'employer_name'),
+    job_start: pick('job_start', 'job_start_date'),
+    hours: pick('hours', 'hours_per_week'),
+    pay: pick('pay', 'wage', 'hourly_rate'),
+    exit_date: pick('exit_date', 'leaving_date'),
+    leave_reason: pick('leave_reason', 'reason_for_leaving'),
+    adviser: pick('adviser', 'advisor', 'key_worker'),
+    referral_source: pick('referral_source', 'ref_source'),
+    provider: pick('provider', 'delivery_organisation', 'organisation'),
+    project: pick('project', 'programme'),
+    outcome_type: pick('outcome_type'),
+    interpersonal: pick('interpersonal'),
+    ...Object.fromEntries(Object.entries(d).filter(([k, v]) => v != null && v !== '' && typeof v !== 'object')),
   };
 }
 
 // ------------------------------------------------------------------
 // docx helpers
 // ------------------------------------------------------------------
+// Walks the document in order, noting which table/row/cell each paragraph
+// sits in. Blank answer cells (next to or under a label cell) are kept and
+// tagged with that label, so tables like "Surname | [blank]" get filled.
+const PLACEHOLDER_RE = /^(click|tap)(\s+or\s+tap)?\s+(here\s+)?to\s+enter\b|^(choose an item|enter text|select date)\.?$/i;
 function extractParagraphs(xml) {
   const out = [];
-  const re = /<w:p\b[^>]*>([\s\S]*?)<\/w:p>/g;
-  let m, idx = 0;
-  while ((m = re.exec(xml)) !== null) {
-    const inner = m[1];
+  const tok = /<w:tbl(?=[\s>])[^>]*>|<\/w:tbl>|<w:tr(?=[\s>])[^>]*>|<w:tc(?=[\s>])[^>]*>|<w:p(?=[\s>\/])(?:\s[^>]*)?\/>|<w:p(?=[\s>])[^>]*>[\s\S]*?<\/w:p>/g;
+  const stack = [];        // tables: { id, r, c, cells: {"r:c": [paraIdx]} }
+  let tables = 0, m, idx = 0;
+  const cellsOf = [];      // per table
+  while ((m = tok.exec(xml)) !== null) {
+    const t = m[0];
+    if (t.startsWith('<w:tbl')) { const id = tables++; stack.push({ id, r: -1, c: -1 }); cellsOf[id] = {}; continue; }
+    if (t === '</w:tbl>') { stack.pop(); continue; }
+    const tb = stack[stack.length - 1];
+    if (t.startsWith('<w:tr')) { if (tb) { tb.r++; tb.c = -1; } continue; }
+    if (t.startsWith('<w:tc')) { if (tb) tb.c++; continue; }
+    const selfClosing = /\/>$/.test(t) && !/<\/w:p>$/.test(t);
+    const inner = selfClosing ? '' : t.replace(/^<w:p[^>]*>/, '').replace(/<\/w:p>$/, '');
     const text = (inner.match(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g) || [])
-      .map(t => t.replace(/<[^>]+>/g, '')).join('')
-      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-    out.push({ index: idx++, full: m[0], inner, text: text.trim() });
+      .map(x => x.replace(/<[^>]+>/g, '')).join('')
+      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'");
+    const p = { index: idx++, full: t, at: m.index, inner, text: text.trim(), selfClosing, cell: tb ? { t: tb.id, r: tb.r, c: tb.c } : null };
+    out.push(p);
+    if (tb) { const k = tb.r + ':' + tb.c; (cellsOf[tb.id][k] = cellsOf[tb.id][k] || []).push(p); }
   }
+  // Label the first paragraph of each blank (or placeholder-only) cell
+  const cellText = (t, r, c) => ((cellsOf[t] || {})[r + ':' + c] || []).map(q => q.text).join(' ').trim();
+  const isBlank = s => !s || PLACEHOLDER_RE.test(s) || /^[_.\s…]+$/.test(s);
+  cellsOf.forEach((cells, t) => {
+    Object.keys(cells).forEach(k => {
+      const [r, c] = k.split(':').map(Number);
+      const txt = cellText(t, r, c);
+      if (!isBlank(txt)) return;
+      let label = '';
+      for (let cc = c - 1; cc >= 0 && !label; cc--) { const lt = cellText(t, r, cc); if (!isBlank(lt)) { label = lt; (cells[r + ':' + cc] || []).forEach(q => { q.isLabel = true; }); } }
+      const above = r > 0 ? cellText(t, 0, c) : '';
+      if (above && !isBlank(above)) (cells['0:' + c] || []).forEach(q => { q.isLabel = true; });
+      if (above && !isBlank(above) && above !== label) label = label ? label + ' — ' + above : above;
+      if (!label) return;
+      const first = cells[k][0];
+      first.answerFor = label.replace(/\s+/g, ' ').slice(0, 160);
+      first.placeholder = !!first.text && PLACEHOLDER_RE.test(first.text);
+      if (/^[_.\s…]+$/.test(first.text)) first.text = '';
+    });
+  });
   return out;
 }
 
@@ -358,12 +419,17 @@ function extractParagraphs(xml) {
 // keeps the .docx valid so Word opens it. The full new text goes into the
 // first <w:t>; any other <w:t> nodes in that paragraph are emptied. If the
 // paragraph has no <w:t> at all, we insert one run before its closing tag.
-function replaceParagraphText(xml, para, newText) {
+function replaceParagraphText(xml, para, newText) { para.newText = newText; return xml; }
+
+// Build the new XML for one paragraph (see applyEdits)
+function newParagraphXml(para, newText) {
   const safe = escapeXml(newText);
   const tRe = /<w:t\b[^>]*>[\s\S]*?<\/w:t>/g;
   let newFull;
 
-  if (tRe.test(para.full)) {
+  if (para.selfClosing) {
+    newFull = para.full.replace(/\s*\/>$/, '>') + `<w:r><w:t xml:space="preserve">${safe}</w:t></w:r></w:p>`;
+  } else if (tRe.test(para.full)) {
     let first = true;
     newFull = para.full.replace(tRe, () => {
       if (first) { first = false; return `<w:t xml:space="preserve">${safe}</w:t>`; }
@@ -376,8 +442,24 @@ function replaceParagraphText(xml, para, newText) {
     newFull = para.full.replace(/<\/w:p>$/, run + '</w:p>');
   }
 
-  if (newFull === para.full) return xml;              // nothing changed
-  return xml.replace(para.full, () => newFull);        // fn replacer: no $-pattern surprises
+  return newFull;
+}
+
+// Apply every edit by its position in the original XML, last first, so
+// identical-looking paragraphs (e.g. many blank cells) are never mixed up.
+function applyEdits(xml, paragraphs) {
+  const todo = paragraphs.filter(p => p.newText != null).sort((a, b) => b.at - a.at);
+  for (const p of todo) {
+    if (xml.substr(p.at, p.full.length) !== p.full) continue;   // safety
+    let head = xml.slice(0, p.at);
+    // A filled Word content control should stop showing as grey placeholder text
+    if (p.placeholder) {
+      const sdt = head.lastIndexOf('<w:sdtPr'), closed = head.lastIndexOf('</w:sdt>');
+      if (sdt > closed) head = head.slice(0, sdt) + head.slice(sdt).replace(/<w:showingPlcHdr\s*\/>/, '');
+    }
+    xml = head + newParagraphXml(p, p.newText) + xml.slice(p.at + p.full.length);
+  }
+  return xml;
 }
 
 function looksLikeField(text) {
