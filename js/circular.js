@@ -22,6 +22,253 @@
 // ─────────────────────────────────────────────────────────────
 
 const CX = { acts: [], items: [], cols: [], tab: 'all', colFilter: 'open', ready: false, err: '', pendingCode: null };
+// ─────────────────────────────────────────────────────────────
+// DEMO-AWARE DATA ACCESS for the circular tables
+// cxFrom() looks like sb.from() but, in demo mode, blends in sample
+// activities, items, collections and custody history. Anything aimed
+// at a demo row (id "demo-…", or a demo activity) is done in memory
+// and never sent to Supabase. Real rows always go to the server.
+// ─────────────────────────────────────────────────────────────
+const CXD = { seeded: false, acts: [], items: [], cols: [], events: [], n: 0 };
+const CXD_TABLE = { circular_activities: 'acts', circular_items: 'items', circular_collections: 'cols', circular_item_events: 'events' };
+function cxDemoClear() { Object.assign(CXD, { seeded: false, acts: [], items: [], cols: [], events: [], n: 0 }); }
+function _cxdIsDemo(v) { return String(v == null ? '' : v).indexOf('demo-') === 0; }
+function _cxdField(row, k) {
+  const m = /^(\w+)->>(\w+)$/.exec(k);
+  if (m) { const o = row[m[1]] || {}; return o[m[2]] == null ? null : String(o[m[2]]); }
+  return row[k];
+}
+function _cxdMatch(row, filters) {
+  return filters.every(f => f[0] === 'eq' ? String(_cxdField(row, f[1])) === String(f[2]) : (f[2] || []).map(String).includes(String(_cxdField(row, f[1]))));
+}
+// Simple, stable fingerprint so demo histories show as linked
+function _cxdHash(s) {
+  let h1 = 0x811c9dc5, h2 = 0x1234567;
+  for (let i = 0; i < s.length; i++) { h1 = Math.imul(h1 ^ s.charCodeAt(i), 16777619); h2 = Math.imul(h2 ^ s.charCodeAt(i), 2246822519); }
+  return ((h1 >>> 0).toString(16).padStart(8, '0') + (h2 >>> 0).toString(16).padStart(8, '0')).repeat(4);
+}
+function _cxdCode() { return 'D' + (++CXD.n).toString(36).toUpperCase().padStart(3, '0') + Math.random().toString(36).slice(2, 6).toUpperCase(); }
+function _cxdInsertLocal(table, row) {
+  const key = CXD_TABLE[table];
+  const now = new Date().toISOString();
+  const r = Object.assign({}, row);
+  if (table === 'circular_item_events') {
+    const prev = CXD.events.filter(e => e.item_id === String(r.item_id)).slice(-1)[0];
+    r.id = CXD.events.length + 1; r.occurred_at = r.occurred_at || now; r.prev_hash = prev ? prev.hash : 'GENESIS';
+    r.hash = _cxdHash(r.prev_hash + '|' + r.item_id + '|' + r.action + '|' + (r.to_stage || '') + '|' + r.occurred_at);
+  } else {
+    r.id = r.id || 'demo-' + (table === 'circular_items' ? 'i' : table === 'circular_collections' ? 'col' : 'a') + '-' + Date.now().toString(36) + (++CXD.n);
+    r._demo = true;
+    if (table === 'circular_items') { r.passport_code = r.passport_code || _cxdCode(); r.custom = r.custom || {}; r.photos = r.photos || []; r.quantity = r.quantity || 1; }
+    if (table === 'circular_collections') r.booking_ref = r.booking_ref || _cxdCode();
+    r.created_at = r.created_at || now; r.updated_at = r.updated_at || now;
+  }
+  CXD[key].push(r);
+  return r;
+}
+
+function cxFrom(table) {
+  const o = { table, action: 'select', payload: null, sel: null, wantRows: false, filters: [], order: null, limit: null, single: false };
+  const b = {
+    select(s) { if (o.action === 'select') o.sel = s || '*'; else o.wantRows = true; return b; },
+    insert(p) { o.action = 'insert'; o.payload = Array.isArray(p) ? p : [p]; return b; },
+    update(p) { o.action = 'update'; o.payload = p; return b; },
+    delete() { o.action = 'delete'; return b; },
+    eq(k, v) { o.filters.push(['eq', k, v]); return b; },
+    in(k, v) { o.filters.push(['in', k, v]); return b; },
+    order(k, opt) { o.order = [k, opt]; return b; },
+    limit(n) { o.limit = n; return b; },
+    single() { o.single = true; return b; },
+    then(res, rej) { return _cxdRun(o).then(res, rej); }
+  };
+  return b;
+}
+
+function _cxdReal(o, overrideFilters, overridePayload) {
+  let q = sb.from(o.table);
+  const f = overrideFilters || o.filters;
+  if (o.action === 'select') q = q.select(o.sel || '*');
+  else if (o.action === 'insert') q = q.insert(overridePayload || o.payload);
+  else if (o.action === 'update') q = q.update(o.payload);
+  else if (o.action === 'delete') q = q.delete();
+  f.forEach(x => { q = x[0] === 'eq' ? q.eq(x[1], x[2]) : q.in(x[1], x[2]); });
+  if (o.action !== 'select' && o.wantRows) q = q.select();
+  if (o.order) q = q.order(o.order[0], o.order[1]);
+  if (o.limit) q = q.limit(o.limit);
+  if (o.single) q = q.single();
+  return q;
+}
+
+async function _cxdRun(o) {
+  const demoOn = typeof _demoMode !== 'undefined' && _demoMode;
+  if (demoOn && !CXD.seeded) cxDemoSeed();
+  const key = CXD_TABLE[o.table];
+  const idF = o.filters.find(f => f[1] === 'id' || f[1] === 'item_id');
+  const ids = idF ? (idF[0] === 'eq' ? [idF[2]] : (idF[2] || [])) : null;
+  const demoIds = ids ? ids.filter(_cxdIsDemo) : [];
+  const realIds = ids ? ids.filter(v => !_cxdIsDemo(v)) : null;
+  const local = () => key && demoOn ? CXD[key].filter(r => _cxdMatch(r, o.filters.filter(f => !(f[1] === 'org_id')))) : [];
+
+  if (o.action === 'insert') {
+    const demoRows = o.payload.filter(r => _cxdIsDemo(r.activity_id) || _cxdIsDemo(r.item_id) || r._demo);
+    const realRows = o.payload.filter(r => !demoRows.includes(r));
+    let data = [], error = null;
+    if (realRows.length) { const res = await _cxdReal(Object.assign({}, o, { single: false }), null, realRows); error = res.error; data = res.data || []; }
+    const made = demoRows.map(r => _cxdInsertLocal(o.table, r));
+    data = data.concat(made);
+    return { data: o.single ? (data[0] || null) : data, error };
+  }
+
+  if (o.action === 'update' || o.action === 'delete') {
+    let error = null;
+    // demo rows: in memory
+    const hit = local();
+    if (o.action === 'update') hit.forEach(r => Object.assign(r, o.payload));
+    else if (hit.length) CXD[key] = CXD[key].filter(r => !hit.includes(r));
+    // real rows: to the server (skip when every targeted id is a demo one)
+    if (!ids || realIds.length) {
+      const f = ids ? o.filters.map(x => x === idF ? (idF[0] === 'eq' ? x : ['in', idF[1], realIds]) : x) : o.filters;
+      const res = await _cxdReal(o, f); error = res.error;
+    }
+    return { data: null, error };
+  }
+
+  // select
+  let data = [], error = null;
+  if (!ids || realIds.length) {
+    const f = ids ? o.filters.map(x => x === idF ? (idF[0] === 'eq' ? x : ['in', idF[1], realIds]) : x) : o.filters;
+    const res = await _cxdReal(Object.assign({}, o, { single: false }), f);
+    error = res.error; data = res.data || [];
+  }
+  if (!error || demoOn) {
+    const add = local();
+    if (add.length) {
+      data = data.concat(add);
+      if (o.order) { const [k, opt] = o.order; const asc = !opt || opt.ascending !== false; data.sort((a, b) => (a[k] > b[k] ? 1 : a[k] < b[k] ? -1 : 0) * (asc ? 1 : -1)); }
+      if (error && add.length) error = null;
+    }
+  }
+  return { data: o.single ? (data[0] || null) : data, error };
+}
+
+// ── The circular sample: one organisation doing five activities ─
+function cxDemoSeed() {
+  cxDemoClear(); CXD.seeded = true;
+  if (typeof CIRC_TEMPLATES === 'undefined') return;
+  let seed = 4242;
+  const R = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+  const pick = a => a[Math.floor(R() * a.length)];
+  const int = (a, b) => a + Math.floor(R() * (b - a + 1));
+  const ago = d => new Date(Date.now() - d * 864e5 - int(1, 8) * 36e5).toISOString();
+  const tpl = k => JSON.parse(JSON.stringify(CIRC_TEMPLATES.find(t => t.key === k)));
+  const mk = (k, id, extra) => { const t = tpl(k); return Object.assign({ id, _demo: true, org_id: orgId, key: 'demo_' + k, template: k, name: t.name + ' (DEMO)', icon: t.icon, description: t.desc, stages: t.stages, outcomes: t.outcomes, item_types: t.item_types, fields: t.fields, links: t.links, active: true, contract_ids: [] }, extra || {}); };
+  const dev = mk('device_reuse', 'demo-a-dev', { sort: 1, contract_ids: ['demo-c-2'] });
+  const rep = mk('repair_cafe', 'demo-a-rep', { sort: 2, contract_ids: ['demo-c-2'] });
+  const gro = mk('growing', 'demo-a-gro', { sort: 3, contract_ids: ['demo-c-3'] });
+  const tex = mk('textiles', 'demo-a-tex', { sort: 4 });
+  const col = mk('collections', 'demo-a-col', { sort: 0, links: [{ on: 'end', to: 'demo_device_reuse' }] });
+  CXD.acts = [col, dev, rep, gro, tex];
+
+  const people = ['Sarah T.', 'Dev Patel', 'Sam Okoro', 'Hannah Green', 'Kofi Boateng'];
+  const evs = (typeof DB !== 'undefined' && DB.events || []).filter(e => e._demo);
+  const evOf = rx => evs.filter(e => rx.test(e.name));
+  const repairEvs = evOf(/Repair/), harvestEvs = evOf(/Harvest/), swapEvs = evOf(/Swap/);
+  const logEv = (item, action, from, to, at, data, who) => {
+    const prev = CXD.events.filter(e => e.item_id === String(item.id)).slice(-1)[0];
+    const r = { id: CXD.events.length + 1, org_id: orgId, item_id: String(item.id), activity_id: item.activity_id, action, from_stage: from || null, to_stage: to || null, data: data || {}, actor_name: who || pick(people), occurred_at: at, prev_hash: prev ? prev.hash : 'GENESIS' };
+    r.hash = _cxdHash(r.prev_hash + '|' + r.item_id + '|' + action + '|' + (to || '') + '|' + at);
+    CXD.events.push(r);
+  };
+  const item = (act, t, x) => {
+    const f = cxCalc(act, t.key, x.quantity || 1, x.weight_kg);
+    const r = Object.assign({ id: 'demo-i-' + (CXD.items.length + 1), _demo: true, org_id: orgId, activity_id: act.id, item_type: t.key, name: cxLbl(t), category: act.name,
+      quantity: 1, co2e_kg: f.co2, value_gbp: f.value, custom: {}, photos: [], passport_code: 'DEMO' + String(CXD.items.length + 1).padStart(3, '0') }, x);
+    CXD.items.push(r); return r;
+  };
+
+  // Collections → device reuse
+  const donors = [['business', 'Northgate Accountants (DEMO)', 'Robert Lane'], ['council', 'Riverside Council (DEMO)', 'Helen Price'], ['household', '', 'Mrs J. Wood'], ['business', 'Brightwave Media (DEMO)', 'Ali Shah'], ['household', '', 'Mr P. Ng'], ['site', 'Riverside Recycling Centre (DEMO)', 'Site team']];
+  const colStatus = ['booked_in', 'booked_in', 'booked_in', 'collected', 'scheduled', 'requested'];
+  donors.forEach((d, i) => CXD.cols.push({ id: 'demo-col-' + (i + 1), _demo: true, org_id: orgId, activity_id: col.id, booking_ref: 'DEMO-B' + (i + 1), donor_type: d[0], donor_org: d[1] || null, donor_name: d[2], donor_email: null, donor_phone: '07700 900' + (200 + i),
+    address: pick(['12 Mill Lane', 'Unit 4, Fengate', '3 Park Road', '88 Lincoln Road', 'Station Yard']), postcode: pick(['PE1 5QT', 'PE2 8LN', 'PE3 6DB']), items_summary: pick(['8 laptops, 2 monitors', 'Box of phones and tablets', '1 desktop PC', '5 laptops', 'Mixed small electricals']),
+    photos: [], requested_date: _dIso(60 - i * 9), scheduled_date: colStatus[i] === 'requested' ? null : _dIso(55 - i * 9 - (colStatus[i] === 'scheduled' ? 60 : 0)), status: colStatus[i],
+    collected_by: ['booked_in', 'collected'].includes(colStatus[i]) ? 'Tariq Ali' : null, collected_at: ['booked_in', 'collected'].includes(colStatus[i]) ? ago(55 - i * 9) : null, notes: i === 0 ? 'Loading bay at rear.' : null, created_at: ago(62 - i * 9) }));
+
+  const brands = [['Dell', 'Latitude 5490'], ['Lenovo', 'ThinkPad T480'], ['HP', 'EliteBook 840 G5'], ['Apple', 'MacBook Air 2017'], ['Dell', 'OptiPlex 7060'], ['Samsung', 'Galaxy Tab A'], ['Apple', 'iPhone 8']];
+  const partPeople = (typeof DB !== 'undefined' && DB.participants || []).filter(p => p._demo);
+  const S = dev.stages.map(s => s.key);
+  for (let i = 0; i < 26; i++) {
+    const t = pick(dev.item_types.slice(0, 6));
+    const b = t.key === 'tablet' ? ['Samsung', 'Galaxy Tab A'] : t.key === 'smartphone' ? ['Apple', 'iPhone 8'] : t.key === 'desktop_pc' ? ['Dell', 'OptiPlex 7060'] : t.key === 'monitor' ? ['Iiyama', 'ProLite 24"'] : t.key === 'printer' ? ['Brother', 'HL-L2350'] : pick(brands.slice(0, 4));
+    const start = int(8, 170);
+    const colId = i < 18 ? 'demo-col-' + (1 + (i % 3)) : null;
+    const colRow = colId && CXD.cols.find(c => c.id === colId);
+    const it = item(dev, t, { brand: b[0], model: b[1], serial: b[0].slice(0, 2).toUpperCase() + String(100000 + int(0, 899999)), source: colRow ? (colRow.donor_org || colRow.donor_name) + ' · ' + colRow.booking_ref : pick(['Walk-in donation', 'Riverside Recycling Centre (DEMO)']),
+      collection_id: colId, weight_kg: t.weight_kg, created_at: ago(start), event_id: null });
+    logEv(it, colId ? 'booked_in' : 'logged', null, S[0], ago(start));
+    const reach = i < 16 ? S.length : int(1, S.length - 1);   // 16 fully processed, the rest part-way
+    let at = start;
+    for (let k = 1; k < reach; k++) {
+      at = Math.max(1, at - int(1, 6));
+      const data = {};
+      if (S[k] === 'data_wiped') { const m = pick(['nwipe (DoD short)', 'Blancco', 'nwipe (PRNG)']); const c = 'WC-' + int(10000, 99999); it.custom.wipe_method = m; if (i !== 7) it.custom.wipe_certificate_ref = c; data.fields = i !== 7 ? { wipe_method: m, wipe_certificate_ref: c } : { wipe_method: m }; }
+      if (S[k] === 'tested') { it.custom.pat_result = i !== 11; data.fields = { pat_result: i !== 11 }; }
+      logEv(it, 'moved', S[k - 1], S[k], ago(at), data);
+    }
+    if (i < 16) {
+      at = Math.max(0, at - int(1, 10));
+      const o = i < 9 ? dev.outcomes.find(x => x.key === 'donated') : i < 13 ? dev.outcomes.find(x => x.key === 'resold') : i < 15 ? dev.outcomes.find(x => x.key === 'parts_harvested') : dev.outcomes.find(x => x.key === 'recycled');
+      const data = {};
+      it.outcome = o.key; it.outcome_type = o.type; it.outcome_at = ago(at); it.status = o.label; it.stage = S[S.length - 1];
+      if (o.key === 'donated') {
+        if (i % 3 !== 2 && partPeople.length) { const p = partPeople[i % partPeople.length]; it.recipient_participant_id = p.id; data.recipient = p.first_name + ' ' + p.last_name; data.recipient_kind = 'person'; }
+        else { it.custom.recipient_org = pick(['Hope Food Bank (DEMO)', 'St Mark\'s School (DEMO)']); data.recipient = it.custom.recipient_org; data.recipient_kind = 'org'; }
+      }
+      if (o.key === 'resold') { it.custom.sale_gbp = pick([65, 85, 95, 120, 140]); it.custom.sale_channel = pick(['eBay', 'Shop', 'Marketplace']); data.sale_gbp = it.custom.sale_gbp; data.sale_channel = it.custom.sale_channel; }
+      logEv(it, 'finished', it.stage, o.key, it.outcome_at, data);
+      it.updated_at = it.outcome_at;
+    } else { it.stage = S[reach - 1]; it.status = dev.stages[reach - 1].label; it.updated_at = ago(Math.max(0, at)); }
+  }
+
+  // Repair café: tallies at each repair session
+  const repEvs = repairEvs.length ? repairEvs : [null];
+  repEvs.forEach(ev => {
+    const n = int(9, 16);
+    for (let k = 0; k < n; k++) {
+      const t = pick(rep.item_types);
+      const o = R() < 0.68 ? rep.outcomes[0] : R() < 0.5 ? rep.outcomes[1] : rep.outcomes[2];
+      const at = ev ? ev.date + 'T1' + int(0, 5) + ':' + String(int(10, 59)) + ':00Z' : ago(int(1, 90));
+      const it = item(rep, t, { weight_kg: t.weight_kg, event_id: ev ? ev.id : null, outcome: o.key, outcome_type: o.type, outcome_at: at, status: o.label, created_at: at, updated_at: at });
+      logEv(it, 'tallied', null, o.key, at, {}, 'Sam Okoro');
+    }
+  });
+
+  // Growing: harvests through the season
+  const crops = gro.item_types;
+  for (let k = 0; k < 34; k++) {
+    const t = pick(crops); const kg = +(R() * (t.key === 'potatoes' ? 14 : 7) + 0.8).toFixed(1);
+    const o = R() < 0.55 ? gro.outcomes[0] : R() < 0.7 ? gro.outcomes[1] : R() < 0.8 ? gro.outcomes[2] : gro.outcomes[3];
+    const hv = harvestEvs.length && R() < 0.4 ? pick(harvestEvs) : null;
+    const at = hv ? hv.date + 'T11:30:00Z' : ago(int(0, 150));
+    const it = item(gro, t, { weight_kg: kg, event_id: hv ? hv.id : null, outcome: o.key, outcome_type: o.type, outcome_at: at, status: o.label, created_at: at, updated_at: at,
+      custom: k % 9 === 4 ? { weight_estimated: true, estimate_basis: 'crate of produce from photo' } : {} });
+    logEv(it, 'tallied', null, o.key, at, {}, pick(['Hannah Green', 'Joan Fletcher']));
+  }
+  // Two harvests still to sort (shows the "Sort them" tool)
+  for (let k = 0; k < 2; k++) { const t = pick(crops); const at = ago(k + 1); const it = item(gro, t, { weight_kg: +(R() * 5 + 1).toFixed(1), created_at: at, updated_at: at, status: '' }); logEv(it, 'tallied', null, null, at, {}); }
+
+  // Textiles: swap shops
+  (swapEvs.length ? swapEvs : [null, null, null]).forEach(ev => {
+    for (let k = 0; k < int(3, 5); k++) {
+      const t = pick(tex.item_types); const kg = t.unit === 'kg' ? +(R() * 12 + 2).toFixed(1) : undefined;
+      const o = pick(tex.outcomes);
+      const at = ev ? ev.date + 'T14:00:00Z' : ago(int(5, 120));
+      const it = item(tex, t, { weight_kg: kg != null ? kg : t.weight_kg * 3, quantity: kg != null ? 1 : 3, event_id: ev ? ev.id : null, outcome: o.key, outcome_type: o.type, outcome_at: at, status: o.label, created_at: at, updated_at: at });
+      logEv(it, 'tallied', null, o.key, at, {});
+    }
+  });
+}
+
 const CX_KG_PER_MEAL = 0.42;              // WRAP standard meal equivalent
 const CX_IMPACT_CO2 = ['reuse', 'repair', 'share'];
 const CX_IMPACT_KG  = ['reuse', 'repair', 'share', 'recycle'];
@@ -67,7 +314,24 @@ function cxInjectStyle() {
 .cxp-list-row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)}
 .cxp-warn{background:#FFFBEB;border:1px solid #FDE68A;color:#92400E;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px}
 .cxp-err{background:#FEF2F2;border:1px solid #FECACA;color:#B91C1C;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px}
-@media(max-width:700px){.cxp-col{min-width:180px}}`;
+@media(max-width:700px){.cxp-col{min-width:180px}}
+@media(max-width:640px){
+  .cxp-head{flex-direction:column;align-items:stretch;gap:10px}
+  .cxp-head .page-sub{display:none}
+  .cxp-head .cxp-btns{flex-wrap:wrap;gap:6px}
+  .cxp-head .cxs-wrap{flex:1 1 100%;max-width:none;order:-1}
+  .cxp-bt{display:none}
+  .cxp-head .btn-p{margin-left:auto}
+  .cxp-tabs{flex-wrap:nowrap;overflow-x:auto;margin-left:-4px;margin-right:-4px;padding:0 4px 4px;scrollbar-width:none}
+  .cxp-tabs::-webkit-scrollbar{display:none}
+  .cxp-tab{white-space:nowrap;flex-shrink:0}
+  #page-circular .cxp-stats{gap:8px;margin-bottom:14px}
+  #page-circular .cxp-stats .stat-card{padding:10px 12px}
+  #page-circular .cxp-stats .stat-val{font-size:18px}
+  #page-circular .cxp-stats .stat-lbl{font-size:10px}
+  #page-circular .card{padding:14px}
+  .cxp-list-row{flex-wrap:wrap}
+}`;
   document.head.appendChild(st);
 }
 
@@ -88,12 +352,12 @@ function cxCloseModal() { cxStopScan(); const m = $('cx-modal'); if (m) m.classL
 // ── Data ─────────────────────────────────────────────────────
 async function cxLoad() {
   CX.err = '';
-  const a = await sb.from('circular_activities').select('*').eq('org_id', orgId).eq('active', true).order('sort');
+  const a = await cxFrom('circular_activities').select('*').eq('org_id', orgId).eq('active', true).order('sort');
   if (a.error) { CX.err = 'Circular needs the database update. Run circular-migration.sql in Supabase, then refresh.'; CX.acts = []; CX.items = []; CX.cols = []; CX.ready = true; return; }
   CX.acts = a.data || [];
   const [it, co] = await Promise.all([
-    sb.from('circular_items').select('*').eq('org_id', orgId).order('updated_at', { ascending: false }).limit(3000),
-    sb.from('circular_collections').select('*').eq('org_id', orgId).order('created_at', { ascending: false }).limit(1000)
+    cxFrom('circular_items').select('*').eq('org_id', orgId).order('updated_at', { ascending: false }).limit(3000),
+    cxFrom('circular_collections').select('*').eq('org_id', orgId).order('created_at', { ascending: false }).limit(1000)
   ]);
   CX.items = it.error ? [] : (it.data || []);
   CX.cols = co.error ? [] : (co.data || []);
@@ -102,7 +366,7 @@ async function cxLoad() {
 }
 
 async function cxLog(item, action, from, to, data) {
-  const { error } = await sb.from('circular_item_events').insert([{
+  const { error } = await cxFrom('circular_item_events').insert([{
     org_id: orgId, item_id: String(item.id), activity_id: item.activity_id || null,
     action, from_stage: from || null, to_stage: to || null, data: data || {}, actor_name: cxActorName()
   }]);
@@ -154,15 +418,15 @@ function cxDraw() {
   if (CX.tab !== 'all' && CX.tab !== 'collections' && !cxAct(CX.tab)) CX.tab = 'all';
   if (CX.tab === 'collections' && !colAct) CX.tab = 'all';
 
-  let h = '<div class="page-header"><div><div class="page-title">♻️ Circular</div>' +
+  let h = '<div class="page-header cxp-head"><div><div class="page-title">♻️ Circular</div>' +
     '<div class="page-sub">Every item has a passport. Every move is logged.</div></div>' +
     '<div class="cxp-btns" style="align-items:center">' +
       '<div class="cxs-wrap"><input id="cxs-q" placeholder="🔍 Search ID, serial, name…" autocomplete="off" onkeyup="cxSearchInput(event)" onblur="setTimeout(()=>{const b=$(\'cxs-res\');if(b)b.innerHTML=\'\'},150)"/><div id="cxs-res" class="cxs-res"></div></div>' +
-      '<button class="btn btn-ghost btn-sm" onclick="_setSection=\'circular\';go(\'settings\')">⚙️ Set up</button>' +
-      '<button class="btn btn-ghost btn-sm" onclick="cxCustodyOpen()">📄 Custody report</button>' +
-      '<button class="btn btn-ghost btn-sm" onclick="cxImportOpen()">⬆ Import</button>' +
-      '<button class="btn btn-ghost btn-sm" onclick="cxOpenScan()">📷 Scan</button>' +
-      (colAct ? '<button class="btn btn-ghost btn-sm" onclick="cxOpenBooking()">🚚 New booking</button>' : '') +
+      '<button class="btn btn-ghost btn-sm" title="Set up" onclick="_setSection=\'circular\';go(\'settings\')">⚙️<span class="cxp-bt"> Set up</span></button>' +
+      '<button class="btn btn-ghost btn-sm" title="Custody report" onclick="cxCustodyOpen()">📄<span class="cxp-bt"> Custody report</span></button>' +
+      '<button class="btn btn-ghost btn-sm" title="Import" onclick="cxImportOpen()">⬆<span class="cxp-bt"> Import</span></button>' +
+      '<button class="btn btn-ghost btn-sm" title="Scan" onclick="cxOpenScan()">📷<span class="cxp-bt"> Scan</span></button>' +
+      (colAct ? '<button class="btn btn-ghost btn-sm" title="New booking" onclick="cxOpenBooking()">🚚<span class="cxp-bt"> New booking</span></button>' : '') +
       '<button class="btn btn-p btn-sm" onclick="cxOpenLog({})">+ Log item</button>' +
     '</div></div>';
 
@@ -185,7 +449,7 @@ function cxDraw() {
   const act = CX.tab === 'all' ? null : cxAct(CX.tab);
   const food = !!act && ['food', 'growing'].includes(act.template);
 
-  h += '<div class="stats-grid">' +
+  let stats = '<div class="stats-grid cxp-stats">' +
     statCard('In progress', cxFmt(im.inProgress)) +
     statCard('Diverted from waste', cxFmt(im.kg, 1) + ' kg') +
     (food
@@ -196,7 +460,7 @@ function cxDraw() {
       : statCard('Value to people', '£' + cxFmt(im.value), im.income ? '£' + cxFmt(im.income) + ' sales income' : cxFmt(im.reused) + ' items reused')) +
     '</div>';
 
-  h += CX.tab === 'all' ? cxSummaryHTML(acts) : cxQuickHTML(act) + (circMode(act) === 'tally' ? cxRecentHTML(act) : cxBoardHTML(act));
+  h += CX.tab === 'all' ? stats + cxSummaryHTML(acts) : cxQuickHTML(act) + stats + (circMode(act) === 'tally' ? cxRecentHTML(act) : cxBoardHTML(act));
   p.innerHTML = h;
 }
 
@@ -323,7 +587,7 @@ function cxQuickHTML(act) {
     h += '<div class="cxq-sess"><span>Session</span><select onchange="cxQ(cxAct(\'' + id + '\')).event=this.value">' + cxSessionOptions(q.event) + '</select></div>';
   }
   h += '<div class="cxq-cap">' +
-    '<label class="cxq-cam"><span>📷</span> Photo' + (kg || !t ? ' on the scales' : '') + '<input type="file" accept="image/*" capture="environment" style="display:none" onchange="cxQPhoto(event,\'' + id + '\')"/></label>' +
+    '<label class="cxq-cam"><span>📷</span><div>Photo' + (kg || !t ? '<small>on the scales</small>' : '') + '</div><input type="file" accept="image/*" capture="environment" style="display:none" onchange="cxQPhoto(event,\'' + id + '\')"/></label>' +
     '<button class="cxq-tellbtn" onclick="cxQ(cxAct(\'' + id + '\')).tell=!cxQ(cxAct(\'' + id + '\')).tell;cxDraw()">✍️ Just tell it</button></div>';
   if (q.status) h += '<div class="cxq-status ' + (q.statusErr ? 'err' : '') + '">' + q.status + '</div>';
   if (q.newType) h += '<div class="cxq-status"><b>' + e(q.newType.label) + '</b> isn\'t on your list yet <button class="btn btn-p btn-sm" onclick="cxAddTypeFromAI(\'' + id + '\')">+ Add ' + e(q.newType.label) + '</button></div>';
@@ -347,7 +611,8 @@ function cxQuickHTML(act) {
 
   if (!q.batch) {
     if (!tracked || kg) {
-      h += '<div class="cxq-amt"><input id="cxq-amt-' + id + '" type="number" inputmode="decimal" min="0" step="' + (kg ? '0.1' : '1') + '" placeholder="' + (kg ? '0.0' : '1') + '" value="' + e(q.amt) + '" oninput="cxQ(cxAct(\'' + id + '\')).amt=this.value"/><span>' + (kg ? 'kg' : 'items') + '</span></div>';
+      h += '<div class="cxq-amt"><input id="cxq-amt-' + id + '" type="number" inputmode="decimal" min="0" step="' + (kg ? '0.1' : '1') + '" placeholder="' + (kg ? '0.0' : '1') + '" value="' + e(q.amt) + '" oninput="cxQ(cxAct(\'' + id + '\')).amt=this.value"/><span>' + (kg ? 'kg' : 'items') + '</span></div>' +
+        (q.estAmt && String(q.amt) === String(q.estAmt) ? '<div class="cxp-s" style="margin:-6px 0 12px">≈ Estimated from the photo — reports will say so. Change it if you weigh it.</div>' : '');
     }
     if (tracked) {
       const show = q.more || q.brand || q.model || q.serial;
@@ -384,9 +649,10 @@ function cxInjectQuickStyle() {
 .cxq-big{font-size:22px;font-weight:700;color:var(--em)}
 .cxq-small{font-size:11px;color:var(--txt3)}
 .cxq-sess{display:flex;align-items:center;gap:8px;margin:-4px 0 12px;font-size:12px;color:var(--txt3)}
-.cxq-sess select{width:auto;flex:1;max-width:340px;padding:6px 9px;font-size:13px}
+.cxq-sess select{width:100%;min-width:0;flex:1;max-width:340px;padding:6px 9px;font-size:13px}
 .cxq-cap{display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-bottom:10px}
-.cxq-cam{display:flex;align-items:center;justify-content:center;gap:8px;height:64px;border-radius:12px;background:rgba(31,111,109,.08);border:1.5px dashed rgba(31,111,109,.35);color:var(--em);font-weight:700;font-size:14px;cursor:pointer}
+.cxq-cam{display:flex;align-items:center;justify-content:center;gap:10px;height:64px;margin:0;border-radius:12px;background:rgba(31,111,109,.08);border:1.5px dashed rgba(31,111,109,.35);color:var(--em);font-weight:700;font-size:15px;cursor:pointer;text-transform:none;letter-spacing:0;line-height:1.15}
+.cxq-cam small{display:block;font-size:11px;font-weight:500;opacity:.8}
 .cxq-cam span{font-size:22px}
 .cxq-tellbtn{height:64px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--txt2);font-weight:600;font-size:13px}
 .cxq-status{font-size:12px;color:var(--em);background:rgba(31,111,109,.06);border-radius:8px;padding:8px 10px;margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -414,7 +680,7 @@ function cxInjectQuickStyle() {
 .cxq-batch input{font-size:18px;font-weight:700;height:46px}
 .cxq-toast{max-width:640px;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;background:#1F2937;color:#fff;border-radius:10px;padding:10px 14px;font-size:13px;margin:-6px 0 16px}
 .cxq-toast a{color:#9FE3D6;font-weight:700;text-decoration:none}
-@media(max-width:600px){.cxq-cap{grid-template-columns:1fr 1fr}.cxq-more{grid-template-columns:1fr}.cxq-btns{grid-template-columns:1fr 1fr}}`;
+@media(max-width:600px){.cxq-cap{grid-template-columns:1fr 1fr}.cxq-more{grid-template-columns:1fr}.cxq-btns{grid-template-columns:1fr 1fr}.cxq-h{font-size:16px}.cxq-big{font-size:19px}.cxq-amt input{font-size:22px;height:52px}.cxq-btn{height:50px;font-size:13.5px}.cxq-tellbtn{font-size:13px}.cxq-sess span{display:none}}`;
   document.head.appendChild(st);
 }
 
@@ -430,10 +696,12 @@ async function cxQInsert(act, typeKey, amount, kind, key, extra) {
   const f = cxCalc(act, t.key, qty, weight);
   const now = new Date().toISOString();
   const qs = CX.q[act.id];
+  // Only the one-tap path uses the photo estimate (totals and 'just tell it' use typed numbers)
+  const estimated = !(extra && extra._via) && !!(qs && qs.estAmt && String(qs.amt) === String(qs.estAmt) && String(amount) === String(qs.estAmt));
   const d = Object.assign({
     org_id: orgId, activity_id: act.id, item_type: t.key, name: cxLbl(t), category: act.name,
     event_id: qs && qs.event ? qs.event : null,
-    quantity: qty, weight_kg: weight, co2e_kg: f.co2, value_gbp: f.value, custom: {}, updated_at: now
+    quantity: qty, weight_kg: weight, co2e_kg: f.co2, value_gbp: f.value, custom: estimated && kg ? { weight_estimated: true, estimate_basis: qs.estBasis || '' } : {}, updated_at: now
   }, extra || {});
   if (kind === 'outcome') {
     const o = cxOutcome(act, key);
@@ -442,7 +710,7 @@ async function cxQInsert(act, typeKey, amount, kind, key, extra) {
     const s = cxStage(act, key);
     Object.assign(d, { stage: key, status: s ? s.label : '' });
   }
-  const { data, error } = await sb.from('circular_items').insert([d]).select().single();
+  const { data, error } = await cxFrom('circular_items').insert([d]).select().single();
   if (error) throw error;
   await cxLog(data, kind === 'outcome' ? 'tallied' : 'logged', null, key, { item_type: t.key, quantity: qty, weight_kg: weight, via: (extra && extra._via) || 'quick' });
   CX.items.unshift(data);
@@ -457,7 +725,7 @@ async function cxQuickLog(actId, kind, key) {
     const r = await cxQInsert(act, q.type, q.amt, kind, key, extra);
     const dest = cxOutcome(act, key) || cxStage(act, key);
     CX.undo = { act: actId, ids: [r.row.id], at: Date.now(), text: r.text + ' → ' + (dest ? dest.label : ''), label: kind === 'stage' };
-    Object.assign(q, { amt: '', brand: '', model: '', serial: '', name: '', status: '', newType: null, more: false });
+    Object.assign(q, { amt: '', brand: '', model: '', serial: '', name: '', status: '', newType: null, more: false, estAmt: null, estBasis: '' });
     cxDraw(); cxUndoTimer();
     if (kind === 'stage' && (act.fields || []).some(f => cxFieldStage(act, f) === key)) {
       _cxPass = { id: r.row.id, action: { kind: 'move', key }, recip: 'person', personId: '', channel: '' };
@@ -487,7 +755,7 @@ async function cxUndo() {
   CX.undo = null;
   for (const id of u.ids) {
     const it = CX.items.find(i => String(i.id) === String(id));
-    const { error } = await sb.from('circular_items').delete().eq('id', id);
+    const { error } = await cxFrom('circular_items').delete().eq('id', id);
     if (!error && it) { await cxLog(it, 'undone', null, null, {}); CX.items = CX.items.filter(i => i !== it); }
   }
   cxDraw();
@@ -501,7 +769,7 @@ async function cxQPhoto(ev, actId) {
   const file = ev.target.files && ev.target.files[0]; if (!file) return;
   ev.target.value = '';   // same photo can be picked again
   const act = cxAct(actId), q = cxQ(act), tracked = circMode(act) === 'tracked';
-  q.status = '✨ Looking at the photo…'; q.newType = null; cxDraw();
+  q.status = '✨ Looking at the photo…'; q.newType = null; q.estAmt = null; q.estBasis = ''; cxDraw();
   try {
     // Sharp enough to read a scale display, small enough for the AI request limit
     const b64 = await cxResize(file, 1400, 0.8, 185000);
@@ -510,7 +778,7 @@ async function cxQPhoto(ev, actId) {
       'You help a UK community organisation log what is in a photo for their "' + act.name + '" activity. Look carefully at any weighing scale display and read its digits exactly. Reply with JSON only.',
       [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
        { type: 'text', text: 'Their list: ' + (list || 'empty') + '.\nReturn {' +
-         '"seen": the specific thing in the photo in plain words, e.g. "Tomatoes", "Runner beans", "Kettle", ' +
+         '"seen": the specific thing in the photo in 1 to 4 plain words, e.g. "Tomatoes", "School sweatshirts", "Kettle" — no brand or school names, ' +
          '"item_type": key of the list entry that is the same thing, or failing that the broader list entry it belongs to (e.g. tomatoes → a "Produce" entry), or "", ' +
          '"match": "exact" if that list entry is the same thing, "category" if it is only a broader group, "none" if nothing fits, ' +
          '"unit": "kg" or "each", ' +
@@ -518,6 +786,8 @@ async function cxQPhoto(ev, actId) {
          '"scale_reading": the number shown on the scale display exactly as shown, or null if you cannot read it clearly, ' +
          '"scale_units": the units on the display: "kg", "g", "lb" or "oz", ' +
          '"count": how many of the main item you can see, ' +
+         '"estimated_kg": if there is no readable scale, your best estimate of the total weight in kg of everything shown, using typical UK weights (e.g. T-shirt 0.2, sweatshirt 0.45, jeans 0.6, coat 1.2, bag of mixed clothes 5, tomato 0.1, potato 0.2), or null if you cannot estimate, ' +
+         '"estimate_basis": a few words on how you estimated, e.g. "about 12 garments at ~0.4 kg", ' +
          (tracked ? '"brand": "", "model": "", "serial": only text you can actually read on a label else "", ' : '') +
          '"hazards": e.g. "lithium battery" or "", "confidence": "high", "medium" or "low"}. Never guess a scale reading or a serial number.' }], 450);
 
@@ -542,6 +812,10 @@ async function cxQPhoto(ev, actId) {
       q.amt = String(+v.toFixed(2));
       how = 'scale reads ' + raw + ' ' + u + (u !== 'kg' ? ' = ' + q.amt + ' kg' : '');
     } else if (!kg && +j.count > 0) { q.amt = String(Math.round(j.count)); how = q.amt + ' counted'; }
+    else if (kg && +j.estimated_kg > 0) {
+      q.amt = String(+(+j.estimated_kg).toFixed(1)); q.estAmt = q.amt; q.estBasis = j.estimate_basis || '';
+      how = (j.scale_visible ? 'can\'t read the scale, so ' : '') + 'estimated ≈ ' + q.amt + ' kg' + (j.estimate_basis ? ' (' + j.estimate_basis + ')' : '') + ' — weigh it if you can';
+    }
     else if (kg && j.scale_visible) how = 'I can see the scale but not read the numbers — take the photo closer to the display, or type the weight';
     else if (kg) how = 'no scale in the photo — type the weight';
 
@@ -559,7 +833,7 @@ async function cxAddTypeFromAI(actId) {
   const key = _circSlug(q.newType.label) + '_' + Math.random().toString(36).slice(2, 5);
   const t = { key, label: q.newType.label, unit: q.newType.unit, weight_kg: 1, co2e_kg: 0, value_gbp: 0, source: 'Set by organisation' };
   const types = (act.item_types || []).concat(t);
-  const { error } = await sb.from('circular_activities').update({ item_types: types }).eq('id', act.id);
+  const { error } = await cxFrom('circular_activities').update({ item_types: types }).eq('id', act.id);
   if (error) { q.status = 'Could not add: ' + cxE(error.message); q.statusErr = true; cxDraw(); q.statusErr = false; return; }
   act.item_types = types; q.type = key; q.newType = null; q.status = '✓ Added ' + cxE(t.label) + ' to your list';
   cxDraw();
@@ -639,7 +913,7 @@ function cxRecentHTML(act) {
 async function cxDelEntry(id) {
   const it = CX.items.find(i => String(i.id) === String(id)); if (!it) return;
   if (!confirm('Delete this entry?')) return;
-  const { error } = await sb.from('circular_items').delete().eq('id', it.id);
+  const { error } = await cxFrom('circular_items').delete().eq('id', it.id);
   if (error) { alert('Could not delete: ' + error.message); return; }
   await cxLog(it, 'deleted', null, null, { name: it.name, weight_kg: it.weight_kg });
   CX.items = CX.items.filter(i => i !== it); cxDraw();
@@ -659,9 +933,9 @@ const CXR = { items: [], acts: [], at: 0, ok: false };
 async function cxReportLoad(force) {
   if (!force && CXR.ok && Date.now() - CXR.at < 60000) return CXR;
   try {
-    const a = await sb.from('circular_activities').select('*').eq('org_id', orgId);
+    const a = await cxFrom('circular_activities').select('*').eq('org_id', orgId);
     if (a.error) { CXR.ok = false; return CXR; }
-    const it = await sb.from('circular_items').select('*').eq('org_id', orgId).limit(20000);
+    const it = await cxFrom('circular_items').select('*').eq('org_id', orgId).limit(20000);
     CXR.acts = a.data || []; CXR.items = it.error ? [] : (it.data || []);
     CXR.ok = true; CXR.at = Date.now();
   } catch (e) { CXR.ok = false; }
@@ -689,7 +963,7 @@ function cxReportStats(o) {
     return true;
   });
   const r = { entries: items.length, inProgress: 0, undecided: 0, inStock: 0, finished: 0, kg: 0, co2: 0, value: 0, reused: 0, foodKg: 0, meals: 0,
-    repairTried: 0, repairFixed: 0, income: 0, recycledKg: 0, byActivity: {}, byOutcome: {}, starter: false, noSession: 0, activities: [] };
+    repairTried: 0, repairFixed: 0, income: 0, recycledKg: 0, estKg: 0, byActivity: {}, byOutcome: {}, starter: false, noSession: 0, activities: [] };
   items.forEach(i => {
     const a = acts[i.activity_id];
     const qty = +i.quantity || 1, kg = +i.weight_kg || 0;
@@ -701,7 +975,7 @@ function cxReportStats(o) {
     const o2 = (a.outcomes || []).find(x => x.key === i.outcome);
     const ol = (o2 ? o2.label : (i.status || t));
     r.byOutcome[ol] = (r.byOutcome[ol] || 0) + qty;
-    if (CX_IMPACT_KG.includes(t)) { r.kg += kg; row.kg += kg; }
+    if (CX_IMPACT_KG.includes(t)) { r.kg += kg; row.kg += kg; if (i.custom && i.custom.weight_estimated) r.estKg += kg; }
     if (t === 'recycle') r.recycledKg += kg;
     if (CX_IMPACT_CO2.includes(t)) { r.co2 += +i.co2e_kg || 0; r.value += +i.value_gbp || 0; row.co2 += +i.co2e_kg || 0; row.value += +i.value_gbp || 0; }
     if (t === 'reuse' || t === 'repair') r.reused += qty;
@@ -712,7 +986,7 @@ function cxReportStats(o) {
     if (ty && ty.source === CIRC_STARTER && ((+i.co2e_kg || 0) > 0 || (+i.value_gbp || 0) > 0)) r.starter = true;
   });
   const r1 = v => Math.round(v * 10) / 10;
-  r.kg = r1(r.kg); r.co2 = r1(r.co2); r.value = Math.round(r.value); r.foodKg = r1(r.foodKg); r.recycledKg = r1(r.recycledKg);
+  r.kg = r1(r.kg); r.estKg = r1(r.estKg); r.co2 = r1(r.co2); r.value = Math.round(r.value); r.foodKg = r1(r.foodKg); r.recycledKg = r1(r.recycledKg);
   r.meals = Math.round(r.foodKg / CX_KG_PER_MEAL);
   r.fixRate = r.repairTried ? Math.round(r.repairFixed / r.repairTried * 100) : null;
   r.activities = Object.keys(r.byActivity);
@@ -728,7 +1002,7 @@ function cxReportLines(r) {
     'Activities: ' + r.activities.join(', '),
     'Items and batches with a final outcome: ' + r.finished,
     r.inStock ? 'Items currently being processed (in stock, not yet counted): ' + r.inStock : '',
-    'Weight diverted from waste (reused, repaired, shared or recycled): ' + r.kg + ' kg' + (r.recycledKg ? ' (of which recycled: ' + r.recycledKg + ' kg)' : ''),
+    'Weight diverted from waste (reused, repaired, shared or recycled): ' + r.kg + ' kg' + (r.recycledKg ? ' (of which recycled: ' + r.recycledKg + ' kg)' : '') + (r.estKg ? ' — ' + r.estKg + ' kg of this was estimated from photos rather than weighed' : ''),
     r.reused ? 'Items reused or repaired: ' + r.reused : '',
     r.co2 ? 'Estimated CO2e avoided: ' + r.co2 + ' kg (' + (Math.round(r.co2 / 100) / 10) + ' tonnes)' : '',
     r.value ? 'Estimated value to people receiving items: ' + m(r.value) : '',
@@ -743,6 +1017,7 @@ function cxReportLines(r) {
 function cxReportGaps(r) {
   const g = [];
   if (!r || !r.entries) return g;
+  if (r.estKg) g.push(r.estKg + ' kg of the weight diverted was estimated from photos rather than weighed.');
   if (r.starter) g.push('Some CO2e and value figures use Vorlana starter estimates rather than the organisation\'s own figures.');
   if (r.undecided) g.push(r.undecided + ' circular entr' + (r.undecided === 1 ? 'y has' : 'ies have') + ' no destination recorded yet, so ' + (r.undecided === 1 ? 'it is' : 'they are') + ' not counted in the impact figures.');
   return g;
@@ -771,7 +1046,7 @@ function cxReportDocHTML(r, title) {
     '<table class="dr-tbl" style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px"><thead><tr><th style="text-align:left">Activity</th><th style="text-align:left">Items</th><th style="text-align:left">kg</th><th style="text-align:left">CO₂e kg</th></tr></thead><tbody>' + actRows + '</tbody></table>' +
     (outKeys.length ? '<table class="dr-tbl" style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:10px"><thead><tr><th style="text-align:left">Where it went</th><th style="text-align:left">Items</th></tr></thead><tbody>' +
       outKeys.map(k => '<tr><td>' + esc(k) + '</td><td>' + r.byOutcome[k] + '</td></tr>').join('') + '</tbody></table>' : '') +
-    '<p style="font-size:11px;color:#777">CO₂e and value are estimates from per-item factors' + (r.starter ? ' (including Vorlana starter estimates)' : ' set by the organisation') + '. Meals at 420 g per meal (WRAP). Weight diverted includes items reused, repaired, shared or recycled.</p>';
+    '<p style="font-size:11px;color:#777">CO₂e and value are estimates from per-item factors' + (r.starter ? ' (including Vorlana starter estimates)' : ' set by the organisation') + '. Meals at 420 g per meal (WRAP). Weight diverted includes items reused, repaired, shared or recycled.' + (r.estKg ? ' ' + r.estKg + ' kg of weight was estimated from photos rather than weighed.' : '') + '</p>';
 }
 
 // Social Impact page card
@@ -1124,7 +1399,7 @@ async function cxImportSave() {
     if (p.newTypes.length) {
       btn.textContent = 'Adding new items…';
       const types = (act.item_types || []).concat(p.newTypes.map(t => { const c = Object.assign({}, t); delete c._new; return c; }));
-      const { error } = await sb.from('circular_activities').update({ item_types: types }).eq('id', act.id);
+      const { error } = await cxFrom('circular_activities').update({ item_types: types }).eq('id', act.id);
       if (error) throw error;
       act.item_types = types;
     }
@@ -1149,13 +1424,13 @@ async function cxImportSave() {
     const saved = [];
     for (let i = 0; i < rows.length; i += 250) {
       btn.textContent = 'Saving ' + Math.min(i + 250, rows.length) + ' of ' + rows.length + '…';
-      const { data, error } = await sb.from('circular_items').insert(rows.slice(i, i + 250)).select();
+      const { data, error } = await cxFrom('circular_items').insert(rows.slice(i, i + 250)).select();
       if (error) throw error;
       saved.push(...(data || []));
     }
     // One custody-log entry per item, in bulk
     for (let i = 0; i < saved.length; i += 250) {
-      await sb.from('circular_item_events').insert(saved.slice(i, i + 250).map(it => ({
+      await cxFrom('circular_item_events').insert(saved.slice(i, i + 250).map(it => ({
         org_id: orgId, item_id: String(it.id), activity_id: act.id, action: 'imported', to_stage: it.outcome || it.stage,
         data: { file: CXI.file, import_batch: batch }, actor_name: cxActorName()
       })));
@@ -1176,7 +1451,7 @@ function cxImportUndoOffer(batch) {
 }
 async function cxImportUndo(batch) {
   if (!confirm('Remove every entry from this import?')) return;
-  const { error } = await sb.from('circular_items').delete().eq('org_id', orgId).eq('custom->>import_batch', batch);
+  const { error } = await cxFrom('circular_items').delete().eq('org_id', orgId).eq('custom->>import_batch', batch);
   if (error) { alert('Could not undo: ' + error.message); return; }
   CX.items = CX.items.filter(i => !(i.custom && i.custom.import_batch === batch));
   if (typeof CXR !== 'undefined') CXR.at = 0;
@@ -1232,9 +1507,9 @@ async function cxTidyApply() {
         const ids = g.ids.slice(i, i + 200);
         btn.textContent = 'Saving ' + (done + ids.length) + '…';
         // outcome_at stays empty so reports keep each entry's own logged date
-        const { error } = await sb.from('circular_items').update({ outcome: o.key, outcome_type: o.type, status: o.label, updated_at: new Date().toISOString() }).in('id', ids);
+        const { error } = await cxFrom('circular_items').update({ outcome: o.key, outcome_type: o.type, status: o.label, updated_at: new Date().toISOString() }).in('id', ids);
         if (error) throw error;
-        await sb.from('circular_item_events').insert(ids.map(id => ({ org_id: orgId, item_id: String(id), activity_id: act.id, action: 'finished', to_stage: o.key, data: { via: 'sorted in bulk' }, actor_name: cxActorName() })));
+        await cxFrom('circular_item_events').insert(ids.map(id => ({ org_id: orgId, item_id: String(id), activity_id: act.id, action: 'finished', to_stage: o.key, data: { via: 'sorted in bulk' }, actor_name: cxActorName() })));
         CX.items.forEach(it => { if (ids.includes(it.id)) Object.assign(it, { outcome: o.key, outcome_type: o.type, status: o.label }); });
         done += ids.length;
       }
@@ -1364,7 +1639,7 @@ async function cxSaveItem() {
     };
     if ($('cx-event')) d.event_id = $('cx-event').value || null;
     if (edit) {
-      const { error } = await sb.from('circular_items').update(d).eq('id', edit.id);
+      const { error } = await cxFrom('circular_items').update(d).eq('id', edit.id);
       if (error) throw error;
       await cxLog(Object.assign({}, edit, d), 'edited', null, null, { name: d.name, weight_kg: kg, quantity: qty, serial: d.serial });
       Object.assign(edit, d);
@@ -1373,7 +1648,7 @@ async function cxSaveItem() {
       d.stage = stageKey; d.status = (cxStage(act, stageKey) || {}).label || '';
       d.collection_id = CX.logCtx.collection_id;
       d.org_id = orgId;
-      const { data, error } = await sb.from('circular_items').insert([d]).select().single();
+      const { data, error } = await cxFrom('circular_items').insert([d]).select().single();
       if (error) throw error;
       await cxLog(data, CX.logCtx.collection_id ? 'booked_in' : 'logged', null, stageKey,
         { name: d.name, item_type: typeKey, quantity: qty, weight_kg: kg, source: d.source, collection_id: d.collection_id });
@@ -1550,7 +1825,7 @@ async function cxOpenItem(id, justLogged) {
     '<div class="pp-grid">' + det.map(d => '<div><span>' + e(d[0]) + '</span><b>' + e(d[1]) + '</b></div>').join('') + '</div>' +
     '<details class="pp-hist" id="pp-hist-wrap"><summary id="pp-hist-sum">Chain of custody</summary><div id="cx-hist" class="cxp-s">Loading…</div></details>', 560);
 
-  const { data, error } = await sb.from('circular_item_events').select('*').eq('org_id', orgId).eq('item_id', String(it.id)).order('id');
+  const { data, error } = await cxFrom('circular_item_events').select('*').eq('org_id', orgId).eq('item_id', String(it.id)).order('id');
   const el = $('cx-hist'); if (!el) return;
   if (error) { el.textContent = 'Could not load history.'; return; }
   const evs = data || [];
@@ -1677,7 +1952,7 @@ async function cxMove(id, stageKey, opt) {
   const from = it.stage;
   const custom = Object.assign({}, it.custom || {}, opt.fields || {});
   const d = { stage: stageKey, status: (cxStage(act, stageKey) || {}).label || '', custom, updated_at: new Date().toISOString() };
-  const { error } = await sb.from('circular_items').update(d).eq('id', it.id);
+  const { error } = await cxFrom('circular_items').update(d).eq('id', it.id);
   if (error) { alert('Could not move: ' + error.message); return; }
   Object.assign(it, d);
   const data = {}; if (opt.note) data.note = opt.note; if (opt.fields && Object.keys(opt.fields).length) data.fields = opt.fields;
@@ -1706,7 +1981,7 @@ async function cxFinish(id, outKey, extra) {
   const to = link && CX.acts.find(a => a.key === link.to && a.template !== 'collections');
   if (to) { await cxLog(it, 'finished', it.stage, outKey, data); _cxPass.action = null; return cxPass(id, to.id, true); }
   Object.assign(d, { outcome: outKey, outcome_type: o.type, outcome_at: new Date().toISOString(), status: o.label, custom, updated_at: new Date().toISOString() });
-  const { error } = await sb.from('circular_items').update(d).eq('id', it.id);
+  const { error } = await cxFrom('circular_items').update(d).eq('id', it.id);
   if (error) { alert('Could not save: ' + error.message); const b = $('pp-confirm'); if (b) b.disabled = false; return; }
   const from = it.stage;
   Object.assign(it, d);
@@ -1721,7 +1996,7 @@ async function cxReopen(id) {
   const custom = Object.assign({}, it.custom || {}); delete custom.sale_gbp; delete custom.sale_channel; delete custom.recipient_org; delete custom.due_back; delete custom.borrower;
   const back = it.stage || ((act.stages || []).slice(-1)[0] || {}).key || null;
   const d = { outcome: null, outcome_type: null, outcome_at: null, recipient_participant_id: null, custom, stage: back, status: (cxStage(act, back) || {}).label || '', updated_at: new Date().toISOString() };
-  const { error } = await sb.from('circular_items').update(d).eq('id', it.id);
+  const { error } = await cxFrom('circular_items').update(d).eq('id', it.id);
   if (error) { alert('Could not undo: ' + error.message); return; }
   const was = it.outcome;
   Object.assign(it, d);
@@ -1737,7 +2012,7 @@ async function cxPass(id, toActId, silent) {
   const d = { activity_id: to.id, category: to.name, stage: first ? first.key : null, status: first ? first.label : '',
     item_type: t ? t.key : it.item_type, co2e_kg: f.co2, value_gbp: f.value,
     outcome: null, outcome_type: null, outcome_at: null, updated_at: new Date().toISOString() };
-  const { error } = await sb.from('circular_items').update(d).eq('id', it.id);
+  const { error } = await cxFrom('circular_items').update(d).eq('id', it.id);
   if (error) { alert('Could not pass on: ' + error.message); return; }
   Object.assign(it, d);
   await cxLog(it, 'passed', null, d.stage, { from_activity: fromAct && fromAct.name, to_activity: to.name });
@@ -1791,6 +2066,7 @@ function cxInjectPassStyle() {
 .pp-grid span{display:block;font-size:10.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;font-weight:600}
 .pp-grid b{display:block;font-size:13px;color:var(--txt);font-weight:600;overflow-wrap:anywhere}
 .pp-hist summary{cursor:pointer;font-size:13px;color:var(--txt2);margin-bottom:10px}
+@media(max-width:600px){#cx-modal{padding:0}#cx-modal .modal{padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px));width:100%;max-width:100%!important;max-height:92vh;overflow-y:auto;border-radius:16px 16px 0 0;margin:auto 0 0}#cx-modal.open{align-items:flex-end}.pp-name{font-size:17px}.pp-grid{grid-template-columns:1fr 1fr}.pp-outs{grid-template-columns:1fr 1fr}.form-grid-2{grid-template-columns:1fr}}
 .cxs-wrap{position:relative;flex:1;min-width:180px;max-width:320px}
 .cxs-wrap input{padding:7px 12px;font-size:13px;border-radius:20px}
 .cxs-res{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.1);z-index:20;max-height:360px;overflow:auto}
@@ -1977,11 +2253,11 @@ async function cxSaveBooking(id) {
     if (id) {
       const c = CX.cols.find(x => x.id === id);
       if (c.status === 'requested' && sched) d.status = 'scheduled';
-      const { error } = await sb.from('circular_collections').update(d).eq('id', id); if (error) throw error;
+      const { error } = await cxFrom('circular_collections').update(d).eq('id', id); if (error) throw error;
       Object.assign(c, d);
     } else {
       d.org_id = orgId; d.activity_id = (cxColAct() || {}).id || null; d.status = sched ? 'scheduled' : 'requested';
-      const { data, error } = await sb.from('circular_collections').insert([d]).select().single(); if (error) throw error;
+      const { data, error } = await cxFrom('circular_collections').insert([d]).select().single(); if (error) throw error;
       CX.cols.unshift(data);
     }
     cxCloseModal(); CX.tab = 'collections'; cxDraw();
@@ -1991,7 +2267,7 @@ async function cxSaveBooking(id) {
 async function cxColStatus(id, status, extra) {
   const c = CX.cols.find(x => x.id === id);
   const d = Object.assign({ status }, extra || {});
-  const { error } = await sb.from('circular_collections').update(d).eq('id', id);
+  const { error } = await cxFrom('circular_collections').update(d).eq('id', id);
   if (error) { alert('Could not update: ' + error.message); return false; }
   Object.assign(c, d); cxCloseModal(); cxDraw(); return true;
 }
@@ -2020,7 +2296,7 @@ function cxBookIn(id) {
 async function cxMarkBookedIn(id) {
   const c = CX.cols.find(x => x.id === id);
   if (c && c.status !== 'booked_in') {
-    const { error } = await sb.from('circular_collections').update({ status: 'booked_in' }).eq('id', id);
+    const { error } = await cxFrom('circular_collections').update({ status: 'booked_in' }).eq('id', id);
     if (!error) c.status = 'booked_in';
   }
 }
@@ -2122,7 +2398,7 @@ async function cxCustodyRun(kind) {
   const evs = {};
   const ids = items.map(i => String(i.id));
   for (let k = 0; k < ids.length; k += 150) {
-    const { data, error } = await sb.from('circular_item_events').select('*').eq('org_id', orgId).in('item_id', ids.slice(k, k + 150)).order('id');
+    const { data, error } = await cxFrom('circular_item_events').select('*').eq('org_id', orgId).in('item_id', ids.slice(k, k + 150)).order('id');
     if (error) { msg.textContent = 'Could not read history: ' + error.message; return; }
     (data || []).forEach(ev => { (evs[ev.item_id] = evs[ev.item_id] || []).push(ev); });
   }
