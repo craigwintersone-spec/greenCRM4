@@ -202,7 +202,15 @@
   function wrapOpeners() {
     ['openAddP', 'openEditP'].forEach(name => {
       const orig = window[name]; if (typeof orig !== 'function' || orig._ob) return;
-      window[name] = function () { const r = orig.apply(this, arguments); try { onOpen(name === 'openAddP'); } catch (e) { console.warn('[onboarding]', e); } return r; };
+      window[name] = function () {
+        const r = orig.apply(this, arguments);
+        try {
+          onOpen(name === 'openAddP');
+          if (name === 'openAddP' && !window._vorlanaFullAdd) { $id('modal-p').classList.remove('open'); openQuickAdd(); }
+          else { tabify(); intakeBanner(); }
+        } catch (e) { console.warn('[onboarding]', e); }
+        return r;
+      };
       window[name]._ob = true;
     });
   }
@@ -301,6 +309,9 @@
     }, myProfile());
     Object.keys(ELIG_STATE).forEach(k => { if (ELIG_STATE[k] !== '' && ELIG_STATE[k] != null) d[k] = ELIG_STATE[k]; });
     if (!d.interpersonal && Array.isArray(d.support_needs)) d.interpersonal = d.support_needs.length ? 'Yes' : '';
+    const cp = currentParticipant();
+    const sig = cp && cp.paperwork && cp.paperwork.signature;
+    if (sig && sig.png) { d.signature_png = sig.png; d.signed_name = sig.signed_name; d.signed_date = new Date(sig.signed_at).toLocaleDateString('en-GB'); }
     return d;
   }
   function currentParticipant() { return (typeof _editPId !== 'undefined' && _editPId) ? (DB.participants || []).find(x => x.id === _editPId) : null; }
@@ -364,6 +375,10 @@
       const { data } = await sb.from('form_maps').select('*').eq('org_id', orgId).eq('form_key', formKey()).maybeSingle();
       if (data && data.items) { FF.map = { id: data.id, formHash: data.form_hash, items: data.items }; return runFill(); }
     } catch (e) { /* no table yet: set up without saving */ }
+    if (!isManager()) {
+      ffModal('<h2>📄 ' + esc(formLabel()) + '</h2><div class="cxp-s" style="font-size:13px;line-height:1.6">This form hasn\'t been set up yet. A manager sets it up once under <b>Funders → Contracts → 🧭 Set up form</b>, then it fills itself for everyone.</div><div class="modal-footer"><button class="btn btn-p" id="ff-ok">OK</button></div>');
+      $id('ff-ok').onclick = ffClose; return;
+    }
     setup();
   }
 
@@ -408,7 +423,13 @@
         const { data, error } = await sb.from('form_maps').upsert(row, { onConflict: 'org_id,form_key' }).select('id').single();
         if (error) throw error;
         FF.map.id = data.id;
-      } catch (e) { alert('Filled this time, but the set-up could not be saved (' + (e.message || e) + '). Run form-maps.sql in Supabase so it is remembered.'); }
+      } catch (e) { alert((FF.setupOnly ? 'The set-up could not be saved' : 'Filled this time, but the set-up could not be saved') + ' (' + (e.message || e) + '). Run form-maps.sql in Supabase so it is remembered.'); }
+      if (FF.setupOnly) {
+        FF.setupOnly = false; delete MAPS[FF.pick];
+        ffModal('<h2>✓ Form set up</h2><div class="cxp-s" style="font-size:13px;line-height:1.6">Advisers can now pick this contract when adding someone and the start form fills itself.</div><div class="modal-footer"><button class="btn btn-p" id="ff-ok">Done</button></div>');
+        $id('ff-ok').onclick = () => { ffClose(); if (FF.afterSetup) FF.afterSetup(); try { addSetupButtons(); } catch (e) { /* page changed */ } };
+        return;
+      }
       runFill();
     };
   }
@@ -504,6 +525,7 @@
       readEligInputs();
       const elig = Object.assign({}, ELIG_STATE);
       const r = await orig.apply(this, arguments);
+      setTimeout(afterConvertSave, 0);
       let p = before;
       if (!p) p = (DB.participants || []).filter(x => x.first_name === names[0] && x.last_name === names[1]).slice(-1)[0];
       if (p && String(p.id).indexOf('demo-') !== 0) {
@@ -521,9 +543,499 @@
     window.saveP._ob = true;
   }
 
+  // ── Quick add: the 30-second version of "Add participant" ────
+  // Only what's needed to start working with someone. Everything else
+  // is filled in later on their record (tabs), when it's known.
+  let QA_OPEN = false;
+  function qaStyle() {
+    if ($id('qa-style')) return;
+    const s = document.createElement('style'); s.id = 'qa-style';
+    s.textContent = `
+#qa-modal .modal{max-width:600px}
+.qa-note{font-size:12.5px;color:var(--txt3);background:var(--bg);border-radius:8px;padding:8px 10px;margin-bottom:10px}
+.qa-form{border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:12px}
+.qa-form-h{font-size:13px;font-weight:700;margin-bottom:6px}.qa-form-h span{font-weight:400;color:var(--txt3);font-size:12px}
+.qa-q{padding:7px 0;border-top:1px solid var(--border)}.qa-q>span{display:block;font-size:12.5px;color:var(--txt);margin-bottom:5px}
+.qa-q input{font-size:13px;padding:6px 9px}
+.qa-drop{border:1.5px dashed rgba(31,111,109,.4);background:rgba(31,111,109,.05);border-radius:12px;padding:14px;text-align:center;margin-bottom:14px}
+.qa-drop b{color:var(--em);font-size:14px}.qa-drop p{font-size:12px;color:var(--txt3);margin:4px 0 10px}
+.qa-drop.drag{background:rgba(31,111,109,.12)}
+.qa-chips{display:flex;flex-wrap:wrap;gap:6px}
+.qa-chips button{border:1px solid var(--border);background:var(--surface);border-radius:16px;padding:6px 12px;font-size:12.5px;color:var(--txt2);cursor:pointer}
+.qa-chips button.on{background:var(--em);border-color:var(--em);color:#fff;font-weight:600}
+.qa-dupe{background:#FFFBEB;border:1px solid #FDE68A;color:#92400E;border-radius:8px;padding:8px 10px;font-size:12.5px;margin-bottom:10px}
+.qa-more{font-size:12.5px;color:var(--txt3);text-align:center;margin-top:4px}
+/* record as tabs */
+#modal-p.tabbed .modal{max-width:760px;padding-top:18px}
+.pt-bar{display:flex;gap:2px;overflow-x:auto;border-bottom:1px solid var(--border);margin:6px -4px 14px;padding:0 4px;scrollbar-width:none;position:sticky;top:-24px;background:var(--surface);z-index:2}
+.pt-bar::-webkit-scrollbar{display:none}
+.pt-bar button{border:none;background:none;padding:10px 12px;font-size:13px;color:var(--txt3);white-space:nowrap;border-bottom:2px solid transparent;cursor:pointer}
+.pt-bar button.on{color:var(--em);border-bottom-color:var(--em);font-weight:700}
+.pt-bar button small{display:inline-block;margin-left:5px;font-size:10.5px;font-weight:600;background:var(--bg);border-radius:8px;padding:1px 6px;color:var(--txt3)}
+.pt-bar button small.done{background:rgba(31,111,109,.1);color:var(--em)}
+#modal-p.tabbed details>summary{display:none}
+#modal-p.tabbed details{border:none;margin:0}
+#modal-p.tabbed .modal-footer{position:sticky;bottom:-24px;background:var(--surface);padding:12px 0;margin-bottom:-12px;z-index:2}`;
+    document.head.appendChild(s);
+  }
+
+  function qaModal() {
+    let m = $id('qa-modal');
+    if (!m) { m = document.createElement('div'); m.className = 'modal-overlay'; m.id = 'qa-modal'; m.addEventListener('click', e => { if (e.target === m) qaClose(); }); document.body.appendChild(m); }
+    return m;
+  }
+  function qaClose() { const m = $id('qa-modal'); if (m) m.classList.remove('open'); QA_OPEN = false; }
+  const QA = { rs: '', contracts: [], answers: {} };
+
+  function openQuickAdd() {
+    qaStyle(); style();
+    QA.rs = ''; QA.contracts = []; QA.answers = {};
+    const rs = options('mp-rs') || [];
+    const cons = (DB.contracts || []);
+    const advs = options('mp-adv') || [];
+    const m = qaModal();
+    m.innerHTML = '<div class="modal"><h2>Add participant</h2>' +
+      '<div class="qa-drop" id="qa-drop"><b>✨ Start from a referral</b><p>Drop a PDF or Word file here, take a photo of a paper form, or paste the email — we\'ll fill this in.</p>' +
+        '<label class="btn btn-p btn-sm" style="margin:0 4px;cursor:pointer">📷 Photo / file<input type="file" id="qa-file" accept="image/*,.pdf,.docx,.txt" style="display:none"/></label>' +
+        '<button class="btn btn-ghost btn-sm" type="button" id="qa-paste">📋 Paste text</button>' +
+        '<div id="qa-paste-box" style="display:none;margin-top:10px"><textarea id="qa-text" style="min-height:80px;font-size:13px" placeholder="Paste the referral here…"></textarea><div style="text-align:right;margin-top:6px"><button class="btn btn-p btn-sm" id="qa-read" type="button">Fill it in</button></div></div>' +
+        '<div class="ob-status" id="qa-status"></div></div>' +
+      '<div id="qa-dupe"></div>' +
+      '<div class="form-grid-2"><div class="form-row"><label>First name *</label><input id="qa-fn" autocomplete="off"/></div><div class="form-row"><label>Last name</label><input id="qa-ln" autocomplete="off"/></div></div>' +
+      '<div class="form-grid-2"><div class="form-row"><label>Phone</label><input id="qa-phone" inputmode="tel"/></div><div class="form-row"><label>Email</label><input id="qa-email" type="email"/></div></div>' +
+      '<div class="form-grid-2"><div class="form-row"><label>Date of birth</label><input id="qa-dob" type="date"/></div><div class="form-row"><label>Postcode</label><input id="qa-pc" style="text-transform:uppercase"/></div></div>' +
+      '<div class="form-row"><label>Referred by</label><div class="qa-chips" id="qa-rs">' + rs.map(o => '<button type="button" data-v="' + esc(o) + '">' + esc(o) + '</button>').join('') + '</div></div>' +
+      (cons.length ? '<div class="form-row"><label>Funded under</label><div class="qa-chips" id="qa-con">' + cons.filter(c => c.status !== 'closed').map(c => '<button type="button" data-v="' + esc(c.id) + '">' + esc(c.name) + '</button>').join('') + '</div></div>' : '') +
+      '<div id="qa-forms"></div>' +
+      (advs.length ? '<div class="form-row"><label>Adviser</label><select id="qa-adv">' + advs.map(o => '<option>' + esc(o) + '</option>').join('') + '</select></div>' : '') +
+      '<div class="modal-footer" style="flex-wrap:wrap"><button class="btn btn-ghost" id="qa-cancel">Cancel</button><button class="btn btn-ghost" id="qa-full">Add &amp; open record</button><button class="btn btn-ghost" id="qa-link">📱 Add &amp; send them a link</button><button class="btn btn-p" id="qa-save">Add participant</button></div>' +
+      '<div class="qa-more">Everything else — eligibility, notes, paperwork — can be added on their record when you have it.</div></div>';
+    m.classList.add('open'); QA_OPEN = true;
+    setTimeout(() => $id('qa-fn').focus(), 50);
+    const chips = (id, multi) => { const box = $id(id); if (!box) return; box.onclick = ev => { const b = ev.target.closest('button'); if (!b) return;
+      if (multi) { b.classList.toggle('on'); QA.contracts = Array.from(box.querySelectorAll('button.on')).map(x => x.dataset.v); drawQAForms(); }
+      else { const was = b.classList.contains('on'); box.querySelectorAll('button').forEach(x => x.classList.remove('on')); if (!was) b.classList.add('on'); QA.rs = was ? '' : b.dataset.v; } }; };
+    chips('qa-rs', false); chips('qa-con', true);
+    ['qa-fn', 'qa-ln', 'qa-dob'].forEach(id => $id(id).addEventListener('input', checkDupe));
+    $id('qa-cancel').onclick = qaClose;
+    $id('qa-save').onclick = () => qaSave(false);
+    $id('qa-full').onclick = () => qaSave(true);
+    $id('qa-link').onclick = () => qaSave('link');
+    $id('qa-paste').onclick = () => { const b = $id('qa-paste-box'); b.style.display = b.style.display === 'none' ? '' : 'none'; if (b.style.display === '') $id('qa-text').focus(); };
+    $id('qa-read').onclick = () => qaRead({ text: val('qa-text') });
+    $id('qa-file').onchange = ev => { const f = ev.target.files && ev.target.files[0]; ev.target.value = ''; if (f) qaRead({ file: f }); };
+    const drop = $id('qa-drop');
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
+    drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('drag'); const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) qaRead({ file: f }); });
+  }
+
+  // Reads the referral into the full form (hidden), then copies the essentials across
+  async function qaRead(src) {
+    const st = $id('qa-status'); st.className = 'ob-status'; st.textContent = '✨ Reading…';
+    const obStatus = $id('ob-status');
+    await readReferral(src);
+    const msg = obStatus ? obStatus.innerHTML : '';
+    [['qa-fn', 'mp-fn'], ['qa-ln', 'mp-ln'], ['qa-phone', 'mp-phone'], ['qa-email', 'mp-email'], ['qa-dob', 'mp-dob'], ['qa-pc', 'mp-postcode']].forEach(([a, b]) => {
+      if (!val(a) && val(b)) { $id(a).value = val(b); $id(a).classList.add('ob-filled'); }
+    });
+    const rs = val('mp-rs'); if (rs && !QA.rs) { QA.rs = rs; document.querySelectorAll('#qa-rs button').forEach(x => x.classList.toggle('on', x.dataset.v === rs)); }
+    st.className = obStatus ? obStatus.className : 'ob-status'; st.innerHTML = msg.replace('highlighted for you to check', 'check below — the rest is saved on their record');
+    $id('qa-paste-box').style.display = 'none';
+    checkDupe();
+  }
+
+  function checkDupe() {
+    const fn = val('qa-fn').toLowerCase(), ln = val('qa-ln').toLowerCase(), box = $id('qa-dupe');
+    if (!box) return;
+    if (fn.length < 2 || ln.length < 2) { box.innerHTML = ''; return; }
+    const hit = (DB.participants || []).find(p => (p.first_name || '').toLowerCase() === fn && (p.last_name || '').toLowerCase() === ln);
+    box.innerHTML = hit ? '<div class="qa-dupe">⚠ ' + esc(hit.first_name + ' ' + hit.last_name) + ' is already on your caseload (' + esc(hit.stage) + '). <a href="#" id="qa-open-dupe">Open their record</a> instead?</div>' : '';
+    if (hit) $id('qa-open-dupe').onclick = ev => { ev.preventDefault(); qaClose(); openEditP(hit.id); };
+  }
+
+  async function qaSave(openAfter) {
+    if (!val('qa-fn')) { $id('qa-fn').focus(); $id('qa-fn').classList.add('ob-filled'); return; }
+    const btn = $id('qa-save'); btn.disabled = true; btn.textContent = 'Adding…';
+    // Copy into the full form (already reset by openAddP) and save with the normal save
+    const set = (id, v) => { const e = $id(id); if (e && v != null && v !== '') e.value = v; };
+    set('mp-fn', val('qa-fn')); set('mp-ln', val('qa-ln')); set('mp-phone', val('qa-phone')); set('mp-email', val('qa-email'));
+    set('mp-dob', val('qa-dob')); set('mp-postcode', val('qa-pc').toUpperCase()); if (QA.rs) set('mp-rs', QA.rs); if ($id('qa-adv')) set('mp-adv', val('qa-adv'));
+    if (!val('mp-start')) set('mp-start', new Date().toISOString().slice(0, 10));
+    if (typeof renderContractSelector === 'function') renderContractSelector(QA.contracts);
+    const names = [val('mp-fn'), val('mp-ln')];
+    const data = gather();
+    try {
+      await window.saveP();
+      const p = (DB.participants || []).filter(x => x.first_name === names[0] && x.last_name === names[1]).slice(-1)[0];
+      let msg = '✓ Added ' + names.join(' ');
+      if (QA.contracts.length && openAfter !== 'link') {   // with a link, the form is filled once they've signed
+        btn.textContent = 'Filling start form…';
+        const r = await autoFillStartForms(p, data);
+        if (r.done.length) msg += ' · start form downloaded';
+        if (r.todo.length) msg += ' · ' + r.todo.join('; ');
+      }
+      qaClose();
+      if (typeof toast === 'function') toast(msg); else if (/to answer|could not/.test(msg)) alert(msg);
+      if (openAfter === 'link' && p) sendIntake(p, { forename: p.first_name, surname: p.last_name, phone: p.phone, email: p.email, dob: val('qa-dob'), postcode: val('qa-pc').toUpperCase() }, QA.contracts);
+      else if (openAfter && p) openEditP(p.id);
+    } catch (e) { alert('Could not add: ' + (e.message || e)); btn.disabled = false; btn.textContent = 'Add participant'; }
+  }
+
+  // ── The record as tabs instead of a long list of folded sections ──
+  function tabify(firstTab) {
+    const modal = $id('modal-p'); if (!modal) return;
+    const box = modal.querySelector('.modal');
+    const ds = Array.from(box.querySelectorAll(':scope > details'));
+    if (!ds.length) return;
+    qaStyle();
+    modal.classList.add('tabbed');
+    const NAMES = [[/participant details/i, 'Details'], [/referral|journey/i, 'Journey'], [/assessment|notes/i, 'Notes & scores'], [/paperwork/i, 'Paperwork'], [/eligib/i, 'Eligibility'], [/job/i, 'Job outcome']];
+    const short = t => { const n = NAMES.find(x => x[0].test(t)); return n ? n[1] : t.replace(/^[^A-Za-z]+/, '').replace(/\s*\d+ of \d+ filled.*/, '').trim().split(' ').slice(0, 2).join(' '); };
+    let bar = $id('pt-bar');
+    if (!bar) { bar = document.createElement('div'); bar.id = 'pt-bar'; bar.className = 'pt-bar'; box.insertBefore(bar, ds[0]); }
+    // Anything the extensions add between sections (e.g. demographics) goes on its own tab
+    const demo = Array.from(box.children).find(x => x.tagName !== 'DETAILS' && /Demographics \(optional\)/.test(x.textContent || '') && !x.contains(bar));
+    const tabs = ds.map(d => ({ el: d, name: short(d.querySelector('summary').textContent) }));
+    if (demo) tabs.push({ el: demo, name: 'Demographics' });
+    const paint = () => {
+      bar.innerHTML = tabs.map((t, i) => {
+        const c = t.el.tagName === 'DETAILS' ? sectionCount(t.el) : null;
+        return '<button type="button" data-i="' + i + '" class="' + (t.el.style.display !== 'none' ? 'on' : '') + '">' + esc(t.name) +
+          (c && c.t ? '<small class="' + (c.f === c.t ? 'done' : '') + '">' + c.f + '/' + c.t + '</small>' : '') + '</button>';
+      }).join('');
+    };
+    const show = i => { tabs.forEach((t, k) => { t.el.style.display = k === i ? '' : 'none'; if (t.el.tagName === 'DETAILS') t.el.open = true; }); paint(); };
+    bar.onclick = ev => { const b = ev.target.closest('button'); if (b) show(+b.dataset.i); };
+    box.addEventListener('input', paint); box.addEventListener('change', paint);
+    const want = firstTab ? tabs.findIndex(t => new RegExp(firstTab, 'i').test(t.name)) : 0;
+    show(want >= 0 ? want : 0);
+  }
+
+  // ── Contract start forms: set up by a manager, filled automatically on "Add participant" ──
+  const isManager = () => typeof currentRole === 'undefined' || !currentRole || /manager|admin|owner|super/i.test(currentRole);
+  const MAPS = {};   // contractId → saved map (or null)
+  async function loadMap(contractId) {
+    if (contractId in MAPS) return MAPS[contractId];
+    try {
+      const { data } = await sb.from('form_maps').select('*').eq('org_id', orgId).eq('form_key', 'contract:' + contractId).maybeSingle();
+      MAPS[contractId] = data && data.items ? { id: data.id, formHash: data.form_hash, items: data.items, name: data.form_name } : null;
+    } catch (e) { MAPS[contractId] = null; }
+    return MAPS[contractId];
+  }
+  // What the adviser needs to tick on the quick-add screen: questions not covered by the quick fields or the referral
+  const QUICK_COVERED = ['title', 'forename', 'surname', 'full_name', 'dob', 'ni', 'phone', 'email', 'address', 'postcode', 'participant_id', 'start_date',
+    'provider', 'project', 'referral_source', 'adviser', 'keyworker_name', 'keyworker_email', 'keyworker_phone', 'today', 'organisation',
+    'employer', 'job_title', 'job_start', 'hours', 'pay', 'exit_date', 'leave_reason', 'outcome_type'];
+  function quickQuestions(map) {
+    return (map.items || []).filter(it => it.use === 'ask' || (it.use === 'field' && !QUICK_COVERED.includes(it.field)));
+  }
+  async function drawQAForms() {
+    const box = $id('qa-forms'); if (!box) return;
+    const withForms = [];
+    for (const cid of QA.contracts) {
+      const c = (DB.contracts || []).find(x => String(x.id) === String(cid)); if (!c) continue;
+      const map = await loadMap(cid);
+      withForms.push({ c, map });
+    }
+    if (!withForms.length) { box.innerHTML = ''; return; }
+    box.innerHTML = withForms.map(({ c, map }) => {
+      if (!map) return '<div class="qa-note">📄 ' + esc(c.name) + ': no start form set up' + (isManager() ? ' — <a href="#" data-setup="' + esc(c.id) + '">set it up</a> (once, for everyone)' : ' yet — a manager can set it up under Funders → Contracts') + '.</div>';
+      const qs = quickQuestions(map);
+      // group yes/no grids into one row of chips (support needs)
+      const grids = qs.filter(q => q.type === 'grid'), rest = qs.filter(q => q.type !== 'grid');
+      return '<div class="qa-form"><div class="qa-form-h">📄 ' + esc(map.name || c.name) + ' <span>— filled in and downloaded when you add them</span></div>' +
+        rest.map(q => {
+          const opts = q.options && q.options.length ? q.options : (q.type === 'choice' ? ['Yes', 'No'] : null);
+          const cur = QA.answers[q.id] || '';
+          return '<div class="qa-q" data-q="' + esc(q.id) + '"><span>' + esc(q.label.replace(/\s+/g, ' ').slice(0, 120)) + '</span>' +
+            (opts ? '<div class="qa-chips">' + opts.map(o => '<button type="button" data-v="' + esc(o) + '" class="' + (cur === o ? 'on' : '') + '">' + esc(o.length > 38 ? o.slice(0, 36) + '…' : o) + '</button>').join('') + '</div>'
+                  : '<input data-t="' + esc(q.id) + '" value="' + esc(cur) + '"/>') + '</div>';
+        }).join('') +
+        (grids.length ? '<div class="qa-q"><span>Support needs (tick all that apply)</span><div class="qa-chips" data-grid="1">' + grids.map(g => '<button type="button" data-g="' + esc(g.id) + '" class="' + (QA.answers[g.id] === 'Yes' ? 'on' : '') + '">' + esc(g.label.slice(0, 30)) + '</button>').join('') + '</div></div>' : '') +
+        '</div>';
+    }).join('');
+    box.onclick = ev => {
+      const s = ev.target.closest('[data-setup]'); if (s) { ev.preventDefault(); setupContract(s.dataset.setup, true); return; }
+      const b = ev.target.closest('button'); if (!b) return;
+      if (b.dataset.g) { b.classList.toggle('on'); return; }
+      const row = b.closest('.qa-q'); if (!row) return;
+      const was = b.classList.contains('on');
+      row.querySelectorAll('button').forEach(x => x.classList.remove('on')); if (!was) b.classList.add('on');
+      QA.answers[row.dataset.q] = was ? '' : b.dataset.v;
+    };
+    box.oninput = ev => { const t = ev.target.closest('input[data-t]'); if (t) QA.answers[t.dataset.t] = t.value.trim(); };
+  }
+  function qaGridAnswers(map) {
+    (map.items || []).filter(i => i.type === 'grid').forEach(g => {
+      const b = document.querySelector('#qa-forms button[data-g="' + g.id + '"]'); if (b) QA.answers[g.id] = b.classList.contains('on') ? 'Yes' : 'No';
+    });
+  }
+
+  // Fill each chosen contract's start form straight after adding
+  async function autoFillStartForms(p, data) {
+    const done = [], todo = [];
+    for (const cid of QA.contracts) {
+      const map = await loadMap(cid); if (!map) continue;
+      qaGridAnswers(map);
+      const answers = {};
+      (map.items || []).forEach(i => { if (QA.answers[i.id]) answers[i.id] = QA.answers[i.id]; });
+      try {
+        const c = (DB.contracts || []).find(x => String(x.id) === String(cid)) || {};
+        const { data: row } = await sb.from('contracts').select('template_data').eq('id', cid).single();
+        const j = await api({ docxBase64: row.template_data, filename: (map.name || c.name || 'Start form') + ' - ' + [data.forename, data.surname].join(' '), orgId, data, map, answers });
+        download(j);
+        done.push(c.name || 'Start form');
+        if ((j.missing || []).length) todo.push((c.name || 'Start form') + ': ' + j.missing.length + ' to answer');
+        // keep the answers on their record, and the eligibility ones in Eligibility
+        if (p && String(p.id).indexOf('demo-') !== 0) {
+          const { data: cur } = await sb.from('participants').select('paperwork').eq('id', p.id).single();
+          const pw = Object.assign({}, (cur && cur.paperwork) || {});
+          pw.form_answers = Object.assign({}, pw.form_answers || {}); pw.form_answers['contract:' + cid] = Object.assign({}, pw.form_answers['contract:' + cid] || {}, answers);
+          pw.eligibility = Object.assign({}, pw.eligibility || {});
+          (map.items || []).forEach(i => { if (i.use === 'field' && answers[i.id] && !QUICK_COVERED.includes(i.field) && i.type !== 'grid') pw.eligibility[i.field] = answers[i.id]; });
+          const needs = (map.items || []).filter(i => i.type === 'grid' && answers[i.id] === 'Yes').map(i => i.label);
+          if (needs.length) pw.eligibility.support_needs = needs;
+          pw.start_forms = Object.assign({}, pw.start_forms || {}); pw.start_forms['contract:' + cid] = new Date().toISOString();
+          await sb.from('participants').update({ paperwork: pw }).eq('id', p.id);
+          p.paperwork = pw;
+        }
+      } catch (e) { todo.push((MAPS[cid] && MAPS[cid].name || 'Start form') + ': could not fill (' + (e.message || e) + ')'); }
+    }
+    return { done, todo };
+  }
+
+  // Manager: set up a contract's form from the Contracts page (or the quick-add note)
+  async function setupContract(contractId, fromQuickAdd) {
+    style(); qaStyle();
+    FF.pick = String(contractId); FF.oneOff = null; FF.setupOnly = true; FF.afterSetup = fromQuickAdd ? () => { delete MAPS[contractId]; drawQAForms(); } : null;
+    const c = (DB.contracts || []).find(x => String(x.id) === String(contractId));
+    FF.forms = c ? [{ id: c.id, name: c.name }] : [];
+    const { data } = await sb.from('contracts').select('id,template_name').eq('id', contractId).not('template_data', 'is', null).maybeSingle().then(r => r, () => ({ data: null }));
+    if (!data) { alert('Upload the funder\'s blank Word form on this contract first (⬆ Form).'); return; }
+    setup();
+  }
+  function addSetupButtons() {
+    if (!isManager()) return;
+    document.querySelectorAll('#fund-list .civ-tpl-btn').forEach(b => {
+      if (b.nextElementSibling && b.nextElementSibling.classList && b.nextElementSibling.classList.contains('civ-map-btn')) return;
+      const m = /civaraUploadContractTemplate\('([^']+)'\)/.exec(b.getAttribute('onclick') || ''); if (!m) return;
+      const s = document.createElement('button');
+      s.className = 'btn btn-ghost btn-sm civ-map-btn'; s.textContent = '🧭 Set up form'; s.title = 'Match the form\'s questions to Vorlana once — then it fills itself';
+      s.onclick = () => setupContract(m[1]);
+      b.parentNode.insertBefore(s, b.nextSibling); b.parentNode.insertBefore(document.createTextNode(' '), s);
+      loadMap(m[1]).then(map => { if (map) { s.textContent = '🧭 Form set up ✓'; } });
+    });
+  }
+
+  // ── Participant self-service: send a link, they fill in and sign, you review ──
+  const INTAKE_MAP = { title: 'mp-ptitle', forename: 'mp-fn', surname: 'mp-ln', dob: 'mp-dob', ni: 'mp-ni', phone: 'mp-phone', email: 'mp-email',
+    address: 'mp-address', postcode: 'mp-postcode', gender: 'mp-gender', right_to_work: 'mp-rtw', labour_status: 'mp-labour', basic_skills: 'mp-bskills', ethnicity: 'eq-ethnicity' };
+  const INTAKE_LABELS = { title: 'Title', forename: 'First name', surname: 'Last name', dob: 'Date of birth', ni: 'NI number', phone: 'Mobile', email: 'Email', address: 'Address', postcode: 'Postcode',
+    gender: 'Gender', ethnicity: 'Ethnicity', right_to_work: 'Right to work', labour_status: 'Employment status', in_education: 'In education/training', education_level: 'Highest qualification',
+    basic_skills: 'English & maths quals', jobless_household: 'Jobless household', single_adult_dependants: 'Single adult with dependants', caring_responsibilities: 'Caring responsibilities',
+    health_condition: 'Disability / health condition', sen: 'Special educational need', homeless: 'Homeless', refugee: 'Refugee', care_leaver: 'Care leaver', adult_social_care: 'Adult Social Care', offender: 'Unspent conviction', support_needs: 'Wants help with' };
+
+  function newToken() { const a = new Uint8Array(32); crypto.getRandomValues(a); return Array.from(a, b => 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 57]).join(''); }
+  function loadQR() { return window.QRCode ? Promise.resolve() : new Promise((ok, bad) => { const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js'; s.onload = ok; s.onerror = bad; document.head.appendChild(s); }); }
+
+  async function sendIntake(p, prefill, contractIds) {
+    if (!p || String(p.id).indexOf('demo-') === 0) { alert('Intake links work for real participants (not demo ones).'); return; }
+    style();
+    const row = { org_id: orgId, token: newToken(), participant_id: String(p.id), contract_ids: contractIds || p.contract_ids || [], prefill: prefill || {} };
+    const { error } = await sb.from('intake_requests').insert([row]);
+    if (error) { alert('Could not create the link (' + error.message + '). Run intake-requests.sql in Supabase first.'); return; }
+    showIntakeLink(p, row.token);
+  }
+  function showIntakeLink(p, token) {
+    const url = location.origin + '/intake.html?t=' + token;
+    const first = (p.first_name || '').trim();
+    const text = 'Hi ' + (first || 'there') + ', please fill in your details and sign here (about 5 minutes): ' + url;
+    ffModal('<h2>📱 Send to ' + esc(first || 'participant') + '</h2>' +
+      '<div class="cxp-s" style="font-size:13px;margin-bottom:12px">They fill in their own details on their phone and sign with their finger. You\'ll see it on their record to check and accept. The link works for 14 days.</div>' +
+      '<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap"><div id="ik-qr" style="background:#fff;padding:8px;border:1px solid var(--border);border-radius:10px"></div>' +
+      '<div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:6px">' +
+        '<b style="font-size:13px">In person — they scan this</b>' +
+        (p.phone ? '<a class="btn btn-p btn-sm" href="sms:' + esc(String(p.phone).replace(/\s+/g, '')) + '?&body=' + encodeURIComponent(text) + '">💬 Text it to ' + esc(p.phone) + '</a>' : '') +
+        '<a class="btn btn-ghost btn-sm" target="_blank" href="https://wa.me/' + esc(String(p.phone || '').replace(/\D/g, '').replace(/^0/, '44')) + '?text=' + encodeURIComponent(text) + '">WhatsApp</a>' +
+        (p.email ? '<a class="btn btn-ghost btn-sm" href="mailto:' + esc(p.email) + '?subject=' + encodeURIComponent('Your details for ' + ((currentOrg && currentOrg.name) || 'us')) + '&body=' + encodeURIComponent(text) + '">✉️ Email it</a>' : '') +
+        '<button class="btn btn-ghost btn-sm" id="ik-copy">📋 Copy link</button>' +
+        '<a class="btn btn-ghost btn-sm" target="_blank" href="' + esc(url) + '">Open here (hand them this device)</a>' +
+      '</div></div>' +
+      '<div class="modal-footer"><button class="btn btn-p" id="ik-done">Done</button></div>');
+    $id('ik-done').onclick = () => { ffClose(); intakeBanner(); };
+    $id('ik-copy').onclick = () => { (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => { $id('ik-copy').textContent = '✓ Copied'; }, () => prompt('Copy this link:', url)); };
+    loadQR().then(() => { const b = $id('ik-qr'); if (b) new QRCode(b, { text: url, width: 150, height: 150, correctLevel: QRCode.CorrectLevel.M }); }).catch(() => { const b = $id('ik-qr'); if (b) b.textContent = 'QR unavailable — use a button'; });
+  }
+
+  // Banner on the record: send, waiting, or ready to review
+  let IK = null;
+  async function intakeBanner() {
+    const modal = document.querySelector('#modal-p .modal'); if (!modal) return;
+    let b = $id('ik-banner');
+    if (!b) { b = document.createElement('div'); b.id = 'ik-banner'; const bar = $id('pt-bar') || $id('mp-title'); bar.parentNode.insertBefore(b, bar.nextSibling); }
+    const p = currentParticipant();
+    if (!p) { b.innerHTML = ''; return; }
+    IK = null;
+    try {
+      const { data } = await sb.from('intake_requests').select('*').eq('org_id', orgId).eq('participant_id', String(p.id)).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(1);
+      IK = data && data[0];
+    } catch (e) { IK = null; }
+    const st = 'display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-radius:10px;padding:9px 12px;font-size:13px;margin:0 0 12px;';
+    if (IK && IK.status === 'submitted') {
+      b.innerHTML = '<div style="' + st + 'background:#F0FDF4;border:1px solid #BBF7D0;color:#15803D"><span>✅ ' + esc(p.first_name) + ' filled in their details and signed on ' + new Date(IK.signed_at).toLocaleDateString('en-GB') + '.</span><button class="btn btn-p btn-sm" type="button" id="ik-review">Review &amp; accept</button></div>';
+      $id('ik-review').onclick = reviewIntake;
+    } else if (IK && (IK.status === 'sent' || IK.status === 'opened') && new Date(IK.expires_at) > new Date()) {
+      b.innerHTML = '<div style="' + st + 'background:var(--bg);border:1px solid var(--border);color:var(--txt2)"><span>📱 Link sent ' + new Date(IK.created_at).toLocaleDateString('en-GB') + (IK.status === 'opened' ? ' · they\'ve opened it' : ' · not opened yet') + '</span><span><a href="#" id="ik-show">Show link</a> · <a href="#" id="ik-cancel">Cancel</a></span></div>';
+      $id('ik-show').onclick = ev => { ev.preventDefault(); showIntakeLink(p, IK.token); };
+      $id('ik-cancel').onclick = async ev => { ev.preventDefault(); await sb.from('intake_requests').update({ status: 'cancelled' }).eq('id', IK.id); intakeBanner(); };
+    } else {
+      const signed = p.paperwork && p.paperwork.signature;
+      b.innerHTML = '<div style="' + st + 'background:var(--bg);border:1px solid var(--border);color:var(--txt2)"><span>' + (signed ? '✍️ Signed by the participant ' + new Date(signed.signed_at).toLocaleDateString('en-GB') + '.' : 'Let ' + esc(p.first_name || 'them') + ' fill in their own details and sign on their phone.') + '</span>' +
+        '<span style="display:flex;gap:6px"><button class="btn btn-ghost btn-sm" type="button" id="ik-sign">✍️ Sign here</button><button class="btn btn-ghost btn-sm" type="button" id="ik-send">📱 ' + (signed ? 'Send again' : 'Send them a link') + '</button></span></div>';
+      $id('ik-sign').onclick = signHere;
+      $id('ik-send').onclick = () => sendIntake(p, { forename: p.first_name, surname: p.last_name, phone: p.phone, email: p.email }, getSelectedContractIds ? getSelectedContractIds() : p.contract_ids);
+    }
+  }
+
+  function reviewIntake() {
+    const d = IK.data || {};
+    const rows = Object.keys(d).filter(k => d[k] !== '' && d[k] != null && !(Array.isArray(d[k]) && !d[k].length)).map(k => {
+      const v = Array.isArray(d[k]) ? d[k].join(', ') : d[k];
+      const label = INTAKE_LABELS[k] || (/^form:/.test(k) ? 'Form question' : k);
+      const cur = INTAKE_MAP[k] ? val(INTAKE_MAP[k]) : (ELIG_STATE[k] || '');
+      const changed = cur && String(cur).toLowerCase() !== String(v).toLowerCase();
+      return '<tr><td style="color:var(--txt3);padding:5px 8px 5px 0;font-size:12.5px;width:40%">' + esc(label) + '</td><td style="padding:4px 0"><input data-ik="' + esc(k) + '" value="' + esc(v) + '" style="font-size:13px;padding:5px 8px"/>' + (changed ? '<div style="color:#B45309;font-size:11.5px">was: ' + esc(cur) + '</div>' : '') + '</td></tr>';
+    }).join('');
+    ffModal('<h2>Review ' + esc(IK.signed_name || '') + '\'s details</h2>' +
+      '<div style="max-height:46vh;overflow:auto;border:1px solid var(--border);border-radius:10px;padding:6px 12px"><table style="width:100%;border-collapse:collapse">' + rows + '</table></div>' +
+      '<div style="margin-top:12px;font-size:12.5px;color:var(--txt3)">Signed ' + new Date(IK.signed_at).toLocaleString('en-GB') + '</div>' +
+      '<img src="' + esc(IK.signature) + '" alt="Signature" style="max-width:260px;max-height:90px;border-bottom:1px solid var(--border);margin:4px 0 6px"/>' +
+      '<div class="cxp-s" style="font-size:12px">You can correct anything above before accepting.</div>' +
+      '<div class="modal-footer"><button class="btn btn-ghost" id="ik-x">Not now</button><button class="btn btn-p" id="ik-ok">Accept into their record</button></div>', 600);
+    $id('ik-x').onclick = ffClose;
+    $id('ik-ok').onclick = acceptIntake;
+  }
+
+  async function acceptIntake() {
+    // take any corrections the adviser made on the review screen
+    document.querySelectorAll('#ff-modal input[data-ik]').forEach(i => {
+      const k = i.getAttribute('data-ik'); const v = i.value.trim();
+      IK.data[k] = Array.isArray(IK.data[k]) ? v.split(',').map(x => x.trim()).filter(Boolean) : v;
+    });
+    const d = IK.data || {}, p = currentParticipant();
+    confirmOverwrite = true;
+    Object.keys(INTAKE_MAP).forEach(k => { if (d[k]) setField(INTAKE_MAP[k], d[k]); });
+    confirmOverwrite = false;
+    const formAns = {};
+    Object.keys(d).forEach(k => {
+      const m = /^form:(contract:[A-Za-z0-9-]+):([a-z]\d+)$/.exec(k);
+      if (m) { (formAns[m[1]] = formAns[m[1]] || {})[m[2]] = d[k]; return; }
+      if (!INTAKE_MAP[k] || ['gender', 'labour_status', 'basic_skills', 'right_to_work'].includes(k)) ELIG_STATE[k] = d[k];
+    });
+    if (Array.isArray(d.support_needs) && d.support_needs.length && !val('mp-inter')) setField('mp-inter', 'Yes');
+    drawElig();
+    try {
+      const { data } = await sb.from('participants').select('paperwork').eq('id', p.id).single();
+      const pw = Object.assign({}, (data && data.paperwork) || {});
+      pw.eligibility = Object.assign({}, pw.eligibility || {}, ELIG_STATE);
+      pw.form_answers = Object.assign({}, pw.form_answers || {});
+      Object.keys(formAns).forEach(k => { pw.form_answers[k] = Object.assign({}, pw.form_answers[k] || {}, formAns[k]); });
+      pw.signature = { png: IK.signature, signed_name: IK.signed_name, signed_at: IK.signed_at, consent: IK.consent_text, via: 'intake link' };
+      await sb.from('participants').update({ paperwork: pw }).eq('id', p.id);
+      p.paperwork = pw;
+      await sb.from('intake_requests').update({ status: 'accepted', accepted_at: new Date().toISOString() }).eq('id', IK.id);
+    } catch (e) { alert('Could not store the signature: ' + (e.message || e)); }
+    ffClose();
+    document.querySelectorAll('#modal-p details').forEach(dd => { if (dd.querySelector('.ob-filled')) dd.open = true; });
+    paintCounts();
+    const b = $id('ik-banner');
+    if (b) b.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;border-radius:10px;padding:9px 12px;font-size:13px;margin:0 0 12px;background:#FFFBEB;border:1px solid #FDE68A;color:#92400E"><span>Their answers are filled in and highlighted — press <b>Save</b> to keep them.</span></div>';
+  }
+
+  // ── Partner referrals → participant, with everything the partner gave ──
+  let FROM_REF = null;
+  function wrapConvert() {
+    const orig = window.convertToParticipant; if (typeof orig !== 'function' || orig._ob) return;
+    window.convertToParticipant = function (id) {
+      const r = orig.apply(this, arguments);
+      const ref = (DB.partner_referrals || []).find(x => x.id === id); if (!ref) return r;
+      try {
+        onOpen(true);
+        $id('ob-quick').style.display = 'none';
+        const pw = ref.paperwork || {};
+        const put = (fid, v) => { if (v) setField(fid, v); };
+        put('mp-phone', ref.phone); put('mp-email', ref.email); put('mp-dob', ref.dob);
+        put('mp-ni', pw.ni); put('mp-address', pw.address); put('mp-postcode', pw.postcode);
+        const e = pw.eligibility || {};
+        put('mp-gender', e.gender); put('mp-rtw', e.right_to_work); put('mp-labour', e.labour_status);
+        // referral source from the partner's own name where it matches a known source
+        const src = /probation/i.test(ref.partner_name) ? 'Probation' : /jobcentre|dwp/i.test(ref.partner_name) ? 'Jobcentre Plus' : '';
+        if (src) setField('mp-rs', src);
+        Object.keys(e).forEach(k => { if (!['gender', 'right_to_work', 'labour_status'].includes(k)) ELIG_STATE[k] = e[k]; });
+        drawElig();
+        if ($id('mp-intake-text')) $id('mp-intake-text').value = 'Referred by ' + ref.partner_name + (ref.partner_ref ? ' (their ref ' + ref.partner_ref + ')' : '') + ' — ' + (ref.primary_need || '') + (ref.urgency && ref.urgency !== 'Standard' ? ' · ' + ref.urgency : '') + '\n\n' + (ref.notes || '');
+        FROM_REF = { id: ref.id, sendLink: pw.send_link !== false, names: [ref.first_name, ref.last_name], partner: ref.partner_name };
+        tabify();
+        const b = $id('ik-banner') || (() => { const d = document.createElement('div'); d.id = 'ik-banner'; const bar = $id('pt-bar'); bar.parentNode.insertBefore(d, bar.nextSibling); return d; })();
+        b.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-radius:10px;padding:9px 12px;font-size:13px;margin:0 0 12px;background:rgba(31,111,109,.06);border:1px solid rgba(31,111,109,.25);color:var(--txt2)"><span>🤝 From <b>' + esc(ref.partner_name) + '</b> — their details are filled in and highlighted.</span>' +
+          '<label style="display:flex;gap:6px;align-items:center;margin:0;font-size:12.5px;text-transform:none;letter-spacing:0"><input type="checkbox" id="ref-link" style="width:auto"' + (FROM_REF.sendLink ? ' checked' : '') + '/> Send them a link to check &amp; sign after saving</label></div>';
+        $id('ref-link').onchange = ev => { FROM_REF.sendLink = ev.target.checked; };
+        paintCounts();
+      } catch (e) { console.warn('[onboarding] convert', e); }
+      return r;
+    };
+    window.convertToParticipant._ob = true;
+  }
+  // After saving a converted referral: link it back, and send the participant their link
+  async function afterConvertSave() {
+    if (!FROM_REF) return;
+    const f = FROM_REF; FROM_REF = null;
+    const p = (DB.participants || []).filter(x => x.first_name === f.names[0] && x.last_name === f.names[1]).slice(-1)[0];
+    if (!p) return;
+    try { await sb.from('partner_referrals').update({ participant_id: String(p.id) }).eq('id', f.id); } catch (e) { /* column may not exist yet */ }
+    if (f.sendLink) sendIntake(p, { forename: p.first_name, surname: p.last_name, phone: p.phone, email: p.email }, p.contract_ids || []);
+  }
+
+  // ── Sign in person, on this device ────────────────────────
+  function signHere() {
+    const p = currentParticipant(); if (!p) { alert('Save the participant first.'); return; }
+    const consent = 'I confirm the information I have given is true to the best of my knowledge. I agree to ' + ((currentOrg && currentOrg.name) || 'the organisation') + ' using it to support me and to report anonymously to the funders of this programme.';
+    ffModal('<h2>✍️ Sign here</h2><div class="cxp-s" style="font-size:13px;margin-bottom:10px">Hand the device to ' + esc(p.first_name || 'the participant') + '.</div>' +
+      '<div style="font-size:13px;background:var(--bg);border-radius:10px;padding:10px 12px;margin-bottom:10px">' + esc(consent) + '</div>' +
+      '<canvas id="sh-pad" style="width:100%;height:170px;border:1.5px dashed var(--em);border-radius:12px;background:#fff;touch-action:none;display:block"></canvas>' +
+      '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--txt3);margin:4px 0 10px"><span>Sign above with a finger or mouse</span><a href="#" id="sh-clear">Clear</a></div>' +
+      '<div class="form-row"><label>Full name</label><input id="sh-name" value="' + esc([p.first_name, p.last_name].filter(Boolean).join(' ')) + '"/></div>' +
+      '<div class="modal-footer"><button class="btn btn-ghost" id="sh-x">Cancel</button><button class="btn btn-p" id="sh-ok">Save signature</button></div>');
+    const c = $id('sh-pad'); let ctx, drawing = false, last = null, dirty = false;
+    const r0 = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    c.width = r0.width * dpr; c.height = r0.height * dpr; ctx = c.getContext('2d'); ctx.scale(dpr, dpr); ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.strokeStyle = '#111';
+    const pt = e => { const r = c.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+    c.onpointerdown = e => { drawing = true; last = pt(e); try { c.setPointerCapture(e.pointerId); } catch (x) { /* ignore */ } };
+    c.onpointermove = e => { if (!drawing) return; const q = pt(e); ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(q.x, q.y); ctx.stroke(); last = q; dirty = true; };
+    c.onpointerup = c.onpointercancel = () => { drawing = false; };
+    $id('sh-clear').onclick = ev => { ev.preventDefault(); ctx.clearRect(0, 0, c.width, c.height); dirty = false; };
+    $id('sh-x').onclick = ffClose;
+    $id('sh-ok').onclick = async () => {
+      if (!dirty) { alert('Please sign in the box.'); return; }
+      const name = val('sh-name'); if (!name) { alert('Please type their name.'); return; }
+      try {
+        const { data } = await sb.from('participants').select('paperwork').eq('id', p.id).single();
+        const pw = Object.assign({}, (data && data.paperwork) || {});
+        pw.signature = { png: c.toDataURL('image/png'), signed_name: name, signed_at: new Date().toISOString(), consent, via: 'in person' };
+        await sb.from('participants').update({ paperwork: pw }).eq('id', p.id);
+        p.paperwork = pw;
+        ffClose(); intakeBanner();
+      } catch (e) { alert('Could not save the signature: ' + (e.message || e)); }
+    };
+  }
+
   function install() {
-    wrapOpeners(); wrapSave();
+    wrapOpeners(); wrapSave(); wrapConvert();
     window.civaraFillFunderForm = openFill;
+    const rf = window.renderFunding;
+    if (typeof rf === 'function' && !rf._ob) { window.renderFunding = function () { const r = rf.apply(this, arguments); setTimeout(addSetupButtons, 50); setTimeout(addSetupButtons, 1800); return r; }; window.renderFunding._ob = true; }
+    setTimeout(addSetupButtons, 2000);
   }
   // Run after app.html's inline scripts have added their own wrappers
   if (document.readyState === 'complete') setTimeout(install, 0);
