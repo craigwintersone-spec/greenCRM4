@@ -35,7 +35,7 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const TICK_ON = '\u2612';   // ☒
 const TICK_OFF = '\u2610';  // ☐
 
-const FILL_FORM_VERSION = '5.2-signature-boxes';
+const FILL_FORM_VERSION = '5.3-evidence-boxes';
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -437,6 +437,7 @@ function extractParagraphs(xml) {
   const widthsOf = [];     // cell widths (twips) per table, to spot letter-per-box rows
   const officeOf = [];     // tables under a "For office use" heading are skipped
   const hasTableIn = {};
+  const introOf = [];     // per table: the instruction written just above it
   const borderOf = [];    // per table: "r:c" → the cell has its own box border
   const gridOf = [];      // per table: "r:c" → { g: first grid column, span }   // cells that hold a nested table are containers, not answers
   while ((m = tok.exec(xml)) !== null) {
@@ -446,6 +447,11 @@ function extractParagraphs(xml) {
       const parent = stack[stack.length - 1];
       if (parent) hasTableIn[parent.id + ':' + parent.r + ':' + parent.c] = true;
       const prev = out.slice().reverse().find(q => q.text);
+      // the instruction a one-cell answer box sits under ("…in the space provided below…")
+      const recent = out.slice(-8).filter(q => q.text).reverse();
+      const instr = recent.find(q => /space provided|provided below|below|details? here|please (detail|describe|list|state)/i.test(q.text)) || null;
+      const heading = recent.find(q => /check:?\s*$|:\s*$/.test(q.text) && q !== instr) || null;
+      introOf[id] = instr ? { p: instr, label: ((heading && heading.index < instr.index ? heading.text.replace(/:\s*$/, '') + ' — ' : '') + instr.text).replace(/\s+/g, ' ').slice(0, 200) } : null;
       stack.push({ id, r: -1, c: -1, office: !!(prev && /office use|for official use/i.test(prev.text)) });
       cellsOf[id] = {}; widthsOf[id] = {}; gridOf[id] = {}; borderOf[id] = {}; officeOf[id] = stack[stack.length - 1].office;
       continue;
@@ -537,7 +543,11 @@ function extractParagraphs(xml) {
         const above = Object.keys(cells).filter(kk => +kk.split(':')[0] === r - 1).find(kk => { const o = gridOf[t][kk]; return o && me && o.g <= me.g + me.span - 1 && o.g + o.span - 1 >= me.g && cellText(t, r - 1, +kk.split(':')[1]).length <= 30 && !isBlank(cellText(t, r - 1, +kk.split(':')[1])); });
         if (above) { label = cellText(t, r - 1, +above.split(':')[1]); consumed[t + ':' + above] = true; (cells[above] || []).forEach(q => { q.isLabel = true; }); }
       }
-      if (!label || label.length > 120 || HAS_BOX.test(label) || hasTableIn[t + ':' + k] || /^(letters?|numbers?|digits?)$/i.test(label.trim())) { run = null; return; }
+      // a blank box on its own under an instruction ("Please detail … in the space provided below")
+      if (!label && introOf[t] && r === 0 && Object.keys(cells).filter(kk => +kk.split(':')[0] === 0).length <= 2) {
+        label = introOf[t].label; introOf[t].p.isLabel = true; introOf[t].p.boxBelow = true;
+      }
+      if (!label || label.length > 220 || HAS_BOX.test(label) || hasTableIn[t + ':' + k] || /^(letters?|numbers?|digits?)$/i.test(label.trim())) { run = null; return; }
       const first = cells[k][0];
       first.answerFor = label.replace(/\s+/g, ' ').slice(0, 160);
       first.width = widthsOf[t][k] || 0;
@@ -550,6 +560,17 @@ function extractParagraphs(xml) {
       if (/^[_.\s…]+$/.test(first.text)) first.text = '';
       run = { r, c, first, head: ownHead };
     });
+  });
+  // Word text boxes ("the space provided below") drawn under an instruction are answer boxes too
+  out.forEach((p, i) => {
+    if (!/<w:txbxContent\b/.test(p.full) || p.text || p.answerFor) return;
+    const recent = out.slice(Math.max(0, i - 10), i).filter(q => q.text).reverse();
+    const instr = recent.find(q => /space provided|provided below|please (detail|describe|list|state)/i.test(q.text));
+    if (!instr) return;
+    const heading = out.slice(Math.max(0, instr.index - 3), instr.index).filter(q => q.text).reverse().find(q => /:\s*$/.test(q.text));
+    p.answerFor = ((heading ? heading.text.replace(/:\s*$/, '') + ' — ' : '') + instr.text).replace(/\s+/g, ' ').slice(0, 200);
+    p.textBox = true;
+    instr.isLabel = true; if (heading) heading.isLabel = true;
   });
   // A single very narrow blank cell is a spacer, not an answer (letter-box rows are kept)
   out.forEach(p => { if (p.answerFor && !(p.boxes && p.boxes.length) && p.width > 0 && p.width < 500) { delete p.answerFor; } });
@@ -730,7 +751,7 @@ function tickInXml(pxml, k) {
 
 // One letter per box: "AB123456C" across 9 boxes; dates as digits across 6 or 8 boxes
 function spreadBoxes(p, answer) {
-  if (!p.boxes || !p.boxes.length || !p.spread) return;
+  if (!p.boxes || !p.boxes.length || !p.spread) return false;
   // write only in the cells drawn as boxes (skip the gaps between them) when the form marks them
   let cellsIn = [p].concat(p.boxes);
   if (cellsIn.some(c => c.bordered) && cellsIn.some(c => !c.bordered)) cellsIn = cellsIn.filter(c => c.bordered);
@@ -740,11 +761,12 @@ function spreadBoxes(p, answer) {
   const dm = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/.exec(chars);
   if (dm) {
     const dd = dm[1].padStart(2, '0'), mm = dm[2].padStart(2, '0'), yy = dm[3].length === 2 ? '20' + dm[3] : dm[3];
-    if (total >= 8) chars = dd + mm + yy; else if (total >= 6) chars = dd + mm + yy.slice(-2); else return;
+    if (total >= 8) chars = dd + mm + yy; else if (total >= 6) chars = dd + mm + yy.slice(-2); else return false;
   }
-  if (chars.length < 2 || chars.length > total) return;   // not a box answer — leave it all in the first box
+  if (chars.length < 2 || chars.length > total) return false;   // doesn't fit — caller decides
   if (!cellsIn.includes(p)) p.newText = null;
   cellsIn.forEach((c, k) => { if (chars[k] != null) c.newText = chars[k]; });
+  return true;
 }
 
 // Apply every edit by its position in the original XML, last first, so
@@ -876,7 +898,8 @@ function guessUse(it) {
   if (it.type === 'grid') return { use: 'field', field: 'support_needs' };
   const table = [
     [/^title\b/, 'title'], [/forename|first name|given name/, 'forename'], [/surname|last name|family name/, 'surname'], [/full name|^name$|participant name/, 'full_name'],
-    [/labour market status check|evidence.*(labour|employment status)|labour market.*evidence/, 'lms_evidence'],
+    [/labour market status check|evidence.*(labour|employment status)|labour market.*evidence|confirm .*(unemployed|economically inactive)/, 'lms_evidence'],
+    [/legal resident|right to take paid employment|eligibility check|evidence you have seen/, 'evidence_seen'],
     [/date of birth|\bdob\b/, 'dob'], [/\bni\b|national insurance/, 'ni'], [/key ?worker.*email|email.*key ?worker/, 'keyworker_email'], [/key ?worker.*(phone|tel)|^phone number/, 'keyworker_phone'],
     [/name of key ?worker|key ?worker name/, 'keyworker_name'], [/tele?phone|mobile|contact no/, 'phone'], [/e-?mail/, 'email'], [/assessment/, 'assessment_postcode'],
     [/post ?code/, 'postcode'], [/address/, 'address'], [/participant id|reference/, 'participant_id'], [/start date/, 'start_date'], [/provider/, 'provider'],
@@ -929,10 +952,13 @@ function fmtVal(v) {
 
 // Fill using a saved map. data = participant fields; data.answers = { itemId: value } for "ask" items
 function fillFromMap(paragraphs, savedItems, data) {
+  savedItems = savedItems.slice();
   const live = paragraphs.filter(p => !p.office);
   const byIdx = new Map(paragraphs.map(p => [p.index, p]));
   const built = buildFormItems(paragraphs);
   const byId = new Map(built.map(it => [it.id, it]));
+  const known = new Set(savedItems.map(x => x.id));
+  built.forEach(it => { if (!known.has(it.id)) { const g = guessUse(it); if (g.use === 'field') savedItems = savedItems.concat([Object.assign({ id: it.id, type: it.type, label: it.label }, g)]); } });
   const answers = data.answers || {};
   const preview = [], missing = [], sigTargets = [];
   savedItems.forEach(s => {
@@ -973,7 +999,14 @@ function fillFromMap(paragraphs, savedItems, data) {
     }
     const val = fmtVal(v);
     const p = byIdx.get(parseInt(s.id.slice(1), 10)); if (!p) return;
-    if (it.type === 'text') { p.newText = val; spreadBoxes(p, val); }
+    if (it.type === 'text') {
+      let v2 = val;
+      if (s.field === 'ni' || /\bni\b|national insurance/i.test(it.label)) v2 = val.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (p.boxes && p.boxes.length && p.spread) {
+        if (!spreadBoxes(p, v2)) { missing.push({ id: s.id, text: it.label + ' — "' + val + '" does not fit the boxes, please check it', type: 'text', field: s.field || null }); return; }
+      } else if (p.textBox) p.newXml = (p.newXml || p.full).replace(/<\/w:p>$/, '<w:r><w:t xml:space="preserve">' + escapeXml(v2) + '</w:t></w:r></w:p>');
+      else p.newText = v2;
+    }
     else if (it.type === 'inline') p.newText = it.placeholder ? val : p.text.replace(/[_.…]{3,}\s*$/, '').replace(/\s*$/, '') + (/:$/.test(p.text.trim()) ? ' ' : ': ') + val;
     preview.push({ before: it.label, after: it.label + ': ' + val, source: 'map' });
   });
