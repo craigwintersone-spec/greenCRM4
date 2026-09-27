@@ -92,6 +92,21 @@
     $id('ob-read').onclick = () => readReferral({ text: val('ob-text') });
     $id('ob-file').onchange = ev => { const f = ev.target.files && ev.target.files[0]; ev.target.value = ''; if (f) readReferral({ file: f }); };
     modal.addEventListener('input', e => { if (e.target.classList) e.target.classList.remove('ob-filled'); paintCounts(); });
+    const ni = $id('mp-ni');
+    if (ni && !ni._ob) {
+      ni._ob = true;
+      const hint = document.createElement('div'); hint.id = 'ni-hint'; hint.style.cssText = 'font-size:11.5px;margin-top:3px;min-height:14px';
+      ni.parentNode.appendChild(hint);
+      const check = () => {
+        const v = ni.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (!v) { hint.textContent = ''; return; }
+        const ok = /^[A-CEGHJ-PR-TW-Z]{2}\d{6}[A-D]$/.test(v);
+        hint.textContent = ok ? '' : 'That doesn\'t look like an NI number (2 letters, 6 numbers, 1 letter A–D) — forms won\'t fill it';
+        hint.style.color = 'var(--red)';
+      };
+      ni.addEventListener('blur', () => { ni.value = ni.value.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^(\w{2})(\d{2})(\d{2})(\d{2})(\w)$/, '$1 $2 $3 $4 $5'); check(); });
+      ni.addEventListener('input', check);
+    }
     modal.addEventListener('change', e => { if (e.target.classList) e.target.classList.remove('ob-filled'); paintCounts(); });
   }
 
@@ -457,6 +472,33 @@
     } catch (e) { fail(e); }
   }
 
+  // Keep a copy of every filled form on the participant, in the Evidence Hub (private storage)
+  async function saveToEvidence(p, j, formName, contractId) {
+    if (!p || String(p.id).indexOf('demo-') === 0 || !j || !j.filledBase64) return false;
+    try {
+      const bin = atob(j.filledBase64); const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const fname = (j.filename || (formName || 'form') + '.docx').replace(/[^\w .()-]+/g, '_');
+      const path = orgId + '/' + p.id + '/' + Date.now() + '-' + fname;
+      const up = await sb.storage.from('participant-docs').upload(path, new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }), { upsert: false });
+      if (up.error) throw up.error;
+      const me = myProfile();
+      const signed = (j.preview || []).some(x => x.source === 'signature');
+      const row = { org_id: orgId, participant_id: String(p.id), participant_name: [p.first_name, p.last_name].filter(Boolean).join(' '), type: formName || 'Funder form',
+        linked_outcome: /end|exit|leav/i.test(formName || '') ? 'Programme end' : 'Programme start', staff: me.keyworker_name || me.keyworker_email || '',
+        evidence_date: new Date().toISOString().slice(0, 10), status: signed && !(j.missing || []).length ? 'Verified' : 'Pending', file_path: path, file_name: fname, source: 'form filler' };
+      if (contractId) row.contract_id = String(contractId);
+      const ins = await sb.from('evidence').insert([row]);
+      if (ins.error) throw ins.error;
+      if (typeof refreshTable === 'function') refreshTable('evidence').catch(() => {});
+      return true;
+    } catch (e) {
+      console.warn('[forms] not saved to Evidence Hub', e);
+      if (/bucket|not found|column|policy|row-level/i.test(e.message || '')) alert('The form downloaded but could not be saved to the Evidence Hub yet — run evidence-files.sql in Supabase.');
+      return false;
+    }
+  }
+
   function download(j) {
     const bin = atob(j.filledBase64); const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
@@ -480,8 +522,14 @@
     document.querySelectorAll('#ff-modal .el-seg button').forEach(b => b.onclick = () => { b.parentNode.querySelectorAll('button').forEach(x => x.classList.remove('on')); b.classList.add('on'); });
     $id('ff-done').onclick = ffClose;
     $id('ff-edit').onclick = ev => { ev.preventDefault(); if (!FIELD_NAMES.title) { setup(); } else drawSetup(); };
-    if ($id('ff-dl')) $id('ff-dl').onclick = () => download(j);
-    if ($id('ff-dl2')) $id('ff-dl2').onclick = () => download(j);
+    const keep = async btn => {
+      download(j);
+      if (btn && btn.dataset.saved) return;
+      const ok = await saveToEvidence(currentParticipant(), j, formLabel(), FF.oneOff ? null : FF.pick);
+      if (ok && btn) { btn.dataset.saved = '1'; btn.insertAdjacentHTML('afterend', '<span class="cxp-s" style="margin-left:6px">✓ Saved to Evidence Hub</span>'); }
+    };
+    if ($id('ff-dl')) $id('ff-dl').onclick = () => keep($id('ff-dl'));
+    if ($id('ff-dl2')) $id('ff-dl2').onclick = () => keep($id('ff-dl2'));
     if ($id('ff-again')) $id('ff-again').onclick = async () => {
       const toElig = {};
       miss.forEach(m => {
@@ -787,6 +835,7 @@
         const { data: row } = await sb.from('contracts').select('template_data').eq('id', cid).single();
         const j = await api({ docxBase64: row.template_data, filename: (map.name || c.name || 'Start form') + ' - ' + [data.forename, data.surname].join(' '), orgId, data, map, answers });
         download(j);
+        await saveToEvidence(p, j, map.name || c.name || 'Start form', cid);
         done.push(c.name || 'Start form');
         if ((j.missing || []).length) todo.push((c.name || 'Start form') + ': ' + j.missing.length + ' to answer');
         // keep the answers on their record, and the eligibility ones in Eligibility
