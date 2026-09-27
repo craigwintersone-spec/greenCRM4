@@ -333,8 +333,10 @@
     return data.template_data;
   }
   async function api(body) {
-    const { data: { session } } = await sb.auth.getSession();
-    const res = await fetch('/api/fill-form', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: session ? 'Bearer ' + session.access_token : '' }, body: JSON.stringify(body) });
+    const tok = typeof vToken === 'function' ? vToken : async () => { const { data: { session } } = await sb.auth.getSession(); return session ? session.access_token : ''; };
+    const post = async force => fetch('/api/fill-form', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (await tok(force)) }, body: JSON.stringify(body) });
+    let res = await post(false);
+    if (res.status === 401) res = await post(true);
     let j; try { j = await res.json(); } catch (e) { throw new Error(res.status === 504 ? 'That took too long — try again' : 'The form filler is not responding (HTTP ' + res.status + ')'); }
     if (res.status === 409) { const e = new Error(j.error); e.changed = true; throw e; }
     if (!j || j.ok !== true) throw new Error((j && j.error) || 'HTTP ' + res.status);
