@@ -25,7 +25,7 @@ function fqMapLabel(k) { const f = MEASURE_MAPS.find(x => x[0] === (k || '')); r
 function renderFeedbackQuestionsCard() {
   const body = $('st-body');
   if (!body || _setSection !== 'feedback') return;
-  if (!_fqRows) _fqRows = (DB.survey_measures || []).slice().sort((a, b) => (a.sort || 0) - (b.sort || 0)).map(m => Object.assign({}, m));
+  if (!_fqRows) _fqRows = (DB.survey_measures || []).filter(m => !m._demo).slice().sort((a, b) => (a.sort || 0) - (b.sort || 0)).map(m => Object.assign({}, m));
   const e = escapeHTML;
 
   let h = '<div class="st-actions">' +
@@ -118,7 +118,7 @@ async function fqSave() {
   if (_fqSaving) { _fqAgain = true; return; }
   _fqSaving = true;
   try {
-    const saved = DB.survey_measures || [];
+    const saved = (DB.survey_measures || []).filter(m => !m._demo);
     const rows = _fqRows.filter(r => r.question && r.question.trim()).map((r, i) => {
       const o = { org_id: orgId, question: r.question.trim(), kind: r.kind || 'text', maps_to: r.maps_to || null, label: r.question.trim().slice(0, 60), active: r.active !== false, sort: i };
       const orig = r.id && saved.find(m => m.id === r.id);
@@ -131,7 +131,7 @@ async function fqSave() {
     if (rows.length) { const r = await sb.from('survey_measures').upsert(rows, { onConflict: 'org_id,question' }); if (r.error) throw r.error; }
     await refreshTable('survey_measures');
     // Pick up new ids without disturbing the editor
-    (DB.survey_measures || []).forEach(m => { const w = _fqRows.find(r => r.question === m.question); if (w) w.id = m.id; });
+    (DB.survey_measures || []).filter(m => !m._demo).forEach(m => { const w = _fqRows.find(r => r.question === m.question); if (w) w.id = m.id; });
     setStatus('✓ Saved');
     try { renderFeedback(); renderImpact(); } catch (e) { /* pages may not be open */ }
   } catch (e) {
@@ -669,7 +669,7 @@ let CIRC_READY = false;
 let _circSel = 0, _circTab = 'basics', _circEdit = null, _circOpenMobile = false;
 
 async function loadCircSettings() {
-  const { data, error } = await sb.from('circular_activities').select('*').eq('org_id', orgId).order('sort');
+  const { data, error } = await cxFrom('circular_activities').select('*').eq('org_id', orgId).order('sort');
   if (error) {
     CIRC_READY = false;
     const b = $('st-body');
@@ -938,16 +938,16 @@ async function saveCircularActivities() {
     if (a.mode) row.mode = a.mode;
     if (Array.isArray(a.contract_ids)) row.contract_ids = a.contract_ids;
     if (a.id) {
-      const { error } = await sb.from('circular_activities').update(row).eq('id', a.id);
+      const { error } = await cxFrom('circular_activities').update(row).eq('id', a.id);
       if (error) throw error;
     } else {
-      const { data, error } = await sb.from('circular_activities').insert([row]).select('id').single();
+      const { data, error } = await cxFrom('circular_activities').insert([row]).select('id').single();
       if (error) throw error;
       a.id = data.id;
     }
   }
   for (const id of CIRC_REMOVED) {
-    const { error } = await sb.from('circular_activities').update({ active: false }).eq('id', id);
+    const { error } = await cxFrom('circular_activities').update({ active: false }).eq('id', id);
     if (error) throw error;
   }
   CIRC_REMOVED = [];
