@@ -28,16 +28,36 @@ export default async function handler(req, res) {
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
   body = body || {};
 
-  const email = String(body.email || '').trim();
-  const orgName = String(body.org_name || 'your organisation').trim();
-  const role = String(body.role || 'team member').trim();
   const token = String(body.token || '').trim();
-  const inviterName = String(body.inviter_name || '').trim();
+  const inviterName = String(body.inviter_name || '').trim().slice(0, 80);
+  if (!token) return res.status(400).json({ error: 'An invite token is required.' });
+
+  // SECURITY: only a signed-in manager of the organisation (or a Vorlana super admin) can send an
+  // invite, and the email, organisation and role come from the saved invitation — never from the
+  // request — so this can't be used to send Vorlana-branded emails to anyone about anything.
+  const SUPABASE_URL = process.env.SUPABASE_URL, KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!SUPABASE_URL || !KEY) return res.status(500).json({ error: 'Server is not configured.' });
+  const H = { apikey: KEY, Authorization: `Bearer ${KEY}` };
+  const bearer = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  if (!bearer) return res.status(401).json({ error: 'Please sign in again.' });
+  const who = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: KEY, Authorization: `Bearer ${bearer}` } }).catch(() => null);
+  if (!who || !who.ok) return res.status(401).json({ error: 'Please sign in again.' });
+  const me = await who.json();
+  const q = (path) => fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: H }).then(r => r.ok ? r.json() : []).catch(() => []);
+  let inv = (await q(`invitations?token=eq.${encodeURIComponent(token)}&select=org_id,email,role,accepted_at&limit=1`))[0];
+  if (!inv) inv = (await q(`invites?token=eq.${encodeURIComponent(token)}&select=org_id,email,role&limit=1`))[0];
+  if (!inv) return res.status(404).json({ error: 'Invitation not found.' });
+  if (inv.accepted_at) return res.status(400).json({ error: 'That invitation has already been used.' });
+  const isSuper = (await q(`super_admins?user_id=eq.${me.id}&select=user_id&limit=1`)).length > 0;
+  const isMgr = (await q(`memberships?user_id=eq.${me.id}&org_id=eq.${inv.org_id}&status=eq.active&role=in.(owner,admin,manager)&select=user_id&limit=1`)).length > 0;
+  if (!isSuper && !isMgr) return res.status(403).json({ error: 'Only a manager of this organisation can send invites.' });
+  const org = (await q(`organisations?id=eq.${inv.org_id}&select=name&limit=1`))[0] || {};
+  const email = String(inv.email || '').trim();
+  const orgName = String(org.name || 'your organisation').trim();
+  const role = String(inv.role || 'team member').trim();
 
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  if (!emailOk || !token) {
-    return res.status(400).json({ error: 'A valid email and invite token are required.' });
-  }
+  if (!emailOk) return res.status(400).json({ error: 'The invitation has no valid email.' });
 
   const inviteLink = `${SITE_URL}/invite.html?token=${encodeURIComponent(token)}`;
 
