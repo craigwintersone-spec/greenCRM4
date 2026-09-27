@@ -133,6 +133,12 @@ label{display:block;font-size:11px;color:var(--txt3);text-transform:uppercase;le
     <div id="invite-result"></div>
   </div>
 
+  <!-- CASELOADS -->
+  <div class="card" id="cl-card">
+    <div class="card-title">Caseloads</div>
+    <div id="cl-body"><div class="empty">Loading…</div></div>
+  </div>
+
   <!-- CURRENT TEAM -->
   <div class="card">
     <div class="card-title">Current team</div>
@@ -168,7 +174,7 @@ const sb=window.supabase.createClient(SB_URL,SB_KEY);
 const $=id=>document.getElementById(id);
 const escapeHTML=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-let MY={userId:null,orgId:null,orgName:'',role:null};
+let MY={userId:null,orgId:null,orgName:'',role:null,settings:{}};
 
 // ── Boot ─────────────────────────────────────────────────────
 async function init(){
@@ -200,13 +206,66 @@ async function init(){
   }
 
   try{
-    const{data:org}=await sb.from('organisations').select('name').eq('id',MY.orgId).maybeSingle();
+    const{data:org}=await sb.from('organisations').select('name,settings').eq('id',MY.orgId).maybeSingle();
     MY.orgName=(org&&org.name)||'';
+    MY.settings=(org&&org.settings)||{};
     if(MY.orgName)$('page-title').textContent=MY.orgName+' — team';
   }catch(e){}
 
   document.body.classList.add('ready');
   await Promise.all([loadTeam(),loadInvites()]);
+  drawCaseloads();
+}
+
+// ── Caseloads: shared or separate; safeguarding lead, triage and cover ──
+async function drawCaseloads(){
+  const on=!!MY.settings.separate_caseloads;
+  let covers=[];
+  try{const{data}=await sb.from('caseload_cover').select('*').eq('org_id',MY.orgId).gt('expires_at',new Date().toISOString());covers=data||[];}catch(e){}
+  const nm=uid=>{const r=Object.values(TEAM_ROWS).find(x=>x.user_id===uid);return r?r.name:'Team member'};
+  $('cl-body').innerHTML=
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">'+
+      '<div style="font-size:13px;color:var(--txt2);line-height:1.6;flex:1;min-width:240px">'+(on
+        ?'<b>Separate.</b> Advisers only see the people they support. Managers and safeguarding leads see everyone; triage sees people with no adviser yet.'
+        :'<b>Shared.</b> Everyone in the team can see every participant. Switch to separate so advisers only see their own caseload.')+'</div>'+
+      '<button class="btn '+(on?'btn-ghost':'btn-p')+'" onclick="setSeparate('+(!on)+')">'+(on?'Switch back to shared':'Make caseloads separate')+'</button></div>'+
+    (on?'<div style="font-size:12px;color:var(--txt3);margin-top:10px">Before switching on, give every participant an adviser: Participants page → "without an adviser".</div>':'')+
+    '<div style="margin-top:14px;font-size:12px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">Cover</div>'+
+    (covers.length?covers.map(c=>'<div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border)"><span><b>'+escapeHTML(nm(c.cover_user))+'</b> covering <b>'+escapeHTML(nm(c.for_user))+'</b> until '+new Date(c.expires_at).toLocaleDateString('en-GB')+'</span><a href="#" onclick="endCover(\''+c.id+'\');return false" style="color:var(--red);font-size:12px">End now</a></div>').join(''):'<div style="font-size:12.5px;color:var(--txt3)">Nobody is covering at the moment.</div>')+
+    '<div style="margin-top:8px"><button class="btn btn-ghost btn-sm" onclick="openCover()">+ Set up cover</button></div>';
+}
+async function setSeparate(on){
+  if(on&&!confirm('Advisers will only see the participants they support. Managers and safeguarding leads still see everyone. Continue?'))return;
+  MY.settings=Object.assign({},MY.settings,{separate_caseloads:on});
+  const{error}=await sb.from('organisations').update({settings:MY.settings}).eq('id',MY.orgId);
+  if(error){showErr(/caseload|column|function/.test(error.message)?'Run caseloads.sql in Supabase first.':'Could not save: '+error.message);return}
+  showOk(on?'✓ Caseloads are now separate':'✓ Caseloads are shared again');drawCaseloads();
+}
+function openCover(){
+  const opts=Object.values(TEAM_ROWS).map(r=>'<option value="'+r.user_id+'">'+escapeHTML(r.name)+'</option>').join('');
+  const d=new Date(Date.now()+7*864e5).toISOString().slice(0,10);
+  let m=document.getElementById('acc-modal');
+  if(!m){m=document.createElement('div');m.id='acc-modal';m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:flex-start;justify-content:center;padding:30px 14px;overflow:auto;z-index:500';m.onclick=e=>{if(e.target===m)m.remove()};document.body.appendChild(m);}
+  m.innerHTML='<div style="background:#fff;border-radius:14px;max-width:460px;width:100%;padding:22px"><h2 style="margin:0 0 12px;font-size:18px">Set up cover</h2>'+
+    '<div class="form-row"><label>Who is covering</label><select id="cv-a">'+opts+'</select></div>'+
+    '<div class="form-row"><label>Whose caseload</label><select id="cv-b">'+opts+'</select></div>'+
+    '<div class="form-row"><label>Until</label><input type="date" id="cv-d" value="'+d+'"/></div>'+
+    '<div style="font-size:12px;color:var(--txt3);margin-bottom:12px">Ends automatically. Every record they open is logged.</div>'+
+    '<div style="text-align:right"><button class="btn btn-ghost" onclick="document.getElementById(\'acc-modal\').remove()">Cancel</button> <button class="btn btn-p" onclick="saveCover()">Save</button></div></div>';
+}
+async function saveCover(){
+  const a=$('cv-a').value,b=$('cv-b').value,d=$('cv-d').value;
+  if(a===b){alert('Choose two different people.');return}
+  const{error}=await sb.from('caseload_cover').insert([{org_id:MY.orgId,cover_user:a,for_user:b,expires_at:new Date(d+'T23:59:00').toISOString()}]);
+  if(error){alert('Could not save: '+error.message);return}
+  document.getElementById('acc-modal').remove();drawCaseloads();
+}
+async function endCover(id){await sb.from('caseload_cover').update({expires_at:new Date().toISOString()}).eq('id',id);drawCaseloads();}
+async function toggleFlag(memId,flag){
+  const r=TEAM_ROWS[memId];const v=!r[flag];
+  const{error}=await sb.from('memberships').update({[flag]:v}).eq('id',memId);
+  if(error){showErr(/is_dsl|is_triage/.test(error.message)?'Run caseloads.sql in Supabase first.':'Could not save: '+error.message);return}
+  showOk('✓ Saved');loadTeam();
 }
 
 function showGate(title,msg){
@@ -259,7 +318,9 @@ async function loadTeam(){
     const accessBtn=(!isMe&&isMgr)
       ?'<button class="btn btn-ghost btn-sm" onclick="openAccess(\''+r.id+'\')" title="Choose which pages '+escapeHTML(name).replace(/"/g,'')+' can open">🔐 '+accessTxt+'</button> '
       :'<span style="font-size:11px;color:var(--txt3);margin-right:6px">'+accessTxt+'</span>';
-    TEAM_ROWS[r.id]={name:name,role:r.role,pages:pages};
+    TEAM_ROWS[r.id]={name:name,role:r.role,pages:pages,user_id:r.user_id,is_dsl:!!r.is_dsl,is_triage:!!r.is_triage};
+    const chip=(flag,label,on)=>isMgr?'<button class="btn btn-ghost btn-sm" style="'+(on?'background:#1F6F6D;color:#fff;border-color:#1F6F6D':'')+'" title="'+label+'" onclick="toggleFlag(\''+r.id+'\',\''+flag+'\')">'+(on?'✓ ':'')+label+'</button> ':(on?'<span class="badge b-advisor">'+label+'</span> ':'');
+    const flagChips=chip('is_dsl','Safeguarding lead',!!r.is_dsl)+chip('is_triage','Triage',!!r.is_triage);
     const removeBtn=(!isMe&&isMgr)
       ?'<button class="btn btn-danger btn-sm" onclick="removeMember(\''+r.id+'\',\''+escapeHTML(name).replace(/'/g,'')+'\')">Remove</button>'
       :'';
@@ -269,7 +330,7 @@ async function loadTeam(){
         '<div class="member-name">'+escapeHTML(name)+(isMe?' <span style="color:var(--txt3);font-weight:400">(you)</span>':'')+'</div>'+
         '<div class="member-email">'+escapeHTML(email)+'</div>'+
       '</div>'+
-      accessBtn+'<span class="badge '+roleCls+'">'+escapeHTML(r.role)+'</span> '+statusBadge+removeBtn+
+      flagChips+accessBtn+'<span class="badge '+roleCls+'">'+escapeHTML(r.role)+'</span> '+statusBadge+removeBtn+
     '</div>';
   }).join('');
 }
