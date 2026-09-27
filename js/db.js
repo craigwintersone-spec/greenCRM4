@@ -222,7 +222,10 @@ const MAPPERS = {
     linked_outcome: r.linked_outcome || '',
     staff: r.staff || '',
     evidence_date: r.evidence_date || '',
-    status: r.status || 'Pending'
+    status: r.status || 'Pending',
+    participant_id: r.participant_id || null,
+    file_path: r.file_path || '',
+    file_name: r.file_name || ''
   }),
   referrals: r => ({
     id: r.id,
