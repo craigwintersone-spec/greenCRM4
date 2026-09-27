@@ -86,8 +86,9 @@ async function boot() {
       'onclick="showUpgradeModal()">✦ Upgrade to Pro</button>';
   }
 
-  // 8. Show dashboard (this is the user's first view)
-  go('dashboard');
+  // 8. First view: ?page=… (e.g. from the old settings page or an app shortcut), else the dashboard
+  const startPage = new URLSearchParams(window.location.search).get('page');
+  go(startPage && $('page-' + startPage) ? startPage : 'dashboard');
 
   // 9. First-login branding modal (manager / admin only)
   maybeShowBrandingModal();
