@@ -85,6 +85,13 @@ textarea{min-height:88px;resize:vertical}
     </div>
   </div>
 
+  <!-- CHOOSE (rare: two sessions on today at one evergreen QR) -->
+  <div id="s-choose" class="card" style="display:none">
+    <h2 style="margin:0 0 4px">Which session are you at?</h2>
+    <p style="color:var(--muted);margin:0 0 14px">A couple of things are on today — tap yours.</p>
+    <div id="choose-list"></div>
+  </div>
+
   <!-- MAIN -->
   <div id="s-main" style="display:none">
     <div class="ev-head">
@@ -186,7 +193,7 @@ var QUESTIONS = [];
 var FACES = ['😞', '🙁', '😐', '🙂', '😄'];
 var $ = function (id) { return document.getElementById(id); };
 
-function show(id) { ['s-loading', 's-invalid', 's-main', 's-done'].forEach(function (x) { $(x).style.display = x === id ? 'block' : 'none'; }); }
+function show(id) { ['s-loading', 's-invalid', 's-choose', 's-main', 's-done'].forEach(function (x) { $(x).style.display = x === id ? 'block' : 'none'; }); }
 function msg(id, text, cls) { var e = $(id); e.textContent = text; e.className = 'msg ' + cls + ' show'; }
 function clearMsg(id) { var e = $(id); e.className = 'msg ' + (e.classList.contains('ok') ? 'ok' : 'err'); }
 function busy(btn, on) { btn.classList.toggle('loading', on); btn.disabled = on; }
@@ -270,11 +277,12 @@ $('tab-fb').addEventListener('click', function () { openTab('fb'); });
 $('tab-vol').addEventListener('click', function () { openTab('vol'); });
 
 // ── api ────────────────────────────────────────────────────
+var CHOSEN_EVENT = null;
 function call(action, payload) {
   return fetch(API, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(Object.assign({ action: action, token: TOKEN }, payload || {}))
+    body: JSON.stringify(Object.assign({ action: action, token: TOKEN, eventId: CHOSEN_EVENT || undefined }, payload || {}))
   }).then(function (r) {
     return r.json().catch(function () { throw new Error('Something went wrong. Please try again.'); })
       .then(function (j) {
@@ -285,10 +293,21 @@ function call(action, payload) {
 }
 
 // ── boot ───────────────────────────────────────────────────
+function renderChoose(choices) {
+  $('choose-list').innerHTML = choices.map(function (c) {
+    return '<button type="button" class="btn-choose" data-id="' + c.id + '" style="display:block;width:100%;text-align:left;padding:14px 16px;margin-bottom:8px;border:1px solid var(--border);border-radius:10px;background:#fff;font-size:15px;font-weight:600">' +
+      c.name + (c.location ? '<div style="font-weight:400;font-size:13px;color:var(--muted);margin-top:2px">' + c.location + '</div>' : '') + '</button>';
+  }).join('');
+  Array.prototype.forEach.call($('choose-list').querySelectorAll('.btn-choose'), function (b) {
+    b.addEventListener('click', function () { CHOSEN_EVENT = b.getAttribute('data-id'); show('s-loading'); boot(); });
+  });
+}
+
 function boot() {
   if (!TOKEN) { show('s-invalid'); return; }
   call('info')
     .then(function (j) {
+      if (j.mode === 'choose') { renderChoose(j.choices || []); show('s-choose'); return; }
       QUESTIONS = j.questions || [];
       var ev = j.event || {};
       var site = j.mode === 'site';
