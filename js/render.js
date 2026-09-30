@@ -562,13 +562,63 @@ function renderPartnerRefs() {
 // EVENTS
 // ─────────────────────────────────────────────────────────────
 
+// Which months actually have events, newest first — built once per render
+// so the "Choose a month" list always matches the real data, however far
+// back or forward it goes.
+function evMonthsWithData() {
+  const set = {};
+  (DB.events || []).forEach(e => { const d = String(e.date || '').slice(0, 7); if (/^\d{4}-\d{2}$/.test(d)) set[d] = (set[d] || 0) + 1; });
+  return Object.keys(set).sort().reverse().map(k => [k, set[k]]);
+}
+function onEvDateFilterChange() {
+  const v = $('ev-filter-date').value;
+  const monthSel = $('ev-filter-month'), custom = $('ev-filter-custom');
+  if (monthSel) monthSel.style.display = v === 'month' ? '' : 'none';
+  if (custom) custom.style.display = v === 'custom' ? 'inline-flex' : 'none';
+  if (v === 'month' && monthSel && !monthSel.options.length) {
+    const months = evMonthsWithData();
+    monthSel.innerHTML = months.map(([k, n]) => {
+      const label = new Date(k + '-01').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+      return '<option value="' + k + '">' + label + ' (' + n + ')</option>';
+    }).join('') || '<option value="">No events yet</option>';
+  }
+  renderEvents();
+}
+function evDateRange() {
+  const mode = ($('ev-filter-date') && $('ev-filter-date').value) || 'all';
+  const today = new Date().toISOString().slice(0, 10);
+  if (mode === 'all') return null;
+  if (mode === 'upcoming') return { from: today, to: null, label: 'upcoming' };
+  if (mode === 'year') return { from: new Date().getFullYear() + '-01-01', to: today, label: 'this year' };
+  if (mode === '30' || mode === '90') {
+    const d = new Date(); d.setDate(d.getDate() - (+mode));
+    return { from: d.toISOString().slice(0, 10), to: today, label: 'the last ' + mode + ' days' };
+  }
+  if (mode === 'month') {
+    const m = $('ev-filter-month') && $('ev-filter-month').value;
+    if (!m) return null;
+    const last = new Date(+m.slice(0, 4), +m.slice(5, 7), 0).getDate();
+    const label = new Date(m + '-01').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+    return { from: m + '-01', to: m + '-' + String(last).padStart(2, '0'), label };
+  }
+  if (mode === 'custom') {
+    const from = $('ev-filter-from') && $('ev-filter-from').value, to = $('ev-filter-to') && $('ev-filter-to').value;
+    if (!from && !to) return null;
+    return { from: from || null, to: to || null, label: 'that range' };
+  }
+  return null;
+}
+
 function renderEvents() {
   const list = $('ev-list'); if (!list) return;
   let E = (DB.events || []).slice();
   const filter = $('ev-filter-type') && $('ev-filter-type').value;
   if (filter) E = E.filter(e => e.type === filter);
+  const range = evDateRange();
+  if (range) E = E.filter(e => (!range.from || e.date >= range.from) && (!range.to || e.date <= range.to));
+  E.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
 
-  if ($('ev-sub')) $('ev-sub').textContent = E.length + ' events';
+  if ($('ev-sub')) $('ev-sub').textContent = E.length + ' event' + (E.length === 1 ? '' : 's') + (range ? ' in ' + range.label : '');
 
   // Stats
   const sg = $('ev-stats');
@@ -582,7 +632,7 @@ function renderEvents() {
   }
 
   if (!E.length) {
-    list.innerHTML = '<div class="card">' + renderEmpty('No events match your filter.') + '</div>';
+    list.innerHTML = '<div class="card">' + renderEmpty(range ? 'No events in ' + range.label + '.' : 'No events match your filter.') + '</div>';
     return;
   }
 
