@@ -111,11 +111,11 @@ function injectModal() {
 }
 
 var DESC = {
-  event: 'Print this and put it on the door, the table, or the gate. Anyone can scan it to leave feedback — ' +
+  event: 'This event\'s own code, if you want a separate one — but your permanent sign-in QR already covers today\'s events on its own. Print this and put it on the door, the table, or the gate. Anyone can scan it to leave feedback — ' +
          'and volunteers can check in and out by name or email, so their hours log themselves. No app, no login.',
-  site:  'For volunteers who come in to help on a normal day — not an event. Put it up somewhere permanent ' +
-         '(the shed, the shop counter). Volunteers scan it to check in and out by name or email; first-timers sign themselves up. ' +
-         'Hours log themselves, with what they did and how they feel.'
+  site:  'One QR, put up for good (the shed, the shop counter, the gate). On a normal day it\'s volunteer sign-in — ' +
+         'scan to check in and out by name or email, first-timers sign themselves up, hours log themselves. ' +
+         'On a day you\'ve added an event for, this SAME code quietly becomes that event\'s page — attendee feedback and all — with nothing to print or swap. Add the event, the QR just knows.'
 };
 function setMode(kind) {
   $('evqr-desc').textContent = DESC[kind];
@@ -145,7 +145,7 @@ window.openSiteQR = function () {
   injectModal();
   if (typeof sb === 'undefined' || !sb || typeof orgId === 'undefined' || !orgId) { alert('Not connected.'); return; }
   setMode('site');
-  $('evqr-title').textContent = 'Volunteer sign-in QR';
+  $('evqr-title').textContent = 'Your one QR — print it once';
   $('evqr-link').textContent = 'Loading…';
   $('evqr-target').innerHTML = '';
   $('modal-evqr').classList.add('open');
@@ -338,7 +338,7 @@ function wrapRenderEvents() {
         var b = document.createElement('button');
         b.className = 'btn btn-ghost btn-sm ev-qr-btn';
         b.textContent = '📱 QR';
-        b.title = 'Show the public QR code for this event';
+        b.title = 'A separate QR for just this event — your permanent sign-in QR already covers it automatically';
         b.setAttribute('onclick', "openEventQR('" + m[1] + "')");
         row.insertBefore(b, edit);
         row.insertBefore(document.createTextNode(' '), edit);
