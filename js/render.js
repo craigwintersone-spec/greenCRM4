@@ -617,7 +617,7 @@ function renderEvents() {
   const range = evDateRange();
   const d10 = v => String(v || '').slice(0, 10);   // a full timestamp still compares correctly against a plain date
   if (range) E = E.filter(e => (!range.from || d10(e.date) >= range.from) && (!range.to || d10(e.date) <= range.to));
-  E.sort((a, b) => d10(a.date).localeCompare(d10(b.date)));   // oldest first, matching how events are normally read
+  E.sort((a, b) => d10(b.date).localeCompare(d10(a.date)));   // newest / upcoming first — what's happening now sits at the top
 
   if ($('ev-sub')) $('ev-sub').textContent = E.length + ' event' + (E.length === 1 ? '' : 's') + (range ? ' in ' + range.label : '');
 
