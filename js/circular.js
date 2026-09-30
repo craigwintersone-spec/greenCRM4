@@ -460,7 +460,12 @@ function cxDraw() {
       : statCard('Value to people', '£' + cxFmt(im.value), im.income ? '£' + cxFmt(im.income) + ' sales income' : cxFmt(im.reused) + ' items reused')) +
     '</div>';
 
-  h += CX.tab === 'all' ? stats + cxSummaryHTML(acts) : cxQuickHTML(act) + stats + (circMode(act) === 'tally' ? cxRecentHTML(act) : cxBoardHTML(act));
+  const backlog = CX.tab !== 'all' ? CX.items.filter(i => i.activity_id === CX.tab && !i.outcome_type).length : 0;
+  const wasTracked = act && circMode(act) === 'tracked';
+  const bulkBtn = backlog > 8 ? '<div class="cxp-warn" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">' +
+    '<span>' + backlog + ' entries aren\'t counted in your figures yet' + (wasTracked ? ' — this activity has been tracking every item one by one' : '') + '.</span>' +
+    '<button class="btn btn-p btn-sm" onclick="' + (wasTracked ? 'cxFixActivity(\'' + CX.tab + '\')' : 'cxTidyOpen(\'' + CX.tab + '\')') + '">' + (wasTracked ? 'Fix this for me' : 'Sort them in bulk') + '</button></div>' : '';
+  h += CX.tab === 'all' ? stats + cxSummaryHTML(acts) : cxQuickHTML(act) + bulkBtn + stats + (circMode(act) === 'tally' ? cxRecentHTML(act) : cxBoardHTML(act));
   p.innerHTML = h;
 }
 
@@ -1477,7 +1482,19 @@ async function cxImportUndo(batch) {
 // in reports. Grouped by item and by what the file said, one choice
 // per group — dates stay as logged.
 let _cxTidy = null;
-function cxTidyOpen(actId) {
+// One click: switches a wrongly-tracked activity to quick tally, then opens
+// the backlog pre-set to its one most common outcome, so it's a single confirm.
+async function cxFixActivity(actId) {
+  const act = cxAct(actId); if (!act) return;
+  try {
+    const { error } = await cxFrom('circular_activities').update({ mode: 'tally' }).eq('id', act.id);
+    if (error) throw error;
+    act.mode = 'tally';
+  } catch (e) { alert('Could not switch the activity: ' + (e.message || e)); return; }
+  cxTidyOpen(actId, true);
+}
+
+function cxTidyOpen(actId, quick) {
   const act = cxAct(actId); if (!act) return;
   const open = CX.items.filter(i => i.activity_id === actId && !i.outcome_type);
   if (!open.length) return;
@@ -1488,18 +1505,27 @@ function cxTidyOpen(actId) {
     const g = groups[k] || (groups[k] = { key: k, type: i.item_type, raw, ids: [], kg: 0, qty: 0, pick: '' });
     g.ids.push(i.id); g.kg += +i.weight_kg || 0; g.qty += +i.quantity || 1;
   });
-  _cxTidy = { act: actId, groups: Object.values(groups).sort((a, b) => b.ids.length - a.ids.length) };
+  _cxTidy = { act: actId, groups: Object.values(groups).sort((a, b) => b.ids.length - a.ids.length), quick: !!quick };
   // Pre-pick where the file's wording matches a destination
   _cxTidy.groups.forEach(g => { if (g.raw) g.pick = cxiMatch(act.outcomes || [], g.raw) || ''; });
+  // "Fix this for me": everything still unpicked defaults to the activity's most-used outcome
+  if (quick) {
+    const counts = {};
+    CX.items.filter(i => i.activity_id === actId && i.outcome_type).forEach(i => { counts[i.outcome] = (counts[i.outcome] || 0) + 1; });
+    const common = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0] || (act.outcomes[0] || {}).key;
+    _cxTidy.groups.forEach(g => { if (!g.pick) g.pick = common; });
+  }
   cxTidyDraw();
 }
 function cxTidyDraw() {
   const t = _cxTidy, act = cxAct(t.act), e = cxE;
   const opts = sel => '<option value="">Leave for now</option>' + (act.outcomes || []).map(o => '<option value="' + e(o.key) + '"' + (o.key === sel ? ' selected' : '') + '>' + e(o.label) + '</option>').join('');
   const total = t.groups.reduce((a, g) => a + g.ids.length, 0);
-  cxModal('<h2>Sort ' + total + ' undecided entr' + (total === 1 ? 'y' : 'ies') + '</h2>' +
-    '<div class="cxp-s" style="margin-bottom:12px">These have no destination, so reports leave them out. Pick where each group went — dates stay as they were logged.</div>' +
-    '<div class="form-row"><label>Quick: set every group to</label><select onchange="_cxTidy.groups.forEach(g=>g.pick=this.value);cxTidyDraw()">' + opts('') + '</select></div>' +
+  cxModal((t.quick ? '<h2>✓ Switched to quick tally</h2>' : '<h2>Sort ' + total + ' undecided entr' + (total === 1 ? 'y' : 'ies') + '</h2>') +
+    '<div class="cxp-s" style="margin-bottom:12px">' + (t.quick
+      ? 'New entries will now log in one tap. These ' + total + ' older entries have no outcome — check the guess below, then confirm. Dates stay as they were logged.'
+      : 'These have no destination, so reports leave them out. Pick where each group went — dates stay as they were logged.') + '</div>' +
+    '<div class="form-row"><label>Quick: set every group to</label><select onchange="_cxTidy.groups.forEach(g=>g.pick=this.value);cxTidyDraw()">' + opts(t.quick ? t.groups[0].pick : '') + '</select></div>' +
     '<div style="max-height:360px;overflow:auto">' + t.groups.map((g, i) => {
       const ty = cxType(act, g.type);
       return '<div class="cxp-list-row"><div style="min-width:0"><div class="cxp-t">' + e(ty ? ty.label : 'Item') + ' · ' + g.ids.length + ' entr' + (g.ids.length === 1 ? 'y' : 'ies') + '</div>' +
