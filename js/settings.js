@@ -700,7 +700,8 @@ const CIRC_TEMPLATES = [
   _circT('growing', 'Growing', '🌱', 'Food grown and harvested, then shared, sold or given to food banks.',
     ['Planted', 'Growing', 'Harvested'],
     [['Shared', 'share'], ['Food bank', 'share'], ['Sold', 'share'], ['Compost', 'recycle']],
-    [['Tomatoes', 'kg', 1, 0, 3], ['Potatoes', 'kg', 1, 0, 1.5], ['Courgettes', 'kg', 1, 0, 2.5], ['Salad leaves', 'kg', 1, 0, 8], ['Beans', 'kg', 1, 0, 5], ['Fruit', 'kg', 1, 0, 4]]),
+    [['Tomatoes', 'kg', 1, 0, 3], ['Potatoes', 'kg', 1, 0, 1.5], ['Courgettes', 'kg', 1, 0, 2.5], ['Salad leaves', 'kg', 1, 0, 8], ['Beans', 'kg', 1, 0, 5], ['Fruit', 'kg', 1, 0, 4]],
+    [['Bed / planter', 'text'], ['Batch number', 'text'], ['Harvester', 'text'], ['Packer', 'text'], ['Packing date', 'date']]),
   _circT('tool_library', 'Library of things', '🧰', 'Tools and equipment loaned out and returned.',
     ['Available', 'On loan', 'Under repair'],
     [['Retired', 'recycle']],
@@ -909,6 +910,7 @@ function circAddTemplate(key, quiet) {
   const a = { key: _circUniqueKey(t.key), template: t.key, name: t.name, icon: t.icon, description: t.desc,
     stages: t.stages, outcomes: t.outcomes, item_types: t.item_types, fields: t.fields, links: t.links };
   if (key === 'collections') { const other = CIRC.find(x => x.template !== 'collections'); a.links = [{ on: 'end', to: other ? other.key : '' }]; }
+  if (key === 'growing') { const h = (a.stages.find(s => /harvest/i.test(s.label)) || {}).key; if (h) a.fields.forEach(f => { f.ask_at = h; }); }
   CIRC.forEach(x => { if (x.template === 'collections' && (!x.links.length || !x.links[0].to)) x.links = [{ on: 'end', to: a.key }]; });
   CIRC.push(a);
   if (!quiet) { renderCircSettings(); _circQueueSave(); }
