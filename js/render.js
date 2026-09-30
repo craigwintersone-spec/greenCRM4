@@ -615,8 +615,9 @@ function renderEvents() {
   const filter = $('ev-filter-type') && $('ev-filter-type').value;
   if (filter) E = E.filter(e => e.type === filter);
   const range = evDateRange();
-  if (range) E = E.filter(e => (!range.from || e.date >= range.from) && (!range.to || e.date <= range.to));
-  E.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  const d10 = v => String(v || '').slice(0, 10);   // a full timestamp still compares correctly against a plain date
+  if (range) E = E.filter(e => (!range.from || d10(e.date) >= range.from) && (!range.to || d10(e.date) <= range.to));
+  E.sort((a, b) => d10(a.date).localeCompare(d10(b.date)));   // oldest first, matching how events are normally read
 
   if ($('ev-sub')) $('ev-sub').textContent = E.length + ' event' + (E.length === 1 ? '' : 's') + (range ? ' in ' + range.label : '');
 
