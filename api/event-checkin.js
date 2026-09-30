@@ -97,10 +97,52 @@ async function getContext(token) {
   if (Array.isArray(sites) && sites.length) {
     const s = sites[0];
     if (s.public_enabled === false) return null;
-    return { mode: 'site', orgId: s.org_id, eventId: null, siteId: String(s.id), name: s.name || 'Volunteer sign-in',
-             date: null, location: '', questionIds: null };
+    const site = { mode: 'site', orgId: s.org_id, eventId: null, siteId: String(s.id), name: s.name || 'Volunteer sign-in',
+                    date: null, location: '', questionIds: null };
+    // EVERGREEN QR: one code, printed once. If an event is on today, this
+    // same code quietly becomes that event's page — attendee feedback and
+    // all. No event today → falls back to plain volunteer sign-in. Nothing
+    // to reprint when a new event is added.
+    const today = await todaysEvent(s.org_id, s.name);
+    return today || site;
   }
   return null;
+}
+
+// Today's event for this organisation, preferring one whose location
+// roughly matches the site's name (so two concurrent sites don't collide).
+async function todaysEvent(orgId, siteName) {
+  const today = new Date().toISOString().slice(0, 10);
+  let evs;
+  try {
+    evs = await sb(`events?org_id=eq.${orgId}&event_date=eq.${today}&public_enabled=neq.false&select=id,name,event_date,location,public_token,public_enabled,question_ids&order=id.asc`);
+  } catch (e) {
+    evs = await sb(`events?org_id=eq.${orgId}&event_date=eq.${today}&public_enabled=neq.false&select=id,name,event_date,location,public_token,public_enabled&order=id.asc`);
+  }
+  evs = (evs || []).filter(e => e.public_enabled !== false);
+  if (!evs.length) return null;
+  const norm = x => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  let ev = evs[0];
+  if (evs.length > 1) {
+    const sn = norm(siteName);
+    const match = evs.find(e => sn && norm(e.location).includes(sn)) || evs.find(e => sn && sn.includes(norm(e.location)));
+    if (match) ev = match;
+    else return { mode: 'choose', orgId, eventId: null, siteId: null, name: 'Choose today\u2019s session',
+      date: today, location: '', questionIds: null,
+      choices: evs.map(e => ({ id: String(e.id), name: e.name || 'Event', location: e.location || '' })) };
+  }
+  // An event with no QR of its own yet still gets one automatically, so the check-in works either way
+  if (!ev.public_token) {
+    ev.public_token = genToken();
+    try { await sb(`events?id=eq.${ev.id}`, { method: 'PATCH', body: JSON.stringify({ public_token: ev.public_token }) }); } catch (e) { /* non-fatal */ }
+  }
+  return { mode: 'event', orgId, eventId: String(ev.id), siteId: null, name: ev.name || 'Event',
+           date: ev.event_date || today, location: ev.location || '', questionIds: ev.question_ids || null, viaSite: true };
+}
+function genToken() {
+  const a = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let t = '';
+  for (let i = 0; i < 32; i++) t += a[Math.floor(Math.random() * a.length)];
+  return t;
 }
 
 async function getOrgName(orgId) {
@@ -248,6 +290,20 @@ module.exports = async function handler(req, res) {
     return bad(res, 'Could not check that link. Please try again.', 500);
   }
   if (!ctx) return bad(res, 'This link isn\u2019t valid or has been turned off. Please ask a member of staff for the current QR code.', 404);
+
+  // Rare case: two events are on today at the same evergreen QR and the location
+  // text doesn't tell them apart — the visitor picks one, then we act on that.
+  if (ctx.mode === 'choose' && body.eventId) {
+    const pick = (ctx.choices || []).find(c => c.id === String(body.eventId));
+    if (!pick) return bad(res, 'Please choose one of today\u2019s sessions.');
+    const evs = await sb(`events?id=eq.${encodeURIComponent(pick.id)}&select=id,org_id,name,event_date,location,public_token,public_enabled,question_ids&limit=1`).catch(() => []);
+    const ev = (evs || [])[0];
+    if (!ev || String(ev.org_id) !== String(ctx.orgId) || ev.public_enabled === false) return bad(res, 'That session is not available.');
+    if (!ev.public_token) { ev.public_token = genToken(); try { await sb(`events?id=eq.${ev.id}`, { method: 'PATCH', body: JSON.stringify({ public_token: ev.public_token }) }); } catch (e) { /* non-fatal */ } }
+    ctx = { mode: 'event', orgId: ctx.orgId, eventId: String(ev.id), siteId: null, name: ev.name || 'Event',
+            date: ev.event_date || null, location: ev.location || '', questionIds: ev.question_ids || null };
+  }
+  if (ctx.mode === 'choose' && action !== 'info') return bad(res, 'Please choose today\u2019s session first.');
 
   try {
     // ── info ────────────────────────────────────────────────
