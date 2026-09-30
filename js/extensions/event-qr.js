@@ -337,7 +337,7 @@ function wrapRenderEvents() {
         if (!m) return;
         var b = document.createElement('button');
         b.className = 'btn btn-ghost btn-sm ev-qr-btn';
-        b.textContent = '📱 QR';
+        b.textContent = '📱 Own QR';
         b.title = 'A separate QR for just this event — your permanent sign-in QR already covers it automatically';
         b.setAttribute('onclick', "openEventQR('" + m[1] + "')");
         row.insertBefore(b, edit);
