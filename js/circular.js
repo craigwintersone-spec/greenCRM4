@@ -963,10 +963,11 @@ function cxReportStats(o) {
     return true;
   });
   const r = { entries: items.length, inProgress: 0, undecided: 0, inStock: 0, finished: 0, kg: 0, co2: 0, value: 0, reused: 0, foodKg: 0, meals: 0,
-    repairTried: 0, repairFixed: 0, income: 0, recycledKg: 0, estKg: 0, byActivity: {}, byOutcome: {}, starter: false, noSession: 0, activities: [] };
+    repairTried: 0, repairFixed: 0, income: 0, recycledKg: 0, estKg: 0, byActivity: {}, byOutcome: {}, byBed: {}, starter: false, noSession: 0, activities: [] };
   items.forEach(i => {
     const a = acts[i.activity_id];
     const qty = +i.quantity || 1, kg = +i.weight_kg || 0;
+    if (a.template === 'growing' && i.custom && i.custom.bed_planter) r.byBed[i.custom.bed_planter] = (r.byBed[i.custom.bed_planter] || 0) + kg;
     const row = r.byActivity[a.name] || (r.byActivity[a.name] = { icon: a.icon || '♻️', items: 0, kg: 0, co2: 0, value: 0 });
     if (!i.event_id) r.noSession++;
     if (!i.outcome_type) { r.inProgress++; if (circMode(a) === 'tracked') r.inStock++; else r.undecided++; return; }
@@ -1039,6 +1040,7 @@ function cxReportDocHTML(r, title) {
   ].filter(Boolean);
   const actRows = r.activities.map(k => { const a = r.byActivity[k]; return '<tr><td>' + esc(a.icon + ' ' + k) + '</td><td>' + a.items + '</td><td>' + (Math.round(a.kg * 10) / 10) + '</td><td>' + (Math.round(a.co2 * 10) / 10) + '</td></tr>'; }).join('');
   const outKeys = Object.keys(r.byOutcome).sort((a, b) => r.byOutcome[b] - r.byOutcome[a]);
+  const bedKeys = Object.keys(r.byBed || {}).sort((a, b) => r.byBed[b] - r.byBed[a]);
   return '<h3>' + esc(title || 'Circular economy') + '</h3>' +
     '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0 16px">' + figs.map(f =>
       '<div style="border:1px solid #ddd;border-radius:8px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:800;color:#1F6F6D">' + esc(String(f[1])) + '</div>' +
@@ -1046,6 +1048,8 @@ function cxReportDocHTML(r, title) {
     '<table class="dr-tbl" style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px"><thead><tr><th style="text-align:left">Activity</th><th style="text-align:left">Items</th><th style="text-align:left">kg</th><th style="text-align:left">CO₂e kg</th></tr></thead><tbody>' + actRows + '</tbody></table>' +
     (outKeys.length ? '<table class="dr-tbl" style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:10px"><thead><tr><th style="text-align:left">Where it went</th><th style="text-align:left">Items</th></tr></thead><tbody>' +
       outKeys.map(k => '<tr><td>' + esc(k) + '</td><td>' + r.byOutcome[k] + '</td></tr>').join('') + '</tbody></table>' : '') +
+    (bedKeys.length ? '<table class="dr-tbl" style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:10px"><thead><tr><th style="text-align:left">Yield by bed / planter</th><th style="text-align:left">kg</th></tr></thead><tbody>' +
+      bedKeys.map(k => '<tr><td>' + esc(k) + '</td><td>' + (Math.round(r.byBed[k] * 10) / 10) + '</td></tr>').join('') + '</tbody></table>' : '') +
     '<p style="font-size:11px;color:#777">CO₂e and value are estimates from per-item factors' + (r.starter ? ' (including Vorlana starter estimates)' : ' set by the organisation') + '. Meals at 420 g per meal (WRAP). Weight diverted includes items reused, repaired, shared or recycled.' + (r.estKg ? ' ' + r.estKg + ' kg of weight was estimated from photos rather than weighed.' : '') + '</p>';
 }
 
@@ -1083,10 +1087,11 @@ async function cxImpactCard() {
 // the counting, dates and weights. Duplicates are skipped, new
 // items are added to the list, and the whole import can be undone.
 // ─────────────────────────────────────────────────────────────
-const CXI = { file: null, headers: [], rows: [], act: null, map: {}, vals: { item: {}, outcome: {}, stage: {} }, gUnit: 'kg', plan: null, batch: null, link: true, defOut: '' };
+const CXI = { file: null, headers: [], rows: [], act: null, map: {}, vals: { item: {}, outcome: {}, stage: {} }, gUnit: 'kg', plan: null, batch: null, link: true, defOut: '', defStage: '' };
 const CXI_FIELDS = [
   ['date', 'Date'], ['item', 'Item / crop'], ['kg', 'Weight'], ['qty', 'Quantity'], ['outcome', 'Where it went / result'],
-  ['stage', 'Step'], ['name', 'Description'], ['brand', 'Brand'], ['model', 'Model'], ['serial', 'Serial'], ['source', 'Donor / source'], ['sale', 'Sale price'], ['notes', 'Notes']
+  ['stage', 'Step'], ['name', 'Description'], ['brand', 'Brand'], ['model', 'Model'], ['serial', 'Serial'], ['source', 'Donor / source'], ['sale', 'Sale price'], ['notes', 'Notes'],
+  ['bed', 'Bed / planter'], ['batch', 'Batch number'], ['harvester', 'Harvester / picker'], ['packer', 'Packer'], ['packdate', 'Packing date']
 ];
 
 function cxImportOpen() {
@@ -1145,10 +1150,11 @@ function cxiGuess(headers) {
     date: /date|when|day|timestamp|time/i, kg: /kg|kilo|weight|grams?\b|\bg\b/i, qty: /qty|quantity|count|number of|how many|^no\.?$|items?$/i,
     outcome: /outcome|result|status|destination|went|fixed|repaired|where|given to/i, stage: /stage|step/i, serial: /serial|s\/n|frame/i,
     brand: /brand|make|manufacturer/i, model: /model/i, source: /donor|source|from|site|supplier/i, sale: /price|sold for|sale|£/i,
-    notes: /note|comment/i, item: /item|type|crop|produce|product|category|what|device|object/i, name: /description|desc|name/i
+    notes: /note|comment/i, item: /item|type|crop|produce|product|category|what|device|object/i, name: /description|desc|name/i,
+    bed: /bed|planter|plot|row\s*no/i, batch: /batch/i, harvester: /harvest(er)?\s*(or)?\s*pick|picker/i, packer: /^packer/i, packdate: /pack(ing)?\s*date/i
   };
   const m = {}, used = new Set();
-  ['date', 'serial', 'brand', 'model', 'kg', 'qty', 'sale', 'outcome', 'stage', 'source', 'notes', 'item', 'name'].forEach(f => {
+  ['date', 'serial', 'brand', 'model', 'kg', 'qty', 'sale', 'outcome', 'stage', 'source', 'notes', 'item', 'bed', 'batch', 'harvester', 'packer', 'packdate', 'name'].forEach(f => {
     const h = headers.find(x => !used.has(x) && rx[f].test(x));
     if (h) { m[f] = h; used.add(h); }
   });
@@ -1328,7 +1334,7 @@ function cxiBuild() {
     if (rawOut) { const v = CXI.vals.outcome[rawOut]; okey = v && cxOutcome(act, v) ? v : cxiMatch(act.outcomes || [], rawOut); }
     if (tracked && rawSt) { const v = CXI.vals.stage[rawSt]; skey = v && cxStage(act, v) ? v : cxiMatch(act.stages || [], rawSt); }
     if (!okey && !tracked && CXI.defOut) okey = CXI.defOut;
-    if (!okey && !skey && tracked) skey = ((act.stages || [])[0] || {}).key || '';
+    if (!okey && !skey && tracked) skey = CXI.defStage || ((act.stages || [])[0] || {}).key || '';
     if (!okey && !skey) { c.noDest++; note(rowNo, (rawOut ? '"' + rawOut + '" not matched' : 'no destination') + ' — imported as undecided'); }
 
     // date — missing takes the row above's, then today
@@ -1343,7 +1349,8 @@ function cxiBuild() {
     if (seen[fp] <= (have[fp] || 0)) { dupes++; left.push({ row: rowNo, why: 'already in Vorlana' }); return; }
     let event_id = null;
     if (CXI.link && byDate[date] && byDate[date].length === 1) event_id = String(byDate[date][0].id);
-    out.push({ t, kg, qty, okey, skey, date, event_id, fp, noWeight, name: g('name'), brand: g('brand'), model: g('model'), serial: g('serial'), source: g('source'), sale: cxiNum(g('sale')), notes: g('notes'), row: rowNo, rawOut });
+    out.push({ t, kg, qty, okey, skey, date, event_id, fp, noWeight, name: g('name'), brand: g('brand'), model: g('model'), serial: g('serial'), source: g('source'), sale: cxiNum(g('sale')), notes: g('notes'), row: rowNo, rawOut,
+      bed: g('bed'), batch: g('batch'), harvester: g('harvester'), packer: g('packer'), packdate: ci.packdate >= 0 ? cxiDate(g('packdate'), order) : '' });
   });
   return { entries: out, notes, left, dupes, empty, counts: c, newTypes: Object.values(newTypes) };
 }
@@ -1377,6 +1384,8 @@ function cxImportPreview() {
     (CXI.link && (DB.events || []).length ? '<div class="cxp-s" style="margin-bottom:10px">' + linked + ' of ' + p.entries.length + ' linked to a session on the same date.</div>' : '') +
     (!tracked ? '<div class="form-row"><label>Rows with no destination</label><select onchange="CXI.defOut=this.value;cxImportPreview()"><option value="">Import as undecided — tidy later</option>' +
       (act.outcomes || []).map(o => '<option value="' + e(o.key) + '"' + (o.key === CXI.defOut ? ' selected' : '') + '>' + e(o.label) + '</option>').join('') + '</select></div>' : '') +
+    (tracked ? '<div class="form-row"><label>Rows with no step — import into</label><select onchange="CXI.defStage=this.value;cxImportPreview()">' +
+      (act.stages || []).map(st => '<option value="' + e(st.key) + '"' + (st.key === (CXI.defStage || (act.stages[0] || {}).key) ? ' selected' : '') + '>' + e(st.label) + '</option>').join('') + '</select></div>' : '') +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">' +
       '<div><div class="cxq-lbl">By item</div>' + Object.keys(byItem).sort((a, b) => byItem[b] - byItem[a]).slice(0, 8).map(k => '<div class="cxp-list-row" style="padding:4px 0"><span class="cxp-s">' + e(k) + '</span><span class="cxp-s">' + cxFmt(byItem[k], 1) + ' kg</span></div>').join('') + '</div>' +
       '<div><div class="cxq-lbl">By destination</div>' + Object.keys(byDest).map(k => '<div class="cxp-list-row" style="padding:4px 0"><span class="cxp-s">' + e(k) + '</span><span class="cxp-s">' + byDest[k] + '</span></div>').join('') + '</div>' +
@@ -1412,6 +1421,11 @@ async function cxImportSave() {
       if (x.sale) custom.sale_gbp = x.sale;
       if (x.noWeight) custom.no_weight = true;
       if (x.rawOut && !x.okey) custom.raw_outcome = x.rawOut;
+      if (x.bed) custom.bed_planter = x.bed;
+      if (x.batch) custom.batch_number = x.batch;
+      if (x.harvester) custom.harvester = x.harvester;
+      if (x.packer) custom.packer = x.packer;
+      if (x.packdate) custom.packing_date = x.packdate;
       custom.import_row = x.row;
       return {
         org_id: orgId, activity_id: act.id, item_type: x.t.key, name: x.name || x.t.label, category: act.name,
