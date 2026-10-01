@@ -1,1168 +1,1581 @@
-// js/render.js — every renderXxx function for every page
-// Depends on: config.js, utils.js, db.js, auth.js, agents.js, branding.js
-//
-// Each renderXxx function reads from DB and writes HTML into the
-// page container in app.html. None of them write to Supabase —
-// that's modals.js's job.
-//
-// All field names match the MAPPERS in db.js exactly.
-//
-// v3 (feedback measures): the Feedback page, Social Impact and the
-// dashboard read the org's OWN questions (DB.survey_measures) instead
-// of Vorlana's fixed fields. See the FEEDBACK — measures section.
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Vorlana</title>
+<link rel="icon" type="image/png" href="logo-mark.png"/>
+<link rel="manifest" href="/manifest.webmanifest"/>
+<meta name="theme-color" content="#1F6F6D"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="apple-mobile-web-app-title" content="Vorlana"/>
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>
+<link rel="stylesheet" href="css/app.css"/>
 
+<!-- EOI form-reading libraries (Word + PDF) — added for the EOI form-fill feature -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  // pdf.js needs its worker pointed at the matching CDN file (set once)
+  if (window.pdfjsLib) {
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+</script>
+</head>
+<body>
+
+<div id="org-banner">
+  <span id="ob-txt"></span>
+  <span id="ob-plan"></span>
+</div>
+
+<div id="shell">
+
+<!-- ─── SIDEBAR ───────────────────────────────────────────── -->
+<div id="sidebar">
+  <div class="sidebar-logo"><img src="logo.png" alt="Vorlana"/></div>
+
+  <div class="nav-section">Overview</div>
+  <button class="nav-btn" onclick="go('dashboard')"><span class="icon">📊</span><span>Dashboard</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" data-module="funders" onclick="go('rag')"><span class="icon">🚦</span><span>RAG Dashboard</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" data-module="impact" onclick="go('impact')"><span class="icon">🌿</span><span>Social Impact</span><span class="ai-dot"></span></button>
+
+  <div class="nav-section">People</div>
+  <button class="nav-btn" data-module="participants" onclick="go('participants')"><span class="icon">👤</span><span>Participants</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" data-module="contacts" onclick="go('contacts')"><span class="icon">📋</span><span>Contacts &amp; Donors</span></button>
+  <button class="nav-btn" data-module="volunteers" onclick="go('volunteers')"><span class="icon">🙋</span><span>Volunteers &amp; Staff</span></button>
+  <button class="nav-btn" data-module="employers" onclick="go('employers')"><span class="icon">🏢</span><span>Employers</span><span class="ai-dot"></span></button>
+
+  <div class="nav-section">Delivery</div>
+  <button class="nav-btn" data-module="participants" onclick="go('pipeline')"><span class="icon">🔁</span><span>Pipeline</span></button>
+  <button class="nav-btn" data-module="participants" onclick="go('referrals')"><span class="icon">📨</span><span>Referrals</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" data-module="participants" onclick="go('partnerrefs')"><span class="icon">🤝</span><span>Partner Referrals</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" data-module="events" onclick="go('events')"><span class="icon">📅</span><span>Events</span></button>
+  <button class="nav-btn" data-module="events" onclick="go('feedback')"><span class="icon">💬</span><span>Feedback</span></button>
+  <button class="nav-btn" data-module="circular" onclick="go('circular')"><span class="icon">♻️</span><span>Circular</span></button>
+
+  <div class="nav-section">Reporting</div>
+  <button class="nav-btn" data-module="participants" onclick="go('outcomes')"><span class="icon">🎯</span><span>Outcomes</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" data-module="funders" onclick="go('funders')"><span class="icon">🏦</span><span>Funders</span></button>
+  <button class="nav-btn" data-module="funders" onclick="go('funding')"><span class="icon">💰</span><span>Contracts</span></button>
+  <button class="nav-btn" data-module="funders" onclick="go('reports')"><span class="icon">📄</span><span>Reports</span></button>
+  <button class="nav-btn" data-module="evidence" onclick="go('evidence')"><span class="icon">🗂️</span><span>Evidence Hub</span></button>
+  <button class="nav-btn" data-module="demographics" onclick="go('demographics')"><span class="icon">📊</span><span>Demographics</span></button>
+
+  <div class="nav-section">Growth</div>
+  <button class="nav-btn" data-module="social" onclick="go('social');renderSocial()"><span class="icon">📣</span><span>Social Media</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" data-module="bd" onclick="go('bd')"><span class="icon">💼</span><span>BD Manager</span><span class="ai-dot"></span></button>
+
+  <div class="nav-section">Settings</div>
+  <button class="nav-btn" data-module="participants" onclick="go('safeguarding')"><span class="icon">🔐</span><span>Safeguarding</span></button>
+  <button class="nav-btn" onclick="go('settings')"><span class="icon">⚙️</span><span>Settings</span></button>
+
+  <div class="sidebar-bottom">
+    <div id="role-badge-slot"></div>
+    <div style="font-size:10px;color:var(--purple);text-align:center;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:4px;font-weight:700"><span>●</span> AI agents active</div>
+    <div id="upgrade-btn-wrap"></div>
+    <button class="btn btn-ghost btn-sm" style="width:100%" onclick="signOut()">Sign out</button>
+  </div>
+</div>
+
+<!-- ─── MAIN CONTENT ──────────────────────────────────────── -->
+<div id="main">
+
+<!-- DASHBOARD -->
+<div id="page-dashboard" class="page">
+  <div class="page-header">
+    <div><div class="page-title">Dashboard</div><div class="page-sub" id="dash-sub">Overview</div></div>
+    <button class="btn btn-ghost btn-sm" onclick="refreshDashboard()">↻ Refresh</button>
+  </div>
+  <div class="morning-briefing">
+    <div class="mb-header">
+      <div><div class="mb-greeting" id="mb-greeting">Good morning 👋</div><div class="mb-time" id="mb-time"></div></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="ai-tag">✦ Org Brain</span>
+        <button class="btn btn-ai btn-sm" onclick="runMorningBriefing()">↻ Refresh</button>
+      </div>
+    </div>
+    <div id="mb-body"><div style="color:var(--txt3);font-size:13px">Your morning briefing covers the areas you work in — add some records to get started.</div></div>
+  </div>
+  <div class="stats-grid" id="dash-stats"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div class="card"><div class="card-title">At-risk — chase today</div><div id="dash-risk"></div></div>
+    <div class="card"><div class="card-title">Recent activity</div><div id="dash-activity"></div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+    <div class="card"><div class="card-title">Feedback highlights</div><div id="dash-fb-hi"></div></div>
+    <div class="card"><div class="card-title">Confidence journey</div><div id="dash-conf-j"></div></div>
+  </div>
+</div>
+
+<!-- RAG -->
+<div id="page-rag" class="page">
+  <div class="page-header"><div><div class="page-title">RAG Status Dashboard</div><div class="page-sub">Auto-calculated from participant data</div></div><button class="btn btn-ghost btn-sm" onclick="renderRAG()">↻ Refresh</button></div>
+  <div id="rag-list"></div>
+</div>
+
+<!-- SOCIAL IMPACT -->
+<div id="page-impact" class="page">
+  <div class="page-header">
+    <div><div class="page-title">Social Impact</div><div class="page-sub">Board-ready · Funder presentations</div></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <select id="ir-period" style="width:auto">
+        <option value="all">All time</option>
+        <option value="12m">Last 12 months</option>
+        <option value="year">This year</option>
+        <option value="quarter">Last quarter</option>
+      </select>
+      <button class="btn btn-ai btn-sm" onclick="generateImpactReport()">✦ Generate impact report</button>
+    </div>
+  </div>
+  <div id="ir-out"></div>
+  <div class="impact-wall">
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--em);margin-bottom:6px;font-weight:700" id="impact-hd">SOCIAL IMPACT</div>
+    <div style="font-size:22px;font-weight:700;margin-bottom:24px;color:var(--txt)">Numbers that move funders</div>
+    <div class="iw-grid">
+      <div><div class="iw-val" id="iw-p">—</div><div class="iw-lbl">Participants supported</div></div>
+      <div><div class="iw-val" id="iw-ev">—</div><div class="iw-lbl">Events &amp; workshops</div></div>
+      <div><div class="iw-val" id="iw-v">—</div><div class="iw-lbl">Active volunteers</div></div>
+      <div><div class="iw-val" id="iw-fb">—</div><div class="iw-lbl">Feedback responses</div></div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
+    <div class="stat-card"><div class="stat-lbl">Enjoyed sessions</div><div class="stat-val" id="imp-enjoyed">—</div></div>
+    <div class="stat-card"><div class="stat-lbl">Learned something new</div><div class="stat-val" id="imp-learned">—</div></div>
+    <div class="stat-card"><div class="stat-lbl">Felt more connected</div><div class="stat-val" id="imp-connected">—</div></div>
+  </div>
+  <div class="card"><div class="card-title">Confidence · before → after</div>
+    <div style="display:flex;gap:24px;align-items:center;padding:8px 0">
+      <div style="text-align:center"><div style="font-size:40px;font-weight:800;color:var(--amber)" id="imp-cb">—</div><div style="font-size:11px;color:var(--txt3);font-weight:600">avg before</div></div>
+      <div style="font-size:28px;color:var(--txt3)">→</div>
+      <div style="text-align:center"><div style="font-size:40px;font-weight:800;color:var(--em)" id="imp-ca">—</div><div style="font-size:11px;color:var(--txt3);font-weight:600">avg after</div></div>
+    </div>
+  </div>
+  <div class="card"><div class="card-title">Participant voices</div><div id="imp-quotes"></div></div>
+</div>
+
+<!-- PARTICIPANTS -->
+<div id="page-participants" class="page">
+  <div class="page-header"><div><div class="page-title">Participants</div><div class="page-sub" id="p-sub"></div></div><button class="btn btn-p btn-sm" onclick="openAddP()">+ Add participant</button></div>
+  <div class="toolbar">
+    <input id="p-search" placeholder="Search name…" oninput="renderParticipants()"/>
+    <select id="p-stage" onchange="renderParticipants()"><option value="">All stages</option><option>Referred</option><option>Engaged</option><option>In Support</option><option>Job Ready</option><option>Outcome Achieved</option><option>Sustained</option><option>Closed</option></select>
+    <select id="p-risk" onchange="renderParticipants()"><option value="">All risk</option><option>High</option><option>Medium</option><option>Low</option></select>
+    <button class="btn btn-ghost btn-sm ml-auto" onclick="exportCSV('participants')">Export CSV</button>
+  </div>
+  <div id="p-alert" class="alert alert-warn" style="display:none"></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Participant</th><th>Ref</th><th>Stage</th><th>Advisor</th><th>Contracts</th><th>Outcomes</th><th>Risk</th><th>Last contact</th><th></th></tr></thead><tbody id="p-table"></tbody></table></div>
+</div>
+
+<!-- CONTACTS -->
+<div id="page-contacts" class="page">
+  <div class="page-header"><div><div class="page-title">Contacts &amp; Donors</div><div class="page-sub" id="c-sub"></div></div><button class="btn btn-p btn-sm" onclick="openAddC()">+ Add contact</button></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody id="c-table"></tbody></table></div>
+</div>
+
+<!-- VOLUNTEERS -->
+<div id="page-volunteers" class="page">
+  <div class="page-header"><div><div class="page-title">Volunteers &amp; Staff</div><div class="page-sub" id="vol-sub"></div></div><button class="btn btn-p btn-sm" onclick="openAddVol()">+ Add volunteer</button></div>
+  <div class="toolbar">
+    <input id="vol-search" placeholder="Search…" oninput="renderVolunteers()"/>
+    <select id="vol-filter-status" onchange="renderVolunteers()"><option value="">All</option><option>Active</option><option>Inactive</option><option>On leave</option></select>
+    <button class="btn btn-ghost btn-sm ml-auto" onclick="exportCSV('volunteers')">Export CSV</button>
+  </div>
+  <div id="vol-list"></div>
+</div>
+
+<!-- EMPLOYERS -->
+<div id="page-employers" class="page">
+  <div class="page-header"><div><div class="page-title">Employer CRM</div><div class="page-sub" id="emp-sub"></div></div><button class="btn btn-p btn-sm" onclick="openAddEmployer()">+ Add employer</button></div>
+  <div class="ai-panel">
+    <div class="ai-panel-title"><span class="ai-icon">🤝</span>Employer Matcher Agent</div>
+    <div style="font-size:13px;color:var(--txt2);margin-bottom:10px">Match job-ready participants to open vacancies automatically.</div>
+    <button class="btn btn-ai btn-sm" onclick="runEmployerMatcher()">✦ Find matches now</button>
+    <div id="employer-matcher-result" style="margin-top:12px"></div>
+  </div>
+  <div class="tbl-wrap"><table><thead><tr><th>Employer</th><th>Sector</th><th>Contact</th><th>Vacancies</th><th>Placements</th><th>Relationship</th><th></th></tr></thead><tbody id="emp-table"></tbody></table></div>
+</div>
+
+<!-- PIPELINE -->
+<div id="page-pipeline" class="page">
+  <div class="page-header"><div><div class="page-title">Caseload Pipeline</div><div class="page-sub">Who needs chasing today?</div></div></div>
+  <div class="kanban" id="kanban"></div>
+</div>
+
+<!-- REFERRALS -->
+<div id="page-referrals" class="page">
+  <div class="page-header"><div><div class="page-title">Referrals</div><div class="page-sub" id="ref-sub"></div></div><button class="btn btn-p btn-sm" onclick="openAddR()">+ New referral</button></div>
+  <div id="ref-alerts"></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Source</th><th>Status</th><th>Date</th><th>Advisor</th><th>Flag</th><th></th></tr></thead><tbody id="ref-table"></tbody></table></div>
+</div>
+
+<!-- PARTNER REFERRALS -->
+<div id="page-partnerrefs" class="page">
+  <div class="page-header"><div><div class="page-title">Partner Referrals</div><div class="page-sub">Submitted via Partner Portal</div></div></div>
+  <div class="card" id="partner-portal-setup">
+    <div class="card-title">🔗 Your partner portal link &amp; QR code</div>
+    <div style="display:grid;grid-template-columns:1fr auto;gap:20px;align-items:start">
+      <div>
+        <div style="font-size:13px;color:var(--txt2);margin-bottom:14px;line-height:1.7">Share this link or QR code with your referral partners — probation, Jobcentre Plus, housing providers. When they register via this link they are automatically linked to your organisation and all their referrals come straight to you.</div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <div id="partner-link-display" style="font-size:12px;color:var(--em);font-family:monospace;flex:1;word-break:break-all">Loading…</div>
+          <button class="btn btn-ghost btn-sm" onclick="copyPartnerLink()" id="copy-link-btn">📋 Copy</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-p btn-sm" onclick="copyPartnerLink()">📋 Copy link</button>
+          <button class="btn btn-ghost btn-sm" onclick="downloadQR()">⬇ Download QR</button>
+          <button class="btn btn-ghost btn-sm" onclick="sharePartnerLink()">📤 Share</button>
+          <button class="btn btn-ghost btn-sm" onclick="printPartnerCard()">🖨️ Print referral card</button>
+        </div>
+      </div>
+      <div style="text-align:center;flex-shrink:0">
+        <div id="qr-container" style="background:#fff;padding:12px;border-radius:10px;display:inline-block;border:1px solid var(--border)">
+          <canvas id="qr-canvas" width="140" height="140"></canvas>
+        </div>
+        <div style="font-size:10px;color:var(--txt3);margin-top:6px;font-weight:600">Scan to open portal</div>
+      </div>
+    </div>
+    <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
+      <button class="btn btn-ghost btn-sm" onclick="toggleEmailTemplate()" id="email-tpl-btn">✉️ Show email template to send to partners</button>
+      <div id="email-template" style="display:none;margin-top:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px">
+        <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;font-weight:700">Ready-to-send email template</div>
+        <div id="email-tpl-body" style="font-size:13px;color:var(--txt2);line-height:1.8;white-space:pre-wrap"></div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="copyEmailTemplate()">📋 Copy email</button>
+      </div>
+    </div>
+  </div>
+  <div id="pref-alerts"></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Partner</th><th>Primary need</th><th>Urgency</th><th>Safeguarding</th><th>Submitted</th><th>Status</th><th></th></tr></thead><tbody id="pref-table"></tbody></table></div>
+</div>
+
+<!-- EVENTS -->
+<div id="page-events" class="page">
+  <div class="page-header"><div><div class="page-title">Events &amp; Workshops</div><div class="page-sub" id="ev-sub"></div></div><button class="btn btn-p btn-sm" onclick="openAddEv()">+ Create event</button></div>
+  <div class="alert alert-info" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span>📱 <strong>One QR covers every event.</strong> Your permanent sign-in QR automatically becomes today's event page as soon as you add one here — nothing to print per event. Attendees scan it to leave feedback; volunteers check in and out, and their hours log themselves.</span><button class="btn btn-ghost btn-sm" onclick="openSiteQR()" style="flex-shrink:0">📱 Show sign-in QR</button></div>
+  <div class="toolbar" style="flex-wrap:wrap;gap:8px"><select id="ev-filter-type" onchange="renderEvents()"><option value="">All types</option><option>Green Skills</option><option>Wellbeing</option><option>Community Event</option><option>Frailty</option><option>Other</option></select><select id="ev-filter-date" onchange="onEvDateFilterChange()"><option value="all">All dates</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="upcoming">Upcoming</option><option value="year">This year</option><option value="month">Choose a month…</option><option value="custom">Custom range…</option></select><select id="ev-filter-month" onchange="renderEvents()" style="display:none"></select><button type="button" class="btn btn-ghost btn-sm" id="ev-sort-btn" onclick="window._evOldestFirst=!window._evOldestFirst;renderEvents()">↓ Newest first</button><span id="ev-filter-custom" style="display:none;align-items:center;gap:6px"><input type="date" id="ev-filter-from" onchange="renderEvents()" style="width:auto"/><span style="color:var(--txt3);font-size:12px">to</span><input type="date" id="ev-filter-to" onchange="renderEvents()" style="width:auto"/></span></div>
+  <div class="stats-grid" id="ev-stats"></div>
+  <div id="ev-list"></div>
+</div>
+
+<!-- FEEDBACK -->
+<div id="page-feedback" class="page">
+  <div class="page-header"><div><div class="page-title">Participant Feedback</div><div class="page-sub" id="fb-sub"></div></div><button class="btn btn-p btn-sm" onclick="openAddFb()">+ Add response</button></div>
+  <div class="toolbar"><select id="fb-filter-ev" onchange="renderFeedback()"><option value="">All events</option></select></div>
+  <div class="stats-grid" id="fb-stats"></div>
+  <div class="ai-panel">
+    <div class="ai-panel-title"><span class="ai-icon">💬</span>Feedback Analyst Agent</div>
+    <div style="font-size:13px;color:var(--txt2);margin-bottom:10px">Generate a board-ready summary of all participant feedback.</div>
+    <button class="btn btn-ai btn-sm" onclick="runFeedbackAnalyst()">✦ Analyse feedback</button>
+    <div id="feedback-analyst-result" style="margin-top:12px"></div>
+  </div>
+  <div id="fb-list"></div>
+</div>
+
+<!-- OUTCOMES -->
+<div id="page-outcomes" class="page">
+  <div class="page-header"><div><div class="page-title">Outcomes &amp; Impact</div></div><button class="btn btn-ghost btn-sm" onclick="exportCSV('participants')">Export CSV</button></div>
+  <div class="ai-panel">
+    <div class="ai-panel-title"><span class="ai-icon">🎯</span>Outcomes Analyst Agent</div>
+    <div style="font-size:13px;color:var(--txt2);margin-bottom:10px">Spot patterns in your caseload — what's working, what barriers cluster together, where to focus.</div>
+    <button class="btn btn-ai btn-sm" onclick="runOutcomesAnalyst()">✦ Analyse outcomes</button>
+    <div id="outcomes-analyst-result" style="margin-top:12px"></div>
+  </div>
+  <div class="stats-grid" id="out-stats"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+    <div class="card"><div class="card-title">Outcomes by type</div><div id="out-by-type"></div></div>
+    <div class="card"><div class="card-title">Common barriers</div><div id="out-barriers"></div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div class="card"><div class="card-title">Journey stages</div><div id="out-stage-breakdown"></div></div>
+    <div class="card"><div class="card-title">Confidence scores</div><div id="out-confidence"></div></div>
+  </div>
+</div>
+
+<!-- FUNDERS -->
+<div id="page-funders" class="page">
+  <div class="page-header"><div><div class="page-title">Funders</div><div class="page-sub" id="funders-sub">Manage your funder relationships</div></div><button class="btn btn-p btn-sm" onclick="openAddFunder()">+ Add funder</button></div>
+  <div class="alert alert-info" style="margin-bottom:16px">💡 <strong>Workflow:</strong> Add a funder → attach contracts → generate reports from the Reports tab.</div>
+  <div id="funders-list"></div>
+</div>
+
+<!-- FUNDING / CONTRACTS -->
+<div id="page-funding" class="page">
+  <div class="page-header"><div><div class="page-title">Funding &amp; Contracts</div><div class="page-sub" id="fund-sub"></div></div><button class="btn btn-p btn-sm" onclick="openAddCon()">+ Add contract</button></div>
+  <div id="fund-list"></div>
+</div>
+
+<!-- REPORTS -->
+<div id="page-reports" class="page">
+  <div class="page-header"><div><div class="page-title">Funder Reports</div><div class="page-sub">AI-generated · Powered by Org Brain</div></div></div>
+  <div class="ai-panel" style="margin-bottom:20px">
+    <div class="ai-panel-title"><span class="ai-icon">✦</span>How it works</div>
+    <div style="font-size:13px;color:var(--txt2);line-height:1.7">Select a contract below and click Generate. The Org Brain reads your live data, cross-checks against the funder's reporting framework, writes a clean professional report, then runs a Quality Supervisor check before showing it to you. Download as PDF when ready.</div>
+  </div>
+  <div id="reports-contract-list"></div>
+  <div id="brain-progress"></div>
+  <div id="report-output"></div>
+</div>
+
+<!-- EVIDENCE -->
+<div id="page-evidence" class="page">
+  <div class="page-header"><div><div class="page-title">Evidence &amp; Compliance Hub</div></div><button class="btn btn-p btn-sm" onclick="openAddEvid()">+ Upload evidence</button></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Participant</th><th>Type</th><th>Outcome</th><th>Staff</th><th>Date</th><th>Status</th><th></th></tr></thead><tbody id="evid-table"></tbody></table></div>
+</div>
+
+<!-- SAFEGUARDING -->
+<div id="page-safeguarding" class="page">
+  <div class="page-header"><div><div class="page-title">Safeguarding &amp; Permissions</div></div></div>
+  <div class="alert alert-info" style="margin-bottom:14px">Role-based access active · GDPR compliant · Consent tracked</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div class="card"><div class="card-title">Flagged cases</div><div id="safe-flags"></div></div>
+    <div class="card"><div class="card-title">Consent tracker</div><div id="consent-list"></div></div>
+  </div>
+</div>
+
+<!-- SOCIAL MEDIA STUDIO -->
+<div id="page-social" class="page">
+  <div class="page-header"><div><div class="page-title">📣 Social Media Studio</div><div class="page-sub">Posts written from your real events, feedback and impact — every platform at once</div></div></div>
+
+  <div class="card">
+    <div class="card-title">① What's this post about?</div>
+    <div class="form-grid-3">
+      <div class="form-row"><label>Post about</label>
+        <select id="sm-about" onchange="socialAboutChanged()">
+          <option value="event">An event we ran</option>
+          <option value="upcoming">An upcoming event (promote it)</option>
+          <option value="impact">Our impact</option>
+          <option value="volunteer">Thanking a volunteer</option>
+          <option value="custom">Something else</option>
+        </select>
+      </div>
+      <div class="form-row" id="sm-event-wrap"><label>Event</label><select id="sm-event" onchange="socialRefreshFacts()"></select></div>
+      <div class="form-row" id="sm-period-wrap" style="display:none"><label>Period</label>
+        <select id="sm-period" onchange="socialRefreshFacts()">
+          <option value="12m">Last 12 months</option>
+          <option value="year">This year</option>
+          <option value="quarter">Last quarter</option>
+          <option value="all">All time</option>
+        </select>
+      </div>
+      <div class="form-row" id="sm-vol-wrap" style="display:none"><label>Volunteer</label><select id="sm-vol" onchange="socialRefreshFacts()"></select></div>
+    </div>
+    <div id="sm-facts"></div>
+    <div class="form-row" style="margin-bottom:0"><label>Anything to add? (optional)</label><input id="sm-context" placeholder="e.g. Our first session in the new polytunnel, thanks to PECT funding"/></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">② Participant quotes</div>
+    <div style="font-size:12px;color:var(--txt3);margin-bottom:10px">Tick only the quotes you have permission to share. They're always posted anonymously.</div>
+    <div id="sm-quotes"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">③ Photo, platforms &amp; tone</div>
+    <div class="form-grid-2">
+      <div class="form-row">
+        <label>Your photo (optional)</label>
+        <input type="file" id="sm-photo" accept="image/*" onchange="handleSocialPhoto(this)" style="font-size:13px"/>
+        <div id="sm-photo-preview" style="margin-top:8px"></div>
+        <div id="sm-consent-wrap" style="display:none;margin-top:8px">
+          <label style="display:flex;gap:8px;align-items:flex-start;text-transform:none;letter-spacing:0;font-weight:500;font-size:12px;color:var(--txt2);cursor:pointer">
+            <input type="checkbox" id="sm-consent" style="width:auto;margin-top:2px"/>
+            Everyone identifiable in this photo has agreed to it being shared (and a parent or guardian for any child)
+          </label>
+        </div>
+        <div style="font-size:11px;color:var(--txt3);margin-top:6px">🔒 Photos stay on this device — they're never uploaded or stored.</div>
+      </div>
+      <div>
+        <div class="form-row"><label>Platforms</label>
+          <div class="chk-group">
+            <div class="chk-pill"><label><input type="checkbox" class="sm-plat" value="linkedin" checked/> 💼 LinkedIn</label></div>
+            <div class="chk-pill"><label><input type="checkbox" class="sm-plat" value="instagram" checked/> 📸 Instagram</label></div>
+            <div class="chk-pill"><label><input type="checkbox" class="sm-plat" value="facebook" checked/> 👍 Facebook</label></div>
+            <div class="chk-pill"><label><input type="checkbox" class="sm-plat" value="x"/> ✖️ X</label></div>
+          </div>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-row"><label>Tone</label>
+            <select id="sm-tone">
+              <option value="warm and human">Warm &amp; human</option>
+              <option value="celebratory">Celebratory</option>
+              <option value="professional">Professional</option>
+              <option value="inspiring">Inspiring</option>
+              <option value="urgent, with a clear ask">Urgent / call to action</option>
+            </select>
+          </div>
+          <div class="form-row"><label>Call to action (optional)</label><input id="sm-cta" placeholder="e.g. Book your place — link in bio"/></div>
+        </div>
+        <label style="display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font-weight:500;font-size:13px;color:var(--txt2);cursor:pointer">
+          <input type="checkbox" id="sm-hashtags" checked style="width:auto"/> Include hashtags
+        </label>
+      </div>
+    </div>
+    <button class="btn btn-ai" style="margin-top:14px" onclick="generateSocial()">✦ Write my posts</button>
+  </div>
+
+  <div id="sm-output" style="display:none;margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div style="font-size:15px;font-weight:700;color:var(--txt)">Your posts</div>
+      <div style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--txt3)">Plan for <input type="date" id="sm-plan-date" style="width:auto"/></div>
+    </div>
+    <div id="sm-result"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🗓️ Content plan</div>
+    <div id="sm-plan"></div>
+  </div>
+</div>
+
+<!-- BD MANAGER -->
+<div id="page-bd" class="page">
+  <div class="page-header"><div><div class="page-title">💼 BD Manager</div><div class="page-sub">Find funding · Write winning Expressions of Interest</div></div></div>
+
+  <!-- ══ STEP 1 · FIND FUNDING ══════════════════════════════ -->
+  <div style="display:flex;align-items:center;gap:12px;margin:4px 0 14px">
+    <span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--em);color:#fff;font-size:13px;font-weight:700;flex-shrink:0">1</span>
+    <div>
+      <div style="font-size:16px;font-weight:700;color:var(--txt)">Find funding opportunities</div>
+      <div style="font-size:12px;color:var(--txt3)">Live web search for open grants and contracts that fit your organisation</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="form-grid-2" style="margin-bottom:12px">
+      <div class="form-row"><label>Primary delivery area</label><select id="bd-area"><option>London</option><option>Greater Manchester</option><option>Birmingham / West Midlands</option><option>Leeds / West Yorkshire</option><option>Bristol / South West</option><option>National / England-wide</option><option>Other</option></select></div>
+      <div class="form-row"><label>Org turnover</label><select id="bd-size"><option value="micro">Under £100k</option><option value="small">£100k–£500k</option><option value="medium">£500k–£2m</option><option value="large">£2m+</option></select></div>
+    </div>
+    <div class="form-row" style="margin-top:8px"><label>Specific funders or programmes of interest</label><input id="bd-specific" placeholder="e.g. MoJ HMPPS, GLA Good Work, National Lottery, UKSPF…"/></div>
+    <button class="btn btn-ai" onclick="runBDResearch()" style="margin-top:4px">✦ Find opportunities</button>
+  </div>
+  <div id="bd-opps-wrap" style="display:none">
+    <div class="ai-panel"><div class="ai-panel-title"><span class="ai-icon">🔍</span>Funding opportunities identified</div><div id="bd-opps-result"></div></div>
+  </div>
+  <!-- ══ STEP 2 · WRITE AN EOI ══════════════════════════════ -->
+  <div style="display:flex;align-items:center;gap:12px;margin:28px 0 14px">
+    <span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--em);color:#fff;font-size:13px;font-weight:700;flex-shrink:0">2</span>
+    <div>
+      <div style="font-size:16px;font-weight:700;color:var(--txt)">Write an Expression of Interest</div>
+      <div style="font-size:12px;color:var(--txt3)">Every answer is drafted from your organisation profile and real CRM outcomes</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">About this bid</div>
+    <div class="form-row">
+      <label>Funder / scheme name</label>
+      <input id="eoi-funder" placeholder="e.g. GLA Grow London Local"/>
+      <div style="font-size:11px;color:var(--txt3);margin-top:4px">Used to research the funder's priorities and as the document title — be specific.</div>
+    </div>
+    <div class="form-row"><label>Your unique selling points (optional)</label><textarea id="eoi-usps" style="min-height:56px" placeholder="e.g. 24 years' West London delivery, bilingual BN(O) advisers, strong probation relationships…"></textarea></div>
+    <details style="margin-top:4px">
+      <summary style="cursor:pointer;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:9px;font-weight:700;font-size:13px;color:var(--txt);user-select:none">🏢 Organisation profile <span style="font-weight:400;color:var(--txt3)">— set once, used in every EOI</span></summary>
+      <div style="padding:12px 2px 2px">
+        <p style="font-size:12px;color:var(--txt2);margin-bottom:10px">The writer only knows what's in your CRM plus what you put here. Paste your key facts once — legal &amp; trading name, charity/company number, registered address, website, socials, lead contact, year founded, boroughs, mission, and prior delivery history <em>with real numbers</em>, partnerships, accreditations. It inserts [INSERT: …] wherever something is missing.</p>
+        <div class="form-row"><textarea id="eoi-org-profile" style="min-height:150px" placeholder="Legal &amp; trading name: Action West London (charity no. 1088999, company no. 04193849)
+Registered address: Kensa House, Central Way, London NW10 7XW
+Website: https://www.actionwestlondon.org.uk
+Socials: linkedin.com/company/…, x.com/…, instagram.com/…
+Lead contact: Amara Okafor, Head of Programmes — amara@… — 020 …
+Founded 2000; delivers across Brent, Ealing, Hounslow, Hammersmith &amp; Fulham, Harrow
+Track record: GLA Good Work 2021–24 — 620 participants, 58% into work, 71% sustained at 26 weeks; MoJ/HMPPS 2019–23 — 340 participants…
+Partnerships: Jobcentre Plus West London, Ealing Council, [named employers]…
+Accreditations: Matrix, Investors in People, Cyber Essentials…"></textarea></div>
+        <button class="btn btn-p btn-sm" onclick="saveOrgProfileFromField()">Save profile</button>
+        <span id="eoi-profile-saved" style="display:none;color:var(--em);font-size:12px;margin-left:8px;font-weight:600">✓ Saved</span>
+      </div>
+    </details>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="font-size:18px">📄</span><div class="card-title" style="margin-bottom:0">Fill in the funder's own form</div><span style="font-size:10px;font-weight:700;color:#fff;background:var(--em);border-radius:20px;padding:2px 8px;letter-spacing:.5px">RECOMMENDED</span></div>
+    <p style="font-size:13px;color:var(--txt2);margin-bottom:12px">Upload the funder's blank EOI form (Word or PDF) or paste its questions — Vorlana answers each one, within every word limit. Or use <strong>✍️ Draft EOI for this</strong> on a funding result above to pull the questions in automatically.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      <input type="file" id="eoi-form-file" accept=".docx,.pdf,.txt" onchange="handleEOIFormUpload(this)" style="font-size:13px"/>
+      <span style="font-size:11px;color:var(--txt3)">or paste the questions below</span>
+    </div>
+    <div class="form-row"><textarea id="eoi-form-text" style="min-height:90px" placeholder="Paste the funder's EOI questions here (one per line is fine)…"></textarea></div>
+    <button class="btn btn-ai btn-sm" onclick="parseEOIForm()">① Pull out the questions</button>
+    <div id="eoi-questions" style="display:none;margin-top:14px"></div>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:12px;margin:16px 2px">
+    <div style="flex:1;height:1px;background:var(--border)"></div>
+    <div style="font-size:12px;font-weight:700;color:var(--txt3);letter-spacing:1px">OR</div>
+    <div style="flex:1;height:1px;background:var(--border)"></div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="font-size:18px">✍️</span><div class="card-title" style="margin-bottom:0">No form? Write from a brief</div></div>
+    <p style="font-size:13px;color:var(--txt2);margin-bottom:12px">For funders who just ask for a free-form expression of interest with no set questions. Paste the brief and get a full EOI narrative.</p>
+    <div class="form-row"><label>Paste the brief or describe what they're looking for</label><textarea id="eoi-brief" style="min-height:100px" placeholder="Paste the funding brief or describe what outcomes they want…"></textarea></div>
+    <button class="btn btn-ai" onclick="runEOIGenerator()">✦ Generate EOI from brief</button>
+  </div>
+
+  <div id="eoi-output" style="display:none">
+    <div class="ai-panel">
+      <div class="ai-panel-title"><span class="ai-icon">📄</span>Expression of Interest draft</div>
+      <div id="eoi-result"></div>
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+        <button class="btn btn-p btn-sm" onclick="downloadEOIPDF()">⬇ Download as PDF</button>
+        <button class="btn btn-ghost btn-sm" onclick="copyEOI()">📋 Copy text</button>
+        <button class="btn btn-ghost btn-sm" onclick="runEOIGenerator()">↻ Regenerate</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EQUALITY & INCLUSION -->
+<div id="page-hr" class="page">
+  <div class="page-header">
+    <div><div class="page-title">🛡️ Equality &amp; Inclusion</div><div class="page-sub">Equality Act 2010 · GDPR · Aggregate &amp; anonymised</div></div>
+  </div>
+
+  <div class="alert alert-info" style="margin-bottom:16px">
+    💬 The Language Coach is a private, self-help tool. It only checks text you paste in, shows suggestions to you alone, and never stores anything or notifies anyone. Equity and benchmarking work on aggregate, anonymised numbers only — no individual is ever named.
+  </div>
+
+  <div class="vtab-bar" style="margin-bottom:20px">
+    <button class="vtab-btn active" onclick="switchHRTab('coach',this)">💬 Language coach</button>
+    <button class="vtab-btn" onclick="switchHRTab('equity',this)">📊 Outcome equity</button>
+    <button class="vtab-btn" onclick="switchHRTab('monitoring',this)">📋 Equality monitoring</button>
+    <button class="vtab-btn" onclick="switchHRTab('benchmark',this)">🏆 Benchmarking</button>
+  </div>
+
+  <div id="hr-tab-coach">
+    <div class="ai-panel" style="margin-bottom:16px">
+      <div class="ai-panel-title"><span class="ai-icon">💬</span>Positive Language Coach · Self-help</div>
+      <div style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:12px">
+        Paste a case note, referral, or any wording you're unsure about. The coach suggests gentler, more inclusive, person-first phrasing — just for you. Nothing is saved, logged, or shared with anyone.
+      </div>
+      <div class="form-row" style="margin-bottom:10px">
+        <label>Your text</label>
+        <textarea id="language-coach-input" style="min-height:120px" placeholder="Paste the wording you'd like a second opinion on…"></textarea>
+      </div>
+      <button class="btn btn-ai btn-sm" onclick="runLanguageCoach()">✦ Suggest kinder phrasing</button>
+      <div id="language-coach-result" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+  <div id="hr-tab-equity" style="display:none">
+    <div class="ai-panel">
+      <div class="ai-panel-title"><span class="ai-icon">📊</span>Outcome Equity Analysis</div>
+      <div style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:10px">Cross-references outcomes against protected characteristics using aggregate numbers only. Flags any gap over 15%. No individual is named.</div>
+      <button class="btn btn-ai btn-sm" onclick="runEquityAnalysis()">✦ Run equity analysis</button>
+    </div>
+    <div id="equity-result"></div>
+  </div>
+
+  <div id="hr-tab-monitoring" style="display:none">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title">About equality monitoring</div>
+      <div style="font-size:13px;color:var(--txt2);line-height:1.7">Completion is <strong style="color:var(--txt)">voluntary</strong>. Data is stored separately, used only for anonymised reporting, and never shared with funders at individual level.</div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div class="card-title" style="margin-bottom:0">Participant equality data</div>
+        <div id="eq-completion-badge" style="font-size:12px;color:var(--txt3);font-weight:600"></div>
+      </div>
+      <div id="eq-monitoring-list"></div>
+    </div>
+  </div>
+
+  <div id="hr-tab-benchmark" style="display:none">
+    <div class="ai-panel">
+      <div class="ai-panel-title"><span class="ai-icon">🏆</span>Anonymised Benchmarking</div>
+      <div style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:10px">Compares your outcome equity against anonymised aggregates from similar-size Vorlana organisations. No names are ever shared.</div>
+      <button class="btn btn-ai btn-sm" onclick="runBenchmarking()">✦ Generate benchmark report</button>
+    </div>
+    <div id="benchmark-result"></div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div id="page-circular" class="page"></div>
+
+<div id="page-settings" class="page"></div>
+
+</div></div>
+
+<!-- ─── MODALS ───────────────────────────────────────────── -->
+
+<div class="modal-overlay" id="modal-branding"><div class="modal" style="max-width:520px">
+  <h2 id="branding-modal-title">Welcome to Vorlana — make it yours</h2>
+  <p style="font-size:13px;color:var(--txt3);margin-bottom:18px;line-height:1.6">Set your organisation's logo and brand colour. They'll appear on the sidebar, funder reports, and partner portal. You can change these any time from Settings.</p>
+  <div class="form-row">
+    <label>Organisation logo</label>
+    <div id="logo-preview-wrap" style="display:flex;align-items:center;gap:14px;margin-bottom:8px">
+      <div id="logo-preview" style="width:90px;height:90px;border-radius:10px;background:var(--bg);border:1px dashed var(--border);display:flex;align-items:center;justify-content:center;color:var(--txt3);font-size:11px;text-align:center;flex-shrink:0;overflow:hidden">No logo<br/>yet</div>
+      <div style="flex:1">
+        <input type="file" id="logo-file-input" accept="image/png,image/jpeg,image/svg+xml" style="display:none" onchange="handleLogoSelect(event)"/>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('logo-file-input').click()">📁 Choose file</button>
+        <div style="font-size:11px;color:var(--txt3);margin-top:6px">PNG, JPG or SVG · Max 2MB · Square or wide both work</div>
+      </div>
+    </div>
+    <div id="logo-upload-status" style="font-size:12px;color:var(--txt3);margin-top:4px"></div>
+  </div>
+  <div class="form-row">
+    <label>Accent colour</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px" id="brand-color-swatches"></div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:12px;color:var(--txt3)">Or paste a hex:</span>
+      <input id="brand-color-hex" type="text" placeholder="#1F6F6D" style="max-width:130px;font-family:ui-monospace,monospace" oninput="onHexInput(this.value)"/>
+      <div id="brand-color-preview" style="width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:#1F6F6D;flex-shrink:0"></div>
+    </div>
+  </div>
+  <div id="branding-error" class="alert alert-warn" style="display:none;margin-top:12px"></div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="skipBranding()">Skip for now</button>
+    <button class="btn btn-p" id="branding-save-btn" onclick="saveBranding()">Save and continue</button>
+  </div>
+</div></div>
+
+<div class="modal-overlay" id="modal-funder"><div class="modal" style="max-width:560px">
+  <h2 id="funder-modal-title">Add funder</h2>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Funder name *</label><input id="ff-name" placeholder="e.g. Ministry of Justice"/></div>
+    <div class="form-row"><label>Funder type</label><select id="ff-type"><option value="moj">Ministry of Justice</option><option value="gla">Greater London Authority</option><option value="cbf">City Bridge Foundation</option><option value="ukspf">UKSPF / Local Authority</option><option value="lottery">National Lottery</option><option value="trust">Grant-making trust</option><option value="dwp">DWP / Jobcentre Plus</option><option value="nhs">NHS / ICB</option><option value="impact">Annual / Board report</option><option value="other">Other</option></select></div>
+  </div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Contact name</label><input id="ff-contact"/></div>
+    <div class="form-row"><label>Contact email</label><input type="email" id="ff-email"/></div>
+  </div>
+  <div class="form-row"><label>Reporting requirements / priorities</label><textarea id="ff-notes" style="min-height:70px"></textarea></div>
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-funder')">Cancel</button><button class="btn btn-p" id="funder-save-btn" onclick="saveFunder()">Save funder</button></div>
+</div></div>
+
+<div class="modal-overlay" id="modal-p"><div class="modal">
+  <h2 id="mp-title">Add participant</h2>
+
+  <details><summary style="cursor:pointer;padding:10px 12px;margin-top:6px;background:var(--bg);border:1px solid var(--border);border-radius:9px;font-weight:700;font-size:13px;color:var(--txt);user-select:none">👤 Participant details</summary>
+  <div style="padding:12px 2px 2px">
+    <div class="form-grid-2"><div class="form-row"><label>First name</label><input id="mp-fn"/></div><div class="form-row"><label>Last name</label><input id="mp-ln"/></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Title</label><input id="mp-ptitle" placeholder="Mr / Mrs / Ms"/></div><div class="form-row"><label>Date of birth</label><input type="date" id="mp-dob"/></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>NI number</label><input id="mp-ni" placeholder="AB123456C"/></div><div class="form-row"><label>Participant ID</label><input id="mp-pid"/></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Phone</label><input id="mp-phone"/></div><div class="form-row"><label>Email</label><input type="email" id="mp-email"/></div></div>
+    <div class="form-row"><label>Address</label><input id="mp-address"/></div>
+    <div class="form-grid-2"><div class="form-row"><label>Post code</label><input id="mp-postcode"/></div><div class="form-row"><label>Start date</label><input type="date" id="mp-start"/></div></div>
+  </div></details>
+
+  <details><summary style="cursor:pointer;padding:10px 12px;margin-top:12px;background:var(--bg);border:1px solid var(--border);border-radius:9px;font-weight:700;font-size:13px;color:var(--txt);user-select:none">🧭 Referral &amp; journey</summary>
+  <div style="padding:12px 2px 2px">
+    <div class="form-grid-2"><div class="form-row"><label>Referral source</label><select id="mp-rs"><option>Self-referral</option><option>Probation</option><option>Jobcentre Plus</option><option>Community org</option><option>School / college</option></select></div><div class="form-row"><label>Advisor</label><select id="mp-adv"><option>Sarah T.</option><option>Marcus O.</option><option>Priya S.</option><option>Unassigned</option></select></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Stage</label><select id="mp-st"><option>Referred</option><option>Engaged</option><option>In Support</option><option>Job Ready</option><option>Outcome Achieved</option><option>Sustained</option><option>Closed</option></select></div><div class="form-row"><label>Risk level</label><select id="mp-risk"><option>Low</option><option>Medium</option><option>High</option></select></div></div>
+    <div class="form-row"><label>Next contact due</label><input type="date" id="mp-due"/></div>
+    <div class="form-row"><label>Link to contracts</label><div class="con-select" id="mp-contracts-list"></div></div>
+    <div class="form-row"><label>Referral background (for AI intake)</label><textarea id="mp-intake-text" placeholder="Paste referral letter or background notes…" style="min-height:70px"></textarea></div>
+    <div id="mp-ai-intake-result"></div>
+    <div style="margin-bottom:4px"><button class="btn btn-ai btn-sm" onclick="runIntakeAI()">✦ Intake Agent — suggest barriers &amp; risk</button></div>
+  </div></details>
+
+  <details><summary style="cursor:pointer;padding:10px 12px;margin-top:12px;background:var(--bg);border:1px solid var(--border);border-radius:9px;font-weight:700;font-size:13px;color:var(--txt);user-select:none">📋 Assessment &amp; notes</summary>
+  <div style="padding:12px 2px 2px">
+    <div class="form-row"><label>Barriers</label><div id="barrier-checks" class="chk-group"></div></div>
+    <div class="form-row"><label>Outcomes achieved</label><div id="outcome-checks" class="chk-group"></div></div>
+    <div class="form-row"><label>Safeguarding flag</label><select id="mp-safe"><option value="">None</option><option>Domestic abuse</option><option>Mental health</option><option>Substance misuse</option><option>Homelessness risk</option></select></div>
+    <div class="score-box"><div class="score-label">Distance Travelled (1–10)</div>
+      <div class="form-grid-2"><div class="form-row"><label>Confidence</label><input type="number" id="mp-conf" min="1" max="10"/></div><div class="form-row"><label>Work readiness</label><input type="number" id="mp-work" min="1" max="10"/></div></div>
+      <div class="form-grid-2"><div class="form-row"><label>Wellbeing</label><input type="number" id="mp-well" min="1" max="10"/></div><div class="form-row"><label>Skills</label><input type="number" id="mp-skillsc" min="1" max="10"/></div></div>
+    </div>
+    <div class="form-row"><label>Case note</label><textarea id="mp-note"></textarea></div>
+    <div id="mp-note-preview" style="display:none">
+      <div style="font-size:11px;color:var(--purple);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;font-weight:700">✦ Case Note Agent — structured preview</div>
+      <div class="ai-note-box" id="mp-note-preview-text"></div>
+      <div style="display:flex;gap:8px;margin-top:6px"><button class="btn btn-p btn-sm" onclick="acceptAINote()">Use this</button><button class="btn btn-ghost btn-sm" onclick="rejectAINote()">Use original</button></div>
+    </div>
+    <button class="btn btn-ai btn-sm" onclick="runCaseNoteAI()" id="note-ai-btn">✦ Case Note Agent — structure note</button>
+  </div></details>
+
+  <details><summary style="cursor:pointer;padding:10px 12px;margin-top:12px;background:var(--bg);border:1px solid var(--border);border-radius:9px;font-weight:700;font-size:13px;color:var(--txt);user-select:none">📑 Funder paperwork &amp; eligibility</summary>
+  <div style="padding:12px 2px 2px">
+    <div style="font-size:12px;color:var(--txt3);margin-bottom:10px">Eligibility details used to fill funder Start/End forms. Optional.</div>
+    <div class="form-grid-2"><div class="form-row"><label>Gender</label><select id="mp-gender"><option value=""></option><option>Male</option><option>Female</option><option>Other</option><option>Prefer not to say</option></select></div><div class="form-row"><label>Right to live &amp; work in UK</label><select id="mp-rtw"><option value=""></option><option>Yes</option><option>No</option></select></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Basic skills (Maths &amp; English)</label><select id="mp-bskills"><option value=""></option><option>Yes</option><option>No</option></select></div><div class="form-row"><label>Labour market status</label><select id="mp-labour"><option value=""></option><option>Unemployed</option><option>Economically inactive</option></select></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Needs interpersonal-skills support</label><select id="mp-inter"><option value=""></option><option>Yes</option><option>No</option></select></div><div class="form-row"><label>Delivery organisation</label><input id="mp-provider"/></div></div>
+    <div class="form-row"><label>Programme / project</label><input id="mp-project"/></div>
+    <div style="margin-top:10px"><button type="button" class="btn btn-p btn-sm" onclick="civaraFillFunderForm()">📄 Fill funder form (from contract template)</button><div style="font-size:11px;color:var(--txt3);margin-top:5px">Fills this contract's own uploaded Word form with this participant's details.</div></div>
+  </div></details>
+
+  <details><summary style="cursor:pointer;padding:10px 12px;margin-top:12px;background:#E7F0EF;border:1px solid #9CC3C0;border-left:4px solid #1F6F6D;border-radius:9px;font-weight:700;font-size:13px;color:#175655;user-select:none">💼 Job outcome — <span style="font-weight:500;color:#3E6F6C">only when they get a job</span></summary>
+  <div style="padding:12px 2px 2px">
+    <div style="font-size:12px;color:var(--txt3);margin-bottom:10px">Fill this in later, when the participant starts work. Feeds the End Form and job evidence.</div>
+    <div class="form-grid-2"><div class="form-row"><label>Outcome type</label><select id="mp-outcome-type"><option value=""></option><option>Employment</option><option>Self-employment</option><option>Apprenticeship</option><option>Training</option><option>Education</option><option>Other</option></select></div><div class="form-row"><label>Job title</label><input id="mp-job-title"/></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Employer</label><input id="mp-employer"/></div><div class="form-row"><label>Job start date</label><input type="date" id="mp-job-start"/></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Hours per week</label><input id="mp-hours" type="number"/></div><div class="form-row"><label>Pay (e.g. £12.50/hr)</label><input id="mp-pay"/></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Exit / leaving date</label><input type="date" id="mp-exit-date"/></div><div class="form-row"><label>Reason for leaving</label><input id="mp-leave-reason"/></div></div>
+    <div style="margin:4px 0 2px"><button type="button" class="btn btn-ghost btn-sm" onclick="civaraAddJobEvidence()">📎 Add job evidence (payslip, contract…)</button></div>
+  </div></details>
+
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeParticipantModal()">Cancel</button><button class="btn btn-ghost" onclick="civaraGenerateStartForm()">📄 Start Form</button><button class="btn btn-ghost" onclick="civaraGenerateEndForm()">📄 End Form</button><button class="btn btn-p" id="p-save-btn" onclick="saveP()">Save</button></div>
+</div></div>
+
+<div class="modal-overlay" id="modal-c"><div class="modal"><h2 id="c-title">Add contact</h2><div class="form-grid-2"><div class="form-row"><label>First name</label><input id="cf-fn"/></div><div class="form-row"><label>Last name</label><input id="cf-ln"/></div></div><div class="form-row"><label>Email</label><input id="cf-em" type="email"/></div><div class="form-grid-2"><div class="form-row"><label>Role</label><select id="cf-role"><option>Donor</option><option>Partner</option><option>Funder</option><option>Trustee</option></select></div><div class="form-row"><label>Status</label><select id="cf-st"><option>Prospect</option><option>Engaged</option><option>Active Supporter</option><option>Lapsed</option></select></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-c')">Cancel</button><button class="btn btn-p" id="c-save-btn" onclick="saveC()">Save</button></div></div></div>
+
+<div class="modal-overlay" id="modal-vol"><div class="modal" style="max-width:600px"><h2 id="vol-modal-title">Add volunteer</h2><div class="form-grid-2"><div class="form-row"><label>Full name *</label><input id="vf-name"/></div><div class="form-row"><label>Email</label><input id="vf-email" type="email"/></div></div><div class="form-grid-2"><div class="form-row"><label>Phone</label><input id="vf-phone"/></div><div class="form-row"><label>Hours logged</label><input type="number" id="vf-hours" min="0"/></div></div><div class="form-grid-2"><div class="form-row"><label>Role *</label><select id="vf-role"><option>Volunteer</option><option>Corporate volunteer</option><option>Fixer</option><option>Advisor</option><option>Manager</option><option>Admin</option><option>Staff</option></select></div><div class="form-row"><label>Status</label><select id="vf-status"><option>Active</option><option>Inactive</option><option>On leave</option></select></div></div><div class="form-row"><label>Skills</label><div class="chk-group" id="vf-skills"></div></div><div class="form-row"><label>Notes</label><textarea id="vf-notes" style="min-height:60px"></textarea></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-vol')">Cancel</button><button class="btn btn-p" id="vol-save-btn" onclick="saveVol()">Save volunteer</button></div></div></div>
+
+<div class="modal-overlay" id="modal-emp"><div class="modal"><h2 id="emp-title">Add employer</h2><div class="form-grid-2"><div class="form-row"><label>Name</label><input id="ef-nm"/></div><div class="form-row"><label>Sector</label><select id="ef-sec"><option>Retail</option><option>Healthcare</option><option>Logistics</option><option>Construction</option><option>Hospitality</option><option>Admin / office</option><option>Tech</option><option>Social care</option><option>Other</option></select></div></div><div class="form-grid-2"><div class="form-row"><label>Contact name</label><input id="ef-con"/></div><div class="form-row"><label>Contact email</label><input id="ef-cem" type="email"/></div></div><div class="form-grid-2"><div class="form-row"><label>Open vacancies</label><input type="number" id="ef-vac"/></div><div class="form-row"><label>Relationship</label><select id="ef-rel"><option>Prospecting</option><option>Engaged</option><option>Active partner</option><option>Dormant</option></select></div></div><div class="form-row"><label>Notes</label><textarea id="ef-notes"></textarea></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-emp')">Cancel</button><button class="btn btn-p" id="emp-save-btn" onclick="saveEmployer()">Save</button></div></div></div>
+
+<div class="modal-overlay" id="modal-r"><div class="modal"><h2>New referral</h2><div class="form-grid-2"><div class="form-row"><label>First name</label><input id="rf-fn"/></div><div class="form-row"><label>Last name</label><input id="rf-ln"/></div></div><div class="form-grid-2"><div class="form-row"><label>Source</label><select id="rf-src"><option>Probation</option><option>Jobcentre Plus</option><option>Community org</option><option>Self-referral</option></select></div><div class="form-row"><label>Advisor</label><select id="rf-adv"><option>Sarah T.</option><option>Marcus O.</option><option>Priya S.</option><option>Unassigned</option></select></div></div><div class="form-row"><label>Date referred</label><input type="date" id="rf-date"/></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-r')">Cancel</button><button class="btn btn-p" id="r-save-btn" onclick="saveR()">Save</button></div></div></div>
+
+<div class="modal-overlay" id="modal-ev"><div class="modal" style="max-width:520px"><h2 id="ev-modal-title">Create event</h2><div class="form-row"><label>Event name *</label><input id="evf-name"/></div><div class="form-grid-3"><div class="form-row"><label>Type</label><select id="evf-type"><option>Green Skills</option><option>Wellbeing</option><option>Community Event</option><option>Frailty</option><option>Other</option></select></div><div class="form-row"><label>Date</label><input type="date" id="evf-date"/></div><div class="form-row"><label>Attendees</label><input type="number" id="evf-att" min="0"/></div></div><div class="form-grid-2"><div class="form-row"><label>Location</label><input id="evf-loc"/></div><div class="form-row"><label>Capacity</label><input type="number" id="evf-cap"/></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-ev')">Cancel</button><button class="btn btn-p" id="ev-save-btn" onclick="saveEv()">Save event</button></div></div></div>
+
+<div class="modal-overlay" id="modal-fb"><div class="modal"><h2 id="fb-modal-title">Add feedback</h2><div class="form-grid-2"><div class="form-row"><label>Event *</label><select id="fbf-ev"><option value="">Select event…</option></select></div><div class="form-row"><label>Participant name</label><input id="fbf-name"/></div></div><div class="form-row"><label>Enjoyment (1–5)</label><div style="display:flex;gap:5px;margin-top:4px" id="fbf-enjoyed-stars"></div></div><div class="form-grid-2"><div class="form-row"><label>Confidence before</label><div style="display:flex;gap:5px;margin-top:4px" id="fbf-cb-stars"></div></div><div class="form-row"><label>Confidence after</label><div style="display:flex;gap:5px;margin-top:4px" id="fbf-ca-stars"></div></div></div><div class="form-row"><label>Outcomes</label><div class="chk-group"><div class="chk-pill"><label><input type="checkbox" id="fbf-learned"/> Learned something new</label></div><div class="chk-pill"><label><input type="checkbox" id="fbf-connected"/> Felt more connected</label></div><div class="chk-pill"><label><input type="checkbox" id="fbf-friend"/> Made a new friend</label></div></div></div><div class="form-row"><label>Quote</label><textarea id="fbf-quote" style="min-height:55px"></textarea></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-fb')">Cancel</button><button class="btn btn-p" id="fb-save-btn" onclick="saveFb()">Save</button></div></div></div>
+
+<div class="modal-overlay" id="modal-con"><div class="modal">
+  <h2 id="con-title">Add contract</h2>
+  <div style="display:flex;gap:6px;margin-bottom:12px;padding:8px 12px;background:rgba(31,111,109,.05);border:1px solid var(--border);border-radius:8px;align-items:center">
+    <span style="font-size:11px;color:var(--txt3);font-weight:600">Linked funder:</span>
+    <span id="con-linked-funder-label" style="font-size:12px;font-weight:600;color:var(--em)">None selected</span>
+  </div>
+  <div class="alert alert-warn" id="con-no-funder-warn" style="display:none">⚠ No funders yet. <button class="btn btn-ghost btn-sm" style="margin-left:8px" onclick="closeModal('modal-con');go('funders');openAddFunder()">+ Add a funder first</button></div>
+  <div class="form-row"><label>Contract name *</label><input id="con-name"/></div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Link to funder *</label><select id="con-funder-id" onchange="onConFunderChange()"><option value="">— Select funder —</option></select></div>
+    <div class="form-row"><label>Report type</label><select id="con-report-type"><option value="moj">MoJ — Employment &amp; desistance</option><option value="gla">GLA — Skills &amp; employment</option><option value="cbf">CBF — Wellbeing &amp; community</option><option value="ukspf">UKSPF / Local authority</option><option value="lottery">National Lottery</option><option value="trust">Grant-making trust</option><option value="dwp">DWP / Jobcentre Plus</option><option value="impact">Annual / Board report</option><option value="other">Other / Generic</option></select></div>
+  </div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Value (£)</label><input type="number" id="con-val"/></div>
+    <div class="form-row"><label>Status</label><select id="con-status"><option value="live">Live</option><option value="pipeline">Pipeline</option><option value="expired">Expired</option></select></div>
+  </div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Start date</label><input type="date" id="con-start"/></div>
+    <div class="form-row"><label>End date</label><input type="date" id="con-end"/></div>
+  </div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Target starts</label><input type="number" id="con-ts"/></div>
+    <div class="form-row"><label>Target outcomes</label><input type="number" id="con-to"/></div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-con')">Cancel</button><button class="btn btn-p" id="con-save-btn" onclick="saveCon()">Save</button></div>
+</div></div>
+
+<div class="modal-overlay" id="modal-evid"><div class="modal"><h2>Upload evidence</h2><div class="form-row"><label>Participant name</label><input id="evid-p"/></div><div class="form-grid-2"><div class="form-row"><label>Type</label><select id="evid-type"><option>Payslip</option><option>Contract</option><option>Certificate</option><option>ID document</option><option>Consent form</option></select></div><div class="form-row"><label>Linked outcome</label><select id="evid-out"><option>Employment</option><option>Training</option><option>Qualification</option><option>Volunteering</option></select></div></div><div class="form-grid-2"><div class="form-row"><label>Staff member</label><input id="evid-staff"/></div><div class="form-row"><label>Date</label><input type="date" id="evid-date"/></div></div><div class="form-row"><label>Attach file (payslip, contract…)</label><input type="file" id="evid-file" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx"/><div style="font-size:11px;color:var(--txt3);margin-top:4px">PDF, image or Word · up to 5MB · optional</div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-evid')">Cancel</button><button class="btn btn-p" id="evid-save-btn" onclick="saveEvid()">Save</button></div></div></div>
+
+<div class="modal-overlay" id="modal-eq"><div class="modal" style="max-width:560px">
+  <h2 id="eq-modal-title">Equality monitoring</h2>
+  <div style="background:rgba(31,111,109,.05);border:1px solid rgba(31,111,109,.2);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--txt2);margin-bottom:16px;line-height:1.6">This information is collected voluntarily for anonymised reporting purposes only.</div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Age group</label><select id="eq-age"><option value="">Prefer not to say</option><option>16–24</option><option>25–34</option><option>35–44</option><option>45–54</option><option>55–64</option><option>65+</option></select></div>
+    <div class="form-row"><label>Ethnicity</label><select id="eq-ethnicity"><option value="">Prefer not to say</option><option>White British</option><option>White Irish</option><option>White Other</option><option>Mixed/Multiple</option><option>Asian/Asian British</option><option>Black/Black British</option><option>Arab</option><option>Other</option></select></div>
+  </div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Gender</label><select id="eq-gender"><option value="">Prefer not to say</option><option>Man</option><option>Woman</option><option>Non-binary</option><option>Other</option></select></div>
+    <div class="form-row"><label>Disability</label><select id="eq-disability"><option value="">Prefer not to say</option><option value="none">No disability</option><option value="physical">Physical / mobility</option><option value="sensory">Sensory</option><option value="mental">Mental health</option><option value="learning">Learning disability</option><option value="neurodiverse">Neurodiverse</option></select></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeModal('modal-eq')">Cancel</button>
+    <button class="btn btn-p" id="eq-save-btn" onclick="saveEqualityData()">Save</button>
+  </div>
+</div></div>
+
+<!-- ─── SCRIPTS — load order matters! ─────────────────────── -->
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+
+<!-- Foundation: constants and helpers -->
+<script src="js/config.js?v=19"></script>
+<script src="js/utils.js?v=19"></script>
+
+<!-- Data + auth -->
+<script src="js/db.js?v=45"></script>
+<script src="js/auth.js?v=20"></script>
+
+<!-- AI + branding -->
+<script src="js/agents.js?v=36"></script>
+<script src="js/branding.js?v=19"></script>
+
+<!-- UI logic -->
+<script src="js/render.js?v=59"></script>
+<script src="js/settings.js?v=7"></script>
+<script src="js/circular.js?v=8"></script>
+<script src="js/modals.js?v=43"></script>
+<script src="js/demo.js?v=22"></script>
+<script src="js/router.js?v=22"></script>
+
+<!-- Module visibility — shows/hides sidebar items per currentOrg.modules -->
+<script>
+'use strict';
+function applyModules(mods) {
+  mods = mods || {};
+  document.querySelectorAll('#sidebar .nav-btn[data-module]').forEach(function (btn) {
+    var key = btn.getAttribute('data-module');
+    var on = mods[key] !== false; // default ON if not explicitly set to false
+    btn.style.display = on ? '' : 'none';
+  });
+}
+</script>
+
+<!-- Entry point -->
+<script src="js/boot.js?v=20"></script>
+
+<!-- Auto-fill paperwork (Start & End Form + job evidence) -->
+<script>
 'use strict';
 
-// ─────────────────────────────────────────────────────────────
-// SHARED HELPERS
-// ─────────────────────────────────────────────────────────────
+(function () {
 
-function renderEmpty(msg) {
-  return '<div style="color:var(--txt3);font-size:13px;padding:20px;text-align:center">' + escapeHTML(msg) + '</div>';
-}
+  /* ---------- tiny ZIP writer (store / no compression) ------------------ */
+  function crc32(bytes) {
+    let table = crc32._t;
+    if (!table) {
+      table = crc32._t = [];
+      for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        table[n] = c >>> 0;
+      }
+    }
+    let crc = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) crc = (crc >>> 8) ^ table[(crc ^ bytes[i]) & 0xFF];
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  }
+  function strBytes(s) { return new TextEncoder().encode(s); }
+  function u16(n) { return [n & 0xFF, (n >>> 8) & 0xFF]; }
+  function u32(n) { return [n & 0xFF, (n >>> 8) & 0xFF, (n >>> 16) & 0xFF, (n >>> 24) & 0xFF]; }
 
-function statCard(label, value, sub) {
-  return '<div class="stat-card">' +
-    '<div class="stat-lbl">' + escapeHTML(label) + '</div>' +
-    '<div class="stat-val">' + escapeHTML(String(value)) + '</div>' +
-    (sub ? '<div style="font-size:11px;color:var(--txt3);margin-top:4px">' + escapeHTML(sub) + '</div>' : '') +
-  '</div>';
-}
-
-function riskBadge(risk) {
-  const map = { High: 'var(--red)', Medium: 'var(--amber)', Low: 'var(--em)' };
-  const c = map[risk] || 'var(--txt3)';
-  return '<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:' + c +
-    ';color:#fff;font-size:11px;font-weight:600">' + escapeHTML(risk || '—') + '</span>';
-}
-
-function stageBadge(stage) {
-  return '<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:var(--bg);' +
-    'border:1px solid var(--border);font-size:11px;font-weight:600;color:var(--txt2)">' +
-    escapeHTML(stage || '—') + '</span>';
-}
-
-// ─────────────────────────────────────────────────────────────
-// DASHBOARD
-// ─────────────────────────────────────────────────────────────
-
-function renderDashboard() {
-  const P = DB.participants || [];
-  const E = DB.events || [];
-  const FB = DB.feedback || [];
-  const V = DB.volunteers || [];
-
-  // Greeting + time
-  const hr = new Date().getHours();
-  const greeting = hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
-  if ($('mb-greeting')) $('mb-greeting').textContent = greeting + ' 👋';
-  if ($('mb-time')) {
-    $('mb-time').textContent = new Date().toLocaleDateString('en-GB', {
-      weekday: 'long', day: '2-digit', month: 'long', year: 'numeric'
+  function makeZip(files) {
+    const parts = [], central = [];
+    let offset = 0;
+    files.forEach(f => {
+      const nameB = strBytes(f.name);
+      const data = f.data;
+      const crc = crc32(data);
+      const local = new Uint8Array(
+        [].concat(u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0),
+          u32(crc), u32(data.length), u32(data.length), u16(nameB.length), u16(0)));
+      parts.push(local, nameB, data);
+      const cen = new Uint8Array(
+        [].concat(u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0),
+          u32(crc), u32(data.length), u32(data.length),
+          u16(nameB.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset)));
+      central.push(cen, nameB);
+      offset += local.length + nameB.length + data.length;
     });
+    let centralSize = 0;
+    central.forEach(c => centralSize += c.length);
+    const end = new Uint8Array(
+      [].concat(u32(0x06054b50), u16(0), u16(0), u16(files.length), u16(files.length),
+        u32(centralSize), u32(offset), u16(0)));
+    const all = parts.concat(central, [end]);
+    let total = 0; all.forEach(a => total += a.length);
+    const out = new Uint8Array(total);
+    let p = 0; all.forEach(a => { out.set(a, p); p += a.length; });
+    return new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
   }
 
-  // Sub-header
-  if ($('dash-sub')) {
-    $('dash-sub').textContent = (currentOrg && currentOrg.name) ? currentOrg.name + ' overview' : 'Overview';
+  /* ---------- OOXML helpers --------------------------------------------- */
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+  }
+  function valueRuns(v) {
+    const lines = String(v == null ? '' : v).split(/\r?\n/);
+    return lines.map((ln, i) =>
+      (i ? '<w:br/>' : '') + '<w:t xml:space="preserve">' + esc(ln) + '</w:t>'
+    ).join('');
+  }
+  function cell(text, w, opts) {
+    opts = opts || {};
+    const shd = opts.fill ? '<w:shd w:val="clear" w:color="auto" w:fill="' + opts.fill + '"/>' : '';
+    const bold = opts.bold ? '<w:b/>' : '';
+    return '<w:tc><w:tcPr><w:tcW w:w="' + w + '" w:type="dxa"/>' + shd +
+      '<w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:spacing w:before="20" w:after="20"/>' +
+      '<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>' + bold + '<w:sz w:val="20"/></w:rPr></w:pPr>' +
+      '<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>' + bold + '<w:sz w:val="20"/></w:rPr>' +
+      valueRuns(text) + '</w:r></w:p></w:tc>';
+  }
+  function tblBorder() {
+    return '<w:tblBorders>' +
+      ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']
+        .map(b => '<w:' + b + ' w:val="single" w:sz="4" w:space="0" w:color="BFBFBF"/>').join('') +
+      '</w:tblBorders>';
+  }
+  function rowsTable(rows) {
+    const trs = rows.map(r =>
+      '<w:tr>' + cell(r[0], 3200, { bold: true, fill: 'F3EEE4' }) + cell(r[1], 5800) + '</w:tr>'
+    ).join('');
+    return '<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/>' + tblBorder() +
+      '<w:tblLayout w:type="fixed"/></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="3200"/><w:gridCol w:w="5800"/></w:tblGrid>' + trs + '</w:tbl>';
+  }
+  function fullBox(text) {
+    return '<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/>' + tblBorder() +
+      '<w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="9000"/></w:tblGrid>' +
+      '<w:tr>' + cell(text && String(text).trim() ? text : '\n\n', 9000) + '</w:tr></w:tbl>';
+  }
+  function heading(text) {
+    return '<w:p><w:pPr><w:spacing w:before="220" w:after="80"/><w:shd w:val="clear" w:color="auto" w:fill="E7E6E6"/>' +
+      '<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:b/><w:sz w:val="24"/></w:rPr></w:pPr>' +
+      '<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:b/><w:sz w:val="24"/></w:rPr>' +
+      '<w:t>' + esc(text) + '</w:t></w:r></w:p>';
+  }
+  function para(text, opts) {
+    opts = opts || {};
+    const jc = opts.center ? '<w:jc w:val="center"/>' : '';
+    const bold = opts.bold ? '<w:b/>' : '';
+    const sz = opts.sz || 20;
+    const color = opts.color ? '<w:color w:val="' + opts.color + '"/>' : '';
+    return '<w:p><w:pPr>' + jc + '<w:spacing w:after="' + (opts.after != null ? opts.after : 60) + '"/>' +
+      '<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>' + bold + color + '<w:sz w:val="' + sz + '"/></w:rPr></w:pPr>' +
+      '<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>' + bold + color + '<w:sz w:val="' + sz + '"/></w:rPr>' +
+      valueRuns(text) + '</w:r></w:p>';
+  }
+  function docWrap(body) {
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+      body +
+      '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>' +
+      '<w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/>' +
+      '</w:sectPr></w:body></w:document>';
   }
 
-  // Stats grid — only for the areas this organisation uses (Settings → What you do)
-  const on = k => typeof orgUses === 'function' ? orgUses(k) : true;
-  const peopleOn = on('participants');
-  const active = P.filter(p => p.stage !== 'Closed').length;
-  const atRisk = P.filter(p => p.risk === 'High' || days(p.last_contact) > 21).length;
-  const outcomesAchieved = P.filter(p => p.outcomes && p.outcomes.length > 0).length;
-  const sg = $('dash-stats');
-  if (sg) {
-    const cards = [];
-    if (peopleOn) cards.push(statCard('Active participants', active, P.length + ' total'), statCard('At-risk', atRisk, 'High risk or 21+ days no contact'), statCard('Outcomes achieved', outcomesAchieved, pct(outcomesAchieved, P.length || 1) + '%'));
-    if (on('events')) cards.push(statCard('Events delivered', E.length, FB.length + ' feedback responses'));
-    if (on('volunteers')) {
-      const from30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
-      const h30 = (DB.volunteer_hours || []).filter(h => (h.date || '') >= from30).reduce((a, h) => a + num(h.hours), 0);
-      cards.push(statCard('Volunteer hours', Math.round(h30 * 10) / 10, 'last 30 days · ' + V.filter(v => v.status !== 'Inactive').length + ' volunteers'));
+  /* ---------- form content ---------------------------------------------- */
+  function buildStartFormXml(d) {
+    const detail = [
+      ['Title', d.title], ['Forename', d.forename], ['Surname', d.surname],
+      ['NI number', d.ni], ['Date of birth', d.dob], ['Telephone', d.phone],
+      ['Email address', d.email], ['Address', d.address], ['Post code', d.postcode],
+      ['Participant ID', d.pid], ['Start date', d.startDate]
+    ];
+    const referral = [
+      ['Referral source', d.referralSource], ['Adviser', d.advisor],
+      ['Journey stage', d.stage], ['Risk level', d.risk]
+    ];
+    const assessment = [
+      ['Barriers identified', d.barriers], ['Safeguarding flag', d.safeguarding],
+      ['Confidence (1–10)', d.confidence], ['Work readiness (1–10)', d.work],
+      ['Wellbeing (1–10)', d.wellbeing], ['Skills (1–10)', d.skills]
+    ];
+    const chars = [
+      ['Gender', d.gender],
+      ['Right to live and work in the UK', d.rightToWork],
+      ['Basic skills — Maths & English', d.basicSkills],
+      ['Labour market status', d.labourStatus],
+      ['Needs interpersonal-skills support', d.interpersonal]
+    ];
+    const provider = [['Delivery organisation', d.provider], ['Programme / project', d.project]];
+
+    return docWrap(
+      para('Participant Start Form', { center: true, bold: true, sz: 32, after: 40 }) +
+      para('Initial registration & assessment — prepared in Vorlana on ' + d.generatedOn,
+        { center: true, sz: 18, color: '808080', after: 160 }) +
+      heading('Part 1: Participant Details') + rowsTable(detail) +
+      heading('Part 2: Referral & Background') + rowsTable(referral) +
+      para('Referral background', { bold: true, sz: 20, after: 40 }) + fullBox(d.background) +
+      heading('Part 3: Initial Assessment') +
+      para('Adviser notes / initial assessment', { bold: true, sz: 20, after: 40 }) + fullBox(d.caseNote) +
+      rowsTable(assessment) +
+      heading('Part 4: Participant Characteristics') + rowsTable(chars) +
+      heading('Delivery') + rowsTable(provider) +
+      para('', { after: 120 }) +
+      para('Participant signature: ______________________________    Date: ____________', { sz: 20, after: 120 }) +
+      para('Adviser signature: __________________________________    Date: ____________', { sz: 20 })
+    );
+  }
+
+  function buildEndFormXml(d) {
+    const detail = [
+      ['Title', d.title], ['Forename', d.forename], ['Surname', d.surname],
+      ['NI number', d.ni], ['Date of birth', d.dob], ['Telephone', d.phone],
+      ['Email address', d.email], ['Participant ID', d.pid]
+    ];
+    const dates = [['Programme start date', d.startDate], ['Exit / leaving date', d.exitDate]];
+    const outcome = [
+      ['Outcome type', d.outcomeType], ['Job title', d.jobTitle], ['Employer', d.employer],
+      ['Job start date', d.jobStart], ['Hours per week', d.hours], ['Pay', d.pay]
+    ];
+    const provider = [['Delivery organisation', d.provider], ['Programme / project', d.project]];
+
+    return docWrap(
+      para('Participant End / Exit Form', { center: true, bold: true, sz: 32, after: 40 }) +
+      para('Programme exit & outcome — prepared in Vorlana on ' + d.generatedOn,
+        { center: true, sz: 18, color: '808080', after: 160 }) +
+      heading('Part 1: Participant Details') + rowsTable(detail) +
+      heading('Part 2: Programme Dates') + rowsTable(dates) +
+      heading('Part 3: Outcome') + rowsTable(outcome) +
+      para('Reason for leaving', { bold: true, sz: 20, after: 40 }) + fullBox(d.leaveReason) +
+      para('Adviser notes', { bold: true, sz: 20, after: 40 }) + fullBox(d.caseNote) +
+      heading('Delivery') + rowsTable(provider) +
+      para('', { after: 120 }) +
+      para('Participant signature: ______________________________    Date: ____________', { sz: 20, after: 120 }) +
+      para('Adviser signature: __________________________________    Date: ____________', { sz: 20 })
+    );
+  }
+
+  function packDocx(documentXml) {
+    const contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '</Types>';
+    const rels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+      '</Relationships>';
+    const docRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
+    return makeZip([
+      { name: '[Content_Types].xml', data: strBytes(contentTypes) },
+      { name: '_rels/.rels', data: strBytes(rels) },
+      { name: 'word/_rels/document.xml.rels', data: strBytes(docRels) },
+      { name: 'word/document.xml', data: strBytes(documentXml) }
+    ]);
+  }
+
+  /* ---------- data helpers ---------------------------------------------- */
+  function fmtDate(v) {
+    if (!v) return '';
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v));
+    return m ? (m[3] + '/' + m[2] + '/' + m[1]) : String(v);
+  }
+  function pick(o) {
+    for (let i = 1; i < arguments.length; i++) {
+      let v = o && o[arguments[i]];
+      if (Array.isArray(v)) v = v.join(', ');
+      if (v != null && String(v).trim() !== '') return v;
     }
-    if (on('circular')) cards.push('<div id="dash-cx-stats" style="display:contents"></div>');
-    sg.innerHTML = cards.slice(0, 6).join('');
-    if (on('circular') && typeof cxReportLoad === 'function') cxReportLoad().then(() => {
-      const el = $('dash-cx-stats'); if (!el || typeof CXR === 'undefined' || !CXR.ok) return;
-      const r = cxReportStats({}); if (!r || !r.entries) { el.innerHTML = statCard('Diverted from waste', '0 kg', 'nothing logged yet'); return; }
-      el.innerHTML = statCard('Diverted from waste', r.kg + ' kg', r.reused + ' items reused or repaired') +
-        (r.foodKg ? statCard('Food shared', r.foodKg + ' kg', '≈ ' + r.meals + ' meals') : statCard('CO₂e avoided', (Math.round(r.co2 / 100) / 10) + ' t', 'estimate'));
+    return '';
+  }
+  function elVal(id) { const e = document.getElementById(id); return e ? (e.value || '') : ''; }
+  function readChecked(containerId) {
+    const c = document.getElementById(containerId);
+    if (!c) return '';
+    const out = [];
+    c.querySelectorAll('input[type=checkbox]').forEach(cb => {
+      if (cb.checked) {
+        const lbl = cb.closest('label');
+        out.push(((lbl ? lbl.textContent : (cb.value || '')) || '').trim());
+      }
     });
+    return out.filter(Boolean).join(', ');
   }
-  // Without a caseload, the two lists show what needs doing across the other areas
-  const t1 = $('dash-risk') && $('dash-risk').previousElementSibling, t2 = $('dash-activity') && $('dash-activity').previousElementSibling;
-  if (t1) t1.textContent = peopleOn ? 'At-risk — chase today' : 'Needs attention';
-  if (t2) t2.textContent = 'Recent activity';
-  if (!peopleOn) { _dashAttention(); return _dashRest(FB); }
+  function ls(key, def) { try { return localStorage.getItem(key) || def || ''; } catch (e) { return def || ''; } }
+  function lsSet(key, val) { try { localStorage.setItem(key, val); } catch (e) {} }
 
-  // At-risk list
-  const riskEl = $('dash-risk');
-  if (riskEl) {
-    const at = P.filter(p => p.risk === 'High' || days(p.last_contact) > 21).slice(0, 6);
-    if (!at.length) {
-      riskEl.innerHTML = renderEmpty('No at-risk cases right now.');
-    } else {
-      riskEl.innerHTML = at.map(p =>
-        '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">' +
-          '<div>' +
-            '<div style="font-size:13px;font-weight:600;color:var(--txt)">' + escapeHTML(p.first_name + ' ' + p.last_name) + '</div>' +
-            '<div style="font-size:11px;color:var(--txt3)">' + escapeHTML(p.advisor || 'Unassigned') +
-              ' · last contact ' + (p.last_contact ? days(p.last_contact) + 'd ago' : 'never') + '</div>' +
-          '</div>' +
-          riskBadge(p.risk) +
-        '</div>'
-      ).join('');
+  function gather(p) {
+    p = p || {};
+    return {
+      title: pick(p, 'title') || elVal('mp-ptitle'),
+      forename: pick(p, 'forename', 'first_name', 'firstName', 'fn') || elVal('mp-fn'),
+      surname: pick(p, 'surname', 'last_name', 'lastName', 'ln') || elVal('mp-ln'),
+      ni: pick(p, 'ni_number', 'ni', 'national_insurance', 'nino') || elVal('mp-ni'),
+      dob: fmtDate(pick(p, 'dob', 'date_of_birth', 'dateOfBirth') || elVal('mp-dob')),
+      phone: pick(p, 'phone', 'telephone', 'tel', 'mobile') || elVal('mp-phone'),
+      email: pick(p, 'email', 'email_address') || elVal('mp-email'),
+      address: pick(p, 'address', 'address_line', 'street') || elVal('mp-address'),
+      postcode: pick(p, 'postcode', 'post_code', 'zip') || elVal('mp-postcode'),
+      pid: pick(p, 'participant_id', 'pid', 'ref', 'reference') || elVal('mp-pid'),
+      startDate: fmtDate(pick(p, 'start_date', 'startDate', 'start') || elVal('mp-start')) || fmtDate(new Date().toISOString()),
+      referralSource: pick(p, 'referral_source', 'referralSource', 'source') || elVal('mp-rs'),
+      advisor: pick(p, 'advisor', 'adviser', 'key_worker') || elVal('mp-adv'),
+      stage: pick(p, 'stage', 'journey_stage') || elVal('mp-st'),
+      risk: pick(p, 'risk', 'risk_level') || elVal('mp-risk'),
+      background: pick(p, 'referral_background', 'background', 'intake', 'intake_text', 'referral_notes') || elVal('mp-intake-text'),
+      caseNote: pick(p, 'case_note', 'case_notes', 'notes', 'note', 'assessment') || elVal('mp-note'),
+      barriers: pick(p, 'barriers', 'barrier_list') || readChecked('barrier-checks'),
+      safeguarding: pick(p, 'safeguarding', 'safeguarding_flag', 'safe') || elVal('mp-safe'),
+      confidence: pick(p, 'confidence', 'confidence_score') || elVal('mp-conf'),
+      work: pick(p, 'work_readiness', 'work') || elVal('mp-work'),
+      wellbeing: pick(p, 'wellbeing') || elVal('mp-well'),
+      skills: pick(p, 'skills', 'skills_score') || elVal('mp-skillsc'),
+      gender: pick(p, 'gender') || elVal('mp-gender'),
+      rightToWork: pick(p, 'right_to_work', 'rightToWork') || elVal('mp-rtw'),
+      basicSkills: pick(p, 'basic_skills', 'basicSkills') || elVal('mp-bskills'),
+      labourStatus: pick(p, 'labour_status', 'labourStatus', 'employment_status') || elVal('mp-labour'),
+      interpersonal: pick(p, 'interpersonal_support', 'interpersonal') || elVal('mp-inter'),
+      provider: elVal('mp-provider') || ls('civara_provider', ''),
+      project: elVal('mp-project') || ls('civara_project', ''),
+      generatedOn: new Date().toLocaleDateString('en-GB')
+    };
+  }
+  function gatherEnd(p) {
+    p = p || {};
+    const d = gather(p);
+    d.outcomeType = pick(p, 'outcome_type', 'outcomeType') || elVal('mp-outcome-type');
+    d.jobTitle = pick(p, 'job_title', 'jobTitle') || elVal('mp-job-title');
+    d.employer = pick(p, 'employer', 'employer_name') || elVal('mp-employer');
+    d.jobStart = fmtDate(pick(p, 'job_start', 'jobStart') || elVal('mp-job-start'));
+    d.hours = pick(p, 'hours', 'hours_per_week') || elVal('mp-hours');
+    d.pay = pick(p, 'pay', 'salary', 'wage') || elVal('mp-pay');
+    d.exitDate = fmtDate(pick(p, 'exit_date', 'exitDate', 'leaving_date') || elVal('mp-exit-date'));
+    d.leaveReason = pick(p, 'leave_reason', 'leaving_reason', 'reason') || elVal('mp-leave-reason');
+    return d;
+  }
+
+  function download(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+
+  function prefillDelivery() {
+    const pv = document.getElementById('mp-provider'), pj = document.getElementById('mp-project');
+    if (pv && !pv.value) pv.value = ls('civara_provider', '');
+    if (pj && !pj.value) pj.value = ls('civara_project', '');
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', prefillDelivery);
+  else prefillDelivery();
+
+  /* ---------- public entry points --------------------------------------- */
+  window.civaraGenerateStartForm = function (p) {
+    if (p && p.preventDefault) p = null;
+    if (!window.TextEncoder) { alert('This browser is too old to generate the form.'); return; }
+    const d = gather(p);
+    if (!d.forename && !d.surname) { alert('Add the participant\u2019s name first, then click Start Form.'); return; }
+    lsSet('civara_provider', d.provider); lsSet('civara_project', d.project);
+    let blob;
+    try { blob = packDocx(buildStartFormXml(d)); }
+    catch (e) { alert('Sorry — could not build the form: ' + e.message); return; }
+    const name = ('Start Form - ' + (d.forename || '') + ' ' + (d.surname || '')).trim().replace(/\s+/g, ' ') || 'Start Form';
+    download(blob, name + '.docx');
+  };
+
+  window.civaraGenerateEndForm = function (p) {
+    if (p && p.preventDefault) p = null;
+    if (!window.TextEncoder) { alert('This browser is too old to generate the form.'); return; }
+    const d = gatherEnd(p);
+    if (!d.forename && !d.surname) { alert('Add the participant\u2019s name first, then click End Form.'); return; }
+    lsSet('civara_provider', d.provider); lsSet('civara_project', d.project);
+    let blob;
+    try { blob = packDocx(buildEndFormXml(d)); }
+    catch (e) { alert('Sorry — could not build the form: ' + e.message); return; }
+    const name = ('End Form - ' + (d.forename || '') + ' ' + (d.surname || '')).trim().replace(/\s+/g, ' ') || 'End Form';
+    download(blob, name + '.docx');
+  };
+
+  window.civaraAddJobEvidence = function () {
+    const name = (elVal('mp-fn') + ' ' + elVal('mp-ln')).trim();
+    try { if (typeof openAddEvid === 'function') openAddEvid(); } catch (e) {}
+    setTimeout(function () {
+      const p = document.getElementById('evid-p'); if (p && name) p.value = name;
+      const t = document.getElementById('evid-type'); if (t) t.value = 'Payslip';
+      const o = document.getElementById('evid-out'); if (o) o.value = 'Employment';
+      const s = document.getElementById('evid-staff'); if (s && !s.value) s.value = elVal('mp-adv');
+      const dt = document.getElementById('evid-date'); if (dt && !dt.value) dt.value = new Date().toISOString().slice(0, 10);
+    }, 0);
+  };
+
+})();
+</script>
+
+<!-- Populate the EOI organisation-profile field once the app has booted -->
+<script>
+(function(){
+  function tryPop(n){
+    if(typeof populateOrgProfileField==='function'){ try{ populateOrgProfileField(); }catch(e){} }
+    if(n>0) setTimeout(function(){ tryPop(n-1); }, 1500);
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', function(){ tryPop(4); });
+  else tryPop(4);
+})();
+</script>
+
+<!-- Extensions (run after boot, patch existing functions) -->
+<script src="js/extensions/demographics.js?v=42"></script>
+<script src="js/extensions/csv-import.js?v=15"></script>
+<script src="js/extensions/reporting-periods.js?v=19"></script>
+<script src="js/extensions/opportunities.js?v=15"></script>
+<script src="js/extensions/partner-portal.js?v=15"></script>
+<script src="js/extensions/volunteers-plus.js?v=37"></script>
+<script src="js/extensions/event-qr.js?v=20"></script>
+<script src="js/extensions/delivery-report.js?v=44"></script>
+<script src="js/extensions/event-contracts.js?v=19"></script>
+<script src="js/extensions/historic-import.js?v=46"></script>
+<script src="js/extensions/feedback-funders.js?v=17"></script>
+
+<!-- Participant handlers + paperwork persistence -->
+<script>
+(function () {
+  if (typeof DB === 'undefined') return;
+
+  function byId(list, id){ list=list||[]; for(var i=0;i<list.length;i++) if(String(list[i].id)===String(id)) return list[i]; return null; }
+  function gv(id){ var el=document.getElementById(id); return el ? (el.value||'') : ''; }
+  function sv(id, v){ var el=document.getElementById(id); if(el) el.value=(v==null?'':v); }
+
+  if (typeof MAPPERS !== 'undefined' && MAPPERS.participants && !MAPPERS._pwPatched) {
+    var _origPMap = MAPPERS.participants;
+    MAPPERS.participants = function(r){ var o=_origPMap(r); o.paperwork = r.paperwork || {}; return o; };
+    MAPPERS._pwPatched = true;
+    if (typeof refreshTable === 'function' && typeof sb !== 'undefined' && sb && typeof orgId !== 'undefined' && orgId) {
+      try { refreshTable('participants').then(function(){ if (typeof renderParticipants === 'function') renderParticipants(); }); } catch (e) {}
     }
   }
 
-  // Recent activity
-  const actEl = $('dash-activity');
-  if (actEl) {
-    const recent = P.filter(p => p.last_contact)
-      .sort((a, b) => (b.last_contact || '').localeCompare(a.last_contact || ''))
-      .slice(0, 6);
-    if (!recent.length) {
-      actEl.innerHTML = renderEmpty('No recent activity yet.');
-    } else {
-      actEl.innerHTML = recent.map(p =>
-        '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">' +
-          '<div>' +
-            '<div style="font-size:13px;font-weight:600;color:var(--txt)">' + escapeHTML(p.first_name + ' ' + p.last_name) + '</div>' +
-            '<div style="font-size:11px;color:var(--txt3)">' + escapeHTML(p.stage || '—') + '</div>' +
-          '</div>' +
-          '<div style="font-size:11px;color:var(--txt3)">' + escapeHTML(fmtD(p.last_contact)) + '</div>' +
-        '</div>'
-      ).join('');
+  var PW=['mp-ptitle','mp-ni','mp-dob','mp-address','mp-postcode','mp-pid','mp-start','mp-gender','mp-rtw','mp-bskills','mp-labour','mp-inter','mp-outcome-type','mp-job-title','mp-employer','mp-job-start','mp-hours','mp-pay','mp-exit-date','mp-leave-reason','mp-intake-text','mp-note'];
+  function clearPaperwork(){ PW.forEach(function(f){ sv(f,''); }); }
+
+  function readPaperwork(){
+    return {
+      title: gv('mp-ptitle'), ni: gv('mp-ni'), dob: gv('mp-dob'),
+      address: gv('mp-address'), postcode: gv('mp-postcode'), pid: gv('mp-pid'),
+      start_date: gv('mp-start'), gender: gv('mp-gender'), right_to_work: gv('mp-rtw'),
+      basic_skills: gv('mp-bskills'), labour_status: gv('mp-labour'), interpersonal: gv('mp-inter'),
+      outcome_type: gv('mp-outcome-type'), job_title: gv('mp-job-title'), employer: gv('mp-employer'),
+      job_start: gv('mp-job-start'), hours: gv('mp-hours'), pay: gv('mp-pay'),
+      exit_date: gv('mp-exit-date'), leave_reason: gv('mp-leave-reason'),
+      intake: gv('mp-intake-text'), case_note: gv('mp-note'),
+      provider: gv('mp-provider'), project: gv('mp-project')
+    };
+  }
+  function fillPaperwork(item){
+    var pw=(item&&item.paperwork)||{};
+    sv('mp-ptitle',pw.title); sv('mp-ni',pw.ni); sv('mp-dob',pw.dob);
+    sv('mp-address',pw.address); sv('mp-postcode',pw.postcode); sv('mp-pid',pw.pid);
+    sv('mp-start',pw.start_date); sv('mp-gender',pw.gender); sv('mp-rtw',pw.right_to_work);
+    sv('mp-bskills',pw.basic_skills); sv('mp-labour',pw.labour_status); sv('mp-inter',pw.interpersonal);
+    sv('mp-outcome-type',pw.outcome_type); sv('mp-job-title',pw.job_title); sv('mp-employer',pw.employer);
+    sv('mp-job-start',pw.job_start); sv('mp-hours',pw.hours); sv('mp-pay',pw.pay);
+    sv('mp-exit-date',pw.exit_date); sv('mp-leave-reason',pw.leave_reason);
+    sv('mp-intake-text',pw.intake); sv('mp-note',pw.case_note);
+    if(pw.provider) sv('mp-provider',pw.provider);
+    if(pw.project) sv('mp-project',pw.project);
+  }
+
+  function wrap(name, listName, after){
+    var orig=window[name]; if(typeof orig!=='function') return;
+    window[name]=function(id){
+      var item=byId(DB[listName], id); if(!item) return;
+      var r=orig.call(this, item.id);
+      if(after){ try{ after(item); }catch(e){} }
+      return r;
+    };
+  }
+  wrap('openEditP','participants', function(item){
+    fillPaperwork(item);
+    if (typeof sb !== 'undefined' && sb) {
+      try {
+        sb.from('participants').select('paperwork').eq('id', item.id).single().then(function(res){
+          if (res && res.data) fillPaperwork({ paperwork: res.data.paperwork });
+        }).catch(function(){});
+      } catch (e) {}
     }
+  });
+  wrap('openNotes','participants');
+  wrap('addNote','participants');
+  wrap('deleteP','participants');
+  wrap('openEqualityModal','participants');
+  wrap('convertToParticipant','partner_referrals');
+
+  var _origAddP=window.openAddP;
+  if(typeof _origAddP==='function'){
+    window.openAddP=function(){ var r=_origAddP.apply(this, arguments); clearPaperwork(); return r; };
   }
 
-  _dashRest(FB);
-}
-
-// Dashboard lists for organisations without a caseload: what needs doing,
-// and what happened lately, across events and circular activity.
-async function _dashAttention() {
-  const riskEl = $('dash-risk'), actEl = $('dash-activity');
-  if (!riskEl || !actEl) return;
-  const on = k => typeof orgUses === 'function' ? orgUses(k) : true;
-  const today = new Date().toISOString().slice(0, 10);
-  const from30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
-  const todo = [], recent = [];
-  const row = (title, sub, act) => '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)' + (act ? ';cursor:pointer" onclick="' + act : '') + '">' +
-    '<div style="min-width:0"><div style="font-size:13px;font-weight:600;color:var(--txt)">' + escapeHTML(title) + '</div><div style="font-size:11px;color:var(--txt3)">' + escapeHTML(sub) + '</div></div></div>';
-  if (on('events')) {
-    const fbBy = {}; (DB.feedback || []).forEach(f => { fbBy[String(f.eventId || f.event_id)] = 1; });
-    (DB.events || []).filter(e => e.date && e.date >= from30 && e.date <= today && !fbBy[String(e.id)])
-      .forEach(e => todo.push(row(e.name, 'No feedback collected yet · ' + fmtD(e.date), "go('events')")));
-    (DB.events || []).filter(e => e.date && e.date <= today).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4)
-      .forEach(e => recent.push([e.date, row(e.name, 'Event · ' + num(e.attendees) + ' attended · ' + fmtD(e.date), "go('events')")]));
-  }
-  if (on('circular') && typeof cxReportLoad === 'function') {
-    try {
-      await cxReportLoad();
-      if (typeof CXR !== 'undefined' && CXR.ok) {
-        const acts = {}; CXR.acts.forEach(a => { acts[a.id] = a; });
-        const items = CXR.items.filter(i => acts[i.activity_id]);
-        const open = items.filter(i => !i.outcome_type);
-        const stuck = open.filter(i => circMode(acts[i.activity_id]) === 'tracked' && cxDays(i.updated_at) > 14);
-        const toSort = open.filter(i => circMode(acts[i.activity_id]) === 'tally');
-        if (stuck.length) todo.push(row(stuck.length + ' item' + (stuck.length === 1 ? '' : 's') + ' waiting over 14 days', 'Circular · longest: ' + (stuck[0].passport_code || stuck[0].name), "go('circular')"));
-        if (toSort.length) todo.push(row(toSort.length + ' entr' + (toSort.length === 1 ? 'y' : 'ies') + ' with no destination', 'Circular · not counted in reports until sorted', "go('circular')"));
-        items.filter(i => i.outcome_type).sort((a, b) => String(b.outcome_at || b.created_at).localeCompare(String(a.outcome_at || a.created_at))).slice(0, 5).forEach(i => {
-          const a = acts[i.activity_id], o = cxOutcome(a, i.outcome);
-          const d = String(i.outcome_at || i.created_at || '').slice(0, 10);
-          recent.push([d, row((cxPerKg(cxType(a, i.item_type)) ? cxFmt(i.weight_kg, 1) + ' kg ' : '') + cxLbl(i.name), (a.icon || '') + ' ' + a.name + ' · ' + (o ? o.label : '') + ' · ' + fmtD(d), "go('circular')")]);
+  function saveParticipantRow(payload, editId){
+    function attempt(pl){ return editId ? sbUpdate('participants', pl, editId) : sbInsert('participants', pl); }
+    return attempt(payload).catch(function(e){
+      if(String((e&&e.message)||'').toLowerCase().indexOf('paperwork')!==-1){
+        var p2=Object.assign({}, payload); delete p2.paperwork;
+        return attempt(p2).then(function(r){
+          setTimeout(function(){
+            alert("Saved — but the paperwork fields (NI, DOB, address, job info…) could NOT be stored because the 'paperwork' column is missing from your participants table.\n\nFix it in Supabase → SQL Editor by running:\n\nALTER TABLE participants ADD COLUMN IF NOT EXISTS paperwork jsonb;\nNOTIFY pgrst, 'reload schema';\n\nThen save the participant again.");
+          }, 100);
+          return r;
         });
       }
-    } catch (e) { /* circular optional */ }
+      throw e;
+    });
   }
-  riskEl.innerHTML = todo.length ? todo.slice(0, 6).join('') : renderEmpty('Nothing needs chasing right now.');
-  recent.sort((a, b) => String(b[0]).localeCompare(String(a[0])));
-  actEl.innerHTML = recent.length ? recent.slice(0, 6).map(x => x[1]).join('') : renderEmpty('No recent activity yet.');
-}
 
-function _dashRest(FB) {
-  // Feedback highlights
-  const fbHi = $('dash-fb-hi');
-  if (fbHi) {
-    const quotes = measureQuotes(FB, 3);
-    if (!quotes.length) {
-      fbHi.innerHTML = renderEmpty('No feedback quotes yet.');
-    } else {
-      fbHi.innerHTML = quotes.map(q =>
-        '<div style="font-size:13px;color:var(--txt2);font-style:italic;padding:8px 0;border-bottom:1px solid var(--border);line-height:1.5">' +
-          '"' + escapeHTML(q.quote) + '"' +
-          (q.name ? '<div style="font-size:11px;color:var(--txt3);font-style:normal;margin-top:4px;font-weight:600">— ' + escapeHTML(q.name) + '</div>' : '') +
-        '</div>'
-      ).join('');
+  window.saveP = async function(){
+    var btn=document.getElementById('p-save-btn'); btn.textContent='Saving…'; btn.disabled=true;
+    try{
+      var note=gv('mp-note');
+      var contractIds=getSelectedContractIds();
+      var d={
+        first_name: gv('mp-fn')||'Unknown',
+        last_name:  gv('mp-ln')||'',
+        ref_source: gv('mp-rs'),
+        stage:      gv('mp-st'),
+        advisor:    gv('mp-adv'),
+        barriers:   getChkArr('barrier-checks'),
+        outcomes:   getChkArr('outcome-checks'),
+        safeguarding: gv('mp-safe')||null,
+        risk:       gv('mp-risk'),
+        last_contact: today(),
+        contract_ids: contractIds,
+        phone:      gv('mp-phone')||'',
+        email:      gv('mp-email')||'',
+        scores: {
+          confidence:     parseInt(gv('mp-conf'))||null,
+          work_readiness: parseInt(gv('mp-work'))||null,
+          wellbeing:      parseInt(gv('mp-well'))||null,
+          skills:         parseInt(gv('mp-skillsc'))||null
+        },
+        paperwork: readPaperwork()
+      };
+      if(_editPId){
+        var ex=byId(DB.participants, _editPId);
+        var notes=toArr(ex&&ex.notes).slice();
+        var prevNote=(ex&&ex.paperwork&&ex.paperwork.case_note)||'';
+        if(note && note!==prevNote) notes.push({t:note, d:today(), s:'Staff'});
+        await saveParticipantRow(Object.assign({}, d, {notes:notes}), _editPId);
+      } else {
+        var notes2=note?[{t:note, d:today(), s:'Staff'}]:[];
+        await saveParticipantRow(Object.assign({}, d, {notes:notes2}), null);
+        if(_editPartnerRefId){ try{ await sbUpdate('partner_referrals', {status:'Converted'}, _editPartnerRefId); }catch(e){} }
+      }
+      if(sb) await refreshTable('participants');
+      if(sb) await refreshTable('partner_referrals');
+      _editPartnerRefId=null;
+      closeModal('modal-p');
+      renderParticipants();
+    } catch(e){
+      alert('Save failed: '+e.message);
+    } finally {
+      btn.textContent='Save'; btn.disabled=false;
     }
+  };
+})();
+</script>
+
+<!-- Evidence file attachments -->
+<script>
+(function () {
+  if (typeof DB === 'undefined') return;
+  function gvE(id){ var el=document.getElementById(id); return el ? (el.value||'') : ''; }
+  function readAsDataURL(file){
+    return new Promise(function(res, rej){
+      var fr=new FileReader();
+      fr.onload=function(){ res(fr.result); };
+      fr.onerror=function(){ rej(new Error('Could not read the file')); };
+      fr.readAsDataURL(file);
+    });
+  }
+  function insertEvidenceRow(rec){
+    return sbInsert('evidence', rec).catch(function(e){
+      var msg=String((e&&e.message)||'').toLowerCase();
+      if(msg.indexOf('file_data')!==-1 || msg.indexOf('file_name')!==-1){
+        var r2=Object.assign({}, rec); delete r2.file_data; delete r2.file_name;
+        return sbInsert('evidence', r2);
+      }
+      throw e;
+    });
   }
 
-  // Confidence journey
-  const cj = $('dash-conf-j');
-  if (cj) {
-    if (!FB.length) {
-      cj.innerHTML = renderEmpty('Add feedback responses to see confidence journey.');
-    } else {
-      const avgCB = stdAvg(FB, 'cb');
-      const avgCA = stdAvg(FB, 'ca');
-      cj.innerHTML =
-        '<div style="display:flex;justify-content:space-around;align-items:center;padding:12px 0">' +
-          '<div style="text-align:center">' +
-            '<div style="font-size:32px;font-weight:800;color:var(--amber)">' + avgCB + '</div>' +
-            '<div style="font-size:11px;color:var(--txt3);font-weight:600">before</div>' +
-          '</div>' +
-          '<div style="font-size:24px;color:var(--txt3)">→</div>' +
-          '<div style="text-align:center">' +
-            '<div style="font-size:32px;font-weight:800;color:var(--em)">' + avgCA + '</div>' +
-            '<div style="font-size:11px;color:var(--txt3);font-weight:600">after</div>' +
-          '</div>' +
-        '</div>' +
-        '<div style="font-size:12px;color:var(--txt3);text-align:center;padding-top:8px">Across ' + FB.length + ' feedback responses</div>';
-    }
-  }
-}
+  window.saveEvid = async function(){
+    var btn=document.getElementById('evid-save-btn'); btn.textContent='Saving…'; btn.disabled=true;
+    try{
+      var rec={
+        participant_name: gvE('evid-p'),
+        type:            gvE('evid-type'),
+        linked_outcome:  gvE('evid-out'),
+        staff:           gvE('evid-staff'),
+        evidence_date:   gvE('evid-date'),
+        status:          'Pending'
+      };
+      var input=document.getElementById('evid-file');
+      var file=input && input.files && input.files[0];
+      if(file){
+        if(file.size > 5*1024*1024){ alert('That file is over 5MB. Please attach a smaller file.'); btn.textContent='Save'; btn.disabled=false; return; }
+        rec.file_data=await readAsDataURL(file);
+        rec.file_name=file.name;
+        rec.status='Received';
+      }
+      await insertEvidenceRow(rec);
+      await refreshTable('evidence');
+      closeModal('modal-evid');
+      renderEvidence();
+    } catch(e){ alert('Save failed: '+e.message); }
+    finally { btn.textContent='Save'; btn.disabled=false; }
+  };
 
-// ─────────────────────────────────────────────────────────────
-// RAG DASHBOARD
-// ─────────────────────────────────────────────────────────────
-
-function renderRAG() {
-  const el = $('rag-list'); if (!el) return;
-  const C = DB.contracts || [];
-  const P = DB.participants || [];
-
-  if (!C.length) {
-    el.innerHTML = '<div class="card">' + renderEmpty('No contracts yet. Add a contract to see RAG status.') + '</div>';
-    return;
+  var _origOpenAddEvid=window.openAddEvid;
+  if(typeof _origOpenAddEvid==='function'){
+    window.openAddEvid=function(){ var r=_origOpenAddEvid.apply(this, arguments); var fi=document.getElementById('evid-file'); if(fi) fi.value=''; return r; };
   }
 
-  el.innerHTML = C.map(c => {
-    const linked = P.filter(p => toArr(p.contract_ids).map(String).includes(String(c.id)));
-    const linkedOutcomes = linked.filter(p => p.outcomes && p.outcomes.length > 0).length;
-    const startsPct = c.target_starts ? Math.round((linked.length / c.target_starts) * 100) : 0;
-    const outcomesPct = c.target_outcomes ? Math.round((linkedOutcomes / c.target_outcomes) * 100) : 0;
-    const worst = Math.min(startsPct, outcomesPct);
-    const colour = worst >= 80 ? 'var(--em)' : worst >= 50 ? 'var(--amber)' : 'var(--red)';
-    const label = worst >= 80 ? 'GREEN' : worst >= 50 ? 'AMBER' : 'RED';
-
-    return '<div class="card" style="border-left:4px solid ' + colour + '">' +
-      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px">' +
-        '<div>' +
-          '<div style="font-size:14px;font-weight:700;color:var(--txt)">' + escapeHTML(c.name) + '</div>' +
-          '<div style="font-size:12px;color:var(--txt3)">' + escapeHTML(c.funder || '—') + '</div>' +
-        '</div>' +
-        '<div style="font-size:11px;font-weight:700;color:' + colour + '">' + label + '</div>' +
-      '</div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:10px">' +
-        '<div><div style="font-size:11px;color:var(--txt3);font-weight:600">Starts</div>' +
-          '<div style="font-size:18px;font-weight:700;color:var(--txt)">' + linked.length + ' / ' + (c.target_starts || 0) + '</div>' +
-          '<div style="font-size:11px;color:var(--txt3)">' + startsPct + '%</div></div>' +
-        '<div><div style="font-size:11px;color:var(--txt3);font-weight:600">Outcomes</div>' +
-          '<div style="font-size:18px;font-weight:700;color:var(--txt)">' + linkedOutcomes + ' / ' + (c.target_outcomes || 0) + '</div>' +
-          '<div style="font-size:11px;color:var(--txt3)">' + outcomesPct + '%</div></div>' +
-      '</div>' +
-      '<button class="btn btn-ai btn-sm" onclick="runRAGExplainer(\'' + escapeHTML(String(c.id)) + '\',\'' +
-        escapeHTML(c.name).replace(/'/g, '\\\'') + '\',\'' +
-        escapeHTML(c.funder || '').replace(/'/g, '\\\'') + '\',' +
-        startsPct + ',' + outcomesPct + ',' + linked.length + ')">' +
-        '✦ Explain this RAG</button>' +
-    '</div>';
-  }).join('');
-}
-
-// ─────────────────────────────────────────────────────────────
-// IMPACT WALL
-// ─────────────────────────────────────────────────────────────
-
-function renderImpact() {
-  if (!currentOrg) return;
-  try { cxImpactCard(); } catch (e) { console.error('[circular impact]', e); }
-
-  // Header — org name + UK financial year (Apr–Mar)
-  const now = new Date();
-  const year = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
-  const yy1 = String(year).slice(-2);
-  const yy2 = String(year + 1).slice(-2);
-  if ($('impact-hd')) {
-    $('impact-hd').textContent = (currentOrg.name || 'Your organisation').toUpperCase() + ' · 20' + yy1 + '–' + yy2;
-  }
-
-  const P = DB.participants || [];
-  const E = DB.events || [];
-  const V = DB.volunteers || [];
-  const FB = DB.feedback || [];
-
-  if ($('iw-p'))  $('iw-p').textContent  = P.length;
-  if ($('iw-ev')) $('iw-ev').textContent = E.length;
-  if ($('iw-v'))  $('iw-v').textContent  = V.filter(v => (v.status || 'Active') === 'Active').length;
-  if ($('iw-fb')) $('iw-fb').textContent = FB.length;
-
-  // Standard outcomes — read through the org's own questions where they map to them
-  if ($('imp-enjoyed'))   $('imp-enjoyed').textContent   = stdPctOrScore(FB, 'enjoyed');
-  if ($('imp-learned'))   $('imp-learned').textContent   = stdPct(FB, 'learned');
-  if ($('imp-connected')) $('imp-connected').textContent = stdPct(FB, 'connected');
-  if ($('imp-cb')) $('imp-cb').textContent = stdAvg(FB, 'cb');
-  if ($('imp-ca')) $('imp-ca').textContent = stdAvg(FB, 'ca');
-
-  // The org's own measures — one card each (created once, below the standard three)
-  let mg = $('imp-measures');
-  if (!mg && $('imp-enjoyed')) {
-    mg = document.createElement('div');
-    mg.id = 'imp-measures';
-    const std3 = $('imp-enjoyed').parentNode.parentNode;
-    std3.parentNode.insertBefore(mg, std3.nextSibling);
-  }
-  if (mg) {
-    const own = measureStats(FB).filter(st => !['enjoyed', 'learned', 'connected', 'cb', 'ca'].includes(st.m.maps_to || ''));
-    mg.innerHTML = own.length
-      ? '<div class="card"><div class="card-title">What participants told us</div>' +
-        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">' +
-        own.map(st => '<div class="stat-card"><div class="stat-lbl" title="' + escapeHTML(st.m.question) + '">' + escapeHTML(measureLabel(st.m)) + '</div><div class="stat-val">' + escapeHTML(st.value) + '</div><div style="font-size:11px;color:var(--txt3);margin-top:4px">' + escapeHTML(st.sub) + '</div></div>').join('') +
-        '</div></div>'
-      : '';
-  }
-
-  const quotesEl = $('imp-quotes');
-  if (quotesEl) {
-    const quotes = measureQuotes(FB, 6);
-    if (!quotes.length) {
-      quotesEl.innerHTML = renderEmpty('No participant quotes yet. Add feedback responses with quotes to populate this section.');
-    } else {
-      quotesEl.innerHTML = quotes.map(q =>
-        '<blockquote style="margin:0 0 14px 0;padding:12px 16px;border-left:3px solid var(--em);background:var(--bg);border-radius:6px;font-size:14px;color:var(--txt);line-height:1.6;font-style:italic">' +
-          '"' + escapeHTML(q.quote) + '"' +
-          (q.name ? '<div style="font-size:11px;color:var(--txt3);font-style:normal;margin-top:6px;font-weight:600">— ' + escapeHTML(q.name) + '</div>' : '') +
-        '</blockquote>'
-      ).join('');
-    }
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// PARTICIPANTS
-// ─────────────────────────────────────────────────────────────
-
-function renderParticipants() {
-  const tbody = $('p-table'); if (!tbody) return;
-  let P = (DB.participants || []).slice();
-
-  const search = ($('p-search') && $('p-search').value || '').toLowerCase();
-  const stage = $('p-stage') && $('p-stage').value;
-  const risk = $('p-risk') && $('p-risk').value;
-
-  if (search) P = P.filter(p => (p.first_name + ' ' + p.last_name).toLowerCase().includes(search));
-  if (stage) P = P.filter(p => p.stage === stage);
-  if (risk)  P = P.filter(p => p.risk === risk);
-
-  if ($('p-sub')) $('p-sub').textContent = P.length + ' of ' + (DB.participants || []).length + ' shown';
-
-  if (!P.length) {
-    tbody.innerHTML = '<tr><td colspan="9">' + renderEmpty('No participants match your filters.') + '</td></tr>';
-    return;
-  }
-
-  tbody.innerHTML = P.map(p => {
-    const contractCount = toArr(p.contract_ids).length;
-    const outcomeCount = (p.outcomes || []).length;
-    const lastContact = p.last_contact ? fmtD(p.last_contact) : '—';
-    return '<tr>' +
-      '<td><div style="font-weight:600">' + escapeHTML(p.first_name + ' ' + p.last_name) + '</div>' +
-        '<div style="font-size:11px;color:var(--txt3)">' + escapeHTML(p.ref_source || '') + '</div></td>' +
-      '<td style="font-size:11px;color:var(--txt3)">' + escapeHTML(String(p.id).slice(0, 8)) + '</td>' +
-      '<td>' + stageBadge(p.stage) + '</td>' +
-      '<td>' + escapeHTML(p.advisor || '—') + '</td>' +
-      '<td style="text-align:center">' + contractCount + '</td>' +
-      '<td style="text-align:center">' + outcomeCount + '</td>' +
-      '<td>' + riskBadge(p.risk) + '</td>' +
-      '<td style="font-size:11px;color:var(--txt3)">' + escapeHTML(lastContact) + '</td>' +
-      '<td style="text-align:right;white-space:nowrap">' +
-        '<button class="btn btn-ghost btn-sm" onclick="openNotes(\'' + escapeHTML(String(p.id)) + '\')">📝</button> ' +
-        '<button class="btn btn-ghost btn-sm" onclick="openEditP(\'' + escapeHTML(String(p.id)) + '\')">Edit</button> ' +
-        '<button class="btn btn-ghost btn-sm" onclick="deleteP(\'' + escapeHTML(String(p.id)) + '\')">×</button>' +
-      '</td>' +
-    '</tr>';
-  }).join('');
-}
-
-// ─────────────────────────────────────────────────────────────
-// CONTACTS
-// ─────────────────────────────────────────────────────────────
-
-function renderContacts() {
-  const tbody = $('c-table'); if (!tbody) return;
-  const C = DB.contacts || [];
-  if ($('c-sub')) $('c-sub').textContent = C.length + ' contacts';
-  if (!C.length) {
-    tbody.innerHTML = '<tr><td colspan="5">' + renderEmpty('No contacts yet. Add your first contact.') + '</td></tr>';
-    return;
-  }
-  tbody.innerHTML = C.map(c => '<tr>' +
-    '<td style="font-weight:600">' + escapeHTML(c.first_name + ' ' + c.last_name) + '</td>' +
-    '<td>' + escapeHTML(c.email || '—') + '</td>' +
-    '<td>' + escapeHTML(c.role || '—') + '</td>' +
-    '<td>' + stageBadge(c.status) + '</td>' +
-    '<td style="text-align:right;white-space:nowrap">' +
-      '<button class="btn btn-ghost btn-sm" onclick="openEditC(\'' + escapeHTML(String(c.id)) + '\')">Edit</button> ' +
-      '<button class="btn btn-ghost btn-sm" onclick="deleteC(\'' + escapeHTML(String(c.id)) + '\')">×</button>' +
-    '</td>' +
-  '</tr>').join('');
-}
-
-// ─────────────────────────────────────────────────────────────
-// VOLUNTEERS
-// ─────────────────────────────────────────────────────────────
-
-function renderVolunteers() {
-  const el = $('vol-list'); if (!el) return;
-  let V = (DB.volunteers || []).slice();
-
-  const search = ($('vol-search') && $('vol-search').value || '').toLowerCase();
-  const status = $('vol-filter-status') && $('vol-filter-status').value;
-  if (search) V = V.filter(v => (v.name || '').toLowerCase().includes(search));
-  if (status) V = V.filter(v => v.status === status);
-
-  if ($('vol-sub')) $('vol-sub').textContent = V.length + ' of ' + (DB.volunteers || []).length + ' shown';
-
-  if (!V.length) {
-    el.innerHTML = '<div class="card">' + renderEmpty('No volunteers match your filters.') + '</div>';
-    return;
-  }
-
-  el.innerHTML = '<div class="tbl-wrap"><table><thead><tr>' +
-    '<th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Skills</th><th>Hours</th><th>Status</th><th></th>' +
-    '</tr></thead><tbody>' +
-    V.map(v => '<tr>' +
-      '<td style="font-weight:600">' + escapeHTML(v.name || '—') + '</td>' +
-      '<td>' + escapeHTML(v.email || '—') + '</td>' +
-      '<td>' + escapeHTML(v.phone || '—') + '</td>' +
-      '<td>' + escapeHTML(v.role || 'Volunteer') + '</td>' +
-      '<td style="font-size:11px;color:var(--txt3)">' + escapeHTML((v.skills || []).join(', ') || '—') + '</td>' +
-      '<td style="text-align:center">' + num(v.hours) + '</td>' +
-      '<td>' + stageBadge(v.status) + '</td>' +
-      '<td style="text-align:right;white-space:nowrap">' +
-        '<button class="btn btn-ghost btn-sm" onclick="openEditVol(\'' + escapeHTML(String(v.id)) + '\')">Edit</button> ' +
-        '<button class="btn btn-ghost btn-sm" onclick="deleteVol(\'' + escapeHTML(String(v.id)) + '\')">×</button>' +
-      '</td>' +
-    '</tr>').join('') +
-    '</tbody></table></div>';
-}
-
-// ─────────────────────────────────────────────────────────────
-// EMPLOYERS
-// ─────────────────────────────────────────────────────────────
-
-function renderEmployers() {
-  const tbody = $('emp-table'); if (!tbody) return;
-  const E = DB.employers || [];
-  if ($('emp-sub')) $('emp-sub').textContent = E.length + ' employers · ' + E.reduce((a, e) => a + num(e.vacancies), 0) + ' open vacancies';
-  if (!E.length) {
-    tbody.innerHTML = '<tr><td colspan="7">' + renderEmpty('No employers yet.') + '</td></tr>';
-    return;
-  }
-  tbody.innerHTML = E.map(e => '<tr>' +
-    '<td style="font-weight:600">' + escapeHTML(e.name || '—') + '</td>' +
-    '<td>' + escapeHTML(e.sector || '—') + '</td>' +
-    '<td>' + escapeHTML(e.contact_name || '—') +
-      (e.contact_email ? '<div style="font-size:11px;color:var(--txt3)">' + escapeHTML(e.contact_email) + '</div>' : '') + '</td>' +
-    '<td style="text-align:center">' + num(e.vacancies) + '</td>' +
-    '<td style="text-align:center">' + num(e.placements) + '</td>' +
-    '<td>' + stageBadge(e.relationship) + '</td>' +
-    '<td style="text-align:right;white-space:nowrap">' +
-      '<button class="btn btn-ghost btn-sm" onclick="openEditEmployer(\'' + escapeHTML(String(e.id)) + '\')">Edit</button> ' +
-      '<button class="btn btn-ghost btn-sm" onclick="deleteEmployer(\'' + escapeHTML(String(e.id)) + '\')">×</button>' +
-    '</td>' +
-  '</tr>').join('');
-}
-
-// ─────────────────────────────────────────────────────────────
-// PIPELINE (Kanban)
-// ─────────────────────────────────────────────────────────────
-
-function renderPipeline() {
-  const el = $('kanban'); if (!el) return;
-  const P = DB.participants || [];
-  const stages = ['Referred', 'Engaged', 'In Support', 'Job Ready', 'Outcome Achieved', 'Sustained'];
-
-  el.innerHTML = stages.map(s => {
-    const cards = P.filter(p => p.stage === s);
-    return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;min-width:220px">' +
-      '<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--txt3);margin-bottom:10px;display:flex;justify-content:space-between">' +
-        '<span>' + escapeHTML(s) + '</span><span>' + cards.length + '</span>' +
-      '</div>' +
-      (cards.length
-        ? cards.map(p =>
-            '<div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;cursor:pointer" onclick="openEditP(\'' + escapeHTML(String(p.id)) + '\')">' +
-              '<div style="font-size:13px;font-weight:600;color:var(--txt);margin-bottom:4px">' + escapeHTML(p.first_name + ' ' + p.last_name) + '</div>' +
-              '<div style="display:flex;justify-content:space-between;align-items:center">' +
-                '<div style="font-size:11px;color:var(--txt3)">' + escapeHTML(p.advisor || '—') + '</div>' +
-                riskBadge(p.risk) +
-              '</div>' +
-            '</div>'
-          ).join('')
-        : '<div style="font-size:11px;color:var(--txt3);text-align:center;padding:14px 0">Empty</div>') +
-    '</div>';
-  }).join('');
-}
-
-// ─────────────────────────────────────────────────────────────
-// REFERRALS
-// ─────────────────────────────────────────────────────────────
-
-function renderReferrals() {
-  const tbody = $('ref-table'); if (!tbody) return;
-  const R = DB.referrals || [];
-  if ($('ref-sub')) $('ref-sub').textContent = R.length + ' referrals';
-  if (!R.length) {
-    tbody.innerHTML = '<tr><td colspan="7">' + renderEmpty('No referrals yet.') + '</td></tr>';
-    return;
-  }
-  tbody.innerHTML = R.map(r => '<tr>' +
-    '<td style="font-weight:600">' + escapeHTML(r.first_name + ' ' + r.last_name) + '</td>' +
-    '<td>' + escapeHTML(r.source || '—') + '</td>' +
-    '<td>' + stageBadge(r.status) + '</td>' +
-    '<td style="font-size:11px;color:var(--txt3)">' + escapeHTML(fmtD(r.referred_date)) + '</td>' +
-    '<td>' + escapeHTML(r.advisor || '—') + '</td>' +
-    '<td></td>' +
-    '<td style="text-align:right">' +
-      '<button class="btn btn-ghost btn-sm" onclick="deleteRef(\'' + escapeHTML(String(r.id)) + '\')">×</button>' +
-    '</td>' +
-  '</tr>').join('');
-}
-
-// ─────────────────────────────────────────────────────────────
-// PARTNER REFERRALS — stub (do not touch existing portal logic)
-// ─────────────────────────────────────────────────────────────
-
-function renderPartnerRefs() {
-  const tbody = $('pref-table'); if (!tbody) return;
-  const R = DB.partner_referrals || [];
-  if (!R.length) {
-    tbody.innerHTML = '<tr><td colspan="8">' + renderEmpty('No partner referrals yet. Share your portal link with partners.') + '</td></tr>';
-    return;
-  }
-  tbody.innerHTML = R.map(r => '<tr>' +
-    '<td style="font-weight:600">' + escapeHTML((r.first_name || '') + ' ' + (r.last_name || '')) + '</td>' +
-    '<td>' + escapeHTML(r.partner_name || '—') + '</td>' +
-    '<td>' + escapeHTML(r.primary_need || '—') + '</td>' +
-    '<td>' + stageBadge(r.urgency) + '</td>' +
-    '<td>' + escapeHTML(r.safeguarding || '—') + '</td>' +
-    '<td style="font-size:11px;color:var(--txt3)">' + escapeHTML(fmtD(r.created_at)) + '</td>' +
-    '<td>' + stageBadge(r.status) + '</td>' +
-    '<td style="text-align:right;white-space:nowrap">' +
-      '<button class="btn btn-p btn-sm" onclick="convertToParticipant(\'' + escapeHTML(String(r.id)) + '\')">Convert</button>' +
-    '</td>' +
-  '</tr>').join('');
-}
-
-// ─────────────────────────────────────────────────────────────
-// EVENTS
-// ─────────────────────────────────────────────────────────────
-
-// Which months actually have events, newest first — built once per render
-// so the "Choose a month" list always matches the real data, however far
-// back or forward it goes.
-function evMonthsWithData() {
-  const set = {};
-  (DB.events || []).forEach(e => { const d = String(e.date || '').slice(0, 7); if (/^\d{4}-\d{2}$/.test(d)) set[d] = (set[d] || 0) + 1; });
-  return Object.keys(set).sort().reverse().map(k => [k, set[k]]);
-}
-function onEvDateFilterChange() {
-  const v = $('ev-filter-date').value;
-  const monthSel = $('ev-filter-month'), custom = $('ev-filter-custom');
-  if (monthSel) monthSel.style.display = v === 'month' ? '' : 'none';
-  if (custom) custom.style.display = v === 'custom' ? 'inline-flex' : 'none';
-  if (v === 'month' && monthSel && !monthSel.options.length) {
-    const months = evMonthsWithData();
-    monthSel.innerHTML = months.map(([k, n]) => {
-      const label = new Date(k + '-01').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-      return '<option value="' + k + '">' + label + ' (' + n + ')</option>';
-    }).join('') || '<option value="">No events yet</option>';
-  }
-  renderEvents();
-}
-function evDateRange() {
-  const mode = ($('ev-filter-date') && $('ev-filter-date').value) || 'all';
-  const today = new Date().toISOString().slice(0, 10);
-  if (mode === 'all') return null;
-  if (mode === 'upcoming') return { from: today, to: null, label: 'upcoming' };
-  if (mode === 'year') return { from: new Date().getFullYear() + '-01-01', to: today, label: 'this year' };
-  if (mode === '30' || mode === '90') {
-    const d = new Date(); d.setDate(d.getDate() - (+mode));
-    return { from: d.toISOString().slice(0, 10), to: today, label: 'the last ' + mode + ' days' };
-  }
-  if (mode === 'month') {
-    const m = $('ev-filter-month') && $('ev-filter-month').value;
-    if (!m) return null;
-    const last = new Date(+m.slice(0, 4), +m.slice(5, 7), 0).getDate();
-    const label = new Date(m + '-01').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-    return { from: m + '-01', to: m + '-' + String(last).padStart(2, '0'), label };
-  }
-  if (mode === 'custom') {
-    const from = $('ev-filter-from') && $('ev-filter-from').value, to = $('ev-filter-to') && $('ev-filter-to').value;
-    if (!from && !to) return null;
-    return { from: from || null, to: to || null, label: 'that range' };
-  }
-  return null;
-}
-
-function renderEvents() {
-  const list = $('ev-list'); if (!list) return;
-  let E = (DB.events || []).slice();
-  const filter = $('ev-filter-type') && $('ev-filter-type').value;
-  if (filter) E = E.filter(e => e.type === filter);
-  const range = evDateRange();
-  const d10 = v => String(v || '').slice(0, 10);   // a full timestamp still compares correctly against a plain date
-  if (range) E = E.filter(e => (!range.from || d10(e.date) >= range.from) && (!range.to || d10(e.date) <= range.to));
-  E.sort((a, b) => d10(b.date).localeCompare(d10(a.date)));   // newest / upcoming first — what's happening now sits at the top
-
-  if ($('ev-sub')) $('ev-sub').textContent = E.length + ' event' + (E.length === 1 ? '' : 's') + (range ? ' in ' + range.label : '');
-
-  // Stats
-  const sg = $('ev-stats');
-  if (sg) {
-    const totalAttendees = E.reduce((a, e) => a + num(e.attendees), 0);
-    const avgFill = E.length ? Math.round(E.reduce((a, e) => a + (e.capacity ? (e.attendees / e.capacity) * 100 : 0), 0) / E.length) : 0;
-    sg.innerHTML =
-      statCard('Events', E.length) +
-      statCard('Total attendees', totalAttendees) +
-      statCard('Average fill', avgFill + '%');
-  }
-
-  if (!E.length) {
-    list.innerHTML = '<div class="card">' + renderEmpty(range ? 'No events in ' + range.label + '.' : 'No events match your filter.') + '</div>';
-    return;
-  }
-
-  list.innerHTML = '<div class="tbl-wrap"><table><thead><tr>' +
-    '<th>Event</th><th>Type</th><th>Date</th><th>Attendees</th><th>Capacity</th><th>Location</th><th></th>' +
-    '</tr></thead><tbody>' +
-    E.map(e => '<tr>' +
-      '<td style="font-weight:600">' + escapeHTML(e.name) + '</td>' +
-      '<td>' + escapeHTML(e.type || '—') + '</td>' +
-      '<td style="font-size:11px;color:var(--txt3)">' + escapeHTML(fmtD(e.date)) + '</td>' +
-      '<td style="text-align:center">' + num(e.attendees) + '</td>' +
-      '<td style="text-align:center">' + num(e.capacity) + '</td>' +
-      '<td>' + escapeHTML(e.location || '—') + '</td>' +
-      '<td style="text-align:right;white-space:nowrap">' +
-        '<button class="btn btn-ghost btn-sm" onclick="openEditEv(\'' + escapeHTML(String(e.id)) + '\')">Edit</button> ' +
-        '<button class="btn btn-ghost btn-sm" onclick="deleteEv(\'' + escapeHTML(String(e.id)) + '\')">×</button>' +
-      '</td>' +
-    '</tr>').join('') +
-    '</tbody></table></div>';
-}
-
-// Used by feedback modal — populate event dropdown
-function populateFbEvSelect() {
-  const sel = $('fbf-ev'); if (!sel) return;
-  const E = DB.events || [];
-  sel.innerHTML = '<option value="">Select event…</option>' +
-    E.map(e => '<option value="' + escapeHTML(String(e.id)) + '">' + escapeHTML(e.name) + '</option>').join('');
-}
-
-// ─────────────────────────────────────────────────────────────
-// FEEDBACK — measures (the org's own questions)
-//
-// Every org has its own feedback questions in DB.survey_measures.
-// Each response keeps its answers word-for-word in f.answers, keyed by
-// question text. Older rows (before measures existed) only have the
-// fixed fields (enjoyed, cb, ca, learned, connected, friend, quote),
-// so a measure with maps_to set falls back to those.
-// ─────────────────────────────────────────────────────────────
-
-const MEASURE_KINDS = [['score', 'Score (1–5)'], ['yesno', 'Yes / no'], ['choice', 'Multiple choice'], ['text', 'Comment / quote'], ['ignore', 'Not used in reports']];
-const MEASURE_MAPS  = [['', 'Own measure'], ['cb', 'Confidence before'], ['ca', 'Confidence after'], ['enjoyed', 'Enjoyment'], ['connected', 'Felt connected'], ['learned', 'Learned / more skilled'], ['friend', 'Made a friend'], ['quote', 'Participant quote']];
-const DEFAULT_MEASURES = [
-  { question: 'How much did you enjoy the session?',                 kind: 'score', maps_to: 'enjoyed',   label: 'Enjoyed the session' },
-  { question: 'How confident did you feel before the session?',     kind: 'score', maps_to: 'cb',        label: 'Confidence before' },
-  { question: 'How confident do you feel now, after the session?',  kind: 'score', maps_to: 'ca',        label: 'Confidence after' },
-  { question: 'Did you learn something new?',                        kind: 'yesno', maps_to: 'learned',   label: 'Learned something new' },
-  { question: 'Do you feel more connected to your community?',       kind: 'yesno', maps_to: 'connected', label: 'Felt more connected' },
-  { question: 'Did you make a new friend or talk to new people?',    kind: 'yesno', maps_to: 'friend',    label: 'Made a new friend' },
-  { question: 'Is there anything else you would like to tell us?',   kind: 'text',  maps_to: 'quote',     label: 'Comments' }
-];
-const _LIKERT = {
-  'strongly disagree': 1, 'disagree': 2, 'somewhat disagree': 2,
-  'neutral': 3, 'neither agree nor disagree': 3, 'neither': 3, 'not sure': 3,
-  'somewhat agree': 4, 'agree': 4, 'strongly agree': 5,
-  'very poor': 1, 'poor': 2, 'average': 3, 'ok': 3, 'good': 4, 'very good': 5, 'excellent': 5
-};
-
-function activeMeasures() {
-  return (DB.survey_measures || []).filter(m => m.active !== false && m.kind !== 'ignore')
-    .slice().sort((a, b) => (a.sort || 0) - (b.sort || 0));
-}
-function measureLabel(m) {
-  const l = (m.label || m.question || '').trim();
-  return l.length > 42 ? l.slice(0, 42) + '…' : l;
-}
-function scoreOf(v) {
-  if (v == null || v === '') return null;
-  if (typeof v === 'number') return v;
-  if (typeof v === 'boolean') return v ? 5 : 1;
-  const s = String(v).trim().toLowerCase();
-  if (_LIKERT[s] != null) return _LIKERT[s];
-  if (/^\d+(\.\d+)?$/.test(s)) { const x = +s; return x >= 0 && x <= 10 ? x : null; }
-  return null;
-}
-function yesOf(v) {
-  if (v == null || v === '') return null;
-  if (typeof v === 'boolean') return v;
-  const sc = scoreOf(v);
-  if (sc != null) return sc >= 4;
-  const s = String(v).trim().toLowerCase();
-  if (/^(y|yes|yeah|yep|true|definitely|absolutely|✓)/.test(s)) return true;
-  if (/^(n|no|nope|false|not really)/.test(s)) return false;
-  return null;
-}
-// The answer a response gives to a measure: its own answer first, else the fixed field it maps to.
-function answerFor(f, m) {
-  const a = f.answers && f.answers[m.question];
-  if (a != null && a !== '') return a;
-  if (!m.maps_to) return null;
-  if (m.maps_to === 'quote') return f.quote || null;
-  const v = f[m.maps_to];
-  if (v == null || v === '') return null;
-  if (typeof v === 'boolean') return (m.kind === 'score') ? (v ? 5 : 1) : (v ? 'Yes' : 'No');
-  return v;
-}
-
-// One stat per active measure, computed from the responses given.
-function measureStats(F) {
-  const out = [];
-  activeMeasures().forEach(m => {
-    const vals = F.map(f => answerFor(f, m)).filter(v => v != null && v !== '');
-    if (!vals.length || m.kind === 'text') return;
-    if (m.kind === 'score') {
-      const sc = vals.map(scoreOf).filter(x => x != null);
-      if (!sc.length) return;
-      const avg = sc.reduce((a, b) => a + b, 0) / sc.length;
-      const high = sc.filter(x => x >= 4).length;
-      out.push({ m, kind: 'score', value: avg.toFixed(1) + ' / 5', sub: pct(high, sc.length) + '% rated 4–5 · ' + sc.length + ' answers', avg, n: sc.length, pctHigh: pct(high, sc.length) });
-    } else if (m.kind === 'yesno') {
-      const yn = vals.map(yesOf).filter(x => x != null);
-      if (!yn.length) return;
-      const yes = yn.filter(Boolean).length;
-      out.push({ m, kind: 'yesno', value: pct(yes, yn.length) + '%', sub: yes + ' of ' + yn.length + ' said yes', pctYes: pct(yes, yn.length), n: yn.length });
-    } else {
-      const counts = {};
-      vals.forEach(v => { const k = String(v).trim(); counts[k] = (counts[k] || 0) + 1; });
-      const top = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
-      out.push({ m, kind: 'choice', value: top[0].length > 26 ? top[0].slice(0, 26) + '…' : top[0], sub: pct(counts[top[0]], vals.length) + '% · ' + vals.length + ' answers', breakdown: top.map(k => [k, counts[k]]), n: vals.length });
-    }
-  });
-  return out;
-}
-// Before → after pair, if the org has both.
-function measureJourney(F) {
-  const M = activeMeasures();
-  const cb = M.find(m => m.maps_to === 'cb'), ca = M.find(m => m.maps_to === 'ca');
-  if (!cb || !ca) return null;
-  const b = F.map(f => scoreOf(answerFor(f, cb))).filter(x => x != null);
-  const a = F.map(f => scoreOf(answerFor(f, ca))).filter(x => x != null);
-  if (!b.length || !a.length) return null;
-  return { before: (b.reduce((x, y) => x + y, 0) / b.length).toFixed(1), after: (a.reduce((x, y) => x + y, 0) / a.length).toFixed(1), n: Math.max(b.length, a.length) };
-}
-// Quotes: every text measure, plus the fixed quote field.
-function measureQuotes(F, limit) {
-  const textM = activeMeasures().filter(m => m.kind === 'text');
-  const out = [];
-  F.forEach(f => {
-    let q = f.quote && f.quote.trim();
-    if (!q && f.answers) {
-      for (const m of textM) { const a = f.answers[m.question]; if (a && String(a).trim().length > 3) { q = String(a).trim(); break; } }
-    }
-    if (q && q.length > 3 && !/^(no|none|n\/a|nothing|-|\.)$/i.test(q)) out.push({ quote: q, name: f.name || '' });
-  });
-  return limit ? out.slice(0, limit) : out;
-}
-// Fixed-field fallbacks used by pages built around Vorlana's standard outcomes.
-function stdPct(F, key) {
-  const m = activeMeasures().find(x => x.maps_to === key);
-  const vals = F.map(f => m ? yesOf(answerFor(f, m)) : (f[key] === true ? true : (f[key] === false ? false : null))).filter(x => x != null);
-  return vals.length ? pct(vals.filter(Boolean).length, vals.length) + '%' : '—';
-}
-// Enjoyment can be a score (avg ≥4 → %) or a yes/no question; either way report a %.
-function stdPctOrScore(F, key) {
-  const m = activeMeasures().find(x => x.maps_to === key);
-  const vals = F.map(f => m ? answerFor(f, m) : f[key]).filter(v => v != null && v !== '');
-  if (!vals.length) return '—';
-  const yn = vals.map(yesOf).filter(x => x != null);
-  return yn.length ? pct(yn.filter(Boolean).length, yn.length) + '%' : '—';
-}
-function stdAvg(F, key) {
-  const m = activeMeasures().find(x => x.maps_to === key);
-  const vals = F.map(f => m ? scoreOf(answerFor(f, m)) : (f[key] == null ? null : num(f[key]))).filter(x => x != null && x > 0);
-  return vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1) : '—';
-}
-
-// ─────────────────────────────────────────────────────────────
-// FEEDBACK PAGE
-// ─────────────────────────────────────────────────────────────
-
-function renderFeedback() {
-  const list = $('fb-list'); if (!list) return;
-  let F = (DB.feedback || []).slice();
-
-  // Populate event filter dropdown
-  const filterSel = $('fb-filter-ev');
-  if (filterSel) {
-    const E = DB.events || [];
-    const currentVal = filterSel.value;
-    filterSel.innerHTML = '<option value="">All events</option>' +
-      E.map(e => '<option value="' + escapeHTML(String(e.id)) + '">' + escapeHTML(e.name) + '</option>').join('');
-    filterSel.value = currentVal;
-  }
-
-  const evFilter = filterSel && filterSel.value;
-  if (evFilter) F = F.filter(f => String(f.eventId) === String(evFilter));
-
-  if ($('fb-sub')) $('fb-sub').textContent = F.length + ' responses';
-
-  // Stats — one card per question the org measures
-  const sg = $('fb-stats');
-  if (sg) {
-    const M = activeMeasures();
-    if (!M.length) {
-      sg.innerHTML =
-        statCard('Avg enjoyment', stdAvg(F, 'enjoyed') + ' / 5') +
-        statCard('Confidence before', stdAvg(F, 'cb') + ' / 5') +
-        statCard('Confidence after', stdAvg(F, 'ca') + ' / 5') +
-        '<div class="stat-card" style="display:flex;flex-direction:column;justify-content:center;gap:6px">' +
-          '<div style="font-size:12px;color:var(--txt2);line-height:1.5">Set up your own feedback questions and every one becomes a metric here.</div>' +
-          '<button class="btn btn-ghost btn-sm" onclick="go(\'settings\');setTimeout(function(){var c=document.getElementById(\'settings-feedback-card\');if(c)c.scrollIntoView({behavior:\'smooth\'})},200)">Set up questions →</button>' +
-        '</div>';
-    } else {
-      const stats = measureStats(F);
-      const j = measureJourney(F);
-      sg.innerHTML =
-        (j ? '<div class="stat-card"><div class="stat-lbl">Confidence before → after</div>' +
-              '<div class="stat-val"><span style="color:var(--amber)">' + j.before + '</span> <span style="color:var(--txt3);font-size:16px">→</span> <span style="color:var(--em)">' + j.after + '</span></div>' +
-              '<div style="font-size:11px;color:var(--txt3);margin-top:4px">' + j.n + ' responses</div></div>' : '') +
-        stats.filter(st => !(j && (st.m.maps_to === 'cb' || st.m.maps_to === 'ca'))).map(st => statCard(measureLabel(st.m), st.value, st.sub)).join('') +
-        (stats.length ? '' : statCard('Responses', F.length, 'No answers to your questions yet'));
-    }
-  }
-
-  if (!F.length) {
-    list.innerHTML = '<div class="card">' + renderEmpty('No feedback responses yet.') + '</div>';
-    return;
-  }
-
-  const M = activeMeasures();
-  list.innerHTML = F.map(f => {
-    const ev = (DB.events || []).find(e => String(e.id) === String(f.eventId));
-    const chips = [], quotes = [];
-    if (M.length) {
-      M.forEach(m => {
-        const a = answerFor(f, m);
-        if (a == null || a === '') return;
-        if (m.kind === 'text') { if (String(a).trim().length > 3) quotes.push(String(a)); return; }
-        let shown = String(a);
-        if (m.kind === 'yesno') { const y = yesOf(a); shown = y === true ? 'Yes' : y === false ? 'No' : shown; }
-        if (m.kind === 'score') { const sc = scoreOf(a); shown = sc != null ? sc + '/5' : shown; }
-        chips.push('<span title="' + escapeHTML(m.question) + '" style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--border)">' + escapeHTML(measureLabel(m)) + ': <strong>' + escapeHTML(shown.length > 30 ? shown.slice(0, 30) + '…' : shown) + '</strong></span>');
+  function augmentDownloads(){
+    if(typeof sb==='undefined' || !sb) return;
+    sb.from('evidence').select('id,file_name').not('file_data','is',null).then(function(res){
+      var rows=(res&&res.data)||[]; if(!rows.length) return;
+      var names={}; rows.forEach(function(r){ names[String(r.id)]=r.file_name||'file'; });
+      var tbody=document.getElementById('evid-table'); if(!tbody) return;
+      Array.prototype.forEach.call(tbody.querySelectorAll('tr'), function(tr){
+        var del=tr.querySelector('button[onclick^="deleteEvid"]'); if(!del) return;
+        var m=/deleteEvid\('([^']+)'\)/.exec(del.getAttribute('onclick')||''); if(!m) return;
+        var id=m[1];
+        if(names[id] && !tr.querySelector('.evid-dl')){
+          var b=document.createElement('button');
+          b.className='btn btn-ghost btn-sm evid-dl';
+          b.textContent='⬇ '+names[id];
+          b.setAttribute('onclick', "civaraDownloadEvidence('"+id+"')");
+          del.parentNode.insertBefore(b, del);
+          del.parentNode.insertBefore(document.createTextNode(' '), del);
+        }
       });
-      if (!quotes.length && f.quote) quotes.push(f.quote);
-    } else {
-      if (f.enjoyed != null) chips.push('<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--border)">★ ' + num(f.enjoyed) + '/5</span>');
-      if (f.cb != null || f.ca != null) chips.push('<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--border)">Conf ' + (f.cb == null ? '–' : num(f.cb)) + '→' + (f.ca == null ? '–' : num(f.ca)) + '</span>');
-      if (f.learned) chips.push('<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--border)">Learned new</span>');
-      if (f.connected) chips.push('<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--border)">More connected</span>');
-      if (f.friend) chips.push('<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--border)">New friend</span>');
-      if (f.quote) quotes.push(f.quote);
-    }
-    return '<div class="card">' +
-      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">' +
-        '<div>' +
-          '<div style="font-size:13px;font-weight:600;color:var(--txt)">' + escapeHTML(f.name || 'Anonymous') + '</div>' +
-          '<div style="font-size:11px;color:var(--txt3)">' + escapeHTML(ev ? ev.name : 'Event removed') + (ev && ev.date ? ' · ' + escapeHTML(fmtD(ev.date)) : '') + '</div>' +
-        '</div>' +
-        '<button class="btn btn-ghost btn-sm" onclick="deleteFb(\'' + escapeHTML(String(f.id)) + '\')">×</button>' +
-      '</div>' +
-      quotes.slice(0, 2).map(q => '<div style="margin-top:10px;font-size:13px;color:var(--txt2);font-style:italic;line-height:1.6">"' + escapeHTML(q) + '"</div>').join('') +
-      (chips.length ? '<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">' + chips.join('') + '</div>' : '') +
-    '</div>';
-  }).join('');
-}
-
-// ─────────────────────────────────────────────────────────────
-// OUTCOMES
-// ─────────────────────────────────────────────────────────────
-
-function renderOutcomes() {
-  const P = DB.participants || [];
-
-  // Top stats
-  const sg = $('out-stats');
-  if (sg) {
-    const withOutcomes = P.filter(p => p.outcomes && p.outcomes.length > 0).length;
-    const sustained = P.filter(p => p.stage === 'Sustained').length;
-    const closed = P.filter(p => p.stage === 'Closed').length;
-    sg.innerHTML =
-      statCard('Total participants', P.length) +
-      statCard('With outcomes', withOutcomes, pct(withOutcomes, P.length || 1) + '%') +
-      statCard('Sustained', sustained) +
-      statCard('Closed', closed);
+    }).catch(function(){});
+  }
+  var _origRenderEvidence=window.renderEvidence;
+  if(typeof _origRenderEvidence==='function'){
+    window.renderEvidence=function(){ var r=_origRenderEvidence.apply(this, arguments); try{ augmentDownloads(); }catch(e){} return r; };
   }
 
-  // Outcomes by type
-  const byType = $('out-by-type');
-  if (byType) {
-    const counts = {};
-    P.forEach(p => (p.outcomes || []).forEach(o => counts[o] = (counts[o] || 0) + 1));
-    const arr = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
-    byType.innerHTML = arr.length
-      ? arr.map(o => '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span>' + escapeHTML(o) + '</span><strong>' + counts[o] + '</strong></div>').join('')
-      : renderEmpty('No outcomes recorded yet.');
+  window.civaraDownloadEvidence=function(id){
+    if(typeof sb==='undefined' || !sb) return;
+    sb.from('evidence').select('file_data,file_name').eq('id', id).single().then(function(res){
+      var row=res&&res.data;
+      if(!row || !row.file_data){ alert('No file is attached to this evidence.'); return; }
+      fetch(row.file_data).then(function(r){ return r.blob(); }).then(function(blob){
+        var url=URL.createObjectURL(blob);
+        var a=document.createElement('a'); a.href=url; a.download=row.file_name||'evidence';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+      });
+    }).catch(function(e){ alert('Could not download: '+((e&&e.message)||e)); });
+  };
+})();
+</script>
+
+<!-- Funder form filling -->
+<script>
+(function () {
+  if (typeof DB === 'undefined') return;
+  var FILL_API = '/api/fill-form';
+
+  function b64(file){ return new Promise(function(res,rej){ var fr=new FileReader(); fr.onload=function(){res(fr.result);}; fr.onerror=function(){rej(new Error('read failed'));}; fr.readAsDataURL(file); }); }
+  function fmtDate(v){ if(!v) return ''; var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(v)); return m?(m[3]+'/'+m[2]+'/'+m[1]):String(v); }
+  function gv(id){ var el=document.getElementById(id); return el?(el.value||''):''; }
+  function dl(blob,name){ var url=URL.createObjectURL(blob); var a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){URL.revokeObjectURL(url);},4000); }
+
+  function docxBlobFromBase64(b64str){
+    var clean = b64str.indexOf('base64,') > -1 ? b64str.split('base64,')[1] : b64str;
+    var bin = atob(clean);
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
   }
 
-  // Barriers
-  const barEl = $('out-barriers');
-  if (barEl) {
-    const counts = {};
-    P.forEach(p => (p.barriers || []).forEach(b => counts[b] = (counts[b] || 0) + 1));
-    const arr = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
-    barEl.innerHTML = arr.length
-      ? arr.map(b => '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span>' + escapeHTML(b) + '</span><strong>' + counts[b] + '</strong></div>').join('')
-      : renderEmpty('No barriers recorded yet.');
-  }
+  window.civaraUploadContractTemplate = function(contractId){
+    var input=document.createElement('input'); input.type='file'; input.accept='.docx';
+    input.onchange=function(){
+      var f=input.files&&input.files[0]; if(!f) return;
+      if(!/\.docx$/i.test(f.name)){ alert('Please upload a Word .docx file.'); return; }
+      if(f.size>3*1024*1024){ alert('That file is over 3MB. Funder forms are usually well under this — please attach a smaller .docx.'); return; }
+      b64(f).then(function(data){
+        sbUpdate('contracts', {template_data:data, template_name:f.name}, contractId).then(function(){
+          if(typeof refreshTable==='function') return refreshTable('contracts');
+        }).then(function(){
+          if(typeof renderFunding==='function') renderFunding();
+          alert('Form template uploaded: '+f.name);
+        }).catch(function(e){
+          var msg=String((e&&e.message)||'').toLowerCase();
+          if(msg.indexOf('template_data')!==-1||msg.indexOf('template_name')!==-1){
+            alert("Couldn't save the template — the 'template_data' column is missing.\n\nRun add-contract-template-columns.sql in Supabase, then try again.");
+          } else { alert('Upload failed: '+((e&&e.message)||e)); }
+        });
+      });
+    };
+    input.click();
+  };
 
-  // Stage breakdown
-  const sb = $('out-stage-breakdown');
-  if (sb) {
-    const stages = ['Referred', 'Engaged', 'In Support', 'Job Ready', 'Outcome Achieved', 'Sustained', 'Closed'];
-    sb.innerHTML = stages.map(s => {
-      const c = P.filter(p => p.stage === s).length;
-      return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">' +
-        '<span>' + escapeHTML(s) + '</span><strong>' + c + '</strong></div>';
-    }).join('');
-  }
-
-  // Confidence scores
-  const conf = $('out-confidence');
-  if (conf) {
-    const withScores = P.filter(p => p.scores && p.scores.confidence);
-    if (!withScores.length) {
-      conf.innerHTML = renderEmpty('No confidence scores recorded yet.');
-    } else {
-      const avg = (withScores.reduce((a, p) => a + num(p.scores.confidence), 0) / withScores.length).toFixed(1);
-      conf.innerHTML = '<div style="text-align:center;padding:14px"><div style="font-size:36px;font-weight:800;color:var(--em)">' + avg + ' / 10</div>' +
-        '<div style="font-size:12px;color:var(--txt3);margin-top:4px">Average across ' + withScores.length + ' participants</div></div>';
-    }
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// FUNDERS
-// ─────────────────────────────────────────────────────────────
-
-function renderFunders() {
-  const el = $('funders-list'); if (!el) return;
-  const F = DB.funders || [];
-  const C = DB.contracts || [];
-
-  if (!F.length) {
-    el.innerHTML = '<div class="card">' + renderEmpty('No funders yet. Add your first funder to start tracking contracts.') + '</div>';
-    return;
-  }
-
-  el.innerHTML = F.map(f => {
-    const contracts = C.filter(c => String(c.funder_id) === String(f.id));
-    const totalValue = contracts.reduce((a, c) => a + num(c.value), 0);
-    return '<div class="card">' +
-      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px">' +
-        '<div>' +
-          '<div style="font-size:15px;font-weight:700;color:var(--txt)">' + escapeHTML(f.name) + '</div>' +
-          '<div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">' + escapeHTML(f.type || 'other') + '</div>' +
-        '</div>' +
-        '<div style="display:flex;gap:6px">' +
-          '<button class="btn btn-p btn-sm" onclick="openAddCon(\'' + escapeHTML(String(f.id)) + '\')">+ Contract</button>' +
-          '<button class="btn btn-ghost btn-sm" onclick="openEditFunder(\'' + escapeHTML(String(f.id)) + '\')">Edit</button>' +
-          '<button class="btn btn-ghost btn-sm" onclick="deleteFunder(\'' + escapeHTML(String(f.id)) + '\')">×</button>' +
-        '</div>' +
-      '</div>' +
-      (f.contact_name || f.contact_email
-        ? '<div style="font-size:12px;color:var(--txt2);margin-bottom:8px">' + escapeHTML(f.contact_name || '') +
-          (f.contact_email ? ' · ' + escapeHTML(f.contact_email) : '') + '</div>'
-        : '') +
-      (f.notes ? '<div style="font-size:12px;color:var(--txt3);line-height:1.6;margin-bottom:10px">' + escapeHTML(f.notes) + '</div>' : '') +
-      '<div style="font-size:12px;color:var(--txt2);padding-top:10px;border-top:1px solid var(--border)">' +
-        '<strong>' + contracts.length + '</strong> contract' + (contracts.length === 1 ? '' : 's') +
-        ' · <strong>£' + totalValue.toLocaleString() + '</strong> total value' +
-      '</div>' +
-    '</div>';
-  }).join('');
-}
-
-// ─────────────────────────────────────────────────────────────
-// FUNDING / CONTRACTS
-// ─────────────────────────────────────────────────────────────
-
-function renderFunding() {
-  const el = $('fund-list'); if (!el) return;
-  const C = DB.contracts || [];
-  const P = DB.participants || [];
-  if ($('fund-sub')) {
-    const total = C.reduce((a, c) => a + num(c.value), 0);
-    $('fund-sub').textContent = C.length + ' contracts · £' + total.toLocaleString() + ' total';
-  }
-
-  if (!C.length) {
-    el.innerHTML = '<div class="card">' + renderEmpty('No contracts yet.') + '</div>';
-    return;
-  }
-
-  el.innerHTML = C.map(c => {
-    const linked = P.filter(p => toArr(p.contract_ids).map(String).includes(String(c.id)));
-    const linkedOutcomes = linked.filter(p => p.outcomes && p.outcomes.length > 0).length;
-    return '<div class="card">' +
-      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px">' +
-        '<div>' +
-          '<div style="font-size:14px;font-weight:700;color:var(--txt)">' + escapeHTML(c.name) + '</div>' +
-          '<div style="font-size:11px;color:var(--txt3)">' + escapeHTML(c.funder || '—') + ' · £' + num(c.value).toLocaleString() + '</div>' +
-        '</div>' +
-        '<div style="display:flex;gap:6px;align-items:flex-start">' +
-          stageBadge(c.status) +
-          '<button class="btn btn-ghost btn-sm" onclick="openEditCon(\'' + escapeHTML(String(c.id)) + '\')">Edit</button>' +
-          '<button class="btn btn-ghost btn-sm" onclick="deleteCon(\'' + escapeHTML(String(c.id)) + '\')">×</button>' +
-        '</div>' +
-      '</div>' +
-      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;font-size:12px">' +
-        '<div><div style="color:var(--txt3);font-weight:600">Starts</div><div style="color:var(--txt);font-weight:700">' + linked.length + ' / ' + (c.target_starts || 0) + '</div></div>' +
-        '<div><div style="color:var(--txt3);font-weight:600">Outcomes</div><div style="color:var(--txt);font-weight:700">' + linkedOutcomes + ' / ' + (c.target_outcomes || 0) + '</div></div>' +
-        '<div><div style="color:var(--txt3);font-weight:600">Start</div><div>' + escapeHTML(fmtD(c.start_date)) + '</div></div>' +
-        '<div><div style="color:var(--txt3);font-weight:600">End</div><div>' + escapeHTML(fmtD(c.end_date)) + '</div></div>' +
-      '</div>' +
-    '</div>';
-  }).join('');
-}
-
-// ─────────────────────────────────────────────────────────────
-// REPORTS
-// ─────────────────────────────────────────────────────────────
-
-function renderReports() {
-  const el = $('reports-contract-list'); if (!el) return;
-  const C = DB.contracts || [];
-  if (!C.length) {
-    el.innerHTML = '<div class="card">' + renderEmpty('Add a contract first to generate a funder report.') + '</div>';
-    return;
-  }
-
-  el.innerHTML = '<div class="card"><div class="card-title">Select a contract to report on</div>' +
-    C.map(c =>
-      '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);gap:10px">' +
-        '<div><div style="font-size:13px;font-weight:600;color:var(--txt)">' + escapeHTML(c.name) + '</div>' +
-        '<div style="font-size:11px;color:var(--txt3)">' + escapeHTML(c.funder || '—') + ' · ' + escapeHTML(c.report_type || 'other') + '</div></div>' +
-        '<button class="btn btn-ai btn-sm" onclick="generateAIReport(\'' + escapeHTML(c.report_type || 'other') + '\',\'' + escapeHTML(String(c.id)) + '\')">✦ Generate</button>' +
-      '</div>'
-    ).join('') +
-    '</div>';
-}
-
-// ─────────────────────────────────────────────────────────────
-// EVIDENCE
-// ─────────────────────────────────────────────────────────────
-
-function renderEvidence() {
-  const tbody = $('evid-table'); if (!tbody) return;
-  const E = DB.evidence || [];
-  if (!E.length) {
-    tbody.innerHTML = '<tr><td colspan="7">' + renderEmpty('No evidence uploaded yet.') + '</td></tr>';
-    return;
-  }
-  tbody.innerHTML = E.map(e => '<tr>' +
-    '<td style="font-weight:600">' + escapeHTML(e.participant_name || '—') + '</td>' +
-    '<td>' + escapeHTML(e.type || '—') + '</td>' +
-    '<td>' + escapeHTML(e.linked_outcome || '—') + '</td>' +
-    '<td>' + escapeHTML(e.staff || '—') + '</td>' +
-    '<td style="font-size:11px;color:var(--txt3)">' + escapeHTML(fmtD(e.evidence_date)) + '</td>' +
-    '<td>' + stageBadge(e.status) + '</td>' +
-    '<td style="text-align:right;white-space:nowrap">' +
-      (e.file_path ? '<button class="btn btn-ghost btn-sm" title="' + escapeHTML(e.file_name || 'Open file') + '" onclick="openEvidFile(\'' + escapeHTML(String(e.id)) + '\')">📄 Open</button> ' : '') +
-      '<button class="btn btn-ghost btn-sm" onclick="deleteEvid(\'' + escapeHTML(String(e.id)) + '\')">×</button>' +
-    '</td>' +
-  '</tr>').join('');
-}
-
-// Files in the Evidence Hub are private: open them with a short-lived link
-async function openEvidFile(id) {
-  const e = (DB.evidence || []).find(x => String(x.id) === String(id)); if (!e || !e.file_path) return;
-  const w = window.open('', '_blank');
-  const { data, error } = await sb.storage.from('participant-docs').createSignedUrl(e.file_path, 120, { download: e.file_name || true });
-  if (error || !data) { if (w) w.close(); alert('Could not open the file: ' + (error ? error.message : 'not found')); return; }
-  if (w) w.location = data.signedUrl; else location.href = data.signedUrl;
-}
-
-// ─────────────────────────────────────────────────────────────
-// SAFEGUARDING
-// ─────────────────────────────────────────────────────────────
-
-function renderSafeguarding() {
-  const flagsEl = $('safe-flags');
-  const consentEl = $('consent-list');
-  const P = DB.participants || [];
-
-  if (flagsEl) {
-    const flagged = P.filter(p => p.safeguarding);
-    if (!flagged.length) {
-      flagsEl.innerHTML = renderEmpty('No safeguarding flags recorded.');
-    } else {
-      flagsEl.innerHTML = flagged.map(p =>
-        '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">' +
-          '<div><div style="font-size:13px;font-weight:600">' + escapeHTML(p.first_name + ' ' + p.last_name) + '</div>' +
-          '<div style="font-size:11px;color:var(--red);font-weight:600">' + escapeHTML(p.safeguarding) + '</div></div>' +
-          riskBadge(p.risk) +
-        '</div>'
-      ).join('');
+  function augmentContractCards(){
+    var el=document.getElementById('fund-list'); if(!el) return;
+    var idToBtn={};
+    Array.prototype.forEach.call(el.querySelectorAll('button[onclick^="openEditCon"]'), function(edit){
+      var m=/openEditCon\('([^']+)'\)/.exec(edit.getAttribute('onclick')||''); if(!m) return;
+      var id=m[1], row=edit.parentNode;
+      if(row.querySelector('.civ-tpl-btn')) { idToBtn[id]=row.querySelector('.civ-tpl-btn'); return; }
+      var b=document.createElement('button');
+      b.className='btn btn-ghost btn-sm civ-tpl-btn';
+      b.textContent='⬆ Form';
+      b.title='Upload this funder\u2019s blank Word form';
+      b.setAttribute('onclick', "civaraUploadContractTemplate('"+id+"')");
+      row.insertBefore(b, edit);
+      row.insertBefore(document.createTextNode(' '), edit);
+      idToBtn[id]=b;
+    });
+    if(typeof sb!=='undefined' && sb){
+      try {
+        sb.from('contracts').select('id,template_name').not('template_data','is',null).then(function(res){
+          ((res&&res.data)||[]).forEach(function(r){
+            var b=idToBtn[String(r.id)];
+            if(b){ b.textContent='📄 Form ✓'; b.title='Template: '+(r.template_name||'form.docx')+' — click to replace'; }
+          });
+        }).catch(function(){});
+      } catch(e){}
     }
   }
-
-  if (consentEl) {
-    if (!P.length) {
-      consentEl.innerHTML = renderEmpty('No participants yet.');
-    } else {
-      consentEl.innerHTML =
-        '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">' +
-          '<span>Total participants</span><strong>' + P.length + '</strong></div>' +
-        '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">' +
-          '<span>With equality data</span><strong>' + P.filter(p => p.equality_data && Object.keys(p.equality_data).length).length + '</strong></div>' +
-        '<div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13px">' +
-          '<span>Safeguarding flagged</span><strong>' + P.filter(p => p.safeguarding).length + '</strong></div>';
-    }
+  var _origRenderFunding=window.renderFunding;
+  if(typeof _origRenderFunding==='function'){
+    window.renderFunding=function(){ var r=_origRenderFunding.apply(this,arguments); try{augmentContractCards();}catch(e){} return r; };
   }
-}
+  setTimeout(function(){ try{ augmentContractCards(); }catch(e){} }, 1500);
 
-// ─────────────────────────────────────────────────────────────
-// HR / EQUALITY (page-level — sub-tabs handled by router.js)
-// ─────────────────────────────────────────────────────────────
-
-// ── HR / EQUALITY (page-level — sub-tabs handled below) ──────
-// v5: flag-queue, manager modes and wellbeing scan removed.
-// Default tab is the self-help Language Coach, which needs no render.
-function renderHR() {
-  // The monitoring tab reads from the DB, so keep it fresh.
-  if (typeof renderEqMonitoringList === 'function') {
-    try { renderEqMonitoringList(); } catch (e) { /* ignore */ }
+  function gatherData(){
+    return {
+      forename: gv('mp-fn'), surname: gv('mp-ln'), title: gv('mp-ptitle'),
+      ni: gv('mp-ni'), dob: fmtDate(gv('mp-dob')), address: gv('mp-address'),
+      postcode: gv('mp-postcode'), phone: gv('mp-phone'), email: gv('mp-email'),
+      participant_id: gv('mp-pid'), start_date: fmtDate(gv('mp-start')),
+      gender: gv('mp-gender'), right_to_work: gv('mp-rtw'), basic_skills: gv('mp-bskills'),
+      labour_status: gv('mp-labour'), interpersonal: gv('mp-inter'),
+      adviser: gv('mp-adv'), referral_source: gv('mp-rs'), stage: gv('mp-st'), risk: gv('mp-risk'),
+      outcome_type: gv('mp-outcome-type'), job_title: gv('mp-job-title'), employer: gv('mp-employer'),
+      job_start: fmtDate(gv('mp-job-start')), hours: gv('mp-hours'), pay: gv('mp-pay'),
+      exit_date: fmtDate(gv('mp-exit-date')), leave_reason: gv('mp-leave-reason'),
+      provider: gv('mp-provider'), project: gv('mp-project'),
+      today: new Date().toLocaleDateString('en-GB')
+    };
   }
-}
 
-// Switch between the Equality & Inclusion sub-tabs.
-// Called from the buttons in #page-hr in app.html.
-function switchHRTab(name, btn) {
-  const tabs = ['coach', 'equity', 'monitoring', 'benchmark'];
-  tabs.forEach(t => {
-    const pane = $('hr-tab-' + t);
-    if (pane) pane.style.display = (t === name) ? 'block' : 'none';
-  });
-  document.querySelectorAll('#page-hr .vtab-btn').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  // Refresh the monitoring list when its tab is opened.
-  if (name === 'monitoring' && typeof renderEqMonitoringList === 'function') {
-    try { renderEqMonitoringList(); } catch (e) { /* ignore */ }
-  }
-}
+  window.civaraFillFunderForm = function(){
+    if(typeof sb==='undefined'||!sb){ alert('Not connected.'); return; }
+    var ids = (typeof getSelectedContractIds==='function') ? getSelectedContractIds() : [];
+    if(!ids.length){ alert('Link this participant to a contract first — open the \u201cReferral & journey\u201d section and tick a contract under \u201cLink to contracts\u201d, then try again.'); return; }
+    sb.from('contracts').select('id,name,template_data,template_name').in('id', ids).then(function(res){
+      var rows=((res&&res.data)||[]).filter(function(r){ return r.template_data; });
+      if(!rows.length){ alert('None of this participant\u2019s contracts has a form template yet.\n\nGo to Funders/Contracts, find the contract and click \u201c\u2b06 Form\u201d to upload the funder\u2019s blank Word form.'); return; }
+      var chosen=rows[0];
+      if(rows.length>1){
+        var pick=window.prompt('This participant has more than one contract with a form. Type the number:\n\n'+rows.map(function(r,i){return (i+1)+'. '+r.name;}).join('\n'),'1');
+        var idx=parseInt(pick,10)-1;
+        if(isNaN(idx)||idx<0||idx>=rows.length) return;
+        chosen=rows[idx];
+      }
+      var data=gatherData();
+      var fname=('Form - '+chosen.name+' - '+(data.forename||'')+' '+(data.surname||'')).replace(/\s+/g,' ').trim();
+      var btnNote='(If this says the filler was not found, the Vercel /api/fill-form function may not be deployed yet.)';
+
+      fetch(FILL_API,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          docxBase64: chosen.template_data,
+          filename: fname,
+          orgId: (typeof orgId!=='undefined' && orgId) ? orgId : 'default',
+          data: data
+        })
+      })
+        .then(function(r){
+          return r.json()
+            .then(function(j){ return { status: r.status, json: j }; })
+            .catch(function(){ throw new Error('The filler returned an unreadable response (HTTP '+r.status+').'); });
+        })
+        .then(function(res2){
+          var json = res2.json;
+          if(!json || json.ok !== true || !json.filledBase64){
+            throw new Error((json && json.error) ? json.error : ('HTTP '+res2.status));
+          }
+          var blob = docxBlobFromBase64(json.filledBase64);
+          dl(blob, json.filename || (fname + '.docx'));
+
+          if(json.missing && json.missing.length){
+            var lines = json.missing.slice(0,8).map(function(m){ return '\u2022 ' + m.text; }).join('\n');
+            alert('Form filled and downloaded.\n\n' + json.missing.length + ' field(s) had no data and were left blank:\n\n' + lines + (json.missing.length > 8 ? '\n\u2026' : ''));
+          }
+        })
+        .catch(function(e){ alert('Could not fill the form: '+((e&&e.message)||e)+'\n\n'+btnNote); });
+    }).catch(function(e){ alert('Could not load the contract: '+((e&&e.message)||e)); });
+  };
+})();
+</script>
+
+<script src="js/onboarding.js?v=10"></script>
+<script src="js/pwa.js?v=1"></script>
+</body>
+</html>
