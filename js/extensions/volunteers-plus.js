@@ -69,8 +69,41 @@ function mapHours(r) {
     date: r.session_date || '',
     hours: n(r.hours),
     activity: r.activity || '',
-    source: r.source || 'staff'
+    source: r.source || 'staff',
+    wellbeing: r.wellbeing != null ? n(r.wellbeing) : null
   };
+}
+
+// ── Outcomes at the top of the Volunteers page ───────────────
+// Last 12 months, so the figures read like a funder report.
+function volOutcomesHTML() {
+  var V = DB.volunteers || [], H = DB.volunteer_hours || [];
+  var now = Date.now(), DAY = 864e5;
+  var iso = function (d) { return new Date(d).toISOString().slice(0, 10); };
+  var y1 = iso(now - 365 * DAY), d90 = iso(now - 90 * DAY), m6 = iso(now - 182 * DAY);
+  var yr = H.filter(function (h) { return h.date && h.date >= y1; });
+  var hrs = Math.round(yr.reduce(function (a, h) { return a + n(h.hours); }, 0) * 10) / 10;
+  var rate = (typeof VOL_HOUR_RATE !== 'undefined') ? VOL_HOUR_RATE : 13.45;
+  var people = {}; yr.forEach(function (h) { people[h.volunteer_id] = 1; });
+  var first = {}; H.forEach(function (h) { if (h.date && (!first[h.volunteer_id] || h.date < first[h.volunteer_id])) first[h.volunteer_id] = h.date; });
+  var newVols = Object.keys(first).filter(function (k) { return first[k] >= d90; }).length;
+  var months = {}; H.filter(function (h) { return h.date && h.date >= m6; }).forEach(function (h) { (months[h.volunteer_id] = months[h.volunteer_id] || {})[h.date.slice(0, 7)] = 1; });
+  var regulars = Object.keys(months).filter(function (k) { return Object.keys(months[k]).length >= 3; }).length;
+  var wb = yr.filter(function (h) { return h.wellbeing; });
+  var wbAvg = wb.length ? Math.round(wb.reduce(function (a, h) { return a + h.wellbeing; }, 0) / wb.length * 10) / 10 : null;
+  var card = function (label, value, sub) {
+    return (typeof statCard === 'function') ? statCard(label, value, sub)
+      : '<div class="stat-card"><div class="stat-label">' + esc(label) + '</div><div class="stat-value">' + value + '</div><div class="stat-sub">' + esc(sub || '') + '</div></div>';
+  };
+  return '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin:0 0 8px">Last 12 months</div>' +
+    '<div class="stats-grid" style="margin-bottom:18px">' +
+      card('Volunteers giving time', Object.keys(people).length, V.filter(function (v) { return v.status === 'Active'; }).length + ' active on your list') +
+      card('Hours given', hrs, yr.length + ' sessions' + (yr.length ? ' · avg ' + (Math.round(hrs / yr.length * 10) / 10) + 'h' : '')) +
+      card('Value of their time', '£' + Math.round(hrs * rate).toLocaleString(), 'at the real Living Wage (£' + rate.toFixed(2) + '/h)') +
+      card('New volunteers', newVols, 'first session in the last 90 days') +
+      card('Regulars', regulars, 'came in 3+ different months (last 6)') +
+      (wbAvg != null ? card('Wellbeing at check-in', wbAvg + ' / 5', wb.length + ' answers') : '') +
+    '</div>';
 }
 
 // Loads the sessions. Resolves either way — never throws at the caller.
@@ -416,7 +449,7 @@ function renderVolunteersPlus() {
     return;
   }
 
-  el.innerHTML =
+  el.innerHTML = volOutcomesHTML() +
     '<div class="tbl-wrap"><table><thead><tr>' +
       '<th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Skills</th><th>Hours</th><th>Status</th><th></th>' +
     '</tr></thead><tbody>' +
