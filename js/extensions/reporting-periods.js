@@ -234,9 +234,14 @@
       { label: 'Ready', meta: 'Report delivered — review and download below' }
     ];
 
-    const sys = 'You are a professional UK bid writer producing a funder report. Write in clean formal British English. ' +
+    // Written in the funder's own language (profiles live in delivery-report.js)
+    const profKey = (window.detectFunderProfile ? window.detectFunderProfile((funder && funder.name) || '', contract) : 'generic');
+    const prof = (window.FUNDER_PROFILES || {})[profKey] || { label: 'General', people: 'participants', tone: 'a professional UK funder report.' };
+    const elapsed = (contract && contract.start_date && contract.end_date) ? Math.max(0, Math.min(100, Math.round((Math.min(Date.now(), new Date(contract.end_date)) - new Date(contract.start_date)) / (new Date(contract.end_date) - new Date(contract.start_date)) * 100))) : null;
+    const sys = 'You are a senior UK charity impact writer. You are writing ' + prof.tone + ' Call the people "' + prof.people + '". Write in clean formal British English, in the language this funder uses. ' +
       'Structure with these sections in order, each beginning with ## and the section title: Executive Summary, Delivery Overview, ' +
-      'Participant Outcomes, Distance Travelled and Wellbeing, ' + (hasCirc ? 'Circular Economy, ' : '') + 'Participant Voice, Forward Plan. Use **bold** sparingly for key statistics. ' +
+      'Participant Outcomes, Distance Travelled and Wellbeing, ' + (hasCirc ? 'Circular Economy, ' : '') + 'Participant Voice, Evidence and Data Quality, Forward Plan. Use **bold** sparingly for key statistics. ' +
+      'Open the Executive Summary with the three figures that matter most to this funder. State progress against targets and relate it to the share of the contract period elapsed; explain variance plainly. ' +
       (hasCirc ? 'In Circular Economy use only the circular figures supplied and say CO2e and value are estimates. ' : '') +
       '600-800 words. Use only data provided — never invent participants, outcomes, figures or quotes, and never recalculate a number. ' +
       'All events, feedback and volunteer figures given relate ONLY to activity delivered under this contract. ' +
@@ -251,6 +256,8 @@
       'Contract: ' + ((contract && contract.name) || 'Unnamed contract'),
       'Funder: ' + ((funder && funder.name) || 'Funder'),
       'Contract value: £' + num(contract && contract.value).toLocaleString(),
+      elapsed != null ? 'Contract period: ' + contract.start_date + ' to ' + contract.end_date + ' (' + elapsed + '% of the contract period has elapsed)' : '',
+      (contract && num(contract.target_outcomes)) ? 'Progress on outcomes: ' + Math.round(num(contract.actual_outcomes) / num(contract.target_outcomes) * 100) + '% of target' + (elapsed != null ? ' against ' + elapsed + '% of time elapsed' : '') : '',
       '',
       'PARTICIPANTS ON THIS CONTRACT',
       'Target starts: ' + ((contract && contract.target_starts) || 0),
@@ -283,16 +290,29 @@
       reportEl.innerHTML = '<div class="alert alert-warn">Report agent not available.</div>';
       return;
     }
-    const raw = await window.runAgent({
+    let raw = await window.runAgent({
       container: progressEl,
       headerLabel: 'Org Brain — Funder Report',
-      headerSub:   'Reading your data, mapping to funder requirements, writing the report',
-      steps, sys, prompt, maxTok: 1400
+      headerSub:   'Written as ' + prof.label + ' · every figure from your records',
+      steps, sys, prompt, maxTok: 1800
     });
     if (!raw) return;
+    // Verification: a number that isn't in the data pack gets one correction pass, then is highlighted
+    let unverified = window.unknownReportNumbers ? window.unknownReportNumbers(raw, prompt) : [];
+    if (unverified.length) {
+      const raw2 = await window.runAgent({ container: progressEl, headerLabel: 'Org Brain — Funder Report', headerSub: 'Correcting ' + unverified.length + ' figure(s) not in the records',
+        steps: [{ label: 'Checking every number against the records', meta: unverified.length + ' to correct' }, { label: 'Ready', meta: '' }],
+        sys: sys + ' Your previous draft contained numbers that are NOT in the supplied data: ' + unverified.join(', ') + '. Rewrite the full report so every number appears in the supplied data; remove or reword any sentence that needs a number you were not given.',
+        prompt: prompt + '\n\nPREVIOUS DRAFT:\n' + raw, maxTok: 1800 });
+      if (raw2) raw = raw2;
+      unverified = window.unknownReportNumbers(raw, prompt);
+    }
 
     const cleaned = window.cleanReportText ? window.cleanReportText(raw) : raw;
-    const bodyHTML = window.reportTextToHTML ? window.reportTextToHTML(cleaned, raw) : '<pre>' + escapeHTML(cleaned) + '</pre>';
+    let bodyHTML = window.reportTextToHTML ? window.reportTextToHTML(cleaned, raw) : '<pre>' + escapeHTML(cleaned) + '</pre>';
+    unverified.forEach(numStr => { bodyHTML = bodyHTML.replace(new RegExp('(£?)' + numStr.replace(/\./g, '\\.') + '(%?)(?![\\d])', 'g'), '<mark title="This number is not in your records — check it before sending" style="background:#FEF3C7">$1' + numStr + '$2</mark>'); });
+    bodyHTML = '<div style="border:1px solid ' + (unverified.length ? '#FDE68A' : '#BBF7D0') + ';background:' + (unverified.length ? '#FFFBEB' : '#F0FDF4') + ';border-radius:10px;padding:10px 14px;font-size:12.5px;margin:0 0 16px"><b>Verification</b> · written as ' + escapeHTML(prof.label) + ' · ' +
+      (unverified.length ? '<span style="color:#92400E">' + unverified.length + ' number(s) could not be matched to your records and are highlighted — check before sending.</span>' : 'every number in the narrative matches your records.') + '</div>' + bodyHTML;
     const reportTitle = ((contract && contract.name) || 'Programme Report') + ' — ' + orgName + ' (' + periodLabel + ')';
     window._lastReportText = cleaned;
     window._lastReportTitle = reportTitle;
