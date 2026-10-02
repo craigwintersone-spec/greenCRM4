@@ -156,15 +156,19 @@ async function getOrgName(orgId) {
 async function getQuestions(ctx) {
   let rows = [];
   try {
-    rows = await sb(`survey_measures?org_id=eq.${ctx.orgId}&select=id,question,kind,maps_to,active,sort&order=sort.asc`);
-  } catch (e) { return []; }
+    rows = await sb(`survey_measures?org_id=eq.${ctx.orgId}&select=id,question,kind,maps_to,options,active,sort&order=sort.asc`);
+  } catch (e) {
+    try { rows = await sb(`survey_measures?org_id=eq.${ctx.orgId}&select=id,question,kind,maps_to,active,sort&order=sort.asc`); }   // options column not added yet
+    catch (e2) { return []; }
+  }
   rows = (rows || []).filter(r => r.active !== false && r.kind !== 'ignore');
   if (Array.isArray(ctx.questionIds) && ctx.questionIds.length) {
     const ids = ctx.questionIds.map(String);
     const sub = rows.filter(r => ids.includes(String(r.id)));
     if (sub.length) rows = sub;
   }
-  return rows.map(r => ({ id: r.id, question: r.question, kind: r.kind, maps_to: r.maps_to || null }));
+  return rows.map(r => ({ id: r.id, question: r.question, kind: r.kind, maps_to: r.maps_to || null,
+    options: r.kind === 'choice' && Array.isArray(r.options) ? r.options.map(x => String(x).slice(0, 80)).slice(0, 12) : undefined }));
 }
 
 // ── scoring (same rules as the app) ────────────────────────
@@ -333,6 +337,7 @@ module.exports = async function handler(req, res) {
           let a = body.answers[q.question];
           if (a == null || a === '') return;
           if (q.kind === 'score') { a = parseInt(a, 10); if (!(a >= 1 && a <= 5)) return; }
+          else if (q.kind === 'choice' && q.options && q.options.length) { a = trim(a, 200); if (!q.options.includes(a)) return; }   // only one of the choices on offer
           else { a = trim(a, 2000); if (!a) return; }
           answers[q.question] = a;
           if (!q.maps_to) return;
