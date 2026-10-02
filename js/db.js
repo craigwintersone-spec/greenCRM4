@@ -263,6 +263,7 @@ const MAPPERS = {
     question: r.question || '',
     kind: r.kind || 'text',
     maps_to: r.maps_to || null,
+    options: Array.isArray(r.options) ? r.options.map(String) : [],     // the choices for a multiple-choice question
     label: r.label || (r.question || '').slice(0, 60),
     active: r.active !== false,
     sort: r.sort == null ? 0 : Number(r.sort)
