@@ -32,7 +32,7 @@ var VERSION = 'v1.3';
 // UK Living Wage (Living Wage Foundation, 2024/25). Shown in the
 // report and editable — never present a made-up rate to a funder.
 var DEFAULT_RATE = (typeof VOL_HOUR_RATE !== 'undefined') ? VOL_HOUR_RATE : 13.45;   // real Living Wage 2025/26
-var RATE_LABEL = 'UK Living Wage (Living Wage Foundation, 2024/25)';
+var RATE_LABEL = 'real Living Wage (Living Wage Foundation, 2025/26)';
 
 function $(id) { return document.getElementById(id); }
 function esc(s) {
@@ -302,6 +302,125 @@ function gapsFor(s) {
   return gaps;
 }
 
+// ── Funder language ──────────────────────────────────────────
+// Each funder reads a report differently. The profile sets the section
+// titles they expect, what they call the people, and the tone. Figures
+// never change — only how they are presented.
+var FUNDER_PROFILES = {
+  ukspf: { label: 'UK Shared Prosperity Fund', people: 'participants',
+    sections: ['Summary', 'Outputs delivered against profile', 'Outcomes and distance travelled', 'Who we reached (equality monitoring)', 'Volunteering and community involvement', '%CIRC%', 'Participant feedback', 'Evidence and data quality', 'Risks, lessons and next period'],
+    tone: 'a UKSPF monitoring return for the lead authority: refer to outputs and outcomes, be factual and concise, note that evidence is retained on file, and explain any variance from profile plainly.' },
+  lottery: { label: 'National Lottery Community Fund', people: 'people',
+    sections: ['Summary', 'What we did', 'The difference it made', 'Who took part', 'Volunteers and community', '%CIRC%', 'What people told us', 'What we learned and what we would change', 'What happens next'],
+    tone: 'a National Lottery Community Fund progress report: warm, people-led plain English; the funder cares most about the difference made and honest learning, not just numbers.' },
+  council: { label: 'Local authority / commissioner', people: 'residents',
+    sections: ['Summary', 'Delivery against the service specification', 'Outcomes for residents', 'Equality and reach', 'Volunteering', '%CIRC%', 'Resident feedback', 'Safeguarding, quality and data', 'Risks and next period'],
+    tone: 'a commissioner performance report for a council: KPI-led, value for money, the public sector equality duty, risks and compliance, written for an officer who will paste it into a committee paper.' },
+  trust: { label: 'Trust or foundation', people: 'beneficiaries',
+    sections: ['Summary', 'Activities delivered', 'Outcomes for beneficiaries', 'Who we reached', 'Volunteering', '%CIRC%', 'Beneficiary voice', 'Learning and challenges', 'Sustainability and next steps'],
+    tone: 'a grant report to a charitable trust: outcomes against the aims of the grant, honest about challenges, with a view to sustainability beyond the grant.' },
+  corporate: { label: 'Corporate / CSR partner', people: 'people',
+    sections: ['Summary', 'Impact at a glance', 'Activities and employee volunteering', 'Community outcomes', 'Environmental impact', 'Participant voice', 'Data and method', 'Next period'],
+    tone: 'a CSR impact report for a company partner: headline numbers first, ESG framing (social value, environmental impact, volunteering), concise and quotable.' },
+  dwp: { label: 'DWP / employment contract', people: 'participants',
+    sections: ['Summary', 'Starts and outcomes against profile', 'Engagement and attendance', 'Who we reached', 'Volunteering', 'Participant feedback', 'Evidence and data quality', 'Risks and next period'],
+    tone: 'a contract performance report: starts, outcomes and sustainment against profile, evidence held, variance explained, written for a contract manager.' },
+  generic: { label: 'General (board / any funder)', people: 'participants',
+    sections: ['Executive Summary', 'Delivery Overview', 'Who We Reached', 'Volunteer Contribution', '%CIRC%', 'Participant Experience', 'Data Quality', 'Forward View'],
+    tone: 'a professional UK charity delivery report for a funder or board.' }
+};
+function detectProfile(name, contract) {
+  var t = ((name || '') + ' ' + (contract && (contract.name + ' ' + (contract.report_type || '')) || '')).toLowerCase();
+  if (/shared prosperity|ukspf/.test(t)) return 'ukspf';
+  if (/lottery/.test(t)) return 'lottery';
+  if (/dwp|jobcentre|restart|work and health|work & health|job centre/.test(t)) return 'dwp';
+  if (/council|borough|county|combined authority|city of|district|london authority|\bgla\b/.test(t)) return 'council';
+  if (/trust|foundation|\bfund\b|charitable|\bpect\b/.test(t)) return 'trust';
+  if (/\bltd\b|\bplc\b|limited|csr|bank|veolia|suez|\binc\b|group\b/.test(t)) return 'corporate';
+  return 'generic';
+}
+function currentProfile(s) {
+  var pick = gv('dr-style');
+  var key = pick && pick !== 'auto' ? pick : detectProfile(s.funder ? s.funder.name : '', s.contract);
+  return { key: key, p: FUNDER_PROFILES[key] || FUNDER_PROFILES.generic };
+}
+
+// ── Flawless numbers: compare, check, verify ─────────────────
+// The previous period of the same length, so the report can say "up from"
+function previousPeriod(p) {
+  if (!p.from || !p.to) return null;
+  var a = new Date(p.from), b = new Date(p.to);
+  // Whole calendar months (a month, quarter or year): step back the same number of months
+  var lastDay = new Date(b.getFullYear(), b.getMonth() + 1, 0).getDate();
+  if (a.getDate() === 1 && b.getDate() === lastDay) {
+    var months = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()) + 1;
+    var pa2 = new Date(a.getFullYear(), a.getMonth() - months, 1), pb2 = new Date(a.getFullYear(), a.getMonth(), 0);
+    var iso = function (d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+    return { from: iso(pa2), to: iso(pb2), label: 'previous ' + (months === 1 ? 'month' : months === 3 ? 'quarter' : months === 12 ? 'year' : months + ' months') };
+  }
+  var len = Math.round((b - a) / 864e5) + 1;
+  var pb = new Date(a); pb.setDate(pb.getDate() - 1);
+  var pa = new Date(pb); pa.setDate(pa.getDate() - len + 1);
+  return { from: pa.toISOString().slice(0, 10), to: pb.toISOString().slice(0, 10), label: 'previous ' + len + ' days' };
+}
+function compareLine(label, now, before, unit) {
+  if (before == null) return label + ': ' + now + (unit || '');
+  var diff = Math.round((now - before) * 10) / 10;
+  var dir = diff > 0 ? 'up' : diff < 0 ? 'down' : 'unchanged';
+  var pc = before ? Math.round(Math.abs(diff) / before * 100) : null;
+  return label + ': ' + now + (unit || '') + ' (previous period ' + before + (unit || '') + ', ' + dir + (diff && pc != null ? ' ' + pc + '%' : '') + ')';
+}
+// Targets from the contract: how far through the contract are we, and how far through the targets
+function targetLines(s, p) {
+  var c = s.contract; if (!c) return [];
+  var out = [];
+  if (c.start_date && c.end_date) {
+    var a = new Date(c.start_date), b = new Date(c.end_date), nowT = Math.min(Date.now(), b.getTime());
+    var elapsed = Math.max(0, Math.min(100, Math.round((nowT - a) / (b - a) * 100)));
+    out.push('Contract period: ' + c.start_date + ' to ' + c.end_date + ' (' + elapsed + '% of the contract period has elapsed)');
+    s.elapsedPct = elapsed;
+  }
+  if (n(c.target_starts)) out.push('Starts: ' + n(c.actual_starts) + ' of ' + n(c.target_starts) + ' target (' + pct(n(c.actual_starts), n(c.target_starts)) + '%)');
+  if (n(c.target_outcomes)) out.push('Outcomes: ' + n(c.actual_outcomes) + ' of ' + n(c.target_outcomes) + ' target (' + pct(n(c.actual_outcomes), n(c.target_outcomes)) + '%)');
+  if (n(c.value)) out.push('Contract value: ' + money(n(c.value)));
+  if (s.elapsedPct != null && n(c.target_outcomes)) {
+    var ahead = pct(n(c.actual_outcomes), n(c.target_outcomes)) - s.elapsedPct;
+    out.push('Outcomes are ' + (ahead >= 0 ? ahead + ' points ahead of' : Math.abs(ahead) + ' points behind') + ' the time elapsed');
+  }
+  return out;
+}
+// Arithmetic checks the reader would do — done first, so the report can say they pass
+function reconcile(s) {
+  var checks = [];
+  var typeSum = Object.keys(s.byType).reduce(function (a, k) { return a + n(s.byType[k]); }, 0);
+  checks.push({ ok: !s.eventCount || typeSum === s.eventCount, text: 'Events by type add up to the total events (' + typeSum + ' = ' + s.eventCount + ')' });
+  checks.push({ ok: Math.abs(round1(s.volHours + s.staffHours) - round1(s.totalHours)) < 0.11, text: 'Volunteer + staff hours equal total hours (' + round1(s.volHours + s.staffHours) + ' = ' + s.totalHours + ')' });
+  if (s.capacity) checks.push({ ok: s.attendees <= s.capacity * 1.5, text: 'Attendance against capacity is plausible (' + s.attendees + ' of ' + s.capacity + ')' });
+  if (s.fbCount) checks.push({ ok: s.attDemo.count <= s.fbCount, text: 'Demographic answers do not exceed feedback responses (' + s.attDemo.count + ' of ' + s.fbCount + ')' });
+  if (s.fbCount && s.attendees) checks.push({ ok: s.fbCount <= s.attendees * 1.2, text: 'Feedback responses are not more than attendances (' + s.fbCount + ' of ' + s.attendees + ')' });
+  checks.push({ ok: Math.abs(Math.round(s.totalHours * s.rate) - Math.round(s.value)) <= 1, text: 'Value of volunteer time = hours × rate (' + s.totalHours + ' × £' + s.rate.toFixed(2) + ' = ' + money(s.value) + ')' });
+  return checks;
+}
+// Every number in the narrative must appear in the data pack. Dates and section numbers are ignored.
+function numbersIn(text) {
+  var t = String(text || '')
+    .replace(/\b\d{1,2}(st|nd|rd|th)?\s+(January|February|March|April|May|June|July|August|September|October|November|December)\b(\s+\d{4})?/gi, ' ')
+    .replace(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}\b/gi, ' ')
+    .replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ').replace(/\b(19|20)\d{2}\b/g, ' ').replace(/\bQ[1-4]\b/g, ' ')
+    .replace(/\b\d{4}\/\d{2}\b/g, ' ');
+  var out = {};
+  (t.match(/£?\d[\d,]*(\.\d+)?%?/g) || []).forEach(function (m) { out[m.replace(/[£,%]/g, '').replace(/\.0+$/, '')] = 1; });
+  return out;
+}
+function unknownNumbers(narrative, pack) {
+  var allowed = numbersIn(pack);
+  ['1', '2', '3', '4', '5', '0', '10', '100'].forEach(function (k) { allowed[k] = 1; });   // "out of 5", "one of two", scale points
+  return Object.keys(numbersIn(narrative)).filter(function (k) { return !allowed[k]; });
+}
+
+// Shared with the contract report
+window.FUNDER_PROFILES = FUNDER_PROFILES; window.detectFunderProfile = detectProfile; window.unknownReportNumbers = unknownNumbers;
+
 // ── UI ─────────────────────────────────────────────────────
 function yearOptions() {
   var y = new Date().getFullYear(), out = '';
@@ -347,6 +466,11 @@ function injectUI() {
     '<div class="form-grid-3">' +
       '<div class="form-row"><label>Funder / contract</label>' +
         '<select id="dr-contract"><option value="">All activity (no funder filter)</option></select>' +
+      '</div>' +
+      '<div class="form-row"><label>Written for</label>' +
+        '<select id="dr-style"><option value="auto">Auto — match the funder</option>' +
+          Object.keys(FUNDER_PROFILES).map(function (k) { return '<option value="' + k + '">' + esc(FUNDER_PROFILES[k].label) + '</option>'; }).join('') +
+        '</select>' +
       '</div>' +
       '<div class="form-row"><label>Reporting period</label>' +
         '<select id="dr-period-type">' +
@@ -497,16 +621,26 @@ function generateNow() {
     { label: 'Ready', meta: 'Review and download below' }
   ];
 
-  var sys = 'You are a professional UK charity impact writer producing a delivery report for a funder or board. ' +
-    'Write clean formal British English. Structure with these sections, each beginning with ## and the section title: ' +
-    'Executive Summary, Delivery Overview, Who We Reached, Volunteer Contribution, ' + (hasCirc ? 'Circular Economy, ' : '') + 'Participant Experience, Data Quality, Forward View. ' +
+  var prof = currentProfile(s);
+  var sections = prof.p.sections.map(function (x) { return x === '%CIRC%' ? (hasCirc ? 'Circular Economy' : '') : x; }).filter(Boolean);
+  var prevP = previousPeriod(p), prev = prevP ? buildStats(prevP) : null;
+  var targets = targetLines(s, p);
+  var checks = reconcile(s);
+  var sys = 'You are a senior UK charity impact writer. You are writing ' + prof.p.tone + ' ' +
+    'Call the people "' + prof.p.people + '". Write clean formal British English, no jargon the funder would not use themselves. ' +
+    'Structure with these sections, in this order, each beginning with ## and exactly this title: ' + sections.join(', ') + '. ' +
+    'Open the Summary with the three figures that matter most to this funder, then one sentence on what they mean. ' +
+    (targets.length ? 'Where targets are supplied, state progress against them and relate it to the share of the contract period elapsed; explain variance without excuses. ' : '') +
+    (prev ? 'Where a previous-period figure is supplied, say whether it is up or down and by how much, using only the supplied percentage. ' : '') +
+    'Use participant quotes verbatim where supplied. Never describe a "case study" or any individual unless a quote is supplied. ' +
+    'In the learning / lessons section draw only on the data gaps and the figures (e.g. low attendance against capacity), never on assumptions. ' +
     (hasCirc ? 'In Circular Economy, report weight diverted, reuse and repair, food shared and CO2e using only the figures supplied, and say CO2e and value are estimates. ' : '') +
     'In Who We Reached, describe the people reached using only the demographic figures supplied, in plain respectful language, and say they are from optional anonymous answers. ' +
     'CRITICAL: use ONLY the figures supplied. Never invent, estimate, extrapolate or recalculate any number — ' +
     'every statistic has already been computed from the database. Do not add totals of your own. ' +
     'Quote the supplied numbers exactly as given. Use **bold** sparingly for headline figures. 600-800 words. ' +
     'If a funder is named, write the report as delivered under that funder\'s programme. ' +
-    'In Data Quality, state the listed gaps plainly and without defensiveness. ' +
+    'In the evidence / data quality section, state the listed gaps plainly and without defensiveness, and say that the arithmetic checks listed were passed. ' +
     'Do not use hashtags except as section markers, no horizontal rules, no emoji.';
 
   var lines = [
@@ -515,21 +649,22 @@ function generateNow() {
     'Report date: ' + todayStr,
     'Reporting period: ' + p.label + (p.from ? ' (' + p.from + ' to ' + p.to + ')' : ''),
     '',
-    'DELIVERY',
-    'Events delivered: ' + s.eventCount,
-    'Total attendances: ' + s.attendees,
+    targets.length ? 'PROGRESS AGAINST CONTRACT TARGETS\n' + targets.join('\n') + '\n' : '',
+    'DELIVERY' + (prev ? ' (with comparison to the previous period, ' + prevP.from + ' to ' + prevP.to + ')' : ''),
+    compareLine('Events delivered', s.eventCount, prev ? prev.eventCount : null),
+    compareLine('Total attendances', s.attendees, prev ? prev.attendees : null),
     s.fillRate != null ? 'Attendance against capacity: ' + s.fillRate + '%' : '',
     'Events by type: ' + (Object.keys(s.byType).map(function (k) { return k + ' ' + s.byType[k]; }).join(', ') || 'none'),
     '',
     'VOLUNTEERING',
     'Volunteers active: ' + s.activeVolunteers + ' (of ' + s.totalVolunteers + ' registered)',
-    'Total hours contributed: ' + s.totalHours,
+    compareLine('Total hours contributed', s.totalHours, prev ? prev.totalHours : null),
     'Volunteer hours: ' + s.volHours + ' · staff hours: ' + s.staffHours,
     'Average hours per active volunteer: ' + s.avgPerVolunteer,
     'Notional value of volunteer time: ' + money(s.value) + ' (at £' + s.rate.toFixed(2) + '/hour, ' + RATE_LABEL + ')',
     '',
     'PARTICIPANT FEEDBACK',
-    'Responses: ' + s.fbCount,
+    compareLine('Responses', s.fbCount, prev ? prev.fbCount : null),
     s.fbCount && s.avgCB && s.avgCA ? 'Confidence before: ' + s.avgCB + ' → after: ' + s.avgCA + ' out of 5 (average gain ' + s.confGain + ')' : '',
     s.ownMeasures.length
       ? s.ownMeasures.map(function (m) { return '"' + m.q + '": ' + m.text + ' (' + m.n + ' answers)'; }).join('\n')
@@ -552,8 +687,12 @@ function generateNow() {
     (typeof cxReportLines === 'function' ? cxReportLines(s.circ).join('\n') : ''),
     '',
     'DATA QUALITY NOTES',
-    gaps.length ? gaps.map(function (g) { return '- ' + g; }).join('\n') : '- No significant data gaps in this period.'
+    gaps.length ? gaps.map(function (g) { return '- ' + g; }).join('\n') : '- No significant data gaps in this period.',
+    '',
+    'ARITHMETIC CHECKS',
+    checks.map(function (c) { return '- ' + (c.ok ? 'PASSED' : 'FAILED') + ': ' + c.text; }).join('\n')
   ].filter(Boolean).join('\n');
+  s.checks = checks; s.profile = prof;
 
   if (typeof runAgent !== 'function') {
     outEl.innerHTML = '<div class="alert alert-warn">The Org Brain agent is not available on this page.</div>';
@@ -563,14 +702,26 @@ function generateNow() {
   runAgent({
     container: progressEl,
     headerLabel: 'Org Brain — Delivery Report',
-    headerSub: funderName ? 'For ' + funderName : 'Figures calculated from your records',
+    headerSub: (funderName ? 'For ' + funderName + ' · ' : '') + 'written as ' + prof.p.label,
     steps: steps,
     sys: sys,
     prompt: lines,
-    maxTok: 1400
+    maxTok: 1800
   }).then(function (raw) {
     if (!raw) return;
-    renderDoc(raw, s, orgName, todayStr, funderName);
+    // Verification: any number the writer used that isn't in the data pack gets one correction pass
+    var bad = unknownNumbers(raw, lines);
+    if (!bad.length) { s.unverified = []; return renderDoc(raw, s, orgName, todayStr, funderName); }
+    return runAgent({
+      container: progressEl, headerLabel: 'Org Brain — Delivery Report', headerSub: 'Correcting ' + bad.length + ' figure(s) not in the records',
+      steps: [{ label: 'Checking every number against the records', meta: bad.length + ' to correct' }, { label: 'Ready', meta: '' }],
+      sys: sys + ' You previously wrote a draft containing numbers that are NOT in the supplied data: ' + bad.join(', ') + '. Rewrite the full report so that every number appears in the supplied data; remove or reword any sentence that needs a number you were not given. Keep everything else the same.',
+      prompt: lines + '\n\nPREVIOUS DRAFT:\n' + raw, maxTok: 1800
+    }).then(function (raw2) {
+      var text = raw2 || raw;
+      s.unverified = unknownNumbers(text, lines);
+      renderDoc(text, s, orgName, todayStr, funderName);
+    });
   });
 }
 
@@ -578,6 +729,15 @@ function renderDoc(raw, s, orgName, todayStr, funderName) {
   var outEl = $('report-output');
   var cleaned = (typeof cleanReportText === 'function') ? cleanReportText(raw) : raw;
   var bodyHTML = (typeof reportTextToHTML === 'function') ? reportTextToHTML(cleaned, raw) : '<pre>' + esc(cleaned) + '</pre>';
+  (s.unverified || []).forEach(function (num) {
+    var re = new RegExp('(£?)' + num.replace(/\./g, '\\.') + '(%?)(?![\\d])', 'g');
+    bodyHTML = bodyHTML.replace(re, '<mark title="This number is not in your records — check it before sending" style="background:#FEF3C7">$1' + num + '$2</mark>');
+  });
+  var checksOk = (s.checks || []).filter(function (c) { return c.ok; }).length, checksAll = (s.checks || []).length;
+  var verifyBox = '<div style="border:1px solid ' + ((s.unverified || []).length || checksOk < checksAll ? '#FDE68A' : '#BBF7D0') + ';background:' + ((s.unverified || []).length || checksOk < checksAll ? '#FFFBEB' : '#F0FDF4') + ';border-radius:10px;padding:10px 14px;font-size:12.5px;margin:0 0 16px;line-height:1.6">' +
+    '<b>Verification</b> · written as ' + esc(s.profile ? s.profile.p.label : 'general') + ' · ' + checksOk + ' of ' + checksAll + ' arithmetic checks passed · ' +
+    ((s.unverified || []).length ? '<span style="color:#92400E">' + s.unverified.length + ' number(s) could not be matched to your records and are highlighted — check before sending.</span>' : 'every number in the narrative matches your records.') +
+    ((s.checks || []).filter(function (c) { return !c.ok; }).map(function (c) { return '<div style="color:#92400E">⚠ ' + esc(c.text) + '</div>'; }).join('')) + '</div>';
 
   window._lastReportText = cleaned;
   window._lastReportTitle = orgName + ' — Delivery Report' + (funderName ? ' — ' + funderName : '') + ' (' + s.period.label + ')';
@@ -596,7 +756,7 @@ function renderDoc(raw, s, orgName, todayStr, funderName) {
         '<div class="report-subtitle">' + esc(orgName) + ' · ' + esc(todayStr) + '</div>' +
       '</div>';
 
-  var headline =
+  var headline = verifyBox +
     '<div class="dr-figs">' +
       fig('Events delivered', s.eventCount) +
       fig('Total attendances', s.attendees) +
