@@ -76,6 +76,12 @@
     },
     "api/claude.js": {
       "maxDuration": 60
+    },
+    "api/fetch-form.js": {
+      "maxDuration": 60
+    },
+    "api/eoi-form.js": {
+      "maxDuration": 60
     }
   }
 }
