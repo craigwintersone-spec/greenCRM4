@@ -1,954 +1,1636 @@
-// js/modals.js — every modal open/save/delete handler
-// Depends on: config.js, utils.js, db.js, render.js, agents.js
-//
-// Each entity follows the pattern:
-//   openAddX()    — clear form, show modal
-//   openEditX(id) — populate form, show modal
-//   saveX()       — write to Supabase, refresh, render, close
-//   deleteX(id)   — confirm, delete, refresh, render
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Vorlana</title>
+<link rel="icon" type="image/png" href="logo-mark.png"/>
+<link rel="manifest" href="/manifest.webmanifest"/>
+<meta name="theme-color" content="#1F6F6D"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="apple-mobile-web-app-title" content="Vorlana"/>
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>
+<link rel="stylesheet" href="css/app.css"/>
 
+<!-- EOI form-reading libraries (Word + PDF) — added for the EOI form-fill feature -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  // pdf.js needs its worker pointed at the matching CDN file (set once)
+  if (window.pdfjsLib) {
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+</script>
+</head>
+<body>
+
+<div id="org-banner">
+  <span id="ob-txt"></span>
+  <span id="ob-plan"></span>
+</div>
+
+<div id="shell">
+
+<!-- ─── SIDEBAR ───────────────────────────────────────────── -->
+<div id="sidebar">
+  <div class="sidebar-logo"><img src="logo.png" alt="Vorlana"/></div>
+
+  <div class="nav-section">Overview</div>
+  <button class="nav-btn" onclick="go('dashboard')"><span class="icon">📊</span><span>Dashboard</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" data-module="funders" onclick="go('rag')"><span class="icon">🚦</span><span>RAG Dashboard</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" data-module="impact" onclick="go('impact')"><span class="icon">🌿</span><span>Social Impact</span><span class="ai-dot"></span></button>
+
+  <div class="nav-section">People</div>
+  <button class="nav-btn" data-module="participants" onclick="go('participants')"><span class="icon">👤</span><span>Participants</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" data-module="contacts" onclick="go('contacts')"><span class="icon">📋</span><span>Contacts &amp; Donors</span></button>
+  <button class="nav-btn" data-module="volunteers" onclick="go('volunteers')"><span class="icon">🙋</span><span>Volunteers &amp; Staff</span></button>
+  <button class="nav-btn" data-module="employers" onclick="go('employers')"><span class="icon">🏢</span><span>Employers</span><span class="ai-dot"></span></button>
+
+  <div class="nav-section">Delivery</div>
+  <button class="nav-btn" data-module="participants" onclick="go('pipeline')"><span class="icon">🔁</span><span>Pipeline</span></button>
+  <button class="nav-btn" data-module="participants" onclick="go('referrals')"><span class="icon">📨</span><span>Referrals</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" data-module="participants" onclick="go('partnerrefs')"><span class="icon">🤝</span><span>Partner Referrals</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" data-module="events" onclick="go('events')"><span class="icon">📅</span><span>Events</span></button>
+  <button class="nav-btn" data-module="events" onclick="go('feedback')"><span class="icon">💬</span><span>Feedback</span></button>
+  <button class="nav-btn" data-module="circular" onclick="go('circular')"><span class="icon">♻️</span><span>Circular</span></button>
+
+  <div class="nav-section">Reporting</div>
+  <button class="nav-btn" data-module="participants" onclick="go('outcomes')"><span class="icon">🎯</span><span>Outcomes</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" data-module="funders" onclick="go('funders')"><span class="icon">🏦</span><span>Funders</span></button>
+  <button class="nav-btn" data-module="funders" onclick="go('funding')"><span class="icon">💰</span><span>Contracts</span></button>
+  <button class="nav-btn" data-module="funders" onclick="go('reports')"><span class="icon">📄</span><span>Reports</span></button>
+  <button class="nav-btn" data-module="evidence" onclick="go('evidence')"><span class="icon">🗂️</span><span>Evidence Hub</span></button>
+  <button class="nav-btn" data-module="demographics" onclick="go('demographics')"><span class="icon">📊</span><span>Demographics</span></button>
+
+  <div class="nav-section">Growth</div>
+  <button class="nav-btn" data-module="social" onclick="go('social');renderSocial()"><span class="icon">📣</span><span>Social Media</span><span class="ai-dot"></span></button>
+  <button class="nav-btn" data-module="bd" onclick="go('bd')"><span class="icon">💼</span><span>BD Manager</span><span class="ai-dot"></span></button>
+
+  <div class="nav-section">Settings</div>
+  <button class="nav-btn" data-module="participants" onclick="go('safeguarding')"><span class="icon">🔐</span><span>Safeguarding</span></button>
+  <button class="nav-btn" onclick="go('settings')"><span class="icon">⚙️</span><span>Settings</span></button>
+
+  <div class="sidebar-bottom">
+    <div id="role-badge-slot"></div>
+    <div style="font-size:10px;color:var(--purple);text-align:center;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:4px;font-weight:700"><span>●</span> AI agents active</div>
+    <div id="upgrade-btn-wrap"></div>
+    <button class="btn btn-ghost btn-sm" style="width:100%" onclick="signOut()">Sign out</button>
+  </div>
+</div>
+
+<!-- ─── MAIN CONTENT ──────────────────────────────────────── -->
+<div id="main">
+
+<!-- DASHBOARD -->
+<div id="page-dashboard" class="page">
+  <div class="page-header">
+    <div><div class="page-title">Dashboard</div><div class="page-sub" id="dash-sub">Overview</div></div>
+    <button class="btn btn-ghost btn-sm" onclick="refreshDashboard()">↻ Refresh</button>
+  </div>
+  <div class="morning-briefing">
+    <div class="mb-header">
+      <div><div class="mb-greeting" id="mb-greeting">Good morning 👋</div><div class="mb-time" id="mb-time"></div></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="ai-tag">✦ Org Brain</span>
+        <button class="btn btn-ai btn-sm" onclick="runMorningBriefing()">↻ Refresh</button>
+      </div>
+    </div>
+    <div id="mb-body"><div style="color:var(--txt3);font-size:13px">Your morning briefing covers the areas you work in — add some records to get started.</div></div>
+  </div>
+  <div class="stats-grid" id="dash-stats"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div class="card"><div class="card-title">At-risk — chase today</div><div id="dash-risk"></div></div>
+    <div class="card"><div class="card-title">Recent activity</div><div id="dash-activity"></div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+    <div class="card"><div class="card-title">Feedback highlights</div><div id="dash-fb-hi"></div></div>
+    <div class="card"><div class="card-title">Confidence journey</div><div id="dash-conf-j"></div></div>
+  </div>
+</div>
+
+<!-- RAG -->
+<div id="page-rag" class="page">
+  <div class="page-header"><div><div class="page-title">RAG Status Dashboard</div><div class="page-sub">Auto-calculated from participant data</div></div><button class="btn btn-ghost btn-sm" onclick="renderRAG()">↻ Refresh</button></div>
+  <div id="rag-list"></div>
+</div>
+
+<!-- SOCIAL IMPACT -->
+<div id="page-impact" class="page">
+  <div class="page-header">
+    <div><div class="page-title">Social Impact</div><div class="page-sub">Board-ready · Funder presentations</div></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <select id="ir-period" style="width:auto">
+        <option value="all">All time</option>
+        <option value="12m">Last 12 months</option>
+        <option value="year">This year</option>
+        <option value="quarter">Last quarter</option>
+      </select>
+      <button class="btn btn-ai btn-sm" onclick="generateImpactReport()">✦ Generate impact report</button>
+    </div>
+  </div>
+  <div id="ir-out"></div>
+  <div class="impact-wall">
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--em);margin-bottom:6px;font-weight:700" id="impact-hd">SOCIAL IMPACT</div>
+    <div style="font-size:22px;font-weight:700;margin-bottom:24px;color:var(--txt)">Numbers that move funders</div>
+    <div class="iw-grid">
+      <div><div class="iw-val" id="iw-p">—</div><div class="iw-lbl">Participants supported</div></div>
+      <div><div class="iw-val" id="iw-ev">—</div><div class="iw-lbl">Events &amp; workshops</div></div>
+      <div><div class="iw-val" id="iw-v">—</div><div class="iw-lbl">Active volunteers</div></div>
+      <div><div class="iw-val" id="iw-fb">—</div><div class="iw-lbl">Feedback responses</div></div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
+    <div class="stat-card"><div class="stat-lbl">Enjoyed sessions</div><div class="stat-val" id="imp-enjoyed">—</div></div>
+    <div class="stat-card"><div class="stat-lbl">Learned something new</div><div class="stat-val" id="imp-learned">—</div></div>
+    <div class="stat-card"><div class="stat-lbl">Felt more connected</div><div class="stat-val" id="imp-connected">—</div></div>
+  </div>
+  <div class="card"><div class="card-title">Confidence · before → after</div>
+    <div style="display:flex;gap:24px;align-items:center;padding:8px 0">
+      <div style="text-align:center"><div style="font-size:40px;font-weight:800;color:var(--amber)" id="imp-cb">—</div><div style="font-size:11px;color:var(--txt3);font-weight:600">avg before</div></div>
+      <div style="font-size:28px;color:var(--txt3)">→</div>
+      <div style="text-align:center"><div style="font-size:40px;font-weight:800;color:var(--em)" id="imp-ca">—</div><div style="font-size:11px;color:var(--txt3);font-weight:600">avg after</div></div>
+    </div>
+  </div>
+  <div class="card"><div class="card-title">Participant voices</div><div id="imp-quotes"></div></div>
+</div>
+
+<!-- PARTICIPANTS -->
+<div id="page-participants" class="page">
+  <div class="page-header"><div><div class="page-title">Participants</div><div class="page-sub" id="p-sub"></div></div><button class="btn btn-p btn-sm" onclick="openAddP()">+ Add participant</button></div>
+  <div class="toolbar">
+    <input id="p-search" placeholder="Search name…" oninput="renderParticipants()"/>
+    <select id="p-stage" onchange="renderParticipants()"><option value="">All stages</option><option>Referred</option><option>Engaged</option><option>In Support</option><option>Job Ready</option><option>Outcome Achieved</option><option>Sustained</option><option>Closed</option></select>
+    <select id="p-risk" onchange="renderParticipants()"><option value="">All risk</option><option>High</option><option>Medium</option><option>Low</option></select>
+    <button class="btn btn-ghost btn-sm ml-auto" onclick="exportCSV('participants')">Export CSV</button>
+  </div>
+  <div id="p-alert" class="alert alert-warn" style="display:none"></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Participant</th><th>Ref</th><th>Stage</th><th>Advisor</th><th>Contracts</th><th>Outcomes</th><th>Risk</th><th>Last contact</th><th></th></tr></thead><tbody id="p-table"></tbody></table></div>
+</div>
+
+<!-- CONTACTS -->
+<div id="page-contacts" class="page">
+  <div class="page-header"><div><div class="page-title">Contacts &amp; Donors</div><div class="page-sub" id="c-sub"></div></div><button class="btn btn-p btn-sm" onclick="openAddC()">+ Add contact</button></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody id="c-table"></tbody></table></div>
+</div>
+
+<!-- VOLUNTEERS -->
+<div id="page-volunteers" class="page">
+  <div class="page-header"><div><div class="page-title">Volunteers &amp; Staff</div><div class="page-sub" id="vol-sub"></div></div><button class="btn btn-p btn-sm" onclick="openAddVol()">+ Add volunteer</button></div>
+  <div class="toolbar">
+    <input id="vol-search" placeholder="Search…" oninput="renderVolunteers()"/>
+    <select id="vol-filter-status" onchange="renderVolunteers()"><option value="">All</option><option>Active</option><option>Inactive</option><option>On leave</option></select>
+    <button class="btn btn-ghost btn-sm ml-auto" onclick="exportCSV('volunteers')">Export CSV</button>
+  </div>
+  <div id="vol-list"></div>
+</div>
+
+<!-- EMPLOYERS -->
+<div id="page-employers" class="page">
+  <div class="page-header"><div><div class="page-title">Employer CRM</div><div class="page-sub" id="emp-sub"></div></div><button class="btn btn-p btn-sm" onclick="openAddEmployer()">+ Add employer</button></div>
+  <div class="ai-panel">
+    <div class="ai-panel-title"><span class="ai-icon">🤝</span>Employer Matcher Agent</div>
+    <div style="font-size:13px;color:var(--txt2);margin-bottom:10px">Match job-ready participants to open vacancies automatically.</div>
+    <button class="btn btn-ai btn-sm" onclick="runEmployerMatcher()">✦ Find matches now</button>
+    <div id="employer-matcher-result" style="margin-top:12px"></div>
+  </div>
+  <div class="tbl-wrap"><table><thead><tr><th>Employer</th><th>Sector</th><th>Contact</th><th>Vacancies</th><th>Placements</th><th>Relationship</th><th></th></tr></thead><tbody id="emp-table"></tbody></table></div>
+</div>
+
+<!-- PIPELINE -->
+<div id="page-pipeline" class="page">
+  <div class="page-header"><div><div class="page-title">Caseload Pipeline</div><div class="page-sub">Who needs chasing today?</div></div></div>
+  <div class="kanban" id="kanban"></div>
+</div>
+
+<!-- REFERRALS -->
+<div id="page-referrals" class="page">
+  <div class="page-header"><div><div class="page-title">Referrals</div><div class="page-sub" id="ref-sub"></div></div><button class="btn btn-p btn-sm" onclick="openAddR()">+ New referral</button></div>
+  <div id="ref-alerts"></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Source</th><th>Status</th><th>Date</th><th>Advisor</th><th>Flag</th><th></th></tr></thead><tbody id="ref-table"></tbody></table></div>
+</div>
+
+<!-- PARTNER REFERRALS -->
+<div id="page-partnerrefs" class="page">
+  <div class="page-header"><div><div class="page-title">Partner Referrals</div><div class="page-sub">Submitted via Partner Portal</div></div></div>
+  <div class="card" id="partner-portal-setup">
+    <div class="card-title">🔗 Your partner portal link &amp; QR code</div>
+    <div style="display:grid;grid-template-columns:1fr auto;gap:20px;align-items:start">
+      <div>
+        <div style="font-size:13px;color:var(--txt2);margin-bottom:14px;line-height:1.7">Share this link or QR code with your referral partners — probation, Jobcentre Plus, housing providers. When they register via this link they are automatically linked to your organisation and all their referrals come straight to you.</div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <div id="partner-link-display" style="font-size:12px;color:var(--em);font-family:monospace;flex:1;word-break:break-all">Loading…</div>
+          <button class="btn btn-ghost btn-sm" onclick="copyPartnerLink()" id="copy-link-btn">📋 Copy</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-p btn-sm" onclick="copyPartnerLink()">📋 Copy link</button>
+          <button class="btn btn-ghost btn-sm" onclick="downloadQR()">⬇ Download QR</button>
+          <button class="btn btn-ghost btn-sm" onclick="sharePartnerLink()">📤 Share</button>
+          <button class="btn btn-ghost btn-sm" onclick="printPartnerCard()">🖨️ Print referral card</button>
+        </div>
+      </div>
+      <div style="text-align:center;flex-shrink:0">
+        <div id="qr-container" style="background:#fff;padding:12px;border-radius:10px;display:inline-block;border:1px solid var(--border)">
+          <canvas id="qr-canvas" width="140" height="140"></canvas>
+        </div>
+        <div style="font-size:10px;color:var(--txt3);margin-top:6px;font-weight:600">Scan to open portal</div>
+      </div>
+    </div>
+    <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
+      <button class="btn btn-ghost btn-sm" onclick="toggleEmailTemplate()" id="email-tpl-btn">✉️ Show email template to send to partners</button>
+      <div id="email-template" style="display:none;margin-top:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px">
+        <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;font-weight:700">Ready-to-send email template</div>
+        <div id="email-tpl-body" style="font-size:13px;color:var(--txt2);line-height:1.8;white-space:pre-wrap"></div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="copyEmailTemplate()">📋 Copy email</button>
+      </div>
+    </div>
+  </div>
+  <div id="pref-alerts"></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Partner</th><th>Primary need</th><th>Urgency</th><th>Safeguarding</th><th>Submitted</th><th>Status</th><th></th></tr></thead><tbody id="pref-table"></tbody></table></div>
+</div>
+
+<!-- EVENTS -->
+<div id="page-events" class="page">
+  <div class="page-header"><div><div class="page-title">Events &amp; Workshops</div><div class="page-sub" id="ev-sub"></div></div><button class="btn btn-p btn-sm" onclick="openAddEv()">+ Create event</button></div>
+  <div class="alert alert-info" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span>📱 <strong>One QR covers every event.</strong> Your permanent sign-in QR automatically becomes today's event page as soon as you add one here — nothing to print per event. Attendees scan it to leave feedback; volunteers check in and out, and their hours log themselves.</span><button class="btn btn-ghost btn-sm" onclick="openSiteQR()" style="flex-shrink:0">📱 Show sign-in QR</button></div>
+  <div class="toolbar" style="flex-wrap:wrap;gap:8px"><select id="ev-filter-type" onchange="renderEvents()"><option value="">All types</option><option>Green Skills</option><option>Wellbeing</option><option>Community Event</option><option>Frailty</option><option>Other</option></select><select id="ev-filter-date" onchange="onEvDateFilterChange()"><option value="all">All dates</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="upcoming">Upcoming</option><option value="year">This year</option><option value="month">Choose a month…</option><option value="custom">Custom range…</option></select><select id="ev-filter-month" onchange="renderEvents()" style="display:none"></select><button type="button" class="btn btn-ghost btn-sm" id="ev-sort-btn" onclick="window._evOldestFirst=!window._evOldestFirst;renderEvents()">↓ Newest first</button><span id="ev-filter-custom" style="display:none;align-items:center;gap:6px"><input type="date" id="ev-filter-from" onchange="renderEvents()" style="width:auto"/><span style="color:var(--txt3);font-size:12px">to</span><input type="date" id="ev-filter-to" onchange="renderEvents()" style="width:auto"/></span></div>
+  <div class="stats-grid" id="ev-stats"></div>
+  <div id="ev-list"></div>
+</div>
+
+<!-- FEEDBACK -->
+<div id="page-feedback" class="page">
+  <div class="page-header"><div><div class="page-title">Participant Feedback</div><div class="page-sub" id="fb-sub"></div></div><button class="btn btn-p btn-sm" onclick="openAddFb()">+ Add response</button></div>
+  <div class="toolbar"><select id="fb-filter-ev" onchange="renderFeedback()"><option value="">All events</option></select></div>
+  <div class="stats-grid" id="fb-stats"></div>
+  <div class="ai-panel">
+    <div class="ai-panel-title"><span class="ai-icon">💬</span>Feedback Analyst Agent</div>
+    <div style="font-size:13px;color:var(--txt2);margin-bottom:10px">Generate a board-ready summary of all participant feedback.</div>
+    <button class="btn btn-ai btn-sm" onclick="runFeedbackAnalyst()">✦ Analyse feedback</button>
+    <div id="feedback-analyst-result" style="margin-top:12px"></div>
+  </div>
+  <div id="fb-list"></div>
+</div>
+
+<!-- OUTCOMES -->
+<div id="page-outcomes" class="page">
+  <div class="page-header"><div><div class="page-title">Outcomes &amp; Impact</div></div><button class="btn btn-ghost btn-sm" onclick="exportCSV('participants')">Export CSV</button></div>
+  <div class="ai-panel">
+    <div class="ai-panel-title"><span class="ai-icon">🎯</span>Outcomes Analyst Agent</div>
+    <div style="font-size:13px;color:var(--txt2);margin-bottom:10px">Spot patterns in your caseload — what's working, what barriers cluster together, where to focus.</div>
+    <button class="btn btn-ai btn-sm" onclick="runOutcomesAnalyst()">✦ Analyse outcomes</button>
+    <div id="outcomes-analyst-result" style="margin-top:12px"></div>
+  </div>
+  <div class="stats-grid" id="out-stats"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+    <div class="card"><div class="card-title">Outcomes by type</div><div id="out-by-type"></div></div>
+    <div class="card"><div class="card-title">Common barriers</div><div id="out-barriers"></div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div class="card"><div class="card-title">Journey stages</div><div id="out-stage-breakdown"></div></div>
+    <div class="card"><div class="card-title">Confidence scores</div><div id="out-confidence"></div></div>
+  </div>
+</div>
+
+<!-- FUNDERS -->
+<div id="page-funders" class="page">
+  <div class="page-header"><div><div class="page-title">Funders</div><div class="page-sub" id="funders-sub">Manage your funder relationships</div></div><button class="btn btn-p btn-sm" onclick="openAddFunder()">+ Add funder</button></div>
+  <div class="alert alert-info" style="margin-bottom:16px">💡 <strong>Workflow:</strong> Add a funder → attach contracts → generate reports from the Reports tab.</div>
+  <div id="funders-list"></div>
+</div>
+
+<!-- FUNDING / CONTRACTS -->
+<div id="page-funding" class="page">
+  <div class="page-header"><div><div class="page-title">Funding &amp; Contracts</div><div class="page-sub" id="fund-sub"></div></div><button class="btn btn-p btn-sm" onclick="openAddCon()">+ Add contract</button></div>
+  <div id="fund-list"></div>
+</div>
+
+<!-- REPORTS -->
+<div id="page-reports" class="page">
+  <div class="page-header"><div><div class="page-title">Funder Reports</div><div class="page-sub">AI-generated · Powered by Org Brain</div></div></div>
+  <div class="ai-panel" style="margin-bottom:20px">
+    <div class="ai-panel-title"><span class="ai-icon">✦</span>How it works</div>
+    <div style="font-size:13px;color:var(--txt2);line-height:1.7">Select a contract below and click Generate. The Org Brain reads your live data, cross-checks against the funder's reporting framework, writes a clean professional report, then runs a Quality Supervisor check before showing it to you. Download as PDF when ready.</div>
+  </div>
+  <div id="reports-contract-list"></div>
+  <div id="brain-progress"></div>
+  <div id="report-output"></div>
+</div>
+
+<!-- EVIDENCE -->
+<div id="page-evidence" class="page">
+  <div class="page-header"><div><div class="page-title">Evidence &amp; Compliance Hub</div></div><button class="btn btn-p btn-sm" onclick="openAddEvid()">+ Upload evidence</button></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Participant</th><th>Type</th><th>Outcome</th><th>Staff</th><th>Date</th><th>Status</th><th></th></tr></thead><tbody id="evid-table"></tbody></table></div>
+</div>
+
+<!-- SAFEGUARDING -->
+<div id="page-safeguarding" class="page">
+  <div class="page-header"><div><div class="page-title">Safeguarding &amp; Permissions</div></div></div>
+  <div class="alert alert-info" style="margin-bottom:14px">Role-based access active · GDPR compliant · Consent tracked</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div class="card"><div class="card-title">Flagged cases</div><div id="safe-flags"></div></div>
+    <div class="card"><div class="card-title">Consent tracker</div><div id="consent-list"></div></div>
+  </div>
+</div>
+
+<!-- SOCIAL MEDIA STUDIO -->
+<div id="page-social" class="page">
+  <div class="page-header"><div><div class="page-title">📣 Social Media Studio</div><div class="page-sub">Posts written from your real events, feedback and impact — every platform at once</div></div></div>
+
+  <div class="card">
+    <div class="card-title">① What's this post about?</div>
+    <div class="form-grid-3">
+      <div class="form-row"><label>Post about</label>
+        <select id="sm-about" onchange="socialAboutChanged()">
+          <option value="event">An event we ran</option>
+          <option value="upcoming">An upcoming event (promote it)</option>
+          <option value="impact">Our impact</option>
+          <option value="volunteer">Thanking a volunteer</option>
+          <option value="custom">Something else</option>
+        </select>
+      </div>
+      <div class="form-row" id="sm-event-wrap"><label>Event</label><select id="sm-event" onchange="socialRefreshFacts()"></select></div>
+      <div class="form-row" id="sm-period-wrap" style="display:none"><label>Period</label>
+        <select id="sm-period" onchange="socialRefreshFacts()">
+          <option value="12m">Last 12 months</option>
+          <option value="year">This year</option>
+          <option value="quarter">Last quarter</option>
+          <option value="all">All time</option>
+        </select>
+      </div>
+      <div class="form-row" id="sm-vol-wrap" style="display:none"><label>Volunteer</label><select id="sm-vol" onchange="socialRefreshFacts()"></select></div>
+    </div>
+    <div id="sm-facts"></div>
+    <div class="form-row" style="margin-bottom:0"><label>Anything to add? (optional)</label><input id="sm-context" placeholder="e.g. Our first session in the new polytunnel, thanks to PECT funding"/></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">② Participant quotes</div>
+    <div style="font-size:12px;color:var(--txt3);margin-bottom:10px">Tick only the quotes you have permission to share. They're always posted anonymously.</div>
+    <div id="sm-quotes"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">③ Photo, platforms &amp; tone</div>
+    <div class="form-grid-2">
+      <div class="form-row">
+        <label>Your photo (optional)</label>
+        <input type="file" id="sm-photo" accept="image/*" onchange="handleSocialPhoto(this)" style="font-size:13px"/>
+        <div id="sm-photo-preview" style="margin-top:8px"></div>
+        <div id="sm-consent-wrap" style="display:none;margin-top:8px">
+          <label style="display:flex;gap:8px;align-items:flex-start;text-transform:none;letter-spacing:0;font-weight:500;font-size:12px;color:var(--txt2);cursor:pointer">
+            <input type="checkbox" id="sm-consent" style="width:auto;margin-top:2px"/>
+            Everyone identifiable in this photo has agreed to it being shared (and a parent or guardian for any child)
+          </label>
+        </div>
+        <div style="font-size:11px;color:var(--txt3);margin-top:6px">🔒 Photos stay on this device — they're never uploaded or stored.</div>
+      </div>
+      <div>
+        <div class="form-row"><label>Platforms</label>
+          <div class="chk-group">
+            <div class="chk-pill"><label><input type="checkbox" class="sm-plat" value="linkedin" checked/> 💼 LinkedIn</label></div>
+            <div class="chk-pill"><label><input type="checkbox" class="sm-plat" value="instagram" checked/> 📸 Instagram</label></div>
+            <div class="chk-pill"><label><input type="checkbox" class="sm-plat" value="facebook" checked/> 👍 Facebook</label></div>
+            <div class="chk-pill"><label><input type="checkbox" class="sm-plat" value="x"/> ✖️ X</label></div>
+          </div>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-row"><label>Tone</label>
+            <select id="sm-tone">
+              <option value="warm and human">Warm &amp; human</option>
+              <option value="celebratory">Celebratory</option>
+              <option value="professional">Professional</option>
+              <option value="inspiring">Inspiring</option>
+              <option value="urgent, with a clear ask">Urgent / call to action</option>
+            </select>
+          </div>
+          <div class="form-row"><label>Call to action (optional)</label><input id="sm-cta" placeholder="e.g. Book your place — link in bio"/></div>
+        </div>
+        <label style="display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font-weight:500;font-size:13px;color:var(--txt2);cursor:pointer">
+          <input type="checkbox" id="sm-hashtags" checked style="width:auto"/> Include hashtags
+        </label>
+      </div>
+    </div>
+    <button class="btn btn-ai" style="margin-top:14px" onclick="generateSocial()">✦ Write my posts</button>
+  </div>
+
+  <div id="sm-output" style="display:none;margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div style="font-size:15px;font-weight:700;color:var(--txt)">Your posts</div>
+      <div style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--txt3)">Plan for <input type="date" id="sm-plan-date" style="width:auto"/></div>
+    </div>
+    <div id="sm-result"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🗓️ Content plan</div>
+    <div id="sm-plan"></div>
+  </div>
+</div>
+
+<!-- BD MANAGER -->
+<div id="page-bd" class="page">
+  <style>
+    .bd-flow{display:flex;align-items:center;gap:8px;margin:0 0 18px;flex-wrap:wrap}
+    .bd-flow a{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:20px;background:var(--surface);border:1px solid var(--border);font-size:13px;font-weight:600;color:var(--txt3);cursor:pointer;text-decoration:none;user-select:none}
+    .bd-flow a b{width:20px;height:20px;border-radius:50%;background:var(--border);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px}
+    .bd-flow a.on{color:var(--txt);border-color:var(--em)}
+    .bd-flow a.on b{background:var(--em)}
+    .bd-flow a.done b{background:#16A34A}
+    .bd-flow a.todo{color:var(--txt3)}
+    .bd-flow a:hover{border-color:var(--em)}
+    .bd-flow i{flex:0 0 16px;height:1px;background:var(--border)}
+    .bd-grid{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:18px;align-items:start}
+    @media(max-width:980px){.bd-grid{grid-template-columns:1fr}.bd-side{order:-1}}
+    .bd-sec-h{display:flex;align-items:center;gap:12px;margin:0 0 14px}
+    .bd-sec-h .n{width:26px;height:26px;border-radius:50%;background:var(--em);color:#fff;font-size:13px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+    .bd-sec-h .t{font-size:17px;font-weight:700;color:var(--txt);letter-spacing:-.2px}
+    .bd-sec-h .s{font-size:12.5px;color:var(--txt3);margin-top:1px}
+    .bd-find{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+    .bd-find .form-row{flex:1;min-width:220px;margin:0}
+    .bd-hint{font-size:12.5px;color:var(--txt3);margin-top:10px;line-height:1.5}
+    .bd-seg{display:inline-flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:0 0 12px;flex-wrap:wrap}
+    .bd-seg button{border:none;background:var(--surface);padding:7px 13px;font-size:12.5px;font-weight:600;color:var(--txt2);cursor:pointer}
+    .bd-seg button.on{background:var(--em);color:#fff}
+    .bd-row{display:flex;gap:14px;justify-content:space-between;align-items:flex-start;padding:14px 0;border-top:1px solid var(--border)}
+    .bd-row:first-of-type{border-top:none}
+    .bd-row-main{min-width:0;flex:1}
+    .bd-pill{display:inline-block;font-size:11px;font-weight:700;border-radius:10px;padding:2px 9px;margin-right:6px}
+    .bd-fit5{background:#DCFCE7;color:#166534}.bd-fit4{background:#E0F2FE;color:#075985}.bd-fit3{background:#F3F4F6;color:#4B5563}
+    .bd-lane{font-size:11.5px;color:var(--txt3)}
+    .bd-row-title{font-size:15px;font-weight:700;color:var(--txt);margin:5px 0 2px}
+    .bd-row-fit{font-size:13.5px;color:var(--txt2);line-height:1.5}
+    .bd-row-meta{font-size:12.5px;color:var(--txt3);margin-top:5px}
+    .bd-row-act{display:flex;flex-direction:column;gap:8px;align-items:flex-end;flex-shrink:0}
+    .bd-row-act a{font-size:12.5px;color:var(--em);font-weight:600;text-decoration:none}
+    @media(max-width:600px){.bd-row{flex-direction:column}.bd-row-act{flex-direction:row;align-items:center}}
+    .bd-org label{font-size:11px}
+    .bd-side summary{cursor:pointer;list-style:none}
+    .bd-side summary::-webkit-details-marker{display:none}
+    .bd-sum{font-size:12.5px;color:var(--txt3);margin-top:3px;line-height:1.45}
+    .bd-how{font-size:12.5px;color:var(--txt2);line-height:1.65;padding-left:16px;margin:6px 0 0}
+    #bd-manual summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--em)}
+    .bd-man-blk{border-top:1px solid var(--border);padding:14px 0 4px;margin-top:12px}
+    .bd-man-blk h4{font-size:13px;margin:0 0 4px;color:var(--txt)}
+    .bd-man-blk p{font-size:12.5px;color:var(--txt3);margin:0 0 10px}
+    .bd-pullnote{font-size:13px;line-height:1.55;padding:10px 12px;border-radius:10px;background:var(--bg);color:var(--txt2);margin-top:12px}
+  </style>
+
+  <div class="page-header"><div><div class="page-title">💼 BD Manager</div><div class="page-sub">Find funding · we pull the funder's own form and fill it in</div></div></div>
+
+  <div class="bd-flow">
+    <a id="bd-chip-1" class="on" onclick="bdGo(1)"><b>1</b> Find funding</a><i></i>
+    <a id="bd-chip-2" class="todo" onclick="bdGo(2)" title="Upload a funder's form, or pull one from a result"><b>2</b> Their form</a><i></i>
+    <a id="bd-chip-3" class="todo" onclick="bdGo(3)" title="Your filled-in form and answers appear here"><b>3</b> Review &amp; download</a>
+  </div>
+
+  <div class="bd-grid">
+    <div class="bd-main">
+
+      <!-- 1 · FIND FUNDING -->
+      <div class="card" id="bd-s1">
+        <div class="bd-sec-h"><span class="n">1</span><div><div class="t">Find funding</div><div class="s">Councils and government, trusts and the Lottery, and company funders, searched live for your area</div></div></div>
+        <div class="bd-find">
+          <div class="form-row"><label>Any funders you already have in mind? <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label><input id="bd-specific" placeholder="e.g. National Lottery, your local council, Veolia…"/></div>
+          <button class="btn btn-ai" onclick="runBDResearch()" style="height:40px">✦ Find opportunities</button>
+        </div>
+        <div class="bd-hint">It uses the details on the right. Takes about a minute. Already have a funder's form? <a href="#" onclick="bdManualStart();return false" style="color:var(--em);font-weight:600">Upload it instead</a></div>
+        <div id="bd-opps-wrap" style="display:none;margin-top:16px;padding-top:6px;border-top:1px solid var(--border)">
+          <div id="bd-opps-result"></div>
+        </div>
+      </div>
+
+      <!-- 2 · THEIR FORM -->
+      <div class="card" id="bd-s2" style="display:none;margin-top:16px">
+        <div class="bd-sec-h"><span class="n">2</span><div><div class="t">Their form</div><div class="s" id="bd-funder-bar">We find it, read it, answer it and fill it in</div></div></div>
+        <div class="form-row"><label>Funder / scheme</label><input id="eoi-funder" placeholder="e.g. Veolia Environmental Trust — Community grants"/></div>
+        <div id="bd-pull-steps"></div>
+        <div id="bd-pull-note"></div>
+        <div id="eoi-questions" style="display:none;margin-top:14px"></div>
+        <details id="bd-manual" style="margin-top:14px">
+          <summary>Use your own form or brief instead</summary>
+          <div class="bd-man-blk">
+            <h4>📄 Upload their form</h4>
+            <p>Word forms are filled in for you, box by box. PDFs are read and the answers written out for you to copy across.</p>
+            <input type="file" id="eoi-form-file" accept=".docx,.pdf,.txt" onchange="handleEOIFormUpload(this)" style="font-size:13px"/>
+          </div>
+          <div class="bd-man-blk">
+            <h4>📋 Paste their questions</h4>
+            <div class="form-row"><textarea id="eoi-form-text" style="min-height:90px" placeholder="Paste the funder's questions here — one per line is fine…"></textarea></div>
+            <button class="btn btn-ai btn-sm" onclick="parseEOIForm()">Read the questions</button>
+          </div>
+          <div class="bd-man-blk">
+            <h4>✍️ No form — write from a brief</h4>
+            <div class="form-row"><textarea id="eoi-brief" style="min-height:100px" placeholder="Paste the funding brief, or describe what outcomes they want…"></textarea></div>
+            <button class="btn btn-ai btn-sm" onclick="runEOIGenerator()">Write my bid</button>
+          </div>
+        </details>
+      </div>
+
+      <!-- 3 · REVIEW & DOWNLOAD -->
+      <div id="eoi-output" style="display:none;margin-top:16px">
+        <div class="ai-panel">
+          <div class="ai-panel-title"><span class="ai-icon">📄</span>Review &amp; download</div>
+          <div id="eoi-result"></div>
+          <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+            <button class="btn btn-p btn-sm" onclick="downloadEOIPDF()">⬇ Download as PDF</button>
+            <button class="btn btn-ghost btn-sm" onclick="copyEOI()">📋 Copy text</button>
+            <button class="btn btn-ghost btn-sm" onclick="runEOIGenerator()">↻ Regenerate</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- YOUR ORGANISATION — always visible, set once -->
+    <aside class="bd-side">
+      <div class="card bd-org">
+        <details id="bd-org" open>
+          <summary><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:15px;color:var(--txt)">Your organisation</b><span style="font-size:12px;color:var(--em);font-weight:600">Edit</span></div>
+            <div class="bd-sum" id="bd-org-sum">Set once — used for every search and bid</div></summary>
+          <div style="margin-top:14px">
+            <div class="form-row"><label>Where you deliver</label><input id="bd-area" list="bd-area-list" onchange="bdSetupLocalSave()" placeholder="e.g. Peterborough and Cambridgeshire"/>
+              <datalist id="bd-area-list"><option value="London"><option value="Greater Manchester"><option value="Birmingham / West Midlands"><option value="Leeds / West Yorkshire"><option value="Bristol / South West"><option value="Peterborough / Cambridgeshire"><option value="National / England-wide"></datalist></div>
+            <div class="form-row"><label>What you do <span style="font-weight:400;text-transform:none;letter-spacing:0">— tap all that apply</span></label>
+              <div id="bd-what" style="display:flex;flex-wrap:wrap;gap:6px"></div></div>
+            <div class="form-grid-2">
+              <div class="form-row"><label>Type</label><select id="bd-type" onchange="bdSetupLocalSave()"><option>Registered charity</option><option>CIC</option><option>CIO</option><option>Community group (unincorporated)</option><option>Company</option><option>Social enterprise</option></select></div>
+              <div class="form-row"><label>Yearly income</label><select id="bd-size" onchange="bdSetupLocalSave()"><option value="micro">Under £100k</option><option value="small">£100k–£500k</option><option value="medium">£500k–£2m</option><option value="large">£2m+</option></select></div>
+            </div>
+            <div class="form-row"><label>About your organisation <span style="font-weight:400;text-transform:none;letter-spacing:0">— every bid starts from this</span></label>
+              <textarea id="eoi-org-profile" oninput="bdRefreshSummary()" style="min-height:140px;font-size:13px" placeholder="Legal &amp; trading name: [your organisation] (charity no. …, company no. …)
+Registered address: …
+Website: …
+Lead contact: name, role — email — phone
+Founded: year · Where you deliver: towns, boroughs or counties
+Mission: one or two sentences
+Track record: programme, years, numbers (e.g. 320 people supported, 140 into work, 1.2 tonnes diverted from waste)
+Partnerships: councils, Jobcentre Plus, schools, employers, other charities
+Accreditations and policies: e.g. Matrix, safeguarding, Cyber Essentials"></textarea></div>
+            <div style="display:flex;gap:6px;margin-bottom:10px"><input id="bd-site" placeholder="Your website (optional)" style="flex:1;font-size:13px"/><button class="btn btn-ghost btn-sm" onclick="fillOrgProfileFromWeb()" style="white-space:nowrap" title="Looks up your website, the Charity Commission and Companies House and drafts the profile for you to check">✨ Look us up</button></div>
+            <div class="form-row"><label>What makes you different? <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label><input id="eoi-usps" placeholder="e.g. 10 years in the area · the only repair café in the district"/></div>
+            <div style="display:flex;gap:10px;align-items:center"><button class="btn btn-p btn-sm" onclick="saveOrgProfileFromField()">Save</button><span id="eoi-profile-saved" style="display:none;color:var(--em);font-size:12px;font-weight:600">✓ Saved for your whole team</span></div>
+          </div>
+        </details>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <div style="font-size:14px;font-weight:700;color:var(--txt)">How it works</div>
+        <ol class="bd-how"><li><b>Find</b> funders that fit you</li><li><b>Pull their form</b> — we download the funder's own Word or PDF form</li><li>We <b>write every answer</b> from your profile and real records, and <b>fill the form in</b></li><li><b>Check</b> the yellow gaps, download, send</li></ol>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- EQUALITY & INCLUSION -->
+<div id="page-hr" class="page">
+  <div class="page-header">
+    <div><div class="page-title">🛡️ Equality &amp; Inclusion</div><div class="page-sub">Equality Act 2010 · GDPR · Aggregate &amp; anonymised</div></div>
+  </div>
+
+  <div class="alert alert-info" style="margin-bottom:16px">
+    💬 The Language Coach is a private, self-help tool. It only checks text you paste in, shows suggestions to you alone, and never stores anything or notifies anyone. Equity and benchmarking work on aggregate, anonymised numbers only — no individual is ever named.
+  </div>
+
+  <div class="vtab-bar" style="margin-bottom:20px">
+    <button class="vtab-btn active" onclick="switchHRTab('coach',this)">💬 Language coach</button>
+    <button class="vtab-btn" onclick="switchHRTab('equity',this)">📊 Outcome equity</button>
+    <button class="vtab-btn" onclick="switchHRTab('monitoring',this)">📋 Equality monitoring</button>
+    <button class="vtab-btn" onclick="switchHRTab('benchmark',this)">🏆 Benchmarking</button>
+  </div>
+
+  <div id="hr-tab-coach">
+    <div class="ai-panel" style="margin-bottom:16px">
+      <div class="ai-panel-title"><span class="ai-icon">💬</span>Positive Language Coach · Self-help</div>
+      <div style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:12px">
+        Paste a case note, referral, or any wording you're unsure about. The coach suggests gentler, more inclusive, person-first phrasing — just for you. Nothing is saved, logged, or shared with anyone.
+      </div>
+      <div class="form-row" style="margin-bottom:10px">
+        <label>Your text</label>
+        <textarea id="language-coach-input" style="min-height:120px" placeholder="Paste the wording you'd like a second opinion on…"></textarea>
+      </div>
+      <button class="btn btn-ai btn-sm" onclick="runLanguageCoach()">✦ Suggest kinder phrasing</button>
+      <div id="language-coach-result" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+  <div id="hr-tab-equity" style="display:none">
+    <div class="ai-panel">
+      <div class="ai-panel-title"><span class="ai-icon">📊</span>Outcome Equity Analysis</div>
+      <div style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:10px">Cross-references outcomes against protected characteristics using aggregate numbers only. Flags any gap over 15%. No individual is named.</div>
+      <button class="btn btn-ai btn-sm" onclick="runEquityAnalysis()">✦ Run equity analysis</button>
+    </div>
+    <div id="equity-result"></div>
+  </div>
+
+  <div id="hr-tab-monitoring" style="display:none">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title">About equality monitoring</div>
+      <div style="font-size:13px;color:var(--txt2);line-height:1.7">Completion is <strong style="color:var(--txt)">voluntary</strong>. Data is stored separately, used only for anonymised reporting, and never shared with funders at individual level.</div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div class="card-title" style="margin-bottom:0">Participant equality data</div>
+        <div id="eq-completion-badge" style="font-size:12px;color:var(--txt3);font-weight:600"></div>
+      </div>
+      <div id="eq-monitoring-list"></div>
+    </div>
+  </div>
+
+  <div id="hr-tab-benchmark" style="display:none">
+    <div class="ai-panel">
+      <div class="ai-panel-title"><span class="ai-icon">🏆</span>Anonymised Benchmarking</div>
+      <div style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:10px">Compares your outcome equity against anonymised aggregates from similar-size Vorlana organisations. No names are ever shared.</div>
+      <button class="btn btn-ai btn-sm" onclick="runBenchmarking()">✦ Generate benchmark report</button>
+    </div>
+    <div id="benchmark-result"></div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div id="page-circular" class="page"></div>
+
+<div id="page-settings" class="page"></div>
+
+</div></div>
+
+<!-- ─── MODALS ───────────────────────────────────────────── -->
+
+<div class="modal-overlay" id="modal-branding"><div class="modal" style="max-width:520px">
+  <h2 id="branding-modal-title">Welcome to Vorlana — make it yours</h2>
+  <p style="font-size:13px;color:var(--txt3);margin-bottom:18px;line-height:1.6">Set your organisation's logo and brand colour. They'll appear on the sidebar, funder reports, and partner portal. You can change these any time from Settings.</p>
+  <div class="form-row">
+    <label>Organisation logo</label>
+    <div id="logo-preview-wrap" style="display:flex;align-items:center;gap:14px;margin-bottom:8px">
+      <div id="logo-preview" style="width:90px;height:90px;border-radius:10px;background:var(--bg);border:1px dashed var(--border);display:flex;align-items:center;justify-content:center;color:var(--txt3);font-size:11px;text-align:center;flex-shrink:0;overflow:hidden">No logo<br/>yet</div>
+      <div style="flex:1">
+        <input type="file" id="logo-file-input" accept="image/png,image/jpeg,image/svg+xml" style="display:none" onchange="handleLogoSelect(event)"/>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('logo-file-input').click()">📁 Choose file</button>
+        <div style="font-size:11px;color:var(--txt3);margin-top:6px">PNG, JPG or SVG · Max 2MB · Square or wide both work</div>
+      </div>
+    </div>
+    <div id="logo-upload-status" style="font-size:12px;color:var(--txt3);margin-top:4px"></div>
+  </div>
+  <div class="form-row">
+    <label>Accent colour</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px" id="brand-color-swatches"></div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:12px;color:var(--txt3)">Or paste a hex:</span>
+      <input id="brand-color-hex" type="text" placeholder="#1F6F6D" style="max-width:130px;font-family:ui-monospace,monospace" oninput="onHexInput(this.value)"/>
+      <div id="brand-color-preview" style="width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:#1F6F6D;flex-shrink:0"></div>
+    </div>
+  </div>
+  <div id="branding-error" class="alert alert-warn" style="display:none;margin-top:12px"></div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="skipBranding()">Skip for now</button>
+    <button class="btn btn-p" id="branding-save-btn" onclick="saveBranding()">Save and continue</button>
+  </div>
+</div></div>
+
+<div class="modal-overlay" id="modal-funder"><div class="modal" style="max-width:560px">
+  <h2 id="funder-modal-title">Add funder</h2>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Funder name *</label><input id="ff-name" placeholder="e.g. Ministry of Justice"/></div>
+    <div class="form-row"><label>Funder type</label><select id="ff-type"><option value="moj">Ministry of Justice</option><option value="gla">Greater London Authority</option><option value="cbf">City Bridge Foundation</option><option value="ukspf">UKSPF / Local Authority</option><option value="lottery">National Lottery</option><option value="trust">Grant-making trust</option><option value="dwp">DWP / Jobcentre Plus</option><option value="nhs">NHS / ICB</option><option value="impact">Annual / Board report</option><option value="other">Other</option></select></div>
+  </div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Contact name</label><input id="ff-contact"/></div>
+    <div class="form-row"><label>Contact email</label><input type="email" id="ff-email"/></div>
+  </div>
+  <div class="form-row"><label>Reporting requirements / priorities</label><textarea id="ff-notes" style="min-height:70px"></textarea></div>
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-funder')">Cancel</button><button class="btn btn-p" id="funder-save-btn" onclick="saveFunder()">Save funder</button></div>
+</div></div>
+
+<div class="modal-overlay" id="modal-p"><div class="modal">
+  <h2 id="mp-title">Add participant</h2>
+
+  <details><summary style="cursor:pointer;padding:10px 12px;margin-top:6px;background:var(--bg);border:1px solid var(--border);border-radius:9px;font-weight:700;font-size:13px;color:var(--txt);user-select:none">👤 Participant details</summary>
+  <div style="padding:12px 2px 2px">
+    <div class="form-grid-2"><div class="form-row"><label>First name</label><input id="mp-fn"/></div><div class="form-row"><label>Last name</label><input id="mp-ln"/></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Title</label><input id="mp-ptitle" placeholder="Mr / Mrs / Ms"/></div><div class="form-row"><label>Date of birth</label><input type="date" id="mp-dob"/></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>NI number</label><input id="mp-ni" placeholder="AB123456C"/></div><div class="form-row"><label>Participant ID</label><input id="mp-pid"/></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Phone</label><input id="mp-phone"/></div><div class="form-row"><label>Email</label><input type="email" id="mp-email"/></div></div>
+    <div class="form-row"><label>Address</label><input id="mp-address"/></div>
+    <div class="form-grid-2"><div class="form-row"><label>Post code</label><input id="mp-postcode"/></div><div class="form-row"><label>Start date</label><input type="date" id="mp-start"/></div></div>
+  </div></details>
+
+  <details><summary style="cursor:pointer;padding:10px 12px;margin-top:12px;background:var(--bg);border:1px solid var(--border);border-radius:9px;font-weight:700;font-size:13px;color:var(--txt);user-select:none">🧭 Referral &amp; journey</summary>
+  <div style="padding:12px 2px 2px">
+    <div class="form-grid-2"><div class="form-row"><label>Referral source</label><select id="mp-rs"><option>Self-referral</option><option>Probation</option><option>Jobcentre Plus</option><option>Community org</option><option>School / college</option></select></div><div class="form-row"><label>Advisor</label><select id="mp-adv"><option>Sarah T.</option><option>Marcus O.</option><option>Priya S.</option><option>Unassigned</option></select></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Stage</label><select id="mp-st"><option>Referred</option><option>Engaged</option><option>In Support</option><option>Job Ready</option><option>Outcome Achieved</option><option>Sustained</option><option>Closed</option></select></div><div class="form-row"><label>Risk level</label><select id="mp-risk"><option>Low</option><option>Medium</option><option>High</option></select></div></div>
+    <div class="form-row"><label>Next contact due</label><input type="date" id="mp-due"/></div>
+    <div class="form-row"><label>Link to contracts</label><div class="con-select" id="mp-contracts-list"></div></div>
+    <div class="form-row"><label>Referral background (for AI intake)</label><textarea id="mp-intake-text" placeholder="Paste referral letter or background notes…" style="min-height:70px"></textarea></div>
+    <div id="mp-ai-intake-result"></div>
+    <div style="margin-bottom:4px"><button class="btn btn-ai btn-sm" onclick="runIntakeAI()">✦ Intake Agent — suggest barriers &amp; risk</button></div>
+  </div></details>
+
+  <details><summary style="cursor:pointer;padding:10px 12px;margin-top:12px;background:var(--bg);border:1px solid var(--border);border-radius:9px;font-weight:700;font-size:13px;color:var(--txt);user-select:none">📋 Assessment &amp; notes</summary>
+  <div style="padding:12px 2px 2px">
+    <div class="form-row"><label>Barriers</label><div id="barrier-checks" class="chk-group"></div></div>
+    <div class="form-row"><label>Outcomes achieved</label><div id="outcome-checks" class="chk-group"></div></div>
+    <div class="form-row"><label>Safeguarding flag</label><select id="mp-safe"><option value="">None</option><option>Domestic abuse</option><option>Mental health</option><option>Substance misuse</option><option>Homelessness risk</option></select></div>
+    <div class="score-box"><div class="score-label">Distance Travelled (1–10)</div>
+      <div class="form-grid-2"><div class="form-row"><label>Confidence</label><input type="number" id="mp-conf" min="1" max="10"/></div><div class="form-row"><label>Work readiness</label><input type="number" id="mp-work" min="1" max="10"/></div></div>
+      <div class="form-grid-2"><div class="form-row"><label>Wellbeing</label><input type="number" id="mp-well" min="1" max="10"/></div><div class="form-row"><label>Skills</label><input type="number" id="mp-skillsc" min="1" max="10"/></div></div>
+    </div>
+    <div class="form-row"><label>Case note</label><textarea id="mp-note"></textarea></div>
+    <div id="mp-note-preview" style="display:none">
+      <div style="font-size:11px;color:var(--purple);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;font-weight:700">✦ Case Note Agent — structured preview</div>
+      <div class="ai-note-box" id="mp-note-preview-text"></div>
+      <div style="display:flex;gap:8px;margin-top:6px"><button class="btn btn-p btn-sm" onclick="acceptAINote()">Use this</button><button class="btn btn-ghost btn-sm" onclick="rejectAINote()">Use original</button></div>
+    </div>
+    <button class="btn btn-ai btn-sm" onclick="runCaseNoteAI()" id="note-ai-btn">✦ Case Note Agent — structure note</button>
+  </div></details>
+
+  <details><summary style="cursor:pointer;padding:10px 12px;margin-top:12px;background:var(--bg);border:1px solid var(--border);border-radius:9px;font-weight:700;font-size:13px;color:var(--txt);user-select:none">📑 Funder paperwork &amp; eligibility</summary>
+  <div style="padding:12px 2px 2px">
+    <div style="font-size:12px;color:var(--txt3);margin-bottom:10px">Eligibility details used to fill funder Start/End forms. Optional.</div>
+    <div class="form-grid-2"><div class="form-row"><label>Gender</label><select id="mp-gender"><option value=""></option><option>Male</option><option>Female</option><option>Other</option><option>Prefer not to say</option></select></div><div class="form-row"><label>Right to live &amp; work in UK</label><select id="mp-rtw"><option value=""></option><option>Yes</option><option>No</option></select></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Basic skills (Maths &amp; English)</label><select id="mp-bskills"><option value=""></option><option>Yes</option><option>No</option></select></div><div class="form-row"><label>Labour market status</label><select id="mp-labour"><option value=""></option><option>Unemployed</option><option>Economically inactive</option></select></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Needs interpersonal-skills support</label><select id="mp-inter"><option value=""></option><option>Yes</option><option>No</option></select></div><div class="form-row"><label>Delivery organisation</label><input id="mp-provider"/></div></div>
+    <div class="form-row"><label>Programme / project</label><input id="mp-project"/></div>
+    <div style="margin-top:10px"><button type="button" class="btn btn-p btn-sm" onclick="civaraFillFunderForm()">📄 Fill funder form (from contract template)</button><div style="font-size:11px;color:var(--txt3);margin-top:5px">Fills this contract's own uploaded Word form with this participant's details.</div></div>
+  </div></details>
+
+  <details><summary style="cursor:pointer;padding:10px 12px;margin-top:12px;background:#E7F0EF;border:1px solid #9CC3C0;border-left:4px solid #1F6F6D;border-radius:9px;font-weight:700;font-size:13px;color:#175655;user-select:none">💼 Job outcome — <span style="font-weight:500;color:#3E6F6C">only when they get a job</span></summary>
+  <div style="padding:12px 2px 2px">
+    <div style="font-size:12px;color:var(--txt3);margin-bottom:10px">Fill this in later, when the participant starts work. Feeds the End Form and job evidence.</div>
+    <div class="form-grid-2"><div class="form-row"><label>Outcome type</label><select id="mp-outcome-type"><option value=""></option><option>Employment</option><option>Self-employment</option><option>Apprenticeship</option><option>Training</option><option>Education</option><option>Other</option></select></div><div class="form-row"><label>Job title</label><input id="mp-job-title"/></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Employer</label><input id="mp-employer"/></div><div class="form-row"><label>Job start date</label><input type="date" id="mp-job-start"/></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Hours per week</label><input id="mp-hours" type="number"/></div><div class="form-row"><label>Pay (e.g. £12.50/hr)</label><input id="mp-pay"/></div></div>
+    <div class="form-grid-2"><div class="form-row"><label>Exit / leaving date</label><input type="date" id="mp-exit-date"/></div><div class="form-row"><label>Reason for leaving</label><input id="mp-leave-reason"/></div></div>
+    <div style="margin:4px 0 2px"><button type="button" class="btn btn-ghost btn-sm" onclick="civaraAddJobEvidence()">📎 Add job evidence (payslip, contract…)</button></div>
+  </div></details>
+
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeParticipantModal()">Cancel</button><button class="btn btn-ghost" onclick="civaraGenerateStartForm()">📄 Start Form</button><button class="btn btn-ghost" onclick="civaraGenerateEndForm()">📄 End Form</button><button class="btn btn-p" id="p-save-btn" onclick="saveP()">Save</button></div>
+</div></div>
+
+<div class="modal-overlay" id="modal-c"><div class="modal"><h2 id="c-title">Add contact</h2><div class="form-grid-2"><div class="form-row"><label>First name</label><input id="cf-fn"/></div><div class="form-row"><label>Last name</label><input id="cf-ln"/></div></div><div class="form-row"><label>Email</label><input id="cf-em" type="email"/></div><div class="form-grid-2"><div class="form-row"><label>Role</label><select id="cf-role"><option>Donor</option><option>Partner</option><option>Funder</option><option>Trustee</option></select></div><div class="form-row"><label>Status</label><select id="cf-st"><option>Prospect</option><option>Engaged</option><option>Active Supporter</option><option>Lapsed</option></select></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-c')">Cancel</button><button class="btn btn-p" id="c-save-btn" onclick="saveC()">Save</button></div></div></div>
+
+<div class="modal-overlay" id="modal-vol"><div class="modal" style="max-width:600px"><h2 id="vol-modal-title">Add volunteer</h2><div class="form-grid-2"><div class="form-row"><label>Full name *</label><input id="vf-name"/></div><div class="form-row"><label>Email</label><input id="vf-email" type="email"/></div></div><div class="form-grid-2"><div class="form-row"><label>Phone</label><input id="vf-phone"/></div><div class="form-row"><label>Hours logged</label><input type="number" id="vf-hours" min="0"/></div></div><div class="form-grid-2"><div class="form-row"><label>Role *</label><select id="vf-role"><option>Volunteer</option><option>Corporate volunteer</option><option>Fixer</option><option>Advisor</option><option>Manager</option><option>Admin</option><option>Staff</option></select></div><div class="form-row"><label>Status</label><select id="vf-status"><option>Active</option><option>Inactive</option><option>On leave</option></select></div></div><div class="form-row"><label>Skills</label><div class="chk-group" id="vf-skills"></div></div><div class="form-row"><label>Notes</label><textarea id="vf-notes" style="min-height:60px"></textarea></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-vol')">Cancel</button><button class="btn btn-p" id="vol-save-btn" onclick="saveVol()">Save volunteer</button></div></div></div>
+
+<div class="modal-overlay" id="modal-emp"><div class="modal"><h2 id="emp-title">Add employer</h2><div class="form-grid-2"><div class="form-row"><label>Name</label><input id="ef-nm"/></div><div class="form-row"><label>Sector</label><select id="ef-sec"><option>Retail</option><option>Healthcare</option><option>Logistics</option><option>Construction</option><option>Hospitality</option><option>Admin / office</option><option>Tech</option><option>Social care</option><option>Other</option></select></div></div><div class="form-grid-2"><div class="form-row"><label>Contact name</label><input id="ef-con"/></div><div class="form-row"><label>Contact email</label><input id="ef-cem" type="email"/></div></div><div class="form-grid-2"><div class="form-row"><label>Open vacancies</label><input type="number" id="ef-vac"/></div><div class="form-row"><label>Relationship</label><select id="ef-rel"><option>Prospecting</option><option>Engaged</option><option>Active partner</option><option>Dormant</option></select></div></div><div class="form-row"><label>Notes</label><textarea id="ef-notes"></textarea></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-emp')">Cancel</button><button class="btn btn-p" id="emp-save-btn" onclick="saveEmployer()">Save</button></div></div></div>
+
+<div class="modal-overlay" id="modal-r"><div class="modal"><h2>New referral</h2><div class="form-grid-2"><div class="form-row"><label>First name</label><input id="rf-fn"/></div><div class="form-row"><label>Last name</label><input id="rf-ln"/></div></div><div class="form-grid-2"><div class="form-row"><label>Source</label><select id="rf-src"><option>Probation</option><option>Jobcentre Plus</option><option>Community org</option><option>Self-referral</option></select></div><div class="form-row"><label>Advisor</label><select id="rf-adv"><option>Sarah T.</option><option>Marcus O.</option><option>Priya S.</option><option>Unassigned</option></select></div></div><div class="form-row"><label>Date referred</label><input type="date" id="rf-date"/></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-r')">Cancel</button><button class="btn btn-p" id="r-save-btn" onclick="saveR()">Save</button></div></div></div>
+
+<div class="modal-overlay" id="modal-ev"><div class="modal" style="max-width:520px"><h2 id="ev-modal-title">Create event</h2><div class="form-row"><label>Event name *</label><input id="evf-name"/></div><div class="form-grid-3"><div class="form-row"><label>Type</label><select id="evf-type"><option>Green Skills</option><option>Wellbeing</option><option>Community Event</option><option>Frailty</option><option>Other</option></select></div><div class="form-row"><label>Date</label><input type="date" id="evf-date"/></div><div class="form-row"><label>Attendees</label><input type="number" id="evf-att" min="0"/></div></div><div class="form-grid-2"><div class="form-row"><label>Location</label><input id="evf-loc"/></div><div class="form-row"><label>Capacity</label><input type="number" id="evf-cap"/></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-ev')">Cancel</button><button class="btn btn-p" id="ev-save-btn" onclick="saveEv()">Save event</button></div></div></div>
+
+<div class="modal-overlay" id="modal-fb"><div class="modal"><h2 id="fb-modal-title">Add feedback</h2><div class="form-grid-2"><div class="form-row"><label>Event *</label><select id="fbf-ev"><option value="">Select event…</option></select></div><div class="form-row"><label>Participant name</label><input id="fbf-name"/></div></div><div class="form-row"><label>Enjoyment (1–5)</label><div style="display:flex;gap:5px;margin-top:4px" id="fbf-enjoyed-stars"></div></div><div class="form-grid-2"><div class="form-row"><label>Confidence before</label><div style="display:flex;gap:5px;margin-top:4px" id="fbf-cb-stars"></div></div><div class="form-row"><label>Confidence after</label><div style="display:flex;gap:5px;margin-top:4px" id="fbf-ca-stars"></div></div></div><div class="form-row"><label>Outcomes</label><div class="chk-group"><div class="chk-pill"><label><input type="checkbox" id="fbf-learned"/> Learned something new</label></div><div class="chk-pill"><label><input type="checkbox" id="fbf-connected"/> Felt more connected</label></div><div class="chk-pill"><label><input type="checkbox" id="fbf-friend"/> Made a new friend</label></div></div></div><div class="form-row"><label>Quote</label><textarea id="fbf-quote" style="min-height:55px"></textarea></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-fb')">Cancel</button><button class="btn btn-p" id="fb-save-btn" onclick="saveFb()">Save</button></div></div></div>
+
+<div class="modal-overlay" id="modal-con"><div class="modal">
+  <h2 id="con-title">Add contract</h2>
+  <div style="display:flex;gap:6px;margin-bottom:12px;padding:8px 12px;background:rgba(31,111,109,.05);border:1px solid var(--border);border-radius:8px;align-items:center">
+    <span style="font-size:11px;color:var(--txt3);font-weight:600">Linked funder:</span>
+    <span id="con-linked-funder-label" style="font-size:12px;font-weight:600;color:var(--em)">None selected</span>
+  </div>
+  <div class="alert alert-warn" id="con-no-funder-warn" style="display:none">⚠ No funders yet. <button class="btn btn-ghost btn-sm" style="margin-left:8px" onclick="closeModal('modal-con');go('funders');openAddFunder()">+ Add a funder first</button></div>
+  <div class="form-row"><label>Contract name *</label><input id="con-name"/></div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Link to funder *</label><select id="con-funder-id" onchange="onConFunderChange()"><option value="">— Select funder —</option></select></div>
+    <div class="form-row"><label>Report type</label><select id="con-report-type"><option value="moj">MoJ — Employment &amp; desistance</option><option value="gla">GLA — Skills &amp; employment</option><option value="cbf">CBF — Wellbeing &amp; community</option><option value="ukspf">UKSPF / Local authority</option><option value="lottery">National Lottery</option><option value="trust">Grant-making trust</option><option value="dwp">DWP / Jobcentre Plus</option><option value="impact">Annual / Board report</option><option value="other">Other / Generic</option></select></div>
+  </div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Value (£)</label><input type="number" id="con-val"/></div>
+    <div class="form-row"><label>Status</label><select id="con-status"><option value="live">Live</option><option value="pipeline">Pipeline</option><option value="expired">Expired</option></select></div>
+  </div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Start date</label><input type="date" id="con-start"/></div>
+    <div class="form-row"><label>End date</label><input type="date" id="con-end"/></div>
+  </div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Target starts</label><input type="number" id="con-ts"/></div>
+    <div class="form-row"><label>Target outcomes</label><input type="number" id="con-to"/></div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-con')">Cancel</button><button class="btn btn-p" id="con-save-btn" onclick="saveCon()">Save</button></div>
+</div></div>
+
+<div class="modal-overlay" id="modal-evid"><div class="modal"><h2>Upload evidence</h2><div class="form-row"><label>Participant name</label><input id="evid-p"/></div><div class="form-grid-2"><div class="form-row"><label>Type</label><select id="evid-type"><option>Payslip</option><option>Contract</option><option>Certificate</option><option>ID document</option><option>Consent form</option></select></div><div class="form-row"><label>Linked outcome</label><select id="evid-out"><option>Employment</option><option>Training</option><option>Qualification</option><option>Volunteering</option></select></div></div><div class="form-grid-2"><div class="form-row"><label>Staff member</label><input id="evid-staff"/></div><div class="form-row"><label>Date</label><input type="date" id="evid-date"/></div></div><div class="form-row"><label>Attach file (payslip, contract…)</label><input type="file" id="evid-file" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx"/><div style="font-size:11px;color:var(--txt3);margin-top:4px">PDF, image or Word · up to 5MB · optional</div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-evid')">Cancel</button><button class="btn btn-p" id="evid-save-btn" onclick="saveEvid()">Save</button></div></div></div>
+
+<div class="modal-overlay" id="modal-eq"><div class="modal" style="max-width:560px">
+  <h2 id="eq-modal-title">Equality monitoring</h2>
+  <div style="background:rgba(31,111,109,.05);border:1px solid rgba(31,111,109,.2);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--txt2);margin-bottom:16px;line-height:1.6">This information is collected voluntarily for anonymised reporting purposes only.</div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Age group</label><select id="eq-age"><option value="">Prefer not to say</option><option>16–24</option><option>25–34</option><option>35–44</option><option>45–54</option><option>55–64</option><option>65+</option></select></div>
+    <div class="form-row"><label>Ethnicity</label><select id="eq-ethnicity"><option value="">Prefer not to say</option><option>White British</option><option>White Irish</option><option>White Other</option><option>Mixed/Multiple</option><option>Asian/Asian British</option><option>Black/Black British</option><option>Arab</option><option>Other</option></select></div>
+  </div>
+  <div class="form-grid-2">
+    <div class="form-row"><label>Gender</label><select id="eq-gender"><option value="">Prefer not to say</option><option>Man</option><option>Woman</option><option>Non-binary</option><option>Other</option></select></div>
+    <div class="form-row"><label>Disability</label><select id="eq-disability"><option value="">Prefer not to say</option><option value="none">No disability</option><option value="physical">Physical / mobility</option><option value="sensory">Sensory</option><option value="mental">Mental health</option><option value="learning">Learning disability</option><option value="neurodiverse">Neurodiverse</option></select></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeModal('modal-eq')">Cancel</button>
+    <button class="btn btn-p" id="eq-save-btn" onclick="saveEqualityData()">Save</button>
+  </div>
+</div></div>
+
+<!-- ─── SCRIPTS — load order matters! ─────────────────────── -->
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+
+<!-- Foundation: constants and helpers -->
+<script src="js/config.js?v=19"></script>
+<script src="js/utils.js?v=19"></script>
+
+<!-- Data + auth -->
+<script src="js/db.js?v=46"></script>
+<script src="js/auth.js?v=20"></script>
+
+<!-- AI + branding -->
+<script src="js/agents.js?v=44"></script>
+<script src="js/branding.js?v=19"></script>
+
+<!-- UI logic -->
+<script src="js/render.js?v=59"></script>
+<script src="js/settings.js?v=8"></script>
+<script src="js/circular.js?v=8"></script>
+<script src="js/modals.js?v=44"></script>
+<script src="js/demo.js?v=22"></script>
+<script src="js/router.js?v=24"></script>
+
+<!-- Module visibility — shows/hides sidebar items per currentOrg.modules -->
+<script>
+'use strict';
+function applyModules(mods) {
+  mods = mods || {};
+  document.querySelectorAll('#sidebar .nav-btn[data-module]').forEach(function (btn) {
+    var key = btn.getAttribute('data-module');
+    var on = mods[key] !== false; // default ON if not explicitly set to false
+    btn.style.display = on ? '' : 'none';
+  });
+}
+</script>
+
+<!-- Entry point -->
+<script src="js/boot.js?v=20"></script>
+
+<!-- Auto-fill paperwork (Start & End Form + job evidence) -->
+<script>
 'use strict';
 
-// ── Modal-scoped state ──────────────────────────────────────
-let _editPId          = null;
-let _editVolId        = null;
-let _editEmpId        = null;
-let _editEvId         = null;
-let _editFbId         = null;
-let _editItemId       = null;
-let _editConId        = null;
-let _editCId          = null;
-let _editFunderId     = null;
-let _editEqPId        = null;
-let _editPartnerRefId = null;
+(function () {
 
-let _fbScores = { enjoyed: 5, cb: 3, ca: 5 };
-
-// ── Checkbox group helpers ──────────────────────────────────
-function mkChkArr(cid, items, sel) {
-  if (!sel) sel = [];
-  const el = $(cid); if (!el) return;
-  el.innerHTML = items.map(b =>
-    '<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--txt2);background:#FFFFFF;border:1px solid var(--border);border-radius:6px;padding:3px 7px;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500">' +
-    '<input type="checkbox" value="' + escapeHTML(b) + '"' + (sel.includes(b) ? ' checked' : '') +
-    ' style="width:auto;background:none;border:none;padding:0"/> ' + escapeHTML(b) + '</label>'
-  ).join('');
-}
-function getChkArr(cid) {
-  return [].slice.call(document.querySelectorAll('#' + cid + ' input[type=checkbox]:checked')).map(x => x.value);
-}
-function mkChkGroup(cid, items, sel) {
-  if (!sel) sel = [];
-  const el = $(cid); if (!el) return;
-  el.innerHTML = items.map(it =>
-    '<div class="chk-pill"><label><input type="checkbox" value="' + escapeHTML(it) + '"' + (sel.includes(it) ? ' checked' : '') + '/> ' + escapeHTML(it) + '</label></div>'
-  ).join('');
-}
-
-// ── Contract selector inside the participant modal ──────────
-function renderContractSelector(sel) {
-  if (!sel) sel = [];
-  const el = $('mp-contracts-list'); if (!el) return;
-  if (!DB.contracts.length) {
-    el.innerHTML = '<div style="font-size:12px;color:var(--txt3);padding:4px">No contracts yet.</div>';
-    return;
-  }
-  el.innerHTML = DB.contracts.map(c => {
-    const s = sel.map(String).includes(String(c.id));
-    return '<div class="con-option' + (s ? ' selected' : '') + '" id="con-opt-' + c.id + '" onclick="toggleConOption(' + JSON.stringify(c.id) + ')">' +
-      '<input type="checkbox" value="' + escapeHTML(c.id) + '"' + (s ? ' checked' : '') + ' style="width:auto;background:none;border:none;padding:0;pointer-events:none"/>' +
-      '<div><div style="font-size:12px;font-weight:600;color:var(--txt)">' + escapeHTML(c.name) + '</div>' +
-      '<div style="font-size:11px;color:var(--txt3)">' + escapeHTML(c.funder || '—') + ' · £' + num(c.value).toLocaleString() + '</div></div></div>';
-  }).join('');
-}
-function toggleConOption(id) {
-  const el = $('con-opt-' + id); if (!el) return;
-  const cb = el.querySelector('input');
-  cb.checked = !cb.checked;
-  el.classList.toggle('selected', cb.checked);
-}
-function getSelectedContractIds() {
-  return [].slice.call(document.querySelectorAll('#mp-contracts-list input[type=checkbox]:checked')).map(x => x.value);
-}
-
-// ── Participant modal ───────────────────────────────────────
-function openAddP() {
-  _editPId = null;
-  _editPartnerRefId = null;
-  $('mp-title').textContent = 'Add participant';
-  ['mp-fn', 'mp-ln', 'mp-note', 'mp-conf', 'mp-work', 'mp-well', 'mp-skillsc', 'mp-intake-text', 'mp-phone', 'mp-email'].forEach(f => {
-    if ($(f)) $(f).value = '';
-  });
-  $('mp-safe').value = '';
-  $('mp-due').value  = '';
-  $('mp-note-preview').style.display = 'none';
-  $('mp-ai-intake-result').innerHTML = '';
-  mkChkArr('barrier-checks', BARRIERS);
-  mkChkArr('outcome-checks', OUT_TYPES);
-  renderContractSelector([]);
-  $('modal-p').classList.add('open');
-}
-
-function openEditP(id) {
-  const p = DB.participants.find(x => x.id === id); if (!p) return;
-  _editPId = id;
-  _editPartnerRefId = null;
-  $('mp-title').textContent = 'Edit participant';
-  $('mp-fn').value   = p.first_name;
-  $('mp-ln').value   = p.last_name;
-  $('mp-rs').value   = p.ref_source;
-  $('mp-adv').value  = p.advisor;
-  $('mp-st').value   = p.stage;
-  $('mp-risk').value = p.risk;
-  $('mp-safe').value = p.safeguarding || '';
-  $('mp-intake-text').value = '';
-  $('mp-note-preview').style.display = 'none';
-  $('mp-ai-intake-result').innerHTML = '';
-  $('mp-phone').value = p.phone || '';
-  $('mp-email').value = p.email || '';
-  const sc = p.scores || {};
-  $('mp-conf').value    = sc.confidence     || '';
-  $('mp-work').value    = sc.work_readiness || '';
-  $('mp-well').value    = sc.wellbeing      || '';
-  $('mp-skillsc').value = sc.skills         || '';
-  mkChkArr('barrier-checks', BARRIERS, p.barriers);
-  mkChkArr('outcome-checks', OUT_TYPES, p.outcomes);
-  renderContractSelector(toArr(p.contract_ids));
-  $('mp-note').value = '';
-  $('modal-p').classList.add('open');
-}
-
-// Reset partner-referral context when the modal closes (bug #4 fix)
-function closeParticipantModal() {
-  closeModal('modal-p');
-  _editPartnerRefId = null;
-}
-
-async function saveP() {
-  const btn = $('p-save-btn'); btn.textContent = 'Saving…'; btn.disabled = true;
-  try {
-    const note = $('mp-note').value;
-    const contractIds = getSelectedContractIds();
-    const d = {
-      first_name: $('mp-fn').value || 'Unknown',
-      last_name:  $('mp-ln').value || '',
-      ref_source: $('mp-rs').value,
-      stage:      $('mp-st').value,
-      advisor:    $('mp-adv').value,
-      barriers:   getChkArr('barrier-checks'),
-      outcomes:   getChkArr('outcome-checks'),
-      safeguarding: $('mp-safe').value || null,
-      risk:       $('mp-risk').value,
-      last_contact: today(),
-      contract_ids: contractIds,
-      phone:      $('mp-phone').value || '',
-      email:      $('mp-email').value || '',
-      scores: {
-        confidence:     parseInt($('mp-conf').value)    || null,
-        work_readiness: parseInt($('mp-work').value)    || null,
-        wellbeing:      parseInt($('mp-well').value)    || null,
-        skills:         parseInt($('mp-skillsc').value) || null
-      }
-    };
-    if (_editPId) {
-      const ex = DB.participants.find(x => x.id === _editPId);
-      const notes = toArr(ex.notes).slice();
-      if (note) notes.push({ t: note, d: today(), s: 'Staff' });
-      await sbUpdate('participants', Object.assign({}, d, { notes }), _editPId);
-    } else {
-      const notes = note ? [{ t: note, d: today(), s: 'Staff' }] : [];
-      await sbInsert('participants', Object.assign({}, d, { notes }));
-      // If we came from a partner referral, mark it as Converted
-      if (_editPartnerRefId) {
-        try { await sbUpdate('partner_referrals', { status: 'Converted' }, _editPartnerRefId); } catch (e) { /* ignore */ }
+  /* ---------- tiny ZIP writer (store / no compression) ------------------ */
+  function crc32(bytes) {
+    let table = crc32._t;
+    if (!table) {
+      table = crc32._t = [];
+      for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        table[n] = c >>> 0;
       }
     }
-    if (sb) await refreshTable('participants');
-    if (sb) await refreshTable('partner_referrals');
-    _editPartnerRefId = null;
-    closeModal('modal-p');
-    renderParticipants();
-  } catch (e) {
-    alert('Save failed: ' + e.message);
-  } finally {
-    btn.textContent = 'Save'; btn.disabled = false;
+    let crc = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) crc = (crc >>> 8) ^ table[(crc ^ bytes[i]) & 0xFF];
+    return (crc ^ 0xFFFFFFFF) >>> 0;
   }
-}
+  function strBytes(s) { return new TextEncoder().encode(s); }
+  function u16(n) { return [n & 0xFF, (n >>> 8) & 0xFF]; }
+  function u32(n) { return [n & 0xFF, (n >>> 8) & 0xFF, (n >>> 16) & 0xFF, (n >>> 24) & 0xFF]; }
 
-async function deleteP(id) {
-  if (!confirm('Delete this participant?')) return;
-  await sbDelete('participants', id);
-  DB.participants = DB.participants.filter(x => x.id !== id);
-  renderParticipants();
-}
-
-// Notes mini-modal
-function openNotes(id) {
-  const p = DB.participants.find(x => x.id === id); if (!p) return;
-  const notes = toArr(p.notes).slice().reverse();
-  const m = document.createElement('div');
-  m.className = 'modal-overlay open';
-  m.id = 'modal-notes';
-  m.innerHTML = '<div class="modal" style="max-width:560px"><h2>Case notes — ' + escapeHTML(p.first_name + ' ' + p.last_name) + '</h2>' +
-    '<div style="max-height:220px;overflow-y:auto;margin-bottom:12px">' +
-      (notes.length
-        ? notes.map(nt => '<div class="tl-entry"><div class="tl-dot blue"></div>' +
-            '<div><div class="tl-lbl">' + escapeHTML(nt.t) + '</div>' +
-            '<div class="tl-meta">' + escapeHTML(nt.d) + ' · ' + escapeHTML(nt.s) + '</div></div></div>').join('')
-        : '<div style="color:var(--txt3);font-size:13px">No notes yet.</div>') +
-    '</div>' +
-    '<div class="form-row"><label>New case note</label><textarea id="new-note-txt" style="min-height:80px"></textarea></div>' +
-    '<div style="display:flex;gap:8px;margin-top:10px">' +
-      '<button class="btn btn-p" onclick="addNote(' + JSON.stringify(id) + ')">Save note</button>' +
-      '<button class="btn btn-ghost" onclick="document.getElementById(\'modal-notes\').remove()">Close</button>' +
-    '</div></div>';
-  document.body.appendChild(m);
-}
-
-async function addNote(id) {
-  const p = DB.participants.find(x => x.id === id);
-  const txt = $('new-note-txt').value;
-  if (!txt || !p) return;
-  const notes = toArr(p.notes).concat({ t: txt, d: today(), s: 'Staff' });
-  await sbUpdate('participants', { notes, last_contact: today() }, id);
-  if (sb) await refreshTable('participants');
-  $('modal-notes').remove();
-  renderParticipants();
-}
-
-// Convert partner referral to participant
-function convertToParticipant(id) {
-  const r = DB.partner_referrals.find(x => x.id === id); if (!r) return;
-  _editPId = null;
-  _editPartnerRefId = id;
-  $('mp-title').textContent = 'Add participant (from referral)';
-  $('mp-fn').value = r.first_name || '';
-  $('mp-ln').value = r.last_name  || '';
-  $('mp-rs').value = 'Community org';
-  $('mp-st').value = 'Referred';
-  $('mp-risk').value = 'Medium';
-  $('mp-safe').value = r.safeguarding || '';
-  $('mp-phone').value = '';
-  $('mp-email').value = '';
-  $('mp-intake-text').value = r.notes || '';
-  mkChkArr('barrier-checks', BARRIERS, toArr(r.barriers));
-  mkChkArr('outcome-checks', OUT_TYPES);
-  renderContractSelector([]);
-  $('mp-note-preview').style.display = 'none';
-  $('mp-ai-intake-result').innerHTML = '';
-  $('modal-p').classList.add('open');
-}
-
-// ── Contacts ────────────────────────────────────────────────
-function openAddC() {
-  _editCId = null;
-  $('c-title').textContent = 'Add contact';
-  ['cf-fn', 'cf-ln', 'cf-em'].forEach(f => $(f).value = '');
-  $('modal-c').classList.add('open');
-}
-function openEditC(id) {
-  const c = DB.contacts.find(x => x.id === id); if (!c) return;
-  _editCId = id;
-  $('c-title').textContent = 'Edit contact';
-  $('cf-fn').value = c.first_name;
-  $('cf-ln').value = c.last_name;
-  $('cf-em').value = c.email;
-  $('cf-role').value = c.role;
-  $('cf-st').value = c.status;
-  $('modal-c').classList.add('open');
-}
-async function saveC() {
-  const btn = $('c-save-btn'); btn.textContent = 'Saving…'; btn.disabled = true;
-  try {
-    const d = {
-      first_name: $('cf-fn').value, last_name: $('cf-ln').value,
-      email: $('cf-em').value, role: $('cf-role').value, status: $('cf-st').value
-    };
-    if (_editCId) await sbUpdate('contacts', d, _editCId);
-    else await sbInsert('contacts', d);
-    await refreshTable('contacts');
-    closeModal('modal-c');
-    renderContacts();
-  } catch (e) { alert('Save failed: ' + e.message); }
-  finally { btn.textContent = 'Save'; btn.disabled = false; }
-}
-async function deleteC(id) {
-  if (!confirm('Delete?')) return;
-  await sbDelete('contacts', id);
-  await refreshTable('contacts');
-  renderContacts();
-}
-
-// ── Volunteers ──────────────────────────────────────────────
-// Skills offered = Vorlana's standard list + every skill already used in
-// this org (e.g. from an imported sign-in sheet) + this volunteer's own.
-function volSkillOptions(sel) {
-  const seen = {}, out = [];
-  const add = s => { s = String(s || '').trim(); if (s && !seen[s.toLowerCase()]) { seen[s.toLowerCase()] = 1; out.push(s); } };
-  (sel || []).forEach(add);
-  (DB.volunteers || []).forEach(v => toArr(v.skills).forEach(add));
-  (typeof VOL_SKILLS !== 'undefined' ? VOL_SKILLS : []).forEach(add);
-  return out;
-}
-function renderVolSkills(sel) {
-  sel = sel || [];
-  mkChkGroup('vf-skills', volSkillOptions(sel), sel);
-  const grp = $('vf-skills'); if (!grp) return;
-  let row = $('vf-skill-add-row');
-  if (!row) {
-    row = document.createElement('div');
-    row.id = 'vf-skill-add-row';
-    row.style.cssText = 'display:flex;gap:6px;margin-top:8px';
-    row.innerHTML = '<input id="vf-skill-new" placeholder="Add a skill…" style="flex:1;font-size:13px"/>' +
-      '<button type="button" class="btn btn-ghost btn-sm" onclick="addVolSkill()">+ Add</button>';
-    grp.parentNode.insertBefore(row, grp.nextSibling);
-    $('vf-skill-new').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addVolSkill(); } });
-  }
-  $('vf-skill-new').value = '';
-}
-function addVolSkill() {
-  const v = ($('vf-skill-new').value || '').trim();
-  if (!v) return;
-  const sel = getChkArr('vf-skills');
-  if (!sel.some(x => x.toLowerCase() === v.toLowerCase())) sel.push(v);
-  renderVolSkills(sel);
-}
-
-function openAddVol() {
-  _editVolId = null;
-  $('vol-modal-title').textContent = 'Add volunteer';
-  ['vf-name', 'vf-email', 'vf-phone', 'vf-notes'].forEach(id => { if ($(id)) $(id).value = ''; });
-  $('vf-hours').value  = '0';
-  $('vf-role').value   = 'Volunteer';
-  $('vf-status').value = 'Active';
-  renderVolSkills([]);
-  $('modal-vol').classList.add('open');
-}
-function openEditVol(id) {
-  const v = DB.volunteers.find(x => x.id === id); if (!v) return;
-  _editVolId = id;
-  $('vol-modal-title').textContent = 'Edit volunteer';
-  $('vf-name').value   = v.name;
-  $('vf-email').value  = v.email || '';
-  $('vf-phone').value  = v.phone || '';
-  $('vf-hours').value  = v.hours;
-  $('vf-role').value   = v.role || 'Volunteer';
-  $('vf-status').value = v.status;
-  renderVolSkills(toArr(v.skills));
-  $('modal-vol').classList.add('open');
-}
-async function saveVol() {
-  const fullName = $('vf-name').value.trim();
-  const email = $('vf-email').value.trim();
-  const phone = $('vf-phone').value.trim();
-  const role = $('vf-role').value;
-  if (!fullName) { alert('Full name is required.'); return; }
-  const btn = $('vol-save-btn'); btn.textContent = 'Saving…'; btn.disabled = true;
-  try {
-    const parts = fullName.split(' ');
-    const payload = {
-      first_name: parts[0],
-      last_name:  parts.slice(1).join(' '),
-      name:       fullName, email: email || null, phone: phone || null, role,
-      hours: parseInt($('vf-hours').value) || 0,
-      status: $('vf-status').value,
-      skills: JSON.stringify(getChkArr('vf-skills'))
-    };
-    if (_editVolId) await sbUpdate('volunteers', payload, _editVolId);
-    else await sbInsert('volunteers', payload);
-    await refreshTable('volunteers');
-    closeModal('modal-vol');
-    renderVolunteers();
-  } catch (e) { alert('Save failed: ' + e.message); }
-  finally { btn.textContent = 'Save volunteer'; btn.disabled = false; }
-}
-async function deleteVol(id) {
-  if (!confirm('Delete?')) return;
-  await sbDelete('volunteers', id);
-  await refreshTable('volunteers');
-  renderVolunteers();
-}
-
-// ── Employers ───────────────────────────────────────────────
-function openAddEmployer() {
-  _editEmpId = null;
-  $('emp-title').textContent = 'Add employer';
-  ['ef-nm', 'ef-con', 'ef-cem', 'ef-notes'].forEach(f => $(f).value = '');
-  $('ef-vac').value = '0';
-  $('modal-emp').classList.add('open');
-}
-function openEditEmployer(id) {
-  const e = DB.employers.find(x => x.id === id); if (!e) return;
-  _editEmpId = id;
-  $('emp-title').textContent = 'Edit employer';
-  $('ef-nm').value   = e.name;
-  $('ef-sec').value  = e.sector;
-  $('ef-con').value  = e.contact_name;
-  $('ef-cem').value  = e.contact_email;
-  $('ef-vac').value  = e.vacancies;
-  $('ef-rel').value  = e.relationship;
-  $('ef-notes').value = e.notes;
-  $('modal-emp').classList.add('open');
-}
-async function saveEmployer() {
-  const btn = $('emp-save-btn'); btn.textContent = 'Saving…'; btn.disabled = true;
-  try {
-    const d = {
-      name: $('ef-nm').value, sector: $('ef-sec').value,
-      contact_name: $('ef-con').value, contact_email: $('ef-cem').value,
-      vacancies: parseInt($('ef-vac').value) || 0,
-      relationship: $('ef-rel').value, notes: $('ef-notes').value
-    };
-    if (_editEmpId) await sbUpdate('employers', d, _editEmpId);
-    else await sbInsert('employers', d);
-    await refreshTable('employers');
-    closeModal('modal-emp');
-    renderEmployers();
-  } catch (e) { alert('Save failed: ' + e.message); }
-  finally { btn.textContent = 'Save'; btn.disabled = false; }
-}
-async function deleteEmployer(id) {
-  if (!confirm('Delete?')) return;
-  await sbDelete('employers', id);
-  await refreshTable('employers');
-  renderEmployers();
-}
-
-// ── Referrals ───────────────────────────────────────────────
-function openAddR() {
-  $('rf-date').value = today();
-  ['rf-fn', 'rf-ln'].forEach(f => $(f).value = '');
-  $('modal-r').classList.add('open');
-}
-async function saveR() {
-  const btn = $('r-save-btn'); btn.textContent = 'Saving…'; btn.disabled = true;
-  try {
-    await sbInsert('referrals', {
-      first_name: $('rf-fn').value,
-      last_name:  $('rf-ln').value,
-      source:     $('rf-src').value,
-      status:     'Referred',
-      advisor:    $('rf-adv').value,
-      referred_date: $('rf-date').value
+  function makeZip(files) {
+    const parts = [], central = [];
+    let offset = 0;
+    files.forEach(f => {
+      const nameB = strBytes(f.name);
+      const data = f.data;
+      const crc = crc32(data);
+      const local = new Uint8Array(
+        [].concat(u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0),
+          u32(crc), u32(data.length), u32(data.length), u16(nameB.length), u16(0)));
+      parts.push(local, nameB, data);
+      const cen = new Uint8Array(
+        [].concat(u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0),
+          u32(crc), u32(data.length), u32(data.length),
+          u16(nameB.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset)));
+      central.push(cen, nameB);
+      offset += local.length + nameB.length + data.length;
     });
-    await refreshTable('referrals');
-    closeModal('modal-r');
-    renderReferrals();
-  } catch (e) { alert('Save failed: ' + e.message); }
-  finally { btn.textContent = 'Save'; btn.disabled = false; }
-}
-async function deleteRef(id) {
-  if (!confirm('Delete?')) return;
-  await sbDelete('referrals', id);
-  await refreshTable('referrals');
-  renderReferrals();
-}
-
-// ── Events ──────────────────────────────────────────────────
-// v3: each event picks which of the org's feedback questions to ask.
-// events.question_ids = array of survey_measures ids, or null = all.
-function _evQuestionBox() {
-  let box = $('evf-questions-wrap');
-  if (box) return box;
-  const modal = document.querySelector('#modal-ev .modal'); if (!modal) return null;
-  const footer = modal.querySelector('.modal-footer');
-  box = document.createElement('div');
-  box.id = 'evf-questions-wrap';
-  box.className = 'form-row';
-  modal.insertBefore(box, footer);
-  return box;
-}
-function renderEvQuestions(selectedIds) {
-  const box = _evQuestionBox(); if (!box) return;
-  const M = (typeof activeMeasures === 'function') ? activeMeasures() : [];
-  const all = selectedIds == null;
-  box.innerHTML =
-    '<label>Feedback questions for this event</label>' +
-    (M.length
-      ? '<div class="chk-group" id="evf-questions">' +
-          M.map(m => '<div class="chk-pill"><label title="' + escapeHTML(m.question) + '"><input type="checkbox" value="' + escapeHTML(String(m.id)) + '"' + ((all || selectedIds.map(String).includes(String(m.id))) ? ' checked' : '') + '/> ' + escapeHTML((m.label || m.question).length > 48 ? (m.label || m.question).slice(0, 48) + '…' : (m.label || m.question)) + '</label></div>').join('') +
-        '</div>'
-      : '<div style="font-size:12px;color:var(--txt3);margin:4px 0 8px">No questions set up yet — add one below or under Settings → Feedback questions.</div>') +
-    '<div style="display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap">' +
-      '<input id="evf-newq" placeholder="Add a new question, e.g. Would you come again?" style="flex:1;min-width:220px;font-size:13px"/>' +
-      '<select id="evf-newq-kind" style="width:auto" onchange="evNewQKind()"><option value="yesno">Yes / no</option><option value="score">Score 1–5</option><option value="choice">Choice</option><option value="text">Comment</option></select>' +
-      '<button type="button" class="btn btn-ghost btn-sm" onclick="evAddQuestion()">+ Add</button>' +
-    '</div>' +
-    '<div id="evf-newq-opts-wrap" style="display:none;margin-top:6px"><input id="evf-newq-opts" placeholder="The choices, separated by commas — e.g. Friend, Facebook, Poster, Other" style="font-size:13px;width:100%"/>' +
-      '<div style="font-size:11px;color:var(--txt3);margin-top:3px">People tap one. You\'ll see how many chose each in your reports.</div></div>';
-}
-function getEvQuestionIds() {
-  const boxes = [].slice.call(document.querySelectorAll('#evf-questions input[type=checkbox]'));
-  if (!boxes.length) return null;
-  const on = boxes.filter(b => b.checked).map(b => b.value);
-  return on.length === boxes.length ? null : on;   // all ticked = "every active question"
-}
-function evNewQKind() { const w = $('evf-newq-opts-wrap'); if (w) w.style.display = $('evf-newq-kind').value === 'choice' ? 'block' : 'none'; if (w && w.style.display === 'block') $('evf-newq-opts').focus(); }
-// "Friend, Facebook, Poster" → ['Friend','Facebook','Poster'] (commas or new lines; no blanks, no repeats)
-function parseChoiceOptions(text) {
-  const seen = {}; return String(text || '').split(/[,\n;]/).map(x => x.trim()).filter(x => x && !seen[x.toLowerCase()] && (seen[x.toLowerCase()] = 1)).slice(0, 12);
-}
-async function evAddQuestion() {
-  const q = ($('evf-newq').value || '').trim();
-  if (!q) return;
-  const kind = $('evf-newq-kind').value;
-  const options = kind === 'choice' ? parseChoiceOptions(($('evf-newq-opts') || {}).value) : null;
-  if (kind === 'choice' && options.length < 2) { alert('Add at least two choices, separated by commas — e.g. Friend, Facebook, Poster.'); if ($('evf-newq-opts')) $('evf-newq-opts').focus(); return; }
-  const btn = document.querySelector('#evf-questions-wrap button'); if (btn) { btn.disabled = true; btn.textContent = '…'; }
-  try {
-    const sel = getEvQuestionIds();
-    const r = await sb.from('survey_measures').upsert(Object.assign({ org_id: orgId, question: q, kind, maps_to: null, label: q.slice(0, 60), active: true, sort: (DB.survey_measures || []).length }, options ? { options } : {}), { onConflict: 'org_id,question' }).select();
-    if (r.error) throw r.error;
-    await refreshTable('survey_measures');
-    const added = (DB.survey_measures || []).find(m => m.question === q);
-    renderEvQuestions(sel == null ? null : sel.concat(added ? [String(added.id)] : []));
-  } catch (e) {
-    alert('Could not add question: ' + (e.message || e) + (/options/i.test(e.message || '') ? '\n\nRun feedback-choices.sql in Supabase first, then try again.' : /survey_measures|active|sort/i.test(e.message || '') ? '\n\nRun sql/import-v3.sql in Supabase first.' : ''));
-    if (btn) { btn.disabled = false; btn.textContent = '+ Add'; }
+    let centralSize = 0;
+    central.forEach(c => centralSize += c.length);
+    const end = new Uint8Array(
+      [].concat(u32(0x06054b50), u16(0), u16(0), u16(files.length), u16(files.length),
+        u32(centralSize), u32(offset), u16(0)));
+    const all = parts.concat(central, [end]);
+    let total = 0; all.forEach(a => total += a.length);
+    const out = new Uint8Array(total);
+    let p = 0; all.forEach(a => { out.set(a, p); p += a.length; });
+    return new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
   }
-}
 
-function openAddEv() {
-  _editEvId = null;
-  $('ev-modal-title').textContent = 'Create event';
-  ['evf-name', 'evf-loc'].forEach(id => $(id).value = '');
-  $('evf-type').value = 'Green Skills';
-  $('evf-date').value = today();
-  $('evf-att').value = '';
-  $('evf-cap').value = '20';
-  renderEvQuestions(null);
-  $('modal-ev').classList.add('open');
-}
-function openEditEv(id) {
-  const ev = DB.events.find(x => x.id === id); if (!ev) return;
-  _editEvId = id;
-  $('ev-modal-title').textContent = 'Edit event';
-  $('evf-name').value = ev.name;
-  $('evf-type').value = ev.type;
-  $('evf-date').value = ev.date;
-  $('evf-att').value  = ev.attendees;
-  $('evf-cap').value  = ev.capacity;
-  $('evf-loc').value  = ev.location;
-  renderEvQuestions(ev.question_ids || null);
-  $('modal-ev').classList.add('open');
-}
-async function saveEv() {
-  const name = $('evf-name').value.trim();
-  if (!name) { alert('Event name required'); return; }
-  const btn = $('ev-save-btn'); btn.textContent = 'Saving…'; btn.disabled = true;
-  try {
-    const d = {
-      name, type: $('evf-type').value,
-      event_date: $('evf-date').value,
-      attendees: parseInt($('evf-att').value) || 0,
-      capacity:  parseInt($('evf-cap').value) || 20,
-      location:  $('evf-loc').value,
-      question_ids: getEvQuestionIds()
-    };
-    const write = (payload) => _editEvId ? sbUpdate('events', payload, _editEvId) : sbInsert('events', payload);
-    try { await write(d); }
-    catch (e) {
-      if (/question_ids/i.test(e.message || '')) { const d2 = Object.assign({}, d); delete d2.question_ids; await write(d2); alert('Saved, but the per-event question choice was not stored — run sql/import-v3.sql in Supabase.'); }
-      else throw e;
+  /* ---------- OOXML helpers --------------------------------------------- */
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+  }
+  function valueRuns(v) {
+    const lines = String(v == null ? '' : v).split(/\r?\n/);
+    return lines.map((ln, i) =>
+      (i ? '<w:br/>' : '') + '<w:t xml:space="preserve">' + esc(ln) + '</w:t>'
+    ).join('');
+  }
+  function cell(text, w, opts) {
+    opts = opts || {};
+    const shd = opts.fill ? '<w:shd w:val="clear" w:color="auto" w:fill="' + opts.fill + '"/>' : '';
+    const bold = opts.bold ? '<w:b/>' : '';
+    return '<w:tc><w:tcPr><w:tcW w:w="' + w + '" w:type="dxa"/>' + shd +
+      '<w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:spacing w:before="20" w:after="20"/>' +
+      '<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>' + bold + '<w:sz w:val="20"/></w:rPr></w:pPr>' +
+      '<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>' + bold + '<w:sz w:val="20"/></w:rPr>' +
+      valueRuns(text) + '</w:r></w:p></w:tc>';
+  }
+  function tblBorder() {
+    return '<w:tblBorders>' +
+      ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']
+        .map(b => '<w:' + b + ' w:val="single" w:sz="4" w:space="0" w:color="BFBFBF"/>').join('') +
+      '</w:tblBorders>';
+  }
+  function rowsTable(rows) {
+    const trs = rows.map(r =>
+      '<w:tr>' + cell(r[0], 3200, { bold: true, fill: 'F3EEE4' }) + cell(r[1], 5800) + '</w:tr>'
+    ).join('');
+    return '<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/>' + tblBorder() +
+      '<w:tblLayout w:type="fixed"/></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="3200"/><w:gridCol w:w="5800"/></w:tblGrid>' + trs + '</w:tbl>';
+  }
+  function fullBox(text) {
+    return '<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/>' + tblBorder() +
+      '<w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="9000"/></w:tblGrid>' +
+      '<w:tr>' + cell(text && String(text).trim() ? text : '\n\n', 9000) + '</w:tr></w:tbl>';
+  }
+  function heading(text) {
+    return '<w:p><w:pPr><w:spacing w:before="220" w:after="80"/><w:shd w:val="clear" w:color="auto" w:fill="E7E6E6"/>' +
+      '<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:b/><w:sz w:val="24"/></w:rPr></w:pPr>' +
+      '<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:b/><w:sz w:val="24"/></w:rPr>' +
+      '<w:t>' + esc(text) + '</w:t></w:r></w:p>';
+  }
+  function para(text, opts) {
+    opts = opts || {};
+    const jc = opts.center ? '<w:jc w:val="center"/>' : '';
+    const bold = opts.bold ? '<w:b/>' : '';
+    const sz = opts.sz || 20;
+    const color = opts.color ? '<w:color w:val="' + opts.color + '"/>' : '';
+    return '<w:p><w:pPr>' + jc + '<w:spacing w:after="' + (opts.after != null ? opts.after : 60) + '"/>' +
+      '<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>' + bold + color + '<w:sz w:val="' + sz + '"/></w:rPr></w:pPr>' +
+      '<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>' + bold + color + '<w:sz w:val="' + sz + '"/></w:rPr>' +
+      valueRuns(text) + '</w:r></w:p>';
+  }
+  function docWrap(body) {
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+      body +
+      '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>' +
+      '<w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/>' +
+      '</w:sectPr></w:body></w:document>';
+  }
+
+  /* ---------- form content ---------------------------------------------- */
+  function buildStartFormXml(d) {
+    const detail = [
+      ['Title', d.title], ['Forename', d.forename], ['Surname', d.surname],
+      ['NI number', d.ni], ['Date of birth', d.dob], ['Telephone', d.phone],
+      ['Email address', d.email], ['Address', d.address], ['Post code', d.postcode],
+      ['Participant ID', d.pid], ['Start date', d.startDate]
+    ];
+    const referral = [
+      ['Referral source', d.referralSource], ['Adviser', d.advisor],
+      ['Journey stage', d.stage], ['Risk level', d.risk]
+    ];
+    const assessment = [
+      ['Barriers identified', d.barriers], ['Safeguarding flag', d.safeguarding],
+      ['Confidence (1–10)', d.confidence], ['Work readiness (1–10)', d.work],
+      ['Wellbeing (1–10)', d.wellbeing], ['Skills (1–10)', d.skills]
+    ];
+    const chars = [
+      ['Gender', d.gender],
+      ['Right to live and work in the UK', d.rightToWork],
+      ['Basic skills — Maths & English', d.basicSkills],
+      ['Labour market status', d.labourStatus],
+      ['Needs interpersonal-skills support', d.interpersonal]
+    ];
+    const provider = [['Delivery organisation', d.provider], ['Programme / project', d.project]];
+
+    return docWrap(
+      para('Participant Start Form', { center: true, bold: true, sz: 32, after: 40 }) +
+      para('Initial registration & assessment — prepared in Vorlana on ' + d.generatedOn,
+        { center: true, sz: 18, color: '808080', after: 160 }) +
+      heading('Part 1: Participant Details') + rowsTable(detail) +
+      heading('Part 2: Referral & Background') + rowsTable(referral) +
+      para('Referral background', { bold: true, sz: 20, after: 40 }) + fullBox(d.background) +
+      heading('Part 3: Initial Assessment') +
+      para('Adviser notes / initial assessment', { bold: true, sz: 20, after: 40 }) + fullBox(d.caseNote) +
+      rowsTable(assessment) +
+      heading('Part 4: Participant Characteristics') + rowsTable(chars) +
+      heading('Delivery') + rowsTable(provider) +
+      para('', { after: 120 }) +
+      para('Participant signature: ______________________________    Date: ____________', { sz: 20, after: 120 }) +
+      para('Adviser signature: __________________________________    Date: ____________', { sz: 20 })
+    );
+  }
+
+  function buildEndFormXml(d) {
+    const detail = [
+      ['Title', d.title], ['Forename', d.forename], ['Surname', d.surname],
+      ['NI number', d.ni], ['Date of birth', d.dob], ['Telephone', d.phone],
+      ['Email address', d.email], ['Participant ID', d.pid]
+    ];
+    const dates = [['Programme start date', d.startDate], ['Exit / leaving date', d.exitDate]];
+    const outcome = [
+      ['Outcome type', d.outcomeType], ['Job title', d.jobTitle], ['Employer', d.employer],
+      ['Job start date', d.jobStart], ['Hours per week', d.hours], ['Pay', d.pay]
+    ];
+    const provider = [['Delivery organisation', d.provider], ['Programme / project', d.project]];
+
+    return docWrap(
+      para('Participant End / Exit Form', { center: true, bold: true, sz: 32, after: 40 }) +
+      para('Programme exit & outcome — prepared in Vorlana on ' + d.generatedOn,
+        { center: true, sz: 18, color: '808080', after: 160 }) +
+      heading('Part 1: Participant Details') + rowsTable(detail) +
+      heading('Part 2: Programme Dates') + rowsTable(dates) +
+      heading('Part 3: Outcome') + rowsTable(outcome) +
+      para('Reason for leaving', { bold: true, sz: 20, after: 40 }) + fullBox(d.leaveReason) +
+      para('Adviser notes', { bold: true, sz: 20, after: 40 }) + fullBox(d.caseNote) +
+      heading('Delivery') + rowsTable(provider) +
+      para('', { after: 120 }) +
+      para('Participant signature: ______________________________    Date: ____________', { sz: 20, after: 120 }) +
+      para('Adviser signature: __________________________________    Date: ____________', { sz: 20 })
+    );
+  }
+
+  function packDocx(documentXml) {
+    const contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '</Types>';
+    const rels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+      '</Relationships>';
+    const docRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
+    return makeZip([
+      { name: '[Content_Types].xml', data: strBytes(contentTypes) },
+      { name: '_rels/.rels', data: strBytes(rels) },
+      { name: 'word/_rels/document.xml.rels', data: strBytes(docRels) },
+      { name: 'word/document.xml', data: strBytes(documentXml) }
+    ]);
+  }
+
+  /* ---------- data helpers ---------------------------------------------- */
+  function fmtDate(v) {
+    if (!v) return '';
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v));
+    return m ? (m[3] + '/' + m[2] + '/' + m[1]) : String(v);
+  }
+  function pick(o) {
+    for (let i = 1; i < arguments.length; i++) {
+      let v = o && o[arguments[i]];
+      if (Array.isArray(v)) v = v.join(', ');
+      if (v != null && String(v).trim() !== '') return v;
     }
-    await refreshTable('events');
-    closeModal('modal-ev');
-    renderEvents();
-  } catch (e) { alert('Save failed: ' + e.message); }
-  finally { btn.textContent = 'Save event'; btn.disabled = false; }
-}
-async function deleteEv(id) {
-  if (!confirm('Delete?')) return;
-  await sbDelete('events', id);
-  await refreshTable('events');
-  renderEvents();
-}
+    return '';
+  }
+  function elVal(id) { const e = document.getElementById(id); return e ? (e.value || '') : ''; }
+  function readChecked(containerId) {
+    const c = document.getElementById(containerId);
+    if (!c) return '';
+    const out = [];
+    c.querySelectorAll('input[type=checkbox]').forEach(cb => {
+      if (cb.checked) {
+        const lbl = cb.closest('label');
+        out.push(((lbl ? lbl.textContent : (cb.value || '')) || '').trim());
+      }
+    });
+    return out.filter(Boolean).join(', ');
+  }
+  function ls(key, def) { try { return localStorage.getItem(key) || def || ''; } catch (e) { return def || ''; } }
+  function lsSet(key, val) { try { localStorage.setItem(key, val); } catch (e) {} }
 
-// ── Feedback ────────────────────────────────────────────────
-// v3: the form asks the org's OWN questions (DB.survey_measures).
-// Answers are stored word-for-word in feedback.answers; the fixed
-// fields (enjoyed, cb, ca, learned, connected, friend, quote) are
-// filled from whichever question maps to them. With no questions
-// set up yet, the original fixed form is shown.
-function makeStars(cid, key, val) {
-  const c = $(cid); if (!c) return;
-  c.innerHTML = [1, 2, 3, 4, 5].map(n =>
-    '<div class="fb-star ' + (val >= n ? 'sel' : '') + '" onclick="setFbScore(\'' + key + '\',' + n + ',\'' + cid + '\')">' + n + '</div>'
-  ).join('');
-}
-function setFbScore(key, val, cid) {
-  _fbScores[key] = val;
-  [].slice.call($(cid).children).forEach((s, i) => s.classList.toggle('sel', i + 1 <= val));
-}
-
-function _fbMeasures(eventId) {
-  const M = (typeof activeMeasures === 'function') ? activeMeasures() : [];
-  if (!eventId) return M;
-  const ev = (DB.events || []).find(e => String(e.id) === String(eventId));
-  if (!ev || !ev.question_ids) return M;
-  const ids = ev.question_ids.map(String);
-  const sub = M.filter(m => ids.includes(String(m.id)));
-  return sub.length ? sub : M;
-}
-// Questions for the event chosen in the form.
-function eventQuestionsFor(eventId) { return _fbMeasures(eventId); }
-
-function openAddFb() {
-  _editFbId = null;
-  _fbScores = {};
-  const M = _fbMeasures();
-  const box = document.querySelector('#modal-fb .modal');
-  if (!box) return;
-
-  if (!M.length) {
-    _fbScores = { enjoyed: 5, cb: 3, ca: 5 };
-    box.innerHTML =
-      '<h2 id="fb-modal-title">Add feedback</h2>' +
-      '<div class="form-grid-2"><div class="form-row"><label>Event *</label><select id="fbf-ev"><option value="">Select event…</option></select></div><div class="form-row"><label>Participant name</label><input id="fbf-name"/></div></div>' +
-      '<div class="form-row"><label>Enjoyment (1–5)</label><div style="display:flex;gap:5px;margin-top:4px" id="fbf-enjoyed-stars"></div></div>' +
-      '<div class="form-grid-2"><div class="form-row"><label>Confidence before</label><div style="display:flex;gap:5px;margin-top:4px" id="fbf-cb-stars"></div></div><div class="form-row"><label>Confidence after</label><div style="display:flex;gap:5px;margin-top:4px" id="fbf-ca-stars"></div></div></div>' +
-      '<div class="form-row"><label>Outcomes</label><div class="chk-group"><div class="chk-pill"><label><input type="checkbox" id="fbf-learned"/> Learned something new</label></div><div class="chk-pill"><label><input type="checkbox" id="fbf-connected"/> Felt more connected</label></div><div class="chk-pill"><label><input type="checkbox" id="fbf-friend"/> Made a new friend</label></div></div></div>' +
-      '<div class="form-row"><label>Quote</label><textarea id="fbf-quote" style="min-height:55px"></textarea></div>' +
-      '<div style="font-size:12px;color:var(--txt3);margin-top:4px">These are Vorlana\'s standard questions. Set your own under Settings → Feedback questions.</div>' +
-      '<div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal(\'modal-fb\')">Cancel</button><button class="btn btn-p" id="fb-save-btn" onclick="saveFb()">Save</button></div>';
-    populateFbEvSelect();
-    makeStars('fbf-enjoyed-stars', 'enjoyed', 5);
-    makeStars('fbf-cb-stars', 'cb', 3);
-    makeStars('fbf-ca-stars', 'ca', 5);
-    $('modal-fb').classList.add('open');
-    return;
+  function gather(p) {
+    p = p || {};
+    return {
+      title: pick(p, 'title') || elVal('mp-ptitle'),
+      forename: pick(p, 'forename', 'first_name', 'firstName', 'fn') || elVal('mp-fn'),
+      surname: pick(p, 'surname', 'last_name', 'lastName', 'ln') || elVal('mp-ln'),
+      ni: pick(p, 'ni_number', 'ni', 'national_insurance', 'nino') || elVal('mp-ni'),
+      dob: fmtDate(pick(p, 'dob', 'date_of_birth', 'dateOfBirth') || elVal('mp-dob')),
+      phone: pick(p, 'phone', 'telephone', 'tel', 'mobile') || elVal('mp-phone'),
+      email: pick(p, 'email', 'email_address') || elVal('mp-email'),
+      address: pick(p, 'address', 'address_line', 'street') || elVal('mp-address'),
+      postcode: pick(p, 'postcode', 'post_code', 'zip') || elVal('mp-postcode'),
+      pid: pick(p, 'participant_id', 'pid', 'ref', 'reference') || elVal('mp-pid'),
+      startDate: fmtDate(pick(p, 'start_date', 'startDate', 'start') || elVal('mp-start')) || fmtDate(new Date().toISOString()),
+      referralSource: pick(p, 'referral_source', 'referralSource', 'source') || elVal('mp-rs'),
+      advisor: pick(p, 'advisor', 'adviser', 'key_worker') || elVal('mp-adv'),
+      stage: pick(p, 'stage', 'journey_stage') || elVal('mp-st'),
+      risk: pick(p, 'risk', 'risk_level') || elVal('mp-risk'),
+      background: pick(p, 'referral_background', 'background', 'intake', 'intake_text', 'referral_notes') || elVal('mp-intake-text'),
+      caseNote: pick(p, 'case_note', 'case_notes', 'notes', 'note', 'assessment') || elVal('mp-note'),
+      barriers: pick(p, 'barriers', 'barrier_list') || readChecked('barrier-checks'),
+      safeguarding: pick(p, 'safeguarding', 'safeguarding_flag', 'safe') || elVal('mp-safe'),
+      confidence: pick(p, 'confidence', 'confidence_score') || elVal('mp-conf'),
+      work: pick(p, 'work_readiness', 'work') || elVal('mp-work'),
+      wellbeing: pick(p, 'wellbeing') || elVal('mp-well'),
+      skills: pick(p, 'skills', 'skills_score') || elVal('mp-skillsc'),
+      gender: pick(p, 'gender') || elVal('mp-gender'),
+      rightToWork: pick(p, 'right_to_work', 'rightToWork') || elVal('mp-rtw'),
+      basicSkills: pick(p, 'basic_skills', 'basicSkills') || elVal('mp-bskills'),
+      labourStatus: pick(p, 'labour_status', 'labourStatus', 'employment_status') || elVal('mp-labour'),
+      interpersonal: pick(p, 'interpersonal_support', 'interpersonal') || elVal('mp-inter'),
+      provider: elVal('mp-provider') || ls('civara_provider', ''),
+      project: elVal('mp-project') || ls('civara_project', ''),
+      generatedOn: new Date().toLocaleDateString('en-GB')
+    };
+  }
+  function gatherEnd(p) {
+    p = p || {};
+    const d = gather(p);
+    d.outcomeType = pick(p, 'outcome_type', 'outcomeType') || elVal('mp-outcome-type');
+    d.jobTitle = pick(p, 'job_title', 'jobTitle') || elVal('mp-job-title');
+    d.employer = pick(p, 'employer', 'employer_name') || elVal('mp-employer');
+    d.jobStart = fmtDate(pick(p, 'job_start', 'jobStart') || elVal('mp-job-start'));
+    d.hours = pick(p, 'hours', 'hours_per_week') || elVal('mp-hours');
+    d.pay = pick(p, 'pay', 'salary', 'wage') || elVal('mp-pay');
+    d.exitDate = fmtDate(pick(p, 'exit_date', 'exitDate', 'leaving_date') || elVal('mp-exit-date'));
+    d.leaveReason = pick(p, 'leave_reason', 'leaving_reason', 'reason') || elVal('mp-leave-reason');
+    return d;
   }
 
-  box.innerHTML =
-    '<h2 id="fb-modal-title">Add feedback</h2>' +
-    '<div class="form-grid-2"><div class="form-row"><label>Event *</label><select id="fbf-ev" onchange="renderFbQuestions()"><option value="">Select event…</option></select></div><div class="form-row"><label>Participant name (optional)</label><input id="fbf-name"/></div></div>' +
-    '<div id="fbf-qs"></div>' +
-    '<div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal(\'modal-fb\')">Cancel</button><button class="btn btn-p" id="fb-save-btn" onclick="saveFb()">Save</button></div>';
-  populateFbEvSelect();
-  renderFbQuestions();
-  $('modal-fb').classList.add('open');
-}
+  function download(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
 
-let _fbQs = [];
-function renderFbQuestions() {
-  const wrap = $('fbf-qs'); if (!wrap) return;
-  const M = _fbMeasures($('fbf-ev') ? $('fbf-ev').value : '');
-  _fbQs = M; _fbScores = {};
-  wrap.innerHTML =
-    M.map((m, i) => {
-      const lbl = '<label title="' + escapeHTML(m.question) + '">' + escapeHTML(m.question) + '</label>';
-      if (m.kind === 'score') return '<div class="form-row">' + lbl + '<div style="display:flex;gap:5px;margin-top:4px" id="fbq-' + i + '"></div></div>';
-      if (m.kind === 'yesno') return '<div class="form-row">' + lbl + '<select id="fbq-' + i + '"><option value="">—</option><option>Yes</option><option>No</option></select></div>';
-      if (m.kind === 'text')  return '<div class="form-row">' + lbl + '<textarea id="fbq-' + i + '" style="min-height:55px"></textarea></div>';
-      return '<div class="form-row">' + lbl + '<input id="fbq-' + i + '"/></div>';
-    }).join('');
-  M.forEach((m, i) => { if (m.kind === 'score') makeStars('fbq-' + i, 'q' + i, 0); });
-}
+  function prefillDelivery() {
+    const pv = document.getElementById('mp-provider'), pj = document.getElementById('mp-project');
+    if (pv && !pv.value) pv.value = ls('civara_provider', '');
+    if (pj && !pj.value) pj.value = ls('civara_project', '');
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', prefillDelivery);
+  else prefillDelivery();
 
-async function saveFb() {
-  const evId = $('fbf-ev').value;
-  if (!evId) { alert('Please select an event'); return; }
-  const btn = $('fb-save-btn'); btn.textContent = 'Saving…'; btn.disabled = true;
-  try {
-    const M = (typeof activeMeasures === 'function' && activeMeasures().length) ? _fbQs : [];
-    let d;
-    if (!M.length) {
-      d = {
-        event_id:  evId,
-        name:      $('fbf-name').value,
-        enjoyed:   _fbScores.enjoyed,
-        cb:        _fbScores.cb,
-        ca:        _fbScores.ca,
-        learned:   $('fbf-learned').checked,
-        connected: $('fbf-connected').checked,
-        friend:    $('fbf-friend').checked,
-        quote:     $('fbf-quote').value,
-        answers:   {}
+  /* ---------- public entry points --------------------------------------- */
+  window.civaraGenerateStartForm = function (p) {
+    if (p && p.preventDefault) p = null;
+    if (!window.TextEncoder) { alert('This browser is too old to generate the form.'); return; }
+    const d = gather(p);
+    if (!d.forename && !d.surname) { alert('Add the participant\u2019s name first, then click Start Form.'); return; }
+    lsSet('civara_provider', d.provider); lsSet('civara_project', d.project);
+    let blob;
+    try { blob = packDocx(buildStartFormXml(d)); }
+    catch (e) { alert('Sorry — could not build the form: ' + e.message); return; }
+    const name = ('Start Form - ' + (d.forename || '') + ' ' + (d.surname || '')).trim().replace(/\s+/g, ' ') || 'Start Form';
+    download(blob, name + '.docx');
+  };
+
+  window.civaraGenerateEndForm = function (p) {
+    if (p && p.preventDefault) p = null;
+    if (!window.TextEncoder) { alert('This browser is too old to generate the form.'); return; }
+    const d = gatherEnd(p);
+    if (!d.forename && !d.surname) { alert('Add the participant\u2019s name first, then click End Form.'); return; }
+    lsSet('civara_provider', d.provider); lsSet('civara_project', d.project);
+    let blob;
+    try { blob = packDocx(buildEndFormXml(d)); }
+    catch (e) { alert('Sorry — could not build the form: ' + e.message); return; }
+    const name = ('End Form - ' + (d.forename || '') + ' ' + (d.surname || '')).trim().replace(/\s+/g, ' ') || 'End Form';
+    download(blob, name + '.docx');
+  };
+
+  window.civaraAddJobEvidence = function () {
+    const name = (elVal('mp-fn') + ' ' + elVal('mp-ln')).trim();
+    try { if (typeof openAddEvid === 'function') openAddEvid(); } catch (e) {}
+    setTimeout(function () {
+      const p = document.getElementById('evid-p'); if (p && name) p.value = name;
+      const t = document.getElementById('evid-type'); if (t) t.value = 'Payslip';
+      const o = document.getElementById('evid-out'); if (o) o.value = 'Employment';
+      const s = document.getElementById('evid-staff'); if (s && !s.value) s.value = elVal('mp-adv');
+      const dt = document.getElementById('evid-date'); if (dt && !dt.value) dt.value = new Date().toISOString().slice(0, 10);
+    }, 0);
+  };
+
+})();
+</script>
+
+<!-- Populate the EOI organisation-profile field once the app has booted -->
+<script>
+(function(){
+  function tryPop(n){
+    if(typeof populateOrgProfileField==='function'){ try{ populateOrgProfileField(); }catch(e){} }
+    if(n>0) setTimeout(function(){ tryPop(n-1); }, 1500);
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', function(){ tryPop(4); });
+  else tryPop(4);
+})();
+</script>
+
+<!-- Extensions (run after boot, patch existing functions) -->
+<script src="js/extensions/demographics.js?v=42"></script>
+<script src="js/extensions/csv-import.js?v=15"></script>
+<script src="js/extensions/reporting-periods.js?v=20"></script>
+<script src="js/extensions/opportunities.js?v=15"></script>
+<script src="js/extensions/partner-portal.js?v=15"></script>
+<script src="js/extensions/volunteers-plus.js?v=38"></script>
+<script src="js/extensions/event-qr.js?v=20"></script>
+<script src="js/extensions/delivery-report.js?v=45"></script>
+<script src="js/extensions/event-contracts.js?v=19"></script>
+<script src="js/extensions/historic-import.js?v=46"></script>
+<script src="js/extensions/feedback-funders.js?v=17"></script>
+
+<!-- Participant handlers + paperwork persistence -->
+<script>
+(function () {
+  if (typeof DB === 'undefined') return;
+
+  function byId(list, id){ list=list||[]; for(var i=0;i<list.length;i++) if(String(list[i].id)===String(id)) return list[i]; return null; }
+  function gv(id){ var el=document.getElementById(id); return el ? (el.value||'') : ''; }
+  function sv(id, v){ var el=document.getElementById(id); if(el) el.value=(v==null?'':v); }
+
+  if (typeof MAPPERS !== 'undefined' && MAPPERS.participants && !MAPPERS._pwPatched) {
+    var _origPMap = MAPPERS.participants;
+    MAPPERS.participants = function(r){ var o=_origPMap(r); o.paperwork = r.paperwork || {}; return o; };
+    MAPPERS._pwPatched = true;
+    if (typeof refreshTable === 'function' && typeof sb !== 'undefined' && sb && typeof orgId !== 'undefined' && orgId) {
+      try { refreshTable('participants').then(function(){ if (typeof renderParticipants === 'function') renderParticipants(); }); } catch (e) {}
+    }
+  }
+
+  var PW=['mp-ptitle','mp-ni','mp-dob','mp-address','mp-postcode','mp-pid','mp-start','mp-gender','mp-rtw','mp-bskills','mp-labour','mp-inter','mp-outcome-type','mp-job-title','mp-employer','mp-job-start','mp-hours','mp-pay','mp-exit-date','mp-leave-reason','mp-intake-text','mp-note'];
+  function clearPaperwork(){ PW.forEach(function(f){ sv(f,''); }); }
+
+  function readPaperwork(){
+    return {
+      title: gv('mp-ptitle'), ni: gv('mp-ni'), dob: gv('mp-dob'),
+      address: gv('mp-address'), postcode: gv('mp-postcode'), pid: gv('mp-pid'),
+      start_date: gv('mp-start'), gender: gv('mp-gender'), right_to_work: gv('mp-rtw'),
+      basic_skills: gv('mp-bskills'), labour_status: gv('mp-labour'), interpersonal: gv('mp-inter'),
+      outcome_type: gv('mp-outcome-type'), job_title: gv('mp-job-title'), employer: gv('mp-employer'),
+      job_start: gv('mp-job-start'), hours: gv('mp-hours'), pay: gv('mp-pay'),
+      exit_date: gv('mp-exit-date'), leave_reason: gv('mp-leave-reason'),
+      intake: gv('mp-intake-text'), case_note: gv('mp-note'),
+      provider: gv('mp-provider'), project: gv('mp-project')
+    };
+  }
+  function fillPaperwork(item){
+    var pw=(item&&item.paperwork)||{};
+    sv('mp-ptitle',pw.title); sv('mp-ni',pw.ni); sv('mp-dob',pw.dob);
+    sv('mp-address',pw.address); sv('mp-postcode',pw.postcode); sv('mp-pid',pw.pid);
+    sv('mp-start',pw.start_date); sv('mp-gender',pw.gender); sv('mp-rtw',pw.right_to_work);
+    sv('mp-bskills',pw.basic_skills); sv('mp-labour',pw.labour_status); sv('mp-inter',pw.interpersonal);
+    sv('mp-outcome-type',pw.outcome_type); sv('mp-job-title',pw.job_title); sv('mp-employer',pw.employer);
+    sv('mp-job-start',pw.job_start); sv('mp-hours',pw.hours); sv('mp-pay',pw.pay);
+    sv('mp-exit-date',pw.exit_date); sv('mp-leave-reason',pw.leave_reason);
+    sv('mp-intake-text',pw.intake); sv('mp-note',pw.case_note);
+    if(pw.provider) sv('mp-provider',pw.provider);
+    if(pw.project) sv('mp-project',pw.project);
+  }
+
+  function wrap(name, listName, after){
+    var orig=window[name]; if(typeof orig!=='function') return;
+    window[name]=function(id){
+      var item=byId(DB[listName], id); if(!item) return;
+      var r=orig.call(this, item.id);
+      if(after){ try{ after(item); }catch(e){} }
+      return r;
+    };
+  }
+  wrap('openEditP','participants', function(item){
+    fillPaperwork(item);
+    if (typeof sb !== 'undefined' && sb) {
+      try {
+        sb.from('participants').select('paperwork').eq('id', item.id).single().then(function(res){
+          if (res && res.data) fillPaperwork({ paperwork: res.data.paperwork });
+        }).catch(function(){});
+      } catch (e) {}
+    }
+  });
+  wrap('openNotes','participants');
+  wrap('addNote','participants');
+  wrap('deleteP','participants');
+  wrap('openEqualityModal','participants');
+  wrap('convertToParticipant','partner_referrals');
+
+  var _origAddP=window.openAddP;
+  if(typeof _origAddP==='function'){
+    window.openAddP=function(){ var r=_origAddP.apply(this, arguments); clearPaperwork(); return r; };
+  }
+
+  function saveParticipantRow(payload, editId){
+    function attempt(pl){ return editId ? sbUpdate('participants', pl, editId) : sbInsert('participants', pl); }
+    return attempt(payload).catch(function(e){
+      if(String((e&&e.message)||'').toLowerCase().indexOf('paperwork')!==-1){
+        var p2=Object.assign({}, payload); delete p2.paperwork;
+        return attempt(p2).then(function(r){
+          setTimeout(function(){
+            alert("Saved — but the paperwork fields (NI, DOB, address, job info…) could NOT be stored because the 'paperwork' column is missing from your participants table.\n\nFix it in Supabase → SQL Editor by running:\n\nALTER TABLE participants ADD COLUMN IF NOT EXISTS paperwork jsonb;\nNOTIFY pgrst, 'reload schema';\n\nThen save the participant again.");
+          }, 100);
+          return r;
+        });
+      }
+      throw e;
+    });
+  }
+
+  window.saveP = async function(){
+    var btn=document.getElementById('p-save-btn'); btn.textContent='Saving…'; btn.disabled=true;
+    try{
+      var note=gv('mp-note');
+      var contractIds=getSelectedContractIds();
+      var d={
+        first_name: gv('mp-fn')||'Unknown',
+        last_name:  gv('mp-ln')||'',
+        ref_source: gv('mp-rs'),
+        stage:      gv('mp-st'),
+        advisor:    gv('mp-adv'),
+        barriers:   getChkArr('barrier-checks'),
+        outcomes:   getChkArr('outcome-checks'),
+        safeguarding: gv('mp-safe')||null,
+        risk:       gv('mp-risk'),
+        last_contact: today(),
+        contract_ids: contractIds,
+        phone:      gv('mp-phone')||'',
+        email:      gv('mp-email')||'',
+        scores: {
+          confidence:     parseInt(gv('mp-conf'))||null,
+          work_readiness: parseInt(gv('mp-work'))||null,
+          wellbeing:      parseInt(gv('mp-well'))||null,
+          skills:         parseInt(gv('mp-skillsc'))||null
+        },
+        paperwork: readPaperwork()
       };
-    } else {
-      const answers = {};
-      const std = { enjoyed: null, cb: null, ca: null, learned: false, connected: false, friend: false, quote: '' };
-      M.forEach((m, i) => {
-        let v;
-        if (m.kind === 'score') v = _fbScores['q' + i] || null;
-        else { const el = $('fbq-' + i); v = el ? el.value.trim() : ''; }
-        if (v == null || v === '') return;
-        answers[m.question] = v;
-        if (!m.maps_to) return;
-        if (m.maps_to === 'quote') { if (!std.quote) std.quote = String(v); return; }
-        if (m.maps_to === 'enjoyed' || m.maps_to === 'cb' || m.maps_to === 'ca') {
-          let sc = scoreOf(v);
-          if (sc == null) { const y = yesOf(v); if (y === true) sc = 5; else if (y === false) sc = 1; }
-          if (sc != null) std[m.maps_to] = Math.min(5, Math.max(1, Math.round(sc)));
-          return;
-        }
-        std[m.maps_to] = yesOf(v) === true;
-      });
-      d = Object.assign({ event_id: evId, name: $('fbf-name').value, answers }, std);
+      if(_editPId){
+        var ex=byId(DB.participants, _editPId);
+        var notes=toArr(ex&&ex.notes).slice();
+        var prevNote=(ex&&ex.paperwork&&ex.paperwork.case_note)||'';
+        if(note && note!==prevNote) notes.push({t:note, d:today(), s:'Staff'});
+        await saveParticipantRow(Object.assign({}, d, {notes:notes}), _editPId);
+      } else {
+        var notes2=note?[{t:note, d:today(), s:'Staff'}]:[];
+        await saveParticipantRow(Object.assign({}, d, {notes:notes2}), null);
+        if(_editPartnerRefId){ try{ await sbUpdate('partner_referrals', {status:'Converted'}, _editPartnerRefId); }catch(e){} }
+      }
+      if(sb) await refreshTable('participants');
+      if(sb) await refreshTable('partner_referrals');
+      _editPartnerRefId=null;
+      closeModal('modal-p');
+      renderParticipants();
+    } catch(e){
+      alert('Save failed: '+e.message);
+    } finally {
+      btn.textContent='Save'; btn.disabled=false;
     }
-    await sbInsert('feedback', d);
-    await refreshTable('feedback');
-    closeModal('modal-fb');
-    renderFeedback();
-  } catch (e) {
-    alert('Save failed: ' + e.message + (/answers/i.test(e.message || '') ? '\n\nRun sql/import-v3.sql in Supabase to add the answers column.' : ''));
-  }
-  finally { btn.textContent = 'Save'; btn.disabled = false; }
-}
-async function deleteFb(id) {
-  if (!confirm('Delete?')) return;
-  await sbDelete('feedback', id);
-  await refreshTable('feedback');
-  renderFeedback();
-}
+  };
+})();
+</script>
 
-// ── Circular items ──────────────────────────────────────────
-function openAddItem() {
-  _editItemId = null;
-  $('item-title').textContent = 'Log item';
-  ['it-name', 'it-kg', 'it-fixer'].forEach(f => $(f).value = '');
-  $('it-st').value = 'Collected';
-  $('modal-item').classList.add('open');
-}
-function openEditItem(id) {
-  const i = DB.circular.find(x => x.id === id); if (!i) return;
-  _editItemId = id;
-  $('item-title').textContent = 'Edit item';
-  $('it-name').value    = i.name;
-  $('it-cat').value     = i.category;
-  $('it-kg').value      = i.weight_kg;
-  $('it-st').value      = i.status;
-  $('it-fixer').value   = i.fixer;
-  $('it-outcome').value = i.outcome;
-  $('modal-item').classList.add('open');
-}
-async function saveItem() {
-  const btn = $('item-save-btn'); btn.textContent = 'Saving…'; btn.disabled = true;
-  try {
-    const d = {
-      name:      $('it-name').value,
-      category:  $('it-cat').value,
-      weight_kg: parseFloat($('it-kg').value) || 0,
-      status:    $('it-st').value,
-      fixer:     $('it-fixer').value,
-      outcome:   $('it-outcome').value
-    };
-    if (_editItemId) await sbUpdate('circular_items', d, _editItemId);
-    else await sbInsert('circular_items', d);
-    await refreshTable('circular_items');
-    closeModal('modal-item');
-    renderCircular();
-  } catch (e) { alert('Save failed: ' + e.message); }
-  finally { btn.textContent = 'Save'; btn.disabled = false; }
-}
-async function deleteItem(id) {
-  if (!confirm('Delete?')) return;
-  await sbDelete('circular_items', id);
-  await refreshTable('circular_items');
-  renderCircular();
-}
-
-// ── Funders ─────────────────────────────────────────────────
-function openAddFunder() {
-  _editFunderId = null;
-  $('funder-modal-title').textContent = 'Add funder';
-  ['ff-name', 'ff-contact', 'ff-email', 'ff-notes'].forEach(id => $(id).value = '');
-  $('ff-type').value = 'moj';
-  $('modal-funder').classList.add('open');
-}
-function openEditFunder(id) {
-  const f = (DB.funders || []).find(x => String(x.id) === String(id)); if (!f) return;
-  _editFunderId = id;
-  $('funder-modal-title').textContent = 'Edit funder';
-  $('ff-name').value    = f.name || '';
-  $('ff-type').value    = f.type || 'other';
-  $('ff-contact').value = f.contact_name || '';
-  $('ff-email').value   = f.contact_email || '';
-  $('ff-notes').value   = f.notes || '';
-  $('modal-funder').classList.add('open');
-}
-async function saveFunder() {
-  const name = $('ff-name').value.trim();
-  if (!name) { alert('Funder name required'); return; }
-  const btn = $('funder-save-btn'); btn.textContent = 'Saving…'; btn.disabled = true;
-  try {
-    const d = {
-      name, type: $('ff-type').value,
-      contact_name:  $('ff-contact').value || null,
-      contact_email: $('ff-email').value || null,
-      notes:         $('ff-notes').value || null
-    };
-    if (_editFunderId) await sbUpdate('funders', d, _editFunderId);
-    else await sbInsert('funders', d);
-    await refreshTable('funders');
-    closeModal('modal-funder');
-    renderFunders();
-  } catch (e) { alert('Save failed: ' + e.message); }
-  finally { btn.textContent = 'Save funder'; btn.disabled = false; }
-}
-async function deleteFunder(id) {
-  if (!confirm('Delete?')) return;
-  await sbDelete('funders', id);
-  await refreshTable('funders');
-  renderFunders();
-}
-
-// ── Contracts ───────────────────────────────────────────────
-function populateConFunderSelect(preselect) {
-  const sel = $('con-funder-id'); if (!sel) return;
-  sel.innerHTML = '<option value="">— Select funder —</option>';
-  (DB.funders || []).forEach(f => {
-    const o = document.createElement('option');
-    o.value = String(f.id); o.textContent = f.name;
-    sel.appendChild(o);
-  });
-  if (preselect) sel.value = String(preselect);
-}
-function onConFunderChange() {
-  const funderId = $('con-funder-id').value;
-  const f = (DB.funders || []).find(x => String(x.id) === String(funderId));
-  const lbl = $('con-linked-funder-label');
-  if (f) {
-    if (f.type) $('con-report-type').value = f.type;
-    if (lbl) lbl.textContent = f.name;
-  } else if (lbl) lbl.textContent = 'None selected';
-}
-
-function openAddCon(funderId) {
-  _editConId = null;
-  $('con-title').textContent = 'Add contract';
-  ['con-name', 'con-val', 'con-ts', 'con-to'].forEach(f => $(f).value = '');
-  $('con-start').value = '';
-  $('con-end').value = '';
-  $('con-status').value = 'live';
-  $('con-report-type').value = 'other';
-  populateConFunderSelect(funderId);
-  const warnEl = $('con-no-funder-warn');
-  if (warnEl) warnEl.style.display = DB.funders.length ? 'none' : 'flex';
-  if (funderId) onConFunderChange();
-  else { const lbl = $('con-linked-funder-label'); if (lbl) lbl.textContent = 'None selected'; }
-  $('modal-con').classList.add('open');
-}
-
-function openEditCon(id) {
-  const c = DB.contracts.find(x => String(x.id) === String(id)); if (!c) return;
-  _editConId = id;
-  $('con-title').textContent = 'Edit contract';
-  $('con-name').value = c.name;
-  $('con-val').value  = c.value;
-  $('con-ts').value   = c.target_starts;
-  $('con-to').value   = c.target_outcomes;
-  $('con-start').value = c.start_date || '';
-  $('con-end').value   = c.end_date || '';
-  $('con-status').value = c.status || 'live';
-  $('con-report-type').value = c.report_type || 'other';
-  populateConFunderSelect(c.funder_id);
-  if (c.funder_id) onConFunderChange();
-  $('modal-con').classList.add('open');
-}
-
-async function saveCon() {
-  const name = $('con-name').value.trim();
-  if (!name) { alert('Contract name required'); return; }
-  const funderId = $('con-funder-id').value;
-  if (!funderId) { alert('Please select a funder.'); return; }
-  const btn = $('con-save-btn'); btn.textContent = 'Saving…'; btn.disabled = true;
-  try {
-    const funderObj = DB.funders.find(f => String(f.id) === String(funderId));
-    const d = {
-      name,
-      funder: (funderObj && funderObj.name) || '',
-      funder_id: String(funderId),
-      report_type: $('con-report-type').value || 'other',
-      value: parseInt($('con-val').value) || 0,
-      target_starts:   parseInt($('con-ts').value) || 0,
-      target_outcomes: parseInt($('con-to').value) || 0,
-      start_date: $('con-start').value || null,
-      end_date:   $('con-end').value || null,
-      status:     $('con-status').value || 'live'
-    };
-    if (_editConId) await sbUpdate('contracts', d, _editConId);
-    else await sbInsert('contracts', d);
-    await refreshTable('contracts');
-    closeModal('modal-con');
-    renderFunding();
-    renderFunders();
-  } catch (e) { alert('Save failed: ' + e.message); }
-  finally { btn.textContent = 'Save'; btn.disabled = false; }
-}
-
-async function deleteCon(id) {
-  if (!confirm('Delete?')) return;
-  await sbDelete('contracts', id);
-  await refreshTable('contracts');
-  renderFunding();
-  renderFunders();
-}
-
-// ── Evidence ────────────────────────────────────────────────
-function openAddEvid() {
-  ['evid-p', 'evid-staff'].forEach(f => $(f).value = '');
-  $('evid-date').value = today();
-  $('modal-evid').classList.add('open');
-}
-async function saveEvid() {
-  const btn = $('evid-save-btn'); btn.textContent = 'Saving…'; btn.disabled = true;
-  try {
-    await sbInsert('evidence', {
-      participant_name: $('evid-p').value,
-      type: $('evid-type').value,
-      linked_outcome: $('evid-out').value,
-      staff: $('evid-staff').value,
-      evidence_date: $('evid-date').value,
-      status: 'Pending'
+<!-- Evidence file attachments -->
+<script>
+(function () {
+  if (typeof DB === 'undefined') return;
+  function gvE(id){ var el=document.getElementById(id); return el ? (el.value||'') : ''; }
+  function readAsDataURL(file){
+    return new Promise(function(res, rej){
+      var fr=new FileReader();
+      fr.onload=function(){ res(fr.result); };
+      fr.onerror=function(){ rej(new Error('Could not read the file')); };
+      fr.readAsDataURL(file);
     });
-    await refreshTable('evidence');
-    closeModal('modal-evid');
-    renderEvidence();
-  } catch (e) { alert('Save failed: ' + e.message); }
-  finally { btn.textContent = 'Save'; btn.disabled = false; }
-}
-async function deleteEvid(id) {
-  if (!confirm('Delete?')) return;
-  await sbDelete('evidence', id);
-  await refreshTable('evidence');
-  renderEvidence();
-}
-
-// ── Equality data modal ─────────────────────────────────────
-function openEqualityModal(pid) {
-  const p = DB.participants.find(x => x.id === pid); if (!p) return;
-  _editEqPId = pid;
-  // Expose for extensions/demographics.js (which patches saveEqualityData)
-  window._editEqPId = pid;
-  $('eq-modal-title').textContent = 'Equality monitoring — ' + p.first_name + ' ' + p.last_name;
-  const ed = p.equality_data || {};
-  ['eq-age', 'eq-ethnicity', 'eq-gender', 'eq-disability'].forEach(id => {
-    const key = id.replace('eq-', '');
-    if ($(id)) $(id).value = ed[key] || '';
-  });
-  $('modal-eq').classList.add('open');
-}
-
-async function saveEqualityData() {
-  if (!_editEqPId) return;
-  const btn = $('eq-save-btn'); btn.textContent = 'Saving…'; btn.disabled = true;
-  try {
-    const data = {
-      age:        $('eq-age').value,
-      ethnicity:  $('eq-ethnicity').value,
-      gender:     $('eq-gender').value,
-      disability: $('eq-disability').value
-    };
-    Object.keys(data).forEach(k => { if (!data[k]) delete data[k]; });
-    if (sb) try { await sbUpdate('participants', { equality_data: data }, _editEqPId); } catch (e) { /* ignore */ }
-    const idx = DB.participants.findIndex(x => x.id === _editEqPId);
-    if (idx >= 0) DB.participants[idx].equality_data = data;
-    closeModal('modal-eq');
-    renderEqMonitoringList();
-  } catch (e) {
-    alert('Save failed: ' + e.message);
-  } finally {
-    btn.textContent = 'Save'; btn.disabled = false;
   }
-}
+  function insertEvidenceRow(rec){
+    return sbInsert('evidence', rec).catch(function(e){
+      var msg=String((e&&e.message)||'').toLowerCase();
+      if(msg.indexOf('file_data')!==-1 || msg.indexOf('file_name')!==-1){
+        var r2=Object.assign({}, rec); delete r2.file_data; delete r2.file_name;
+        return sbInsert('evidence', r2);
+      }
+      throw e;
+    });
+  }
+
+  window.saveEvid = async function(){
+    var btn=document.getElementById('evid-save-btn'); btn.textContent='Saving…'; btn.disabled=true;
+    try{
+      var rec={
+        participant_name: gvE('evid-p'),
+        type:            gvE('evid-type'),
+        linked_outcome:  gvE('evid-out'),
+        staff:           gvE('evid-staff'),
+        evidence_date:   gvE('evid-date'),
+        status:          'Pending'
+      };
+      var input=document.getElementById('evid-file');
+      var file=input && input.files && input.files[0];
+      if(file){
+        if(file.size > 5*1024*1024){ alert('That file is over 5MB. Please attach a smaller file.'); btn.textContent='Save'; btn.disabled=false; return; }
+        rec.file_data=await readAsDataURL(file);
+        rec.file_name=file.name;
+        rec.status='Received';
+      }
+      await insertEvidenceRow(rec);
+      await refreshTable('evidence');
+      closeModal('modal-evid');
+      renderEvidence();
+    } catch(e){ alert('Save failed: '+e.message); }
+    finally { btn.textContent='Save'; btn.disabled=false; }
+  };
+
+  var _origOpenAddEvid=window.openAddEvid;
+  if(typeof _origOpenAddEvid==='function'){
+    window.openAddEvid=function(){ var r=_origOpenAddEvid.apply(this, arguments); var fi=document.getElementById('evid-file'); if(fi) fi.value=''; return r; };
+  }
+
+  function augmentDownloads(){
+    if(typeof sb==='undefined' || !sb) return;
+    sb.from('evidence').select('id,file_name').not('file_data','is',null).then(function(res){
+      var rows=(res&&res.data)||[]; if(!rows.length) return;
+      var names={}; rows.forEach(function(r){ names[String(r.id)]=r.file_name||'file'; });
+      var tbody=document.getElementById('evid-table'); if(!tbody) return;
+      Array.prototype.forEach.call(tbody.querySelectorAll('tr'), function(tr){
+        var del=tr.querySelector('button[onclick^="deleteEvid"]'); if(!del) return;
+        var m=/deleteEvid\('([^']+)'\)/.exec(del.getAttribute('onclick')||''); if(!m) return;
+        var id=m[1];
+        if(names[id] && !tr.querySelector('.evid-dl')){
+          var b=document.createElement('button');
+          b.className='btn btn-ghost btn-sm evid-dl';
+          b.textContent='⬇ '+names[id];
+          b.setAttribute('onclick', "civaraDownloadEvidence('"+id+"')");
+          del.parentNode.insertBefore(b, del);
+          del.parentNode.insertBefore(document.createTextNode(' '), del);
+        }
+      });
+    }).catch(function(){});
+  }
+  var _origRenderEvidence=window.renderEvidence;
+  if(typeof _origRenderEvidence==='function'){
+    window.renderEvidence=function(){ var r=_origRenderEvidence.apply(this, arguments); try{ augmentDownloads(); }catch(e){} return r; };
+  }
+
+  window.civaraDownloadEvidence=function(id){
+    if(typeof sb==='undefined' || !sb) return;
+    sb.from('evidence').select('file_data,file_name').eq('id', id).single().then(function(res){
+      var row=res&&res.data;
+      if(!row || !row.file_data){ alert('No file is attached to this evidence.'); return; }
+      fetch(row.file_data).then(function(r){ return r.blob(); }).then(function(blob){
+        var url=URL.createObjectURL(blob);
+        var a=document.createElement('a'); a.href=url; a.download=row.file_name||'evidence';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+      });
+    }).catch(function(e){ alert('Could not download: '+((e&&e.message)||e)); });
+  };
+})();
+</script>
+
+<!-- Funder form filling -->
+<script>
+(function () {
+  if (typeof DB === 'undefined') return;
+  var FILL_API = '/api/fill-form';
+
+  function b64(file){ return new Promise(function(res,rej){ var fr=new FileReader(); fr.onload=function(){res(fr.result);}; fr.onerror=function(){rej(new Error('read failed'));}; fr.readAsDataURL(file); }); }
+  function fmtDate(v){ if(!v) return ''; var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(v)); return m?(m[3]+'/'+m[2]+'/'+m[1]):String(v); }
+  function gv(id){ var el=document.getElementById(id); return el?(el.value||''):''; }
+  function dl(blob,name){ var url=URL.createObjectURL(blob); var a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){URL.revokeObjectURL(url);},4000); }
+
+  function docxBlobFromBase64(b64str){
+    var clean = b64str.indexOf('base64,') > -1 ? b64str.split('base64,')[1] : b64str;
+    var bin = atob(clean);
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  }
+
+  window.civaraUploadContractTemplate = function(contractId){
+    var input=document.createElement('input'); input.type='file'; input.accept='.docx';
+    input.onchange=function(){
+      var f=input.files&&input.files[0]; if(!f) return;
+      if(!/\.docx$/i.test(f.name)){ alert('Please upload a Word .docx file.'); return; }
+      if(f.size>3*1024*1024){ alert('That file is over 3MB. Funder forms are usually well under this — please attach a smaller .docx.'); return; }
+      b64(f).then(function(data){
+        sbUpdate('contracts', {template_data:data, template_name:f.name}, contractId).then(function(){
+          if(typeof refreshTable==='function') return refreshTable('contracts');
+        }).then(function(){
+          if(typeof renderFunding==='function') renderFunding();
+          alert('Form template uploaded: '+f.name);
+        }).catch(function(e){
+          var msg=String((e&&e.message)||'').toLowerCase();
+          if(msg.indexOf('template_data')!==-1||msg.indexOf('template_name')!==-1){
+            alert("Couldn't save the template — the 'template_data' column is missing.\n\nRun add-contract-template-columns.sql in Supabase, then try again.");
+          } else { alert('Upload failed: '+((e&&e.message)||e)); }
+        });
+      });
+    };
+    input.click();
+  };
+
+  function augmentContractCards(){
+    var el=document.getElementById('fund-list'); if(!el) return;
+    var idToBtn={};
+    Array.prototype.forEach.call(el.querySelectorAll('button[onclick^="openEditCon"]'), function(edit){
+      var m=/openEditCon\('([^']+)'\)/.exec(edit.getAttribute('onclick')||''); if(!m) return;
+      var id=m[1], row=edit.parentNode;
+      if(row.querySelector('.civ-tpl-btn')) { idToBtn[id]=row.querySelector('.civ-tpl-btn'); return; }
+      var b=document.createElement('button');
+      b.className='btn btn-ghost btn-sm civ-tpl-btn';
+      b.textContent='⬆ Form';
+      b.title='Upload this funder\u2019s blank Word form';
+      b.setAttribute('onclick', "civaraUploadContractTemplate('"+id+"')");
+      row.insertBefore(b, edit);
+      row.insertBefore(document.createTextNode(' '), edit);
+      idToBtn[id]=b;
+    });
+    if(typeof sb!=='undefined' && sb){
+      try {
+        sb.from('contracts').select('id,template_name').not('template_data','is',null).then(function(res){
+          ((res&&res.data)||[]).forEach(function(r){
+            var b=idToBtn[String(r.id)];
+            if(b){ b.textContent='📄 Form ✓'; b.title='Template: '+(r.template_name||'form.docx')+' — click to replace'; }
+          });
+        }).catch(function(){});
+      } catch(e){}
+    }
+  }
+  var _origRenderFunding=window.renderFunding;
+  if(typeof _origRenderFunding==='function'){
+    window.renderFunding=function(){ var r=_origRenderFunding.apply(this,arguments); try{augmentContractCards();}catch(e){} return r; };
+  }
+  setTimeout(function(){ try{ augmentContractCards(); }catch(e){} }, 1500);
+
+  function gatherData(){
+    return {
+      forename: gv('mp-fn'), surname: gv('mp-ln'), title: gv('mp-ptitle'),
+      ni: gv('mp-ni'), dob: fmtDate(gv('mp-dob')), address: gv('mp-address'),
+      postcode: gv('mp-postcode'), phone: gv('mp-phone'), email: gv('mp-email'),
+      participant_id: gv('mp-pid'), start_date: fmtDate(gv('mp-start')),
+      gender: gv('mp-gender'), right_to_work: gv('mp-rtw'), basic_skills: gv('mp-bskills'),
+      labour_status: gv('mp-labour'), interpersonal: gv('mp-inter'),
+      adviser: gv('mp-adv'), referral_source: gv('mp-rs'), stage: gv('mp-st'), risk: gv('mp-risk'),
+      outcome_type: gv('mp-outcome-type'), job_title: gv('mp-job-title'), employer: gv('mp-employer'),
+      job_start: fmtDate(gv('mp-job-start')), hours: gv('mp-hours'), pay: gv('mp-pay'),
+      exit_date: fmtDate(gv('mp-exit-date')), leave_reason: gv('mp-leave-reason'),
+      provider: gv('mp-provider'), project: gv('mp-project'),
+      today: new Date().toLocaleDateString('en-GB')
+    };
+  }
+
+  window.civaraFillFunderForm = function(){
+    if(typeof sb==='undefined'||!sb){ alert('Not connected.'); return; }
+    var ids = (typeof getSelectedContractIds==='function') ? getSelectedContractIds() : [];
+    if(!ids.length){ alert('Link this participant to a contract first — open the \u201cReferral & journey\u201d section and tick a contract under \u201cLink to contracts\u201d, then try again.'); return; }
+    sb.from('contracts').select('id,name,template_data,template_name').in('id', ids).then(function(res){
+      var rows=((res&&res.data)||[]).filter(function(r){ return r.template_data; });
+      if(!rows.length){ alert('None of this participant\u2019s contracts has a form template yet.\n\nGo to Funders/Contracts, find the contract and click \u201c\u2b06 Form\u201d to upload the funder\u2019s blank Word form.'); return; }
+      var chosen=rows[0];
+      if(rows.length>1){
+        var pick=window.prompt('This participant has more than one contract with a form. Type the number:\n\n'+rows.map(function(r,i){return (i+1)+'. '+r.name;}).join('\n'),'1');
+        var idx=parseInt(pick,10)-1;
+        if(isNaN(idx)||idx<0||idx>=rows.length) return;
+        chosen=rows[idx];
+      }
+      var data=gatherData();
+      var fname=('Form - '+chosen.name+' - '+(data.forename||'')+' '+(data.surname||'')).replace(/\s+/g,' ').trim();
+      var btnNote='(If this says the filler was not found, the Vercel /api/fill-form function may not be deployed yet.)';
+
+      fetch(FILL_API,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          docxBase64: chosen.template_data,
+          filename: fname,
+          orgId: (typeof orgId!=='undefined' && orgId) ? orgId : 'default',
+          data: data
+        })
+      })
+        .then(function(r){
+          return r.json()
+            .then(function(j){ return { status: r.status, json: j }; })
+            .catch(function(){ throw new Error('The filler returned an unreadable response (HTTP '+r.status+').'); });
+        })
+        .then(function(res2){
+          var json = res2.json;
+          if(!json || json.ok !== true || !json.filledBase64){
+            throw new Error((json && json.error) ? json.error : ('HTTP '+res2.status));
+          }
+          var blob = docxBlobFromBase64(json.filledBase64);
+          dl(blob, json.filename || (fname + '.docx'));
+
+          if(json.missing && json.missing.length){
+            var lines = json.missing.slice(0,8).map(function(m){ return '\u2022 ' + m.text; }).join('\n');
+            alert('Form filled and downloaded.\n\n' + json.missing.length + ' field(s) had no data and were left blank:\n\n' + lines + (json.missing.length > 8 ? '\n\u2026' : ''));
+          }
+        })
+        .catch(function(e){ alert('Could not fill the form: '+((e&&e.message)||e)+'\n\n'+btnNote); });
+    }).catch(function(e){ alert('Could not load the contract: '+((e&&e.message)||e)); });
+  };
+})();
+</script>
+
+<script src="js/onboarding.js?v=10"></script>
+<script src="js/pwa.js?v=1"></script>
+</body>
+</html>
