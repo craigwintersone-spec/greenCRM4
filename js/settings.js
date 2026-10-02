@@ -51,7 +51,7 @@ function renderFeedbackQuestionsCard() {
 
   h += _fqRows.map((m, i) => {
     const on = m.active !== false;
-    const meta = fqKindLabel(m.kind) + (m.maps_to ? ' · ' + fqMapLabel(m.maps_to) : '');
+    const meta = fqKindLabel(m.kind) + (m.kind === 'choice' ? ((m.options || []).length ? ': ' + m.options.slice(0, 3).join(', ') + (m.options.length > 3 ? ' +' + (m.options.length - 3) : '') : ' — ⚠ add the choices') : '') + (m.maps_to ? ' · ' + fqMapLabel(m.maps_to) : '');
     return '<div class="st-q ' + (on ? '' : 'off') + '" draggable="true" data-i="' + i + '">' +
       '<div class="st-q-row" onclick="fqToggleOpen(' + i + ')"><span class="grip" title="Drag to reorder">⋮⋮</span>' +
         '<div style="flex:1;min-width:0"><div class="st-q-t">' + (m.question ? e(m.question) : '<em>New question</em>') + '</div><div class="st-q-m">' + e(meta) + '</div></div>' +
@@ -60,6 +60,7 @@ function renderFeedbackQuestionsCard() {
         '<div class="st-q-edit">' +
           '<div class="form-row"><label>Question</label><input id="fq-q-' + i + '" value="' + e(m.question || '') + '" placeholder="As people will read it" onchange="fqSet(' + i + ',\'question\',this.value)"/>' +
           (m.id ? '<div style="font-size:11px;color:var(--txt3);margin-top:4px">Changing the wording starts a new question in reports.</div>' : '') + '</div>' +
+          (m.kind === 'choice' ? '<div class="form-row"><label>The choices</label><input value="' + e((m.options || []).join(', ')) + '" placeholder="Separated by commas — e.g. Friend, Facebook, Poster, Other" onchange="fqSetOptions(' + i + ',this.value)"/><div style="font-size:11px;color:var(--txt3);margin-top:4px">People tap one. Your reports count how many chose each.</div></div>' : '') +
           '<div class="form-grid-2">' +
             '<div class="form-row"><label>Answer type</label><select onchange="fqSet(' + i + ',\'kind\',this.value)">' + MEASURE_KINDS.map(k => '<option value="' + k[0] + '"' + ((m.kind || 'text') === k[0] ? ' selected' : '') + '>' + k[1] + '</option>').join('') + '</select></div>' +
             '<div class="form-row"><label>Counts in reports as</label><select onchange="fqSet(' + i + ',\'maps_to\',this.value||null)">' + MEASURE_MAPS.map(k => '<option value="' + k[0] + '"' + ((m.maps_to || '') === k[0] ? ' selected' : '') + '>' + k[1] + '</option>').join('') + '</select></div>' +
@@ -96,6 +97,11 @@ function fqSet(i, f, v) {
   r[f] = f === 'question' ? String(v || '').trim() : v;
   renderFeedbackQuestionsCard(); fqQueueSave();
 }
+function fqSetOptions(i, text) {
+  const r = _fqRows[i]; if (!r) return;
+  const seen = {}; r.options = String(text || '').split(/[,\n;]/).map(x => x.trim()).filter(x => x && !seen[x.toLowerCase()] && (seen[x.toLowerCase()] = 1)).slice(0, 12);
+  renderFeedbackQuestionsCard(); fqQueueSave();
+}
 function fqMove(i, d) {
   const j = i + d; if (j < 0 || j >= _fqRows.length) return;
   [_fqRows[i], _fqRows[j]] = [_fqRows[j], _fqRows[i]]; _fqOpen = j;
@@ -121,6 +127,7 @@ async function fqSave() {
     const saved = (DB.survey_measures || []).filter(m => !m._demo);
     const rows = _fqRows.filter(r => r.question && r.question.trim()).map((r, i) => {
       const o = { org_id: orgId, question: r.question.trim(), kind: r.kind || 'text', maps_to: r.maps_to || null, label: r.question.trim().slice(0, 60), active: r.active !== false, sort: i };
+      if (o.kind === 'choice') o.options = (r.options || []).slice(0, 12);      // only written for choice questions
       const orig = r.id && saved.find(m => m.id === r.id);
       if (orig && orig.question === o.question) o.id = r.id;   // reworded = new question
       return o;
@@ -213,14 +220,14 @@ async function fqCopyRun() {
 function fqPreview() {
   const qs = _fqRows.filter(r => r.active !== false && r.question && r.kind !== 'ignore');
   const logo = typeof getOrgLogoUrl === 'function' ? getOrgLogoUrl(currentOrg) : '';
-  const ans = k => k === 'score' ? '<div class="st-dots">' + [1, 2, 3, 4, 5].map(n => '<span>' + n + '</span>').join('') + '</div>'
+  const ans = (k, opts) => k === 'score' ? '<div class="st-dots">' + [1, 2, 3, 4, 5].map(n => '<span>' + n + '</span>').join('') + '</div>'
     : k === 'yesno' ? '<div class="st-dots"><span style="width:auto;padding:0 16px;border-radius:17px">Yes</span><span style="width:auto;padding:0 16px;border-radius:17px">No</span></div>'
-    : k === 'choice' ? '<div style="font-size:12px;color:#777">○ Option A<br>○ Option B</div>'
+    : k === 'choice' ? '<div style="font-size:12px;color:#777;line-height:1.9">' + ((opts && opts.length) ? opts : ['Option A', 'Option B']).map(x => '○ ' + escapeHTML(x)).join('<br>') + '</div>'
     : '<div style="border:1px solid #ddd;border-radius:8px;height:56px"></div>';
   setModal('<h2>How the form looks on a phone</h2><div class="st-phone">' +
     (logo ? '<div style="text-align:center;margin-bottom:10px"><img src="' + escapeHTML(logo) + '" style="max-height:34px;max-width:140px"/></div>' : '') +
     '<div style="font-size:15px;font-weight:700;text-align:center;margin-bottom:16px;color:#222">How was today?</div>' +
-    qs.map(q => '<div class="st-phone-q"><p>' + escapeHTML(q.question) + '</p>' + ans(q.kind) + '</div>').join('') +
+    qs.map(q => '<div class="st-phone-q"><p>' + escapeHTML(q.question) + '</p>' + ans(q.kind, q.options) + '</div>').join('') +
     '<div style="background:' + escapeHTML(currentOrg.brand_color || '#1F6F6D') + ';color:#fff;text-align:center;padding:11px;border-radius:10px;font-weight:700;font-size:14px">Send</div></div>' +
     '<div class="modal-footer"><button class="btn btn-p" onclick="setCloseModal()">Done</button></div>', 380);
 }
