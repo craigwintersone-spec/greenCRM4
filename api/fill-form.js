@@ -1054,3 +1054,6 @@ function placeSignature(targets) {
     p.newXml = /\/>$/.test(base) && !/<\/w:p>$/.test(base) ? base.replace(/\s*\/>$/, '>') + run + '</w:p>' : base.replace(/<\/w:p>$/, run + '</w:p>');
   });
 }
+
+// Shared with api/eoi-form.js (funder Expression-of-Interest forms)
+module.exports.helpers = { extractParagraphs, applyEdits, escapeXml, stripDataUri };
