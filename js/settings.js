@@ -60,7 +60,11 @@ function renderFeedbackQuestionsCard() {
         '<div class="st-q-edit">' +
           '<div class="form-row"><label>Question</label><input id="fq-q-' + i + '" value="' + e(m.question || '') + '" placeholder="As people will read it" onchange="fqSet(' + i + ',\'question\',this.value)"/>' +
           (m.id ? '<div style="font-size:11px;color:var(--txt3);margin-top:4px">Changing the wording starts a new question in reports.</div>' : '') + '</div>' +
-          (m.kind === 'choice' ? '<div class="form-row"><label>The choices</label><input value="' + e((m.options || []).join(', ')) + '" placeholder="Separated by commas — e.g. Friend, Facebook, Poster, Other" onchange="fqSetOptions(' + i + ',this.value)"/><div style="font-size:11px;color:var(--txt3);margin-top:4px">People tap one. Your reports count how many chose each.</div></div>' : '') +
+          (m.kind === 'choice' ? '<div class="form-row"><label>The choices people can pick</label>' +
+            '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">' + ((m.options || []).length ? choicePills(m.options, 'fqRemoveOpt.bind(null,' + i + ')') : '<span style="font-size:12px;color:var(--txt3)">No choices yet — type one below and press Enter.</span>') + '</div>' +
+            '<div style="display:flex;gap:6px"><input id="fq-opt-' + i + '" placeholder="Type a choice, then press Enter" onkeydown="if(event.key===\'Enter\'){event.preventDefault();fqAddOpt(' + i + ')}" style="flex:1"/>' +
+              '<button type="button" class="btn btn-ghost btn-sm" onclick="fqAddOpt(' + i + ')">+ Add choice</button></div>' +
+            '<div style="font-size:11px;color:var(--txt3);margin-top:4px">People tap one. Your reports count how many chose each.</div></div>' : '') +
           '<div class="form-grid-2">' +
             '<div class="form-row"><label>Answer type</label><select onchange="fqSet(' + i + ',\'kind\',this.value)">' + MEASURE_KINDS.map(k => '<option value="' + k[0] + '"' + ((m.kind || 'text') === k[0] ? ' selected' : '') + '>' + k[1] + '</option>').join('') + '</select></div>' +
             '<div class="form-row"><label>Counts in reports as</label><select onchange="fqSet(' + i + ',\'maps_to\',this.value||null)">' + MEASURE_MAPS.map(k => '<option value="' + k[0] + '"' + ((m.maps_to || '') === k[0] ? ' selected' : '') + '>' + k[1] + '</option>').join('') + '</select></div>' +
@@ -97,10 +101,20 @@ function fqSet(i, f, v) {
   r[f] = f === 'question' ? String(v || '').trim() : v;
   renderFeedbackQuestionsCard(); fqQueueSave();
 }
-function fqSetOptions(i, text) {
-  const r = _fqRows[i]; if (!r) return;
-  const seen = {}; r.options = String(text || '').split(/[,\n;]/).map(x => x.trim()).filter(x => x && !seen[x.toLowerCase()] && (seen[x.toLowerCase()] = 1)).slice(0, 12);
+// choices are added one at a time: type, Enter, type, Enter
+function fqAddOpt(i) {
+  const r = _fqRows[i]; const inp = $('fq-opt-' + i); if (!r || !inp) return;
+  const add = parseChoiceOptions(inp.value); if (!add.length) return;
+  r.options = (r.options || []).slice();
+  add.forEach(o => { if (!r.options.some(x => x.toLowerCase() === o.toLowerCase()) && r.options.length < 12) r.options.push(o); });
   renderFeedbackQuestionsCard(); fqQueueSave();
+  const again = $('fq-opt-' + i); if (again) again.focus();
+}
+function fqRemoveOpt(i, j) {
+  const r = _fqRows[i]; if (!r || !r.options) return;
+  r.options = r.options.filter((_, k) => k !== j);
+  renderFeedbackQuestionsCard(); fqQueueSave();
+  const again = $('fq-opt-' + i); if (again) again.focus();
 }
 function fqMove(i, d) {
   const j = i + d; if (j < 0 || j >= _fqRows.length) return;
