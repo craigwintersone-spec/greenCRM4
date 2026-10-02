@@ -62,6 +62,9 @@ textarea{min-height:88px;resize:vertical}
 .yn{display:flex;gap:8px}
 .yn button{flex:1;padding:13px;border:1px solid var(--border);background:var(--surface);border-radius:10px;font-family:inherit;font-size:15px;font-weight:700;color:var(--txt2);cursor:pointer}
 .yn button.on{background:var(--em);border-color:var(--em);color:#fff}
+.chs{display:flex;flex-wrap:wrap;gap:8px}
+.chs button{padding:11px 16px;border:1px solid var(--border);background:var(--surface);border-radius:22px;font-family:inherit;font-size:15px;font-weight:600;color:var(--txt2);cursor:pointer}
+.chs button.on{background:var(--em);border-color:var(--em);color:#fff}
 .divider{border-top:1px solid var(--border);margin:18px 0 14px}
 .faces .star{font-size:22px}
 </style>
@@ -231,6 +234,18 @@ function buildYesNo(c, key) {
   });
 }
 
+function buildChoice(c, key, options) {
+  c.innerHTML = options.map(function (o) { return '<button type="button" data-v="' + esc(o) + '">' + esc(o) + '</button>'; }).join('');
+  Array.prototype.forEach.call(c.children, function (b) {
+    b.addEventListener('click', function () {
+      var was = b.classList.contains('on');
+      Array.prototype.forEach.call(c.children, function (x) { x.classList.remove('on'); });
+      if (was) { delete scores[key]; } else { b.classList.add('on'); scores[key] = b.getAttribute('data-v'); }
+    });
+  });
+}
+function hasChoices(q) { return q.kind === 'choice' && q.options && q.options.length > 0; }
+
 // ── feedback form: the org's own questions, else Vorlana's standard ones ─
 var STANDARD = [
   { question: 'How much did you enjoy it?', kind: 'score', key: 'enjoyed' },
@@ -249,18 +264,20 @@ function renderFeedbackForm() {
     var lbl = '<label style="text-transform:none;letter-spacing:0;font-size:15px;font-weight:600;color:var(--txt)">' + esc(q.question) + '</label>';
     if (q.kind === 'score') return '<div class="field">' + lbl + '<div class="stars" id="' + id + '"></div></div>';
     if (q.kind === 'yesno') return '<div class="field">' + lbl + '<div class="yn" id="' + id + '"></div></div>';
+    if (hasChoices(q)) return '<div class="field">' + lbl + '<div class="chs" id="' + id + '"></div></div>';
     if (q.kind === 'text')  return '<div class="field">' + lbl + '<textarea id="' + id + '" placeholder="Optional"></textarea></div>';
     return '<div class="field">' + lbl + '<input id="' + id + '" placeholder="Optional"/></div>';
   }).join('');
   list.forEach(function (q, i) {
     if (q.kind === 'score') buildStars($('fq-' + i), 'fq-' + i);
     if (q.kind === 'yesno') buildYesNo($('fq-' + i), 'fq-' + i);
+    if (hasChoices(q)) buildChoice($('fq-' + i), 'fq-' + i, q.options);
   });
 }
 function readFeedback() {
   var out = {}, count = 0, own = QUESTIONS.length > 0;
   formQuestions().forEach(function (q, i) {
-    var v = (q.kind === 'score' || q.kind === 'yesno') ? scores['fq-' + i] : ($('fq-' + i).value || '').trim();
+    var v = (q.kind === 'score' || q.kind === 'yesno' || hasChoices(q)) ? scores['fq-' + i] : ($('fq-' + i).value || '').trim();
     if (v == null || v === '') return;
     out[own ? q.question : q.key] = v;
     count++;
