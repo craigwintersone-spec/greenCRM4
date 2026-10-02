@@ -293,10 +293,12 @@ function call(action, payload) {
 }
 
 // ── boot ───────────────────────────────────────────────────
+function escapeText(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 function renderChoose(choices) {
+  if (!choices.length) { $('invalid-msg').textContent = 'Nothing is set up for today yet — please ask a member of staff.'; show('s-invalid'); return; }
   $('choose-list').innerHTML = choices.map(function (c) {
     return '<button type="button" class="btn-choose" data-id="' + c.id + '" style="display:block;width:100%;text-align:left;padding:14px 16px;margin-bottom:8px;border:1px solid var(--border);border-radius:10px;background:#fff;font-size:15px;font-weight:600">' +
-      c.name + (c.location ? '<div style="font-weight:400;font-size:13px;color:var(--muted);margin-top:2px">' + c.location + '</div>' : '') + '</button>';
+      escapeText(c.name) + (c.location ? '<div style="font-weight:400;font-size:13px;color:var(--muted);margin-top:2px">' + escapeText(c.location) + '</div>' : '') + '</button>';
   }).join('');
   Array.prototype.forEach.call($('choose-list').querySelectorAll('.btn-choose'), function (b) {
     b.addEventListener('click', function () { CHOSEN_EVENT = b.getAttribute('data-id'); show('s-loading'); boot(); });
