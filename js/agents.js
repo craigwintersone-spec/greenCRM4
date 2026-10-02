@@ -1621,18 +1621,23 @@ function _downloadBase64(b64, filename, mime) {
 }
 const _DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
-// ── the three steps along the top ──
+// ── the three steps along the top: always clickable ──
 function bdShowSection(n) {
   if (n >= 2 && $('bd-s2')) $('bd-s2').style.display = '';
   if (n >= 3 && $('eoi-output')) $('eoi-output').style.display = 'block';
-  const chips = [1, 2, 3].map(i => $('bd-chip-' + i));
-  chips.forEach((c, i) => { if (!c) return; c.classList.remove('on', 'done', 'off');
-    const shown = i === 0 || (i === 1 && $('bd-s2') && $('bd-s2').style.display !== 'none') || (i === 2 && $('eoi-output') && $('eoi-output').style.display !== 'none');
-    c.classList.add(!shown ? 'off' : (i + 1 === n ? 'on' : 'done')); });
+  const reached = [true, !!($('bd-s2') && $('bd-s2').style.display !== 'none'), !!($('eoi-output') && $('eoi-output').style.display !== 'none')];
+  [1, 2, 3].forEach(i => { const c = $('bd-chip-' + i); if (!c) return; c.classList.remove('on', 'done', 'todo');
+    c.classList.add(i === n ? 'on' : (reached[i - 1] && i < n) || (reached[i - 1] && i !== n) ? 'done' : 'todo'); });
 }
 function bdGo(n) {
-  const el = n === 1 ? $('bd-s1') : n === 2 ? $('bd-s2') : $('eoi-output');
-  if (el && el.style.display !== 'none') { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); bdShowSection(n); }
+  if (n === 1) { const e = $('bd-s1'); if (e) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); bdShowSection(1); return; }
+  const hasForm = _eoiQuestions && _eoiQuestions.length;
+  if (n === 3 && hasForm && $('eoi-output') && $('eoi-output').style.display !== 'none') { $('eoi-output').scrollIntoView({ behavior: 'smooth', block: 'start' }); bdShowSection(3); return; }
+  if (n === 2 && hasForm) { $('bd-s2').scrollIntoView({ behavior: 'smooth', block: 'start' }); bdShowSection(2); return; }
+  // nothing pulled yet: open the manual way in, and say what to do
+  bdManualStart();
+  const note = $('bd-pull-note');
+  if (note) note.innerHTML = '<div class="bd-pullnote">' + (n === 3 ? 'Nothing to review yet. ' : '') + 'Press <b>Pull their form ▸</b> on a result in step 1, or upload their form here — the filled-in answers then appear in step 3.</div>';
 }
 function bdManualStart() {
   bdShowSection(2);
@@ -1902,32 +1907,37 @@ async function pullFunderForm(key) {
   const o = _bdOpps[key]; if (!o) { alert('That result is no longer on screen — please run the search again.'); return; }
   _bdSel = o;
   const name = (o.funder && o.programme) ? (o.funder + ' — ' + o.programme) : (o.programme || o.funder || '');
-  if ($('eoi-funder')) $('eoi-funder').value = name;
-  _eoiDoc = null; _eoiQuestions = []; _eoiAnswers = {}; _eoiFunderPriorities = ''; _eoiPrioritiesFunder = '';
-  if ($('eoi-output')) $('eoi-output').style.display = 'none';
-  if ($('eoi-questions')) { $('eoi-questions').style.display = 'none'; $('eoi-questions').innerHTML = ''; }
-  if ($('bd-manual')) $('bd-manual').open = false;
-  if ($('bd-funder-bar')) $('bd-funder-bar').innerHTML = escapeHTML(o.funder || name) + (o.url ? ' · <a href="' + escapeHTML(o.url) + '" target="_blank" rel="noopener" style="color:var(--em);font-weight:600">Funder page ↗</a>' : '');
-  bdShowSection(2);
-  const sec = $('bd-s2'); if (sec && sec.scrollIntoView) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
   const steps = [{ label: 'Finding their form' }, { label: 'Reading the questions' }, { label: 'Writing your answers' }, { label: 'Filling in their form' }];
   const show = (i, sub) => { const el = $('bd-pull-steps'); if (el) el.innerHTML = renderBrainProgress(steps, i, 'Getting the form for ' + (o.funder || name), sub || 'This can take a minute or two'); };
   const note = (html, tone) => { const n = $('bd-pull-note'); if (n) n.innerHTML = html ? '<div class="bd-pullnote" style="' + (tone === 'warn' ? 'background:#FFFBEB' : tone === 'ok' ? 'background:#F0FDF4' : '') + '">' + html + '</div>' : ''; };
-  note('');
+  let watchdog = null;
   try {
-    show(0);
+    if ($('eoi-funder')) $('eoi-funder').value = name;
+    _eoiDoc = null; _eoiQuestions = []; _eoiAnswers = {}; _eoiFunderPriorities = ''; _eoiPrioritiesFunder = '';
+    if ($('eoi-output')) $('eoi-output').style.display = 'none';
+    if ($('eoi-questions')) { $('eoi-questions').style.display = 'none'; $('eoi-questions').innerHTML = ''; }
+    if ($('bd-manual')) $('bd-manual').open = false;
+    if ($('bd-funder-bar')) $('bd-funder-bar').innerHTML = escapeHTML(o.funder || name) + (o.url ? ' · <a href="' + escapeHTML(o.url) + '" target="_blank" rel="noopener" style="color:var(--em);font-weight:600">Funder page ↗</a>' : '');
+    bdShowSection(2);
+    const sec = $('bd-s2'); if (sec && sec.scrollIntoView) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    note('');
+    show(0, 'Looking on their website…');
+    // a gentle nudge if it's slow, so it never looks stuck
+    watchdog = setTimeout(() => note('Still working — funder sites and the AI can be slow. You can wait, or <a href="#" onclick="bdManualStart();return false" style="color:var(--em);font-weight:600">upload their form instead</a>.'), 60000);
+    window._eoiOnProgress = (i, n) => { steps[2].meta = 'Question ' + (i + 1) + ' of ' + n; show(2, 'Writing every answer from your profile and records'); };
+
     const found = await _findFunderForm(o, name);
     steps[0].meta = found.base64 ? (found.filename || 'form found') : (found.kind === 'page' ? 'No file to download — reading their page' : 'No downloadable form found');
-    show(1);
+    show(1, 'Reading what they ask');
     await _readFormQuestions(found, o, name);
     if (!_eoiQuestions.length) throw new Error('NO_QUESTIONS');
     steps[1].meta = _eoiQuestions.length + ' question' + (_eoiQuestions.length === 1 ? '' : 's') + (_eoiDoc && _eoiDoc.kind === 'docx' ? ' · Word form' : _eoiDoc && _eoiDoc.kind === 'pdf' ? ' · PDF form' : '');
-    show(2);
+    show(2, 'Writing every answer from your profile and records');
     bdShowSection(3);
     await runEOIFormFill();
+    window._eoiOnProgress = null;
     if (!Object.keys(_eoiAnswers).length) { note('✦ Writing bids with Org Brain is part of the <b>Pro</b> plan. You can still upload or paste the funder\'s questions and answer them yourself.', 'warn'); return; }
-    show(3);
+    show(3, 'Putting the answers into their form');
     if (_eoiDoc && _eoiDoc.kind === 'docx') {
       try { const r = await _buildFilledForm(); _eoiDoc.filled = { n: r.filled, total: r.total }; steps[3].meta = r.filled + ' of ' + r.total + ' answer spaces filled'; }
       catch (e) { steps[3].meta = 'couldn\'t write into their file — answers are below'; }
@@ -1937,14 +1947,15 @@ async function pullFunderForm(key) {
     note('✓ <b>' + escapeHTML(o.funder || name) + '</b> — ' + (_eoiDoc && _eoiDoc.kind === 'docx' ? 'their own form is filled in. ' : 'answers are written. ') + 'Check the <mark style="background:#ffe9a8">yellow [INSERT]</mark> gaps, then download below.', 'ok');
     const out = $('eoi-output'); if (out && out.scrollIntoView) out.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
+    window._eoiOnProgress = null;
     if (e && e.message === 'AI_PLAN_GATE') { note('✦ Writing bids with Org Brain is part of the <b>Pro</b> plan. You can still upload or paste the funder\'s questions and answer them yourself.', 'warn'); }
     else {
       const m = $('bd-manual'); if (m) m.open = true;
-      $('bd-pull-steps').innerHTML = '';
+      const st = $('bd-pull-steps'); if (st) st.innerHTML = '';
       note((e && e.message === 'NO_QUESTIONS' ? 'We couldn\'t find an application form or questions for <b>' + escapeHTML(name) + '</b> on their website.' : 'Something went wrong getting the form' + (e && e.message ? ' <span style="color:var(--txt3)">(' + escapeHTML(e.message) + ')</span>' : '') + '.') +
         '<br>No problem — upload their form, paste their questions, or write from their brief below.' + (o.url ? ' <a href="' + escapeHTML(o.url) + '" target="_blank" rel="noopener" style="color:var(--em);font-weight:600">Open their page ↗</a>' : ''), 'warn');
     }
-  }
+  } finally { if (watchdog) clearTimeout(watchdog); }
 }
 var startEOIFromOpportunity = pullFunderForm;      // older buttons and bookmarks keep working
 
@@ -2310,6 +2321,7 @@ async function runEOIFormFill() {
   for (let i = 0; i < _eoiQuestions.length; i++) {
     const q = _eoiQuestions[i];
     res.innerHTML = _fillProgressHTML(i);
+    if (typeof window._eoiOnProgress === 'function') { try { window._eoiOnProgress(i, _eoiQuestions.length); } catch (e) { /* display only */ } }
     const short = _eoiIsShortField(q);
     let limitLine, maxTok;
     if (short) {
