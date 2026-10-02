@@ -444,11 +444,19 @@
   </div>
   <div class="card">
     <div class="form-grid-2" style="margin-bottom:12px">
-      <div class="form-row"><label>Primary delivery area</label><select id="bd-area"><option>London</option><option>Greater Manchester</option><option>Birmingham / West Midlands</option><option>Leeds / West Yorkshire</option><option>Bristol / South West</option><option>National / England-wide</option><option>Other</option></select></div>
+      <div class="form-row"><label>Where you deliver</label><input id="bd-area" placeholder="e.g. Peterborough and Cambridgeshire · Ealing, Brent and Hounslow · England-wide"/></div>
       <div class="form-row"><label>Org turnover</label><select id="bd-size"><option value="micro">Under £100k</option><option value="small">£100k–£500k</option><option value="medium">£500k–£2m</option><option value="large">£2m+</option></select></div>
     </div>
-    <div class="form-row" style="margin-top:8px"><label>Specific funders or programmes of interest</label><input id="bd-specific" placeholder="e.g. MoJ HMPPS, GLA Good Work, National Lottery, UKSPF…"/></div>
-    <button class="btn btn-ai" onclick="runBDResearch()" style="margin-top:4px">✦ Find opportunities</button>
+    <div class="form-row"><label>What you do <span style="font-weight:400;text-transform:none;letter-spacing:0">— tap all that apply</span></label>
+      <div id="bd-what" style="display:flex;flex-wrap:wrap;gap:6px"></div></div>
+    <div class="form-grid-2">
+      <div class="form-row"><label>Organisation type</label><select id="bd-type"><option>Registered charity</option><option>CIC</option><option>CIO</option><option>Community group (unincorporated)</option><option>Company</option><option>Social enterprise</option></select></div>
+      <div class="form-row"><label>Specific funders or programmes of interest</label><input id="bd-specific" placeholder="e.g. National Lottery, UKSPF, Veolia Environmental Trust, local council…"/></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px">
+      <button class="btn btn-ai" onclick="runBDResearch()">✦ Find opportunities</button>
+      <span style="font-size:12px;color:var(--txt3)">Searches government and councils, trusts and the Lottery, and corporate and environmental funders — about a minute.</span>
+    </div>
   </div>
   <div id="bd-opps-wrap" style="display:none">
     <div class="ai-panel"><div class="ai-panel-title"><span class="ai-icon">🔍</span>Funding opportunities identified</div><div id="bd-opps-result"></div></div>
@@ -469,21 +477,22 @@
       <input id="eoi-funder" placeholder="e.g. GLA Grow London Local"/>
       <div style="font-size:11px;color:var(--txt3);margin-top:4px">Used to research the funder's priorities and as the document title — be specific.</div>
     </div>
-    <div class="form-row"><label>Your unique selling points (optional)</label><textarea id="eoi-usps" style="min-height:56px" placeholder="e.g. 24 years' West London delivery, bilingual BN(O) advisers, strong probation relationships…"></textarea></div>
+    <div class="form-row"><label>Your unique selling points (optional)</label><textarea id="eoi-usps" style="min-height:56px" placeholder="e.g. 10 years' delivery in the area · the only repair café in the district · strong council and school partnerships…"></textarea></div>
     <details style="margin-top:4px">
       <summary style="cursor:pointer;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:9px;font-weight:700;font-size:13px;color:var(--txt);user-select:none">🏢 Organisation profile <span style="font-weight:400;color:var(--txt3)">— set once, used in every EOI</span></summary>
       <div style="padding:12px 2px 2px">
         <p style="font-size:12px;color:var(--txt2);margin-bottom:10px">The writer only knows what's in your CRM plus what you put here. Paste your key facts once — legal &amp; trading name, charity/company number, registered address, website, socials, lead contact, year founded, boroughs, mission, and prior delivery history <em>with real numbers</em>, partnerships, accreditations. It inserts [INSERT: …] wherever something is missing.</p>
-        <div class="form-row"><textarea id="eoi-org-profile" style="min-height:150px" placeholder="Legal &amp; trading name: Action West London (charity no. 1088999, company no. 04193849)
-Registered address: Kensa House, Central Way, London NW10 7XW
-Website: https://www.actionwestlondon.org.uk
-Socials: linkedin.com/company/…, x.com/…, instagram.com/…
-Lead contact: Amara Okafor, Head of Programmes — amara@… — 020 …
-Founded 2000; delivers across Brent, Ealing, Hounslow, Hammersmith &amp; Fulham, Harrow
-Track record: GLA Good Work 2021–24 — 620 participants, 58% into work, 71% sustained at 26 weeks; MoJ/HMPPS 2019–23 — 340 participants…
-Partnerships: Jobcentre Plus West London, Ealing Council, [named employers]…
-Accreditations: Matrix, Investors in People, Cyber Essentials…"></textarea></div>
+        <div class="form-row"><textarea id="eoi-org-profile" style="min-height:150px" placeholder="Legal &amp; trading name: [your organisation] (charity no. …, company no. …)
+Registered address: …
+Website: …
+Lead contact: name, role — email — phone
+Founded: year · Where you deliver: towns, boroughs or counties
+Mission: one or two sentences
+Track record: programme, years, numbers (e.g. 320 people supported, 140 into work, 1.2 tonnes diverted from waste)
+Partnerships: councils, Jobcentre Plus, schools, employers, other charities
+Accreditations and policies: e.g. Matrix, safeguarding, Cyber Essentials"></textarea></div>
         <button class="btn btn-p btn-sm" onclick="saveOrgProfileFromField()">Save profile</button>
+        <button class="btn btn-ghost btn-sm" onclick="fillOrgProfileFromWeb()" title="Looks up your website and the Charity Commission / Companies House and drafts the profile for you to check">✨ Fill from our website</button>
         <span id="eoi-profile-saved" style="display:none;color:var(--em);font-size:12px;margin-left:8px;font-weight:600">✓ Saved</span>
       </div>
     </details>
@@ -781,7 +790,7 @@ Accreditations: Matrix, Investors in People, Cyber Essentials…"></textarea></d
 <script src="js/auth.js?v=20"></script>
 
 <!-- AI + branding -->
-<script src="js/agents.js?v=36"></script>
+<script src="js/agents.js?v=37"></script>
 <script src="js/branding.js?v=19"></script>
 
 <!-- UI logic -->
@@ -790,7 +799,7 @@ Accreditations: Matrix, Investors in People, Cyber Essentials…"></textarea></d
 <script src="js/circular.js?v=8"></script>
 <script src="js/modals.js?v=43"></script>
 <script src="js/demo.js?v=22"></script>
-<script src="js/router.js?v=22"></script>
+<script src="js/router.js?v=23"></script>
 
 <!-- Module visibility — shows/hides sidebar items per currentOrg.modules -->
 <script>
