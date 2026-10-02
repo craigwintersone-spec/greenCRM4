@@ -1588,122 +1588,365 @@ async function deleteSocialDraft(id) {
   } catch (e) { alert('Could not remove: ' + e.message); }
 }
 
+// ═════════════════════════════════════════════════════════════
+// BD WORKSPACE — find funding, pull the funder's form, fill it in
+// ═════════════════════════════════════════════════════════════
+let _bdSel = null;       // the opportunity being worked on
+let _eoiDoc = null;      // the funder's form: { kind:'docx'|'pdf'|'text', base64, name, url }
+
+async function _agToken(force) {
+  let { data: { session } } = await sb.auth.getSession();
+  if (force || !session || (session.expires_at && session.expires_at * 1000 - Date.now() < 60000)) {
+    try { const r = await sb.auth.refreshSession(); if (r && r.data && r.data.session) session = r.data.session; } catch (e) { /* use what we have */ }
+  }
+  return session && session.access_token;
+}
+async function _postJSON(path, body) {
+  const send = async force => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (await _agToken(force)) }, body: JSON.stringify(body) });
+  let res = await send(false);
+  if (res.status === 401) res = await send(true);
+  let data = null; try { data = await res.json(); } catch (e) { /* not JSON */ }
+  if (!res.ok && !(data && data.error)) throw new Error(res.status === 504 ? 'That took too long — please try again' : 'Server error (' + res.status + ')');
+  return data || {};
+}
+function _fileToBase64(file) { return new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = () => bad(new Error('Could not read the file')); r.readAsDataURL(file); }); }
+function _downloadBase64(b64, filename, mime) {
+  const bin = atob(b64); const bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([bytes], { type: mime })); a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+const _DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+// ── the three steps along the top ──
+function bdShowSection(n) {
+  if (n >= 2 && $('bd-s2')) $('bd-s2').style.display = '';
+  if (n >= 3 && $('eoi-output')) $('eoi-output').style.display = 'block';
+  const chips = [1, 2, 3].map(i => $('bd-chip-' + i));
+  chips.forEach((c, i) => { if (!c) return; c.classList.remove('on', 'done', 'off');
+    const shown = i === 0 || (i === 1 && $('bd-s2') && $('bd-s2').style.display !== 'none') || (i === 2 && $('eoi-output') && $('eoi-output').style.display !== 'none');
+    c.classList.add(!shown ? 'off' : (i + 1 === n ? 'on' : 'done')); });
+}
+function bdGo(n) {
+  const el = n === 1 ? $('bd-s1') : n === 2 ? $('bd-s2') : $('eoi-output');
+  if (el && el.style.display !== 'none') { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); bdShowSection(n); }
+}
+function bdManualStart() {
+  bdShowSection(2);
+  const m = $('bd-manual'); if (m) m.open = true;
+  if ($('bd-funder-bar')) $('bd-funder-bar').textContent = 'Upload their form, paste their questions, or write from a brief';
+  if ($('bd-s2')) $('bd-s2').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ── about your organisation (sidebar) ──
+const BD_WHAT = [['employability', 'Employment & skills'], ['circular', 'Reuse, repair & circular economy'], ['growing', 'Food growing & community food'], ['environment', 'Environment & nature'],
+  ['wellbeing', 'Mental health & wellbeing'], ['young', 'Children & young people'], ['older', 'Older people'], ['justice', 'Criminal justice'], ['migrants', 'Refugees & migrants'],
+  ['disability', 'Disability'], ['community', 'Community & volunteering'], ['arts', 'Arts, culture & heritage'], ['digital', 'Digital inclusion'], ['housing', 'Housing & homelessness']];
+function bdSetupGet() {
+  const org = (currentOrg && currentOrg.settings && currentOrg.settings.bd_setup) || null;
+  let loc = null; try { loc = JSON.parse(localStorage.getItem('vorlana_bd_setup_' + orgId) || 'null'); } catch (e) { /* ignore */ }
+  return org || loc || {};
+}
+function bdSetupRead() {
+  return { area: (($('bd-area') || {}).value || '').trim(), size: ($('bd-size') || {}).value || 'micro', type: ($('bd-type') || {}).value || 'Registered charity',
+    what: Array.from(document.querySelectorAll('#bd-what button.on')).map(b => b.dataset.k) };
+}
+function bdSetupLocalSave() { try { localStorage.setItem('vorlana_bd_setup_' + orgId, JSON.stringify(bdSetupRead())); } catch (e) { /* ignore */ } bdRefreshSummary(); }
+function bdWhat() { return Array.from(document.querySelectorAll('#bd-what button.on')).map(b => (BD_WHAT.find(x => x[0] === b.dataset.k) || [])[1]).filter(Boolean); }
+function bdRefreshSummary() {
+  const el = $('bd-org-sum'); if (!el) return;
+  const s = bdSetupRead(), what = bdWhat();
+  const hasProfile = !!(($('eoi-org-profile') || {}).value || '').trim();
+  const bits = [s.area || '⚠ where you deliver isn\'t set', what.length ? what.slice(0, 2).join(', ') + (what.length > 2 ? ' +' + (what.length - 2) : '') : '', hasProfile ? '✓ profile written' : '⚠ profile not written yet'].filter(Boolean);
+  el.textContent = bits.join(' · ');
+}
+function bdPaintWhat() {
+  const box = $('bd-what'); if (!box) return;
+  const setup = bdSetupGet();
+  let saved = Array.isArray(setup.what) ? setup.what.slice() : [];
+  const m = (currentOrg && currentOrg.modules) || {};
+  if (!saved.length) { if (m.participants !== false) saved.push('employability'); if (m.circular !== false) saved.push('circular'); saved.push('community'); }
+  const paint = (b, on) => { b.classList.toggle('on', on); b.style.background = on ? 'var(--em)' : 'var(--surface)'; b.style.color = on ? '#fff' : 'var(--txt2)'; b.style.borderColor = on ? 'var(--em)' : 'var(--border)'; };
+  box.innerHTML = BD_WHAT.map(([k, l]) => '<button type="button" data-k="' + k + '" style="border:1px solid var(--border);border-radius:16px;padding:5px 11px;font-size:12px;cursor:pointer">' + l + '</button>').join('');
+  Array.from(box.children).forEach(b => paint(b, saved.includes(b.dataset.k)));
+  box.onclick = e => { const b = e.target.closest('button'); if (!b) return; paint(b, !b.classList.contains('on')); bdSetupLocalSave(); };
+}
+function bdInit() {
+  const s = bdSetupGet();
+  if ($('bd-area')) $('bd-area').value = s.area || '';
+  if ($('bd-size') && s.size) $('bd-size').value = s.size;
+  if ($('bd-type') && s.type) $('bd-type').value = s.type;
+  bdPaintWhat();
+  const ta = $('eoi-org-profile'); if (ta && !ta.value) ta.value = getOrgProfile();
+  bdRefreshSummary();
+  // on a phone, tuck the details away once they're complete so the page opens on the work
+  const complete = !!(s.area && (ta || {}).value);
+  const det = $('bd-org'); if (det && window.matchMedia && window.matchMedia('(max-width:980px)').matches) det.open = !complete;
+  bdShowSection(($('eoi-output') && $('eoi-output').style.display !== 'none') ? 3 : ($('bd-s2') && $('bd-s2').style.display !== 'none') ? 2 : 1);
+}
+
+// ── find funding: three live searches, merged, de-duplicated and scored ──
 async function runBDResearch() {
   const wrap = $('bd-opps-wrap'); const res = $('bd-opps-result');
+  const area = (($('bd-area') || {}).value || '').trim();
+  if (!area) { const d = $('bd-org'); if (d) d.open = true; if ($('bd-area')) { $('bd-area').focus(); $('bd-area').scrollIntoView({ block: 'center' }); } alert('Tell us where you deliver first (on the right) — every search and bid uses it.'); return; }
   wrap.style.display = 'block';
-  const area = $('bd-area').value, size = $('bd-size').value, specific = $('bd-specific').value;
-  const steps = [
-    { label: 'Searching live funding sources', meta: area + ' · ' + size },
-    { label: 'Checking deadlines and eligibility', meta: '' },
-    { label: 'Scoring fit', meta: '' },
-    { label: 'Ready', meta: '' }
+  const size = $('bd-size').value, specific = ($('bd-specific').value || '').trim(), type = $('bd-type') ? $('bd-type').value : 'Registered charity';
+  const what = bdWhat().join(', ') || 'community work';
+  const sizeTxt = { micro: 'under £100k', small: '£100k–£500k', medium: '£500k–£2m', large: 'over £2m' }[size] || size;
+  const profile = _eoiCleanProfile(getOrgProfile());
+  const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  const base = 'Today is ' + today + '. Organisation: a ' + type + ' with turnover ' + sizeTxt + ', delivering ' + what + ' in ' + area + '.' +
+    (specific ? ' Particularly interested in: ' + specific + '.' : '') + (profile ? '\nAbout them: ' + profile.slice(0, 900) : '');
+  const rules = ' Find up to 6 funding opportunities that are OPEN NOW or open on a rolling basis and that this organisation is actually eligible for (right area, right size, right type). ' +
+    'For each give: funder, programme name, deadline (or "rolling"), grant or contract value, eligibility in one line, one sentence on why it fits THIS organisation, and the application or information URL. ' +
+    'Prefer local and regional funders over national ones where an area is given. Never invent deadlines, values or URLs — if unsure, say "check". Skip anything closed.';
+  const lanes = [
+    ['Government, UKSPF and councils', 'You are a UK public-sector funding researcher. Search for ' + area + ' council grants, combined authority and UKSPF / Shared Prosperity funds, Contracts Finder and Find a Tender notices, Find a Grant (gov.uk), and government programmes relevant to ' + what + '.'],
+    ['Trusts, foundations and the Lottery', 'You are a UK grants researcher. Search the National Lottery Community Fund (Awards for All, Reaching Communities, Partnerships), the community foundation covering ' + area + ', and trusts and foundations that fund ' + what + ' (for example Esmée Fairbairn, Garfield Weston, Tudor Trust, Henry Smith, Lloyds Bank Foundation, Power to Change, Postcode Lottery, Allen Lane, Paul Hamlyn, Trust for London where relevant).'],
+    ['Corporate and environmental funders', 'You are a UK funding researcher. Search corporate and landfill/environmental funders that fit ' + what + ' in ' + area + ': Veolia Environmental Trust, Biffa Award, SUEZ Communities Trust, Enovert, FCC Communities Foundation, Tesco Stronger Starts, Co-op Local Community Fund, Greggs Foundation, Aviva Community Fund, National Grid, water company funds, Screwfix Foundation, B&Q Foundation, Asda Foundation, Morrisons Foundation, Benefact Trust, and energy or housing-association community funds.']
   ];
-  const sys = 'You are a UK funding researcher. Find up to 5 currently OPEN funding opportunities that fit the organisation. ' +
-    'For each, give: funder, programme name, application deadline, grant value, eligibility in brief, one sentence on why it fits, and the application or info URL. Be specific and factual. Do not invent deadlines or URLs.';
-  const prompt = 'Delivery area: ' + area + '\nOrg turnover band: ' + size + '\nSpecific interests: ' + (specific || 'none');
+  const steps = lanes.map(l => ({ label: 'Searching ' + l[0].toLowerCase(), meta: area })).concat([{ label: 'Merging and scoring fit', meta: '' }, { label: 'Ready', meta: '' }]);
+  res.innerHTML = '';
+  const shell = document.createElement('div'); res.appendChild(shell);
+  const header = runAgent({ container: shell, headerLabel: 'BD Manager Agent', headerSub: 'Three live searches · ' + area, steps, sys: 'Reply with the single word OK.', prompt: 'OK', maxTok: 5 });
+  const raws = await Promise.all(lanes.map(l => callClaude(l[1] + rules, base, 1400, true).catch(() => '')));
+  await header;
+  const joined = lanes.map((l, i) => '### ' + l[0] + '\n' + String(raws[i] || '').replace(/<\/?cite[^>]*>/gi, '')).join('\n\n');
 
-  const raw = await runAgent({
-    container: res,
-    headerLabel: 'BD Manager Agent',
-    headerSub: 'Live web search · finding open funding',
-    steps, sys, prompt, maxTok: 1100, webSearch: true
-  });
-  if (!raw) return;
-
-  // Structure the prose into JSON (no web search) so we can render interactive
-  // cards. Search-mode replies rarely obey a "return JSON" instruction, so we
-  // do the formatting in a separate call — this is the reliable path.
   res.innerHTML = '<div class="alert alert-info" style="margin:0">Organising the results…</div>';
   let items = [];
   try {
-    const structSys = 'Convert the funding research below into a JSON array. Return ONLY valid JSON — no prose, no code fences, no citation markers. ' +
-      'Each item: {"funder":"","programme":"","deadline":"","value":"","eligibility":"","fit":"","url":""}. Use "" for anything missing.';
-    const cleanedInput = raw.replace(/<\/?cite[^>]*>/gi, '').slice(0, 3800);
-    const structRaw = await callClaude(structSys, cleanedInput, 1000, false);
-    const clean = (structRaw || '').replace(/```json|```/gi, '').trim();
-    const m = clean.match(/\[[\s\S]*\]/);
+    const structSys = 'Convert the funding research below into ONE JSON array, de-duplicated (same funder+programme once). Return ONLY valid JSON — no prose, no code fences. ' +
+      'Each item: {"funder":"","programme":"","deadline":"","value":"","eligibility":"","fit":"","url":"","lane":"","score":0}. ' +
+      '"lane" is the ### heading it came from. "score" is 1–5 for how well it fits the organisation described (5 = made for them). Use "" for anything missing. Drop anything marked closed.';
+    const structRaw = await callClaude(structSys, 'ORGANISATION: ' + base.slice(0, 600) + '\n\nRESEARCH:\n' + joined.slice(0, 9000), 2500, false);
+    const m = (structRaw || '').replace(/```json|```/gi, '').trim().match(/\[[\s\S]*\]/);
     if (m) items = JSON.parse(m[0]);
   } catch (e) { items = []; }
   items = Array.isArray(items) ? items.filter(o => o && (o.funder || o.programme)) : [];
-
-  if (!items.length) { aiResult(res, raw.replace(/<\/?cite[^>]*>/gi, '')); return; } // graceful text fallback
+  if (!items.length) { aiResult(res, joined); return; }
+  items.sort((a, b) => (+b.score || 0) - (+a.score || 0));
 
   _bdOpps = {};
-  res.innerHTML = items.map((o, i) => {
-    const key = 'opp' + i;
-    _bdOpps[key] = o;
-    const funder = escapeHTML(o.funder || o.programme || 'Opportunity');
-    const programme = o.programme && o.funder ? (' — ' + escapeHTML(o.programme)) : '';
-    const meta = [
-      o.deadline ? ('⏱ ' + escapeHTML(o.deadline)) : '',
-      o.value ? ('💷 ' + escapeHTML(o.value)) : ''
-    ].filter(Boolean).join('&nbsp;&nbsp;&nbsp;');
-    return '<div class="card" style="margin-bottom:10px">' +
-      '<div style="font-weight:700;font-size:14px;color:var(--txt)">' + funder + programme + '</div>' +
-      (meta ? '<div style="font-size:12px;color:var(--txt3);margin:4px 0 6px">' + meta + '</div>' : '') +
-      (o.eligibility ? '<div style="font-size:12px;color:var(--txt3);margin-bottom:6px"><strong>Eligibility:</strong> ' + escapeHTML(o.eligibility) + '</div>' : '') +
-      (o.fit ? '<div style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:10px">' + escapeHTML(o.fit) + '</div>' : '') +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-        '<button class="btn btn-ai btn-sm" onclick="startEOIFromOpportunity(\'' + key + '\')">✍️ Draft EOI for this</button>' +
-        (o.url ? ('<a class="btn btn-ghost btn-sm" href="' + escapeHTML(o.url) + '" target="_blank" rel="noopener" style="text-decoration:none">🔗 Funder page</a>') : '') +
-      '</div></div>';
-  }).join('');
+  const laneShort = { 'Government, UKSPF and councils': 'Councils & government', 'Trusts, foundations and the Lottery': 'Trusts & Lottery', 'Corporate and environmental funders': 'Companies' };
+  const laneNames = Object.keys(laneShort).filter(l => items.some(o => o.lane === l));
+  res.innerHTML = '<div style="font-size:13px;color:var(--txt3);margin-bottom:12px">' + items.length + ' matches, best first. Check dates and amounts on the funder\'s page before you apply.</div>' +
+    (laneNames.length > 1 ? '<div class="bd-seg"><button class="on" onclick="bdFilterLane(\'\', this)">All (' + items.length + ')</button>' + laneNames.map(l => '<button onclick="bdFilterLane(this.dataset.l, this)" data-l="' + escapeHTML(l) + '">' + escapeHTML(laneShort[l]) + ' (' + items.filter(o => o.lane === l).length + ')</button>').join('') + '</div>' : '') +
+    items.map((o, i) => {
+      const key = 'opp' + i; _bdOpps[key] = o;
+      const sc = Math.max(1, Math.min(5, +o.score || 3));
+      const fit = sc >= 5 ? ['bd-fit5', 'Great fit'] : sc === 4 ? ['bd-fit4', 'Good fit'] : ['bd-fit3', 'Possible fit'];
+      const meta = [o.deadline ? ('Closes: ' + escapeHTML(o.deadline)) : '', o.value ? escapeHTML(o.value) : ''].filter(Boolean).join(' &nbsp;·&nbsp; ');
+      return '<div class="bd-row bd-opp" data-lane="' + escapeHTML(o.lane || '') + '"><div class="bd-row-main">' +
+        '<span class="bd-pill ' + fit[0] + '">' + fit[1] + '</span><span class="bd-lane">' + escapeHTML(laneShort[o.lane] || '') + '</span>' +
+        '<div class="bd-row-title">' + escapeHTML(o.funder || o.programme || 'Opportunity') + (o.programme && o.funder ? ' — ' + escapeHTML(o.programme) : '') + '</div>' +
+        (o.fit ? '<div class="bd-row-fit">' + escapeHTML(o.fit) + '</div>' : '') +
+        (meta ? '<div class="bd-row-meta">' + meta + '</div>' : '') +
+        (o.eligibility ? '<details style="margin-top:6px"><summary style="font-size:12px;color:var(--txt3);cursor:pointer">Who can apply</summary><div style="font-size:12.5px;color:var(--txt2);margin-top:4px;line-height:1.5">' + escapeHTML(o.eligibility) + '</div></details>' : '') +
+        '</div><div class="bd-row-act"><button class="btn btn-ai" onclick="pullFunderForm(\'' + key + '\')">Pull their form ▸</button>' +
+        (o.url ? '<a href="' + escapeHTML(o.url) + '" target="_blank" rel="noopener">Funder page ↗</a>' : '') + '</div></div>';
+    }).join('');
+}
+function bdFilterLane(lane, btn) {
+  document.querySelectorAll('#bd-opps-result .bd-seg button').forEach(b => b.classList.toggle('on', b === btn));
+  document.querySelectorAll('#bd-opps-result .bd-opp').forEach(c => { c.style.display = (!lane || c.dataset.lane === lane) ? '' : 'none'; });
 }
 
-// Bridge: from a found opportunity into the form-fill flow — sets the funder,
-// web-searches that programme's application questions, and pulls them out.
-async function startEOIFromOpportunity(key) {
+// ── about your organisation: saved on the organisation so the whole team shares it ──
+function _orgProfileKey() { return 'vorlana_org_profile_' + ((currentOrg && currentOrg.id) || 'default'); }
+function getOrgProfile() {
+  const org = (currentOrg && currentOrg.settings && currentOrg.settings.bd_profile) || '';
+  if (org) return String(org).trim();
+  try { return (localStorage.getItem(_orgProfileKey()) || '').trim(); } catch (e) { return ''; }
+}
+function populateOrgProfileField() { const el = $('eoi-org-profile'); if (el && !el.value) el.value = getOrgProfile(); if (typeof bdInit === 'function') bdInit(); }
+async function saveOrgProfileFromField() {
+  const el = $('eoi-org-profile'); if (!el) return;
+  const text = el.value || '';
+  try { localStorage.setItem(_orgProfileKey(), text); } catch (e) { /* ignore */ }
+  try {
+    const settings = Object.assign({}, (currentOrg && currentOrg.settings) || {}, { bd_profile: text, bd_setup: bdSetupRead() });
+    await sbUpdate('organisations', { settings }, orgId);
+    if (currentOrg) currentOrg.settings = settings;
+  } catch (e) { /* advisers can't save for the org; the local copy still works */ }
+  bdSetupLocalSave();
+  const s = $('eoi-profile-saved'); if (s) { s.style.display = 'inline'; setTimeout(() => { s.style.display = 'none'; }, 2500); }
+}
+// Looks the organisation up and drafts the profile for the person to check. Never writes commentary into it.
+async function fillOrgProfileFromWeb() {
+  const el = $('eoi-org-profile'); if (!el) return;
+  const name = (currentOrg && currentOrg.name) || '';
+  const site = (($('bd-site') || {}).value || '').trim();
+  const before = el.value;
+  el.value = 'Looking up your organisation…';
+  const sys = 'You are a UK bid researcher. Using web search, build an organisation profile for an Expression of Interest, from the organisation\'s own website, the Charity Commission register and Companies House. ' +
+    'The website or number given is the source of truth for WHO the organisation is. The account name may be just an internal label (for example a test account) — if it differs from what you find, ignore it and describe the organisation you found. ' +
+    'Output ONLY the profile, one "Label: value" line per item, exactly in this layout. Write [CHECK] after any value you could not confirm. NEVER write warnings, comments, questions or explanations. ' +
+    'Layout:\nLegal & trading name: … (charity no. …, company no. …)\nRegistered address: …\nWebsite: …\nLead contact: … [CHECK]\nFounded: … · Where you deliver: …\nMission: …\nTrack record: … (only real, published numbers)\nPartnerships: …\nAccreditations and policies: …';
+  try {
+    const out = await callClaude(sys, 'Website / details given: ' + (site || 'none') + '\nAccount label (may be wrong, ignore if it differs): ' + name, 900, true);
+    const lines = String(out || '').replace(/<\/?cite[^>]*>/gi, '').split('\n').map(x => x.trim()).filter(x => /^[A-Z][A-Za-z &\/'’\-–·()]{2,40}:\s*\S/.test(x));
+    if (lines.length < 3) { el.value = before; alert('We couldn\'t confirm enough about the organisation online. Please type a few lines in the box instead — who you are, what you\'ve achieved, who you work with.'); return; }
+    el.value = lines.join('\n'); bdRefreshSummary();
+  } catch (e) { el.value = before; if (e && e.message !== 'AI_PLAN_GATE') alert('Could not look it up: ' + (e.message || e)); }
+}
+
+// ── pull the funder's form, read it, answer it, fill it in ──
+async function _docxText(b64) {
+  if (!window.mammoth) return '';
+  const bin = atob(b64); const bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const { value } = await window.mammoth.extractRawText({ arrayBuffer: bytes.buffer });
+  return value || '';
+}
+const _QS_SYS = 'You are parsing a UK funding Expression of Interest form. Extract every question or field the applicant must complete, in order. ' +
+  'Return ONLY a valid JSON array — no prose, no markdown, no code fences. ' +
+  'Each item: {"id":"q1","question":"<exact question text>","wordLimit":<number or null>,"guidance":"<any limit/guidance note, else empty string>"}. ' +
+  'Include short mandatory fields too (project title, amount requested, organisation name). ' +
+  'If a word limit is stated use it; if only a character limit is stated, set wordLimit to that number divided by 6 (rounded). ' +
+  'If no limit is stated, wordLimit is null. Return at most 25 items. If the text contains no application questions at all, return [].';
+async function _parseQuestionsText(text) {
+  const raw = await callClaude(_QS_SYS, String(text).slice(0, 3900), 1100, false);
+  const m = String(raw || '').replace(/```json|```/gi, '').trim().match(/\[[\s\S]*\]/);
+  if (!m) return [];
+  const arr = JSON.parse(m[0]);
+  return Array.isArray(arr) ? arr : [];
+}
+async function _pdfQuestions(b64) {
+  const out = await vAI(_QS_SYS, [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } }, { type: 'text', text: 'Extract the questions from this form.' }], 1800);
+  return Array.isArray(out) ? out : (out && Array.isArray(out.questions) ? out.questions : []);
+}
+function _toQuestions(arr) {
+  return (arr || []).map((q, i) => ({ id: q.id || ('q' + (i + 1)), question: String(q.question || '').trim(),
+    wordLimit: (typeof q.wordLimit === 'number' && q.wordLimit > 0) ? Math.round(q.wordLimit) : null, guidance: String(q.guidance || '').trim() })).filter(q => q.question);
+}
+// 1. their form: the page's own link first, then ask the web where it lives
+async function _findFunderForm(o, name) {
+  const tried = new Set(); let pageText = '';
+  const tryUrl = async u => {
+    if (!u || tried.has(u)) return null; tried.add(u);
+    let r; try { r = await _postJSON('/api/fetch-form', { url: u }); } catch (e) { return null; }
+    if (r && r.pageText && r.pageText.length > pageText.length) pageText = r.pageText;
+    return r && r.ok && r.base64 ? r : null;
+  };
+  let r = await tryUrl(o.url);
+  if (!r) {
+    let urls = [];
+    try {
+      const raw = await callClaude('You find official funder pages. Reply with ONLY up to 3 full URLs, one per line: the official page or document where applicants get the Expression of Interest / application form for this funding programme. No other text.',
+        'Funder / programme: ' + name + (o.url ? '\nKnown page: ' + o.url : ''), 300, true);
+      urls = (String(raw).match(/https?:\/\/[^\s)>\]"']+/g) || []).slice(0, 3);
+    } catch (e) { if (e && e.message === 'AI_PLAN_GATE') throw e; }
+    for (const u of urls) { r = await tryUrl(u); if (r) break; }
+  }
+  if (r) return { kind: r.kind, base64: r.base64, filename: r.filename, formUrl: r.formUrl, pageText };
+  return { kind: pageText ? 'page' : 'none', pageText };
+}
+// 2. its questions
+async function _readFormQuestions(found, o, name) {
+  if (found.kind === 'docx' && found.base64) {
+    const r = await _postJSON('/api/eoi-form', { action: 'parse', docxBase64: found.base64 });
+    if (r.ok && r.items && r.items.length) { _eoiDoc = { kind: 'docx', base64: found.base64, name: found.filename, url: found.formUrl }; _eoiQuestions = _toQuestions(r.items); return; }
+    found.text = await _docxText(found.base64);       // a Word file with no answer spaces we recognise: read it as text
+  }
+  if (found.kind === 'pdf' && found.base64) {
+    let arr = []; try { arr = await _pdfQuestions(found.base64); } catch (e) { if (e && e.message === 'AI_PLAN_GATE') throw e; }
+    if (arr.length) { _eoiDoc = { kind: 'pdf', name: found.filename, url: found.formUrl }; _eoiQuestions = _toQuestions(arr); return; }
+  }
+  const text = found.text || found.pageText || '';
+  if (text.trim()) {
+    const arr = await _parseQuestionsText(text);
+    if (arr.length) { _eoiDoc = { kind: 'text', url: found.formUrl || (o && o.url) }; _eoiQuestions = _toQuestions(arr); return; }
+  }
+  const raw = await callClaude('You are a UK bid researcher. Find the actual Expression of Interest / application questions an applicant must answer for this specific funding programme. Return each question on its own line, with any stated word or character limit in brackets. If you cannot find the exact form, list the key questions or assessment criteria the application is known to require, one per line. No preamble, just the questions.',
+    'Funder / programme: ' + name + (o && o.url ? '\nInfo page: ' + o.url : ''), 900, true);
+  const arr = await _parseQuestionsText(cleanReportText(raw));
+  if (arr.length) { _eoiDoc = { kind: 'text', url: o && o.url }; _eoiQuestions = _toQuestions(arr); }
+}
+// 3. their form, with the answers written in
+async function _buildFilledForm() {
+  if (!_eoiDoc || _eoiDoc.kind !== 'docx') return null;
+  const answers = {}; _eoiQuestions.forEach(q => { const a = _plainAnswer(_eoiAnswers[q.id] || '').trim(); if (a) answers[q.id] = a; });
+  const r = await _postJSON('/api/eoi-form', { action: 'fill', docxBase64: _eoiDoc.base64, answers });
+  if (!r.ok) throw new Error(r.error || 'Could not fill the form');
+  return r;
+}
+function _eoiFileName(suffix) {
+  const funder = (($('eoi-funder') || {}).value || '').trim();
+  const base = (_eoiDoc && _eoiDoc.name) ? _eoiDoc.name.replace(/\.(docx|pdf|doc)$/i, '') : (funder || 'Expression of Interest');
+  return (base + ' - ' + ((currentOrg && currentOrg.name) || 'our organisation') + ' - ' + suffix + '.docx').replace(/[^\w .()\-]+/g, '_');
+}
+async function downloadFilledForm() {
+  const btn = $('eoi-dl-form'); const label = btn && btn.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = 'Preparing…'; }
+  try { const r = await _buildFilledForm(); if (r) _downloadBase64(r.filledBase64, _eoiFileName('filled in'), _DOCX_MIME); }
+  catch (e) { alert('Could not fill their form: ' + (e.message || e)); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = label; } }
+}
+async function downloadAnswersDoc() {
+  const funder = (($('eoi-funder') || {}).value || '').trim() || 'the funder';
+  const org = _eoiApplicant(_eoiCleanProfile(getOrgProfile())) || (currentOrg && currentOrg.name) || '';
+  const qa = _eoiQuestions.map(q => { const a = _plainAnswer(_eoiAnswers[q.id] || ''); return { q: q.question, a, limit: (q.wordLimit ? 'Limit ' + q.wordLimit + ' words · ' : '') + _wordCount(a) + ' words' }; });
+  try {
+    const r = await _postJSON('/api/eoi-form', { action: 'answers-doc', title: 'Expression of Interest — ' + funder, subtitle: org + ' · ' + new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }), qa });
+    if (!r.ok) throw new Error(r.error || 'failed');
+    _downloadBase64(r.filledBase64, _eoiFileName('answers'), _DOCX_MIME);
+  } catch (e) { alert('Could not make the document: ' + (e.message || e)); }
+}
+
+// The whole thing, from one click on a result
+async function pullFunderForm(key) {
   const o = _bdOpps[key]; if (!o) { alert('That result is no longer on screen — please run the search again.'); return; }
+  _bdSel = o;
   const name = (o.funder && o.programme) ? (o.funder + ' — ' + o.programme) : (o.programme || o.funder || '');
   if ($('eoi-funder')) $('eoi-funder').value = name;
+  _eoiDoc = null; _eoiQuestions = []; _eoiAnswers = {}; _eoiFunderPriorities = ''; _eoiPrioritiesFunder = '';
+  if ($('eoi-output')) $('eoi-output').style.display = 'none';
+  if ($('eoi-questions')) { $('eoi-questions').style.display = 'none'; $('eoi-questions').innerHTML = ''; }
+  if ($('bd-manual')) $('bd-manual').open = false;
+  if ($('bd-funder-bar')) $('bd-funder-bar').innerHTML = escapeHTML(o.funder || name) + (o.url ? ' · <a href="' + escapeHTML(o.url) + '" target="_blank" rel="noopener" style="color:var(--em);font-weight:600">Funder page ↗</a>' : '');
+  bdShowSection(2);
+  const sec = $('bd-s2'); if (sec && sec.scrollIntoView) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-  const ta = $('eoi-form-text');
-  // Say what's happening, right where the person is looking
-  let note = $('eoi-fetch-note');
-  if (!note && ta) { note = document.createElement('div'); note.id = 'eoi-fetch-note'; note.style.cssText = 'font-size:13px;margin:0 0 10px;padding:10px 12px;border-radius:10px;background:var(--bg);color:var(--txt2)'; ta.parentNode.insertBefore(note, ta); }
-  const say = (html, tone) => { if (note) { note.innerHTML = html; note.style.background = tone === 'warn' ? '#FFFBEB' : tone === 'ok' ? '#F0FDF4' : 'var(--bg)'; } };
-  if (ta) { ta.value = ''; ta.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-  say('<b>' + escapeHTML(name) + '</b><br>⏳ Looking up their application questions — this can take up to a minute…');
-
-  const sys = 'You are a UK bid researcher. Find the actual Expression of Interest / application questions an applicant must answer for this specific funding programme. ' +
-    'Return each question on its own line, with any stated word or character limit in brackets. ' +
-    'If you cannot find the exact form, list the key questions or assessment criteria the application is known to require, one per line. ' +
-    'No preamble, no numbered commentary, just the questions.';
-  const prompt = 'Funder / programme: ' + name + (o.url ? ('\nInfo page: ' + o.url) : '');
-
+  const steps = [{ label: 'Finding their form' }, { label: 'Reading the questions' }, { label: 'Writing your answers' }, { label: 'Filling in their form' }];
+  const show = (i, sub) => { const el = $('bd-pull-steps'); if (el) el.innerHTML = renderBrainProgress(steps, i, 'Getting the form for ' + (o.funder || name), sub || 'This can take a minute or two'); };
+  const note = (html, tone) => { const n = $('bd-pull-note'); if (n) n.innerHTML = html ? '<div class="bd-pullnote" style="' + (tone === 'warn' ? 'background:#FFFBEB' : tone === 'ok' ? 'background:#F0FDF4' : '') + '">' + html + '</div>' : ''; };
+  note('');
   try {
-    const raw = await callClaude(sys, prompt, 900, true);
-    const clean = cleanReportText(raw);
-    if (ta) ta.value = clean;
-    say('✓ Found their questions for <b>' + escapeHTML(name) + '</b>. Check them below, then write the answers.', 'ok');
-    await parseEOIForm();               // structure them into the editable list
-    const qWrap = $('eoi-questions');
-    if (qWrap) qWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    show(0);
+    const found = await _findFunderForm(o, name);
+    steps[0].meta = found.base64 ? (found.filename || 'form found') : (found.kind === 'page' ? 'No file to download — reading their page' : 'No downloadable form found');
+    show(1);
+    await _readFormQuestions(found, o, name);
+    if (!_eoiQuestions.length) throw new Error('NO_QUESTIONS');
+    steps[1].meta = _eoiQuestions.length + ' question' + (_eoiQuestions.length === 1 ? '' : 's') + (_eoiDoc && _eoiDoc.kind === 'docx' ? ' · Word form' : _eoiDoc && _eoiDoc.kind === 'pdf' ? ' · PDF form' : '');
+    show(2);
+    bdShowSection(3);
+    await runEOIFormFill();
+    if (!Object.keys(_eoiAnswers).length) { note('✦ Writing bids with Org Brain is part of the <b>Pro</b> plan. You can still upload or paste the funder\'s questions and answer them yourself.', 'warn'); return; }
+    show(3);
+    if (_eoiDoc && _eoiDoc.kind === 'docx') {
+      try { const r = await _buildFilledForm(); _eoiDoc.filled = { n: r.filled, total: r.total }; steps[3].meta = r.filled + ' of ' + r.total + ' answer spaces filled'; }
+      catch (e) { steps[3].meta = 'couldn\'t write into their file — answers are below'; }
+    } else steps[3].meta = 'Their form isn\'t a Word file, so the answers are written out for you to copy across';
+    renderFilledEOI();
+    show(4, 'Done');
+    note('✓ <b>' + escapeHTML(o.funder || name) + '</b> — ' + (_eoiDoc && _eoiDoc.kind === 'docx' ? 'their own form is filled in. ' : 'answers are written. ') + 'Check the <mark style="background:#ffe9a8">yellow [INSERT]</mark> gaps, then download below.', 'ok');
+    const out = $('eoi-output'); if (out && out.scrollIntoView) out.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
-    if (e && e.message === 'AI_PLAN_GATE') { say('✦ Writing bids with Org Brain is part of the <b>Pro</b> plan. You can still paste the funder\'s questions in the box below and answer them yourself.', 'warn'); return; }
-    // Not a dead end: the funder is filled in; they can paste or upload the form instead
-    say('We couldn\'t fetch <b>' + escapeHTML(name) + '</b>\'s questions automatically' + (e && e.message ? ' <span style="color:var(--txt3)">(' + escapeHTML(e.message) + ')</span>' : '') + '.<br>' +
-        'No problem: paste their questions in the box below, or upload their form, then press <b>① Pull out the questions</b>. ' +
-        (o.url ? '<a href="' + escapeHTML(o.url) + '" target="_blank" rel="noopener">Open their page ↗</a>' : ''), 'warn');
+    if (e && e.message === 'AI_PLAN_GATE') { note('✦ Writing bids with Org Brain is part of the <b>Pro</b> plan. You can still upload or paste the funder\'s questions and answer them yourself.', 'warn'); }
+    else {
+      const m = $('bd-manual'); if (m) m.open = true;
+      $('bd-pull-steps').innerHTML = '';
+      note((e && e.message === 'NO_QUESTIONS' ? 'We couldn\'t find an application form or questions for <b>' + escapeHTML(name) + '</b> on their website.' : 'Something went wrong getting the form' + (e && e.message ? ' <span style="color:var(--txt3)">(' + escapeHTML(e.message) + ')</span>' : '') + '.') +
+        '<br>No problem — upload their form, paste their questions, or write from their brief below.' + (o.url ? ' <a href="' + escapeHTML(o.url) + '" target="_blank" rel="noopener" style="color:var(--em);font-weight:600">Open their page ↗</a>' : ''), 'warn');
+    }
   }
 }
+var startEOIFromOpportunity = pullFunderForm;      // older buttons and bookmarks keep working
 
 // ═════════════════════════════════════════════════════════════
 // EOI ENGINE — form-fill + grounded drafting
 // ═════════════════════════════════════════════════════════════
-
-// ── Organisation profile (the facts an EOI needs that the CRM doesn't hold) ──
-// Stored in the browser (localStorage) per org, so no database change is needed.
-function _orgProfileKey() { return 'vorlana_org_profile_' + ((currentOrg && currentOrg.id) || 'default'); }
-function getOrgProfile() { try { return (localStorage.getItem(_orgProfileKey()) || '').trim(); } catch (e) { return ''; } }
-function populateOrgProfileField() { const el = $('eoi-org-profile'); if (el) el.value = getOrgProfile(); }
-function saveOrgProfileFromField() {
-  try {
-    const el = $('eoi-org-profile'); if (!el) return;
-    localStorage.setItem(_orgProfileKey(), el.value || '');
-    const s = $('eoi-profile-saved'); if (s) { s.style.display = 'inline'; setTimeout(() => { s.style.display = 'none'; }, 2500); }
-  } catch (e) {}
-}
 
 // The single biggest quality lever: real, verifiable numbers from the CRM.
 // IMPORTANT: only emit metrics that are > 0. Broadcasting zeros makes a bid
@@ -1841,12 +2084,32 @@ async function readUploadedFormFile(file) {
 async function handleEOIFormUpload(inputEl) {
   const file = inputEl && inputEl.files && inputEl.files[0];
   if (!file) return;
-  const ta = $('eoi-form-text');
+  const ta = $('eoi-form-text'); const lower = (file.name || '').toLowerCase();
+  bdShowSection(2);
+  _eoiDoc = null;
+  if (lower.endsWith('.docx')) {
+    try {
+      ta.value = 'Reading ' + file.name + ' …';
+      const b64 = await _fileToBase64(file);
+      const r = await _postJSON('/api/eoi-form', { action: 'parse', docxBase64: b64 });
+      if (r.ok && r.items && r.items.length) {
+        _eoiDoc = { kind: 'docx', base64: b64, name: file.name };
+        _eoiQuestions = _toQuestions(r.items); _eoiAnswers = {};
+        ta.value = '';
+        renderEOIQuestions();
+        const q = $('eoi-questions'); if (q && q.scrollIntoView) q.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+    } catch (e) { /* fall through: read it as plain text */ }
+  }
   try {
     ta.value = 'Reading ' + file.name + ' …';
     const text = await readUploadedFormFile(file);
     if (!text.trim()) { ta.value = ''; alert('Could not read any text from that file. Try pasting the questions instead.'); return; }
     ta.value = text.trim();
+    await parseEOIForm({ keepDoc: true });
+    if (lower.endsWith('.pdf') && _eoiQuestions.length) _eoiDoc = { kind: 'pdf', name: file.name };
+    else if (_eoiQuestions.length) _eoiDoc = { kind: 'text' };
   } catch (e) {
     ta.value = '';
     alert('Could not read that file: ' + e.message + '\nPaste the questions in the box instead.');
@@ -1854,7 +2117,9 @@ async function handleEOIFormUpload(inputEl) {
 }
 
 // Parse the form text into structured questions (one AI call)
-async function parseEOIForm() {
+async function parseEOIForm(opts) {
+  if (!(opts && opts.keepDoc)) _eoiDoc = null;
+  bdShowSection(2);
   const text = ($('eoi-form-text') && $('eoi-form-text').value || '').trim();
   if (!text) { alert('Upload or paste the funder\'s form first.'); return; }
 
@@ -1905,7 +2170,7 @@ function renderEOIQuestions() {
   wrap.style.display = 'block';
   wrap.innerHTML =
     '<div style="font-weight:700;font-size:13px;margin:4px 0 10px">Found ' + _eoiQuestions.length +
-    ' question(s) — edit if needed, then draft:</div>' +
+    ' question(s)' + (_eoiDoc && _eoiDoc.kind === 'docx' ? ' in their Word form' : '') + ' — edit if needed, then write the answers:</div>' +
     _eoiQuestions.map((q, i) =>
       '<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px">' +
         '<div style="font-size:11px;color:var(--txt3);margin-bottom:4px">Q' + (i + 1) +
@@ -1915,7 +2180,7 @@ function renderEOIQuestions() {
       '</div>'
     ).join('') +
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">' +
-      '<button class="btn btn-p" onclick="runEOIFormFill()">✦ Draft all answers from my data</button>' +
+      '<button class="btn btn-p" onclick="runEOIFormFill()">✦ ' + (_eoiDoc && _eoiDoc.kind === 'docx' ? 'Write the answers and fill their form' : 'Write the answers from my data') + '</button>' +
       '<button class="btn btn-ghost btn-sm" onclick="researchEOIFunder()">🔎 Re-research funder (optional — runs automatically)</button>' +
     '</div>' +
     (_eoiFunderPriorities ? '<div style="font-size:11px;color:var(--txt3);margin-top:8px">Funder priorities loaded — they\'ll steer the drafting.</div>' : '');
@@ -1969,6 +2234,34 @@ async function researchEOIFunder() {
 }
 
 // Draft — one grounded call per question, respecting word limits
+// ── The bid writer never stops to ask questions ──────────────
+// The applicant is whoever the organisation profile says it is; the account name is only an internal label.
+function _eoiApplicant(profile) {
+  const m = /(?:legal\s*(?:&|and)?\s*trading\s*name|legal\s*name|organisation\s*name|trading\s*name)\s*:\s*([^\n(]+)/i.exec(profile || '');
+  return (m && m[1].trim()) || '';
+}
+// A stale warning pasted into the profile (e.g. "no organisation called X exists…") must never be treated as a fact about the applicant
+function _eoiCleanProfile(profile) {
+  return String(profile || '').split('\n').filter(l => !/(no organisation (called|named)|not (found|registered|listed) (in|on|with) |critical mismatch|mismatch (between|with)|cannot (confirm|verify)|could ?n['’]?t (find|verify|confirm)|does not exist in)/i.test(l)).join('\n').trim();
+}
+const _EOI_NEVER_STOP = 'ABSOLUTE RULE: you are producing finished text that is pasted straight into an application. You must ALWAYS write the full draft. ' +
+  'If anything looks inconsistent, unverifiable, mismatched or missing (names, registration numbers, websites, or track record that does not obviously match the funder), do NOT stop, do NOT ask questions, do NOT list what you need and do NOT comment. ' +
+  'Treat the organisation facts as true, write the best honest draft, and use [INSERT: ...] for anything missing. ' +
+  'Where the funder\'s priorities differ from the organisation\'s main work, describe the organisation\'s real activities in the terms the funder values (never claim work that is not in the facts) and use [INSERT: ...] for specific evidence. ';
+function _eoiLooksLikeRefusal(t) {
+  const x = String(t || '').trim().slice(0, 700).toLowerCase();
+  return /^(i need to pause|i('| a)?m unable|i cannot|i can't|before i can|unfortunately|i('| a)?m sorry|sorry,|there('| i)?s a (critical )?(mismatch|problem|issue))/.test(x) ||
+    /(what i need from you|i need you to (confirm|clarify)|could you (please )?(confirm|clarify)|critical mismatch|once you clarify|please confirm (the|your))/.test(x);
+}
+async function _eoiCallNoRefusal(sys, user, maxTok) {
+  let raw = await callClaude(sys, user, maxTok, false);
+  if (_eoiLooksLikeRefusal(raw)) {
+    raw = await callClaude(sys + 'Your previous reply asked for clarification instead of writing. That is not allowed. Write the complete answer now. ',
+      user + '\n\n(Write the finished text now. No questions, no commentary. Use [INSERT: ...] for anything missing.)', maxTok, false);
+  }
+  return raw;
+}
+
 async function runEOIFormFill() {
   if (orgUses('circular') && typeof cxReportLoad === 'function') { try { await cxReportLoad(); } catch (e) { /* optional */ } }
   if (!_eoiQuestions.length) { alert('Parse a form first.'); return; }
@@ -1977,7 +2270,7 @@ async function runEOIFormFill() {
   const funderRaw = ($('eoi-funder') && $('eoi-funder').value || '').trim();
   const funder = funderRaw || 'the funder';
   const usps = ($('eoi-usps') && $('eoi-usps').value || '').trim();
-  const profile = getOrgProfile();
+  const profile = _eoiCleanProfile(getOrgProfile());
   const evidence = buildEOIEvidence();
   const out = $('eoi-output'); const res = $('eoi-result');
   out.style.display = 'block';
@@ -2002,9 +2295,10 @@ async function runEOIFormFill() {
     '4) Where a specific fact is missing, insert a placeholder like [INSERT: charity number] and keep going — do NOT lecture about the gap. ' +
     '5) NEVER state or imply the organisation has no experience, no track record, or that figures are zero; rely on the organisation facts and use [INSERT: ...] for specifics. ' +
     '6) If the question is a SHORT FACTUAL FIELD (name, number, address, postcode, website, email, link, date, title, contact, budget line), reply with ONLY the value or a single [INSERT: ...] placeholder — no prose, no sentences. ' +
-    '7) Otherwise write clean formal British English prose, mirror the funder\'s language and priorities, and respect the word limit.';
+    '7) Otherwise write clean formal British English prose, mirror the funder\'s language and priorities, and respect the word limit. ' + _EOI_NEVER_STOP;
 
-  const facts = 'KNOWN ORGANISATION FACTS (provided by the applicant — treat as true):\n' +
+  const applicant = _eoiApplicant(profile);
+  const facts = (applicant ? 'APPLICANT: ' + applicant + ' (the organisation named in the facts below; any other name is just an internal label — ignore it)\n\n' : '') + 'KNOWN ORGANISATION FACTS (provided by the applicant — treat as true):\n' +
     (profile ? profile.slice(0, 1800) : '(none provided — use [INSERT: ...] placeholders for organisation details such as legal name, charity/company number, address, website, contact)');
 
   _eoiAnswers = {};
@@ -2036,8 +2330,10 @@ async function runEOIFormFill() {
     ].filter(Boolean).join('\n');
 
     try {
-      const raw = await callClaude(sys, userPrompt, maxTok, false);
-      _eoiAnswers[q.id] = _stripLeadingLabel(cleanReportText(raw));
+      const raw = await _eoiCallNoRefusal(sys, userPrompt, maxTok);
+      _eoiAnswers[q.id] = _eoiLooksLikeRefusal(raw)
+        ? (short ? '[INSERT: ' + q.question.replace(/[:?]\s*$/, '').slice(0, 80) + ']' : '[INSERT: answer to this question — add more detail to your organisation profile and write it again]')
+        : _stripLeadingLabel(cleanReportText(raw));
     } catch (e) {
       if (e.message === 'AI_PLAN_GATE') { res.innerHTML = ''; return; }
       _eoiAnswers[q.id] = '[Could not draft this answer: ' + e.message + ']';
@@ -2066,8 +2362,16 @@ function _fillProgressHTML(activeIdx) {
 function _wordCount(s) { return (s || '').trim() ? (s.trim().split(/\s+/).length) : 0; }
 
 // Assemble — render the completed form, flag limits + placeholders
+function _plainAnswer(a) { return String(a || '').replace(/\*\*([^*]+)\*\*/g, '$1'); }
+function _eoiEditAnswer(id, el) {
+  _eoiAnswers[id] = el.innerText.replace(/\u00a0/g, ' ').trim();
+  const q = _eoiQuestions.find(x => x.id === id), wc = _wordCount(_eoiAnswers[id]);
+  const m = $('eoi-wc-' + id);
+  if (m) { const over = q && q.wordLimit && wc > q.wordLimit; m.textContent = (q && q.wordLimit ? wc + '/' + q.wordLimit + ' words' : wc + ' words') + (over ? ' · OVER LIMIT' : ''); m.style.color = over ? '#b91c1c' : '#888'; }
+}
 function renderFilledEOI() {
   const res = $('eoi-result');
+  window._eoiLastKind = 'form';
   let placeholderCount = 0;
   const parts = _eoiQuestions.map((q, i) => {
     const ans = _eoiAnswers[q.id] || '';
@@ -2080,26 +2384,33 @@ function renderFilledEOI() {
       .replace(/\n/g, '<br/>');
     return '<div style="margin-bottom:22px">' +
       '<div style="font-weight:700;font-size:14px;margin-bottom:2px">Q' + (i + 1) + '. ' + escapeHTML(q.question) + '</div>' +
-      '<div style="font-size:11px;color:' + (over ? '#b91c1c' : '#888') + ';margin-bottom:6px">' + meta + '</div>' +
-      '<div style="font-size:14px;line-height:1.7">' + html + '</div></div>';
+      '<div id="eoi-wc-' + escapeHTML(q.id) + '" style="font-size:11px;color:' + (over ? '#b91c1c' : '#888') + ';margin-bottom:6px">' + meta + '</div>' +
+      '<div contenteditable="true" spellcheck="true" oninput="_eoiEditAnswer(\'' + escapeHTML(q.id) + '\',this)" onfocus="this.style.borderColor=\'var(--border)\'" onblur="this.style.borderColor=\'transparent\'" ' +
+        'style="font-size:14px;line-height:1.7;border:1px solid transparent;border-radius:8px;padding:6px 8px;margin:-6px -8px;outline:none">' + html + '</div></div>';
   });
 
+  const docx = !!(_eoiDoc && _eoiDoc.kind === 'docx');
+  const docNote = !_eoiDoc ? '' : docx
+    ? '<div style="background:#F0FDF4;border:1px solid #BBF7D0;color:#166534;border-radius:10px;padding:10px 14px;font-size:13px;margin:0 0 16px">✓ Their own Word form is filled in' + (_eoiDoc.filled ? ' — ' + _eoiDoc.filled.n + ' of ' + _eoiDoc.filled.total + ' answer spaces' : '') + '. Click any answer below to edit it, then download.</div>'
+    : '<div class="alert alert-info" style="margin:0 0 16px">Their form is ' + (_eoiDoc.kind === 'pdf' ? 'a PDF' : 'online') + ', so we can\'t type into it. The answers are written out below — copy them across, or download them as a Word document.</div>';
   const flagBar = placeholderCount
-    ? '<div class="alert alert-warn" style="margin:0 0 16px">⚠ ' + placeholderCount +
-      ' placeholder(s) need your real figures before you submit — highlighted below.</div>'
+    ? '<div class="alert alert-warn" style="margin:0 0 16px">⚠ ' + placeholderCount + ' placeholder(s) need your real figures before you submit — highlighted below.</div>'
     : '';
 
-  _lastEOIText = _eoiQuestions.map((q, i) => 'Q' + (i + 1) + '. ' + q.question + '\n\n' + (_eoiAnswers[q.id] || '')).join('\n\n');
+  _lastEOIText = _eoiQuestions.map((q, i) => 'Q' + (i + 1) + '. ' + q.question + '\n\n' + _plainAnswer(_eoiAnswers[q.id] || '')).join('\n\n');
 
   $('eoi-output').style.display = 'block';
+  if (typeof bdShowSection === 'function') bdShowSection(3);
   res.style.cssText = 'background:#fff;color:#1a1a1a;border-radius:var(--radiuslg);padding:30px 36px';
   res.innerHTML =
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">' +
-      '<button class="btn btn-p" onclick="downloadEOIPDF()">⬇ Download as PDF</button>' +
+      (docx ? '<button class="btn btn-p" id="eoi-dl-form" onclick="downloadFilledForm()">⬇ Download their form, filled in (Word)</button>' : '') +
+      '<button class="btn ' + (docx ? 'btn-ghost btn-sm' : 'btn-p') + '" onclick="downloadAnswersDoc()">⬇ Answers as a Word document</button>' +
+      '<button class="btn btn-ghost btn-sm" onclick="downloadEOIPDF()">⬇ PDF</button>' +
       '<button class="btn btn-ghost btn-sm" onclick="copyEOI()">📋 Copy all</button>' +
       '<button class="btn btn-ghost btn-sm" onclick="runEOIQualitySupervisor()">🔍 Run Quality Supervisor</button>' +
     '</div>' +
-    flagBar +
+    docNote + flagBar +
     '<div id="eoi-fill-body" style="font-family:Georgia,serif">' + parts.join('') + '</div>' +
     '<div id="eoi-qa-result"></div>' +
     '<div style="margin-top:20px;padding-top:12px;border-top:1px solid #eee;font-size:11px;color:#999">Drafted with Vorlana · verify all figures before submission</div>';
@@ -2158,7 +2469,7 @@ async function runEOIGenerator() {
   if (!funder || !brief) { alert('Please enter funder and brief.'); return; }
   const out = $('eoi-output'); const res = $('eoi-result');
   out.style.display = 'block';
-  const profile = getOrgProfile();
+  const profile = _eoiCleanProfile(getOrgProfile());
   const evidence = buildEOIEvidence();
 
   const steps = [
@@ -2174,8 +2485,10 @@ async function runEOIGenerator() {
     'Executive summary, The need, Our track record, Our approach, Value for money. ' +
     'Mirror the funder\'s language and priorities. Never address the reader, never comment on data quality, never apologise, never imply the organisation has no track record or that figures are zero. ' +
     'Ground every claim in the KNOWN ORGANISATION FACTS and VERIFIED CRM DATA — never invent numbers, quotes, names or partners; ' +
-    'use [INSERT: ...] placeholders for anything missing and keep going. 600-800 words. **bold** key statistics. No hashtags except section markers.';
+    'use [INSERT: ...] placeholders for anything missing and keep going. 600-800 words. **bold** key statistics. No hashtags except section markers. ' + _EOI_NEVER_STOP;
+  const applicantName = _eoiApplicant(profile);
   const prompt = [
+    applicantName ? 'APPLICANT: ' + applicantName + ' (the organisation named in the facts below; any other name is just an internal label — ignore it)' : '',
     'FUNDER: ' + funder,
     'BRIEF: ' + brief,
     'OUR STRENGTHS/USPs: ' + ($('eoi-usps').value || 'none'),
@@ -2184,17 +2497,26 @@ async function runEOIGenerator() {
     (profile ? profile.slice(0, 1800) : '(none provided — use [INSERT: ...] placeholders for organisation details)'),
     '',
     evidence
-  ].join('\n');
+  ].join('\n').replace(/^\n+/, '');
 
-  const raw = await runAgent({
+  let raw = await runAgent({
     container: res,
     headerLabel: 'EOI Generator Agent',
     headerSub: 'Writing your application using verified outcomes',
     steps, sys, prompt, maxTok: 1300
   });
+  if (raw && _eoiLooksLikeRefusal(raw)) {      // never hand the person a list of questions instead of a bid
+    try { raw = await callClaude(sys + 'Your previous reply asked for clarification instead of writing. That is not allowed. Write the complete Expression of Interest now. ', prompt + '\n\n(Write the finished text now. No questions, no commentary. Use [INSERT: ...] for anything missing.)', 1300, false); }
+    catch (e) { raw = ''; }
+    if (!raw || _eoiLooksLikeRefusal(raw)) {
+      res.innerHTML = '<div class="alert alert-warn">We couldn\'t write this one automatically. Add a few lines about your organisation under <b>About your organisation</b> (who you are, what you\'ve achieved, who you work with), then press <b>Write my bid</b> again.</div>';
+      return;
+    }
+  }
   if (raw) {
     const cleaned = cleanReportText(raw);
-    _lastEOIText = cleaned;
+    _lastEOIText = cleaned; window._eoiLastKind = 'brief';
+    if (typeof bdShowSection === 'function') bdShowSection(3);
     const html = reportTextToHTML(cleaned, raw)
       .replace(/\[INSERT:([^\]]*)\]/gi, '<mark style="background:#ffe9a8">[INSERT:$1]</mark>');
     res.innerHTML = html +
@@ -2223,5 +2545,8 @@ function downloadEOIPDF() {
 }
 
 function copyEOI() {
-  navigator.clipboard.writeText(_lastEOIText || ($('eoi-result') && $('eoi-result').innerText) || '');
+  const text = (window._eoiLastKind === 'form' && _eoiQuestions.length)
+    ? _eoiQuestions.map((q, i) => 'Q' + (i + 1) + '. ' + q.question + '\n\n' + _plainAnswer(_eoiAnswers[q.id] || '')).join('\n\n')
+    : (_lastEOIText || ($('eoi-result') && $('eoi-result').innerText) || '');
+  navigator.clipboard.writeText(text);
 }
