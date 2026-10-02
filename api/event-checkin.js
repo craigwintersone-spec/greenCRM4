@@ -125,7 +125,7 @@ async function todaysEvent(orgId, siteName) {
   let ev = evs[0];
   if (evs.length > 1) {
     const sn = norm(siteName);
-    const match = evs.find(e => sn && norm(e.location).includes(sn)) || evs.find(e => sn && sn.includes(norm(e.location)));
+    const match = evs.find(e => sn && norm(e.location) && norm(e.location).includes(sn)) || evs.find(e => sn && norm(e.location) && sn.includes(norm(e.location)));   // a blank location never counts as a match
     if (match) ev = match;
     else return { mode: 'choose', orgId, eventId: null, siteId: null, name: 'Choose today\u2019s session',
       date: today, location: '', questionIds: null,
@@ -314,7 +314,8 @@ module.exports = async function handler(req, res) {
         ok: true,
         mode: ctx.mode,
         event: { name: ctx.name, date: ctx.date, location: ctx.location, org_name: orgName },
-        questions
+        questions,
+        choices: ctx.mode === 'choose' ? (ctx.choices || []) : undefined   // today's sessions to tap between
       });
     }
 
