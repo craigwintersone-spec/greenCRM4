@@ -432,49 +432,133 @@
 
 <!-- BD MANAGER -->
 <div id="page-bd" class="page">
-  <div class="page-header"><div><div class="page-title">💼 BD Manager</div><div class="page-sub">Find funding · Write winning Expressions of Interest</div></div></div>
+  <style>
+    .bd-flow{display:flex;align-items:center;gap:8px;margin:0 0 18px;flex-wrap:wrap}
+    .bd-flow a{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:20px;background:var(--surface);border:1px solid var(--border);font-size:13px;font-weight:600;color:var(--txt3);cursor:pointer;text-decoration:none;user-select:none}
+    .bd-flow a b{width:20px;height:20px;border-radius:50%;background:var(--border);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px}
+    .bd-flow a.on{color:var(--txt);border-color:var(--em)}
+    .bd-flow a.on b{background:var(--em)}
+    .bd-flow a.done b{background:#16A34A}
+    .bd-flow a.off{opacity:.45;pointer-events:none}
+    .bd-flow i{flex:0 0 16px;height:1px;background:var(--border)}
+    .bd-grid{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:18px;align-items:start}
+    @media(max-width:980px){.bd-grid{grid-template-columns:1fr}.bd-side{order:-1}}
+    .bd-sec-h{display:flex;align-items:center;gap:12px;margin:0 0 14px}
+    .bd-sec-h .n{width:26px;height:26px;border-radius:50%;background:var(--em);color:#fff;font-size:13px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+    .bd-sec-h .t{font-size:17px;font-weight:700;color:var(--txt);letter-spacing:-.2px}
+    .bd-sec-h .s{font-size:12.5px;color:var(--txt3);margin-top:1px}
+    .bd-find{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+    .bd-find .form-row{flex:1;min-width:220px;margin:0}
+    .bd-hint{font-size:12.5px;color:var(--txt3);margin-top:10px;line-height:1.5}
+    .bd-seg{display:inline-flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:0 0 12px;flex-wrap:wrap}
+    .bd-seg button{border:none;background:var(--surface);padding:7px 13px;font-size:12.5px;font-weight:600;color:var(--txt2);cursor:pointer}
+    .bd-seg button.on{background:var(--em);color:#fff}
+    .bd-row{display:flex;gap:14px;justify-content:space-between;align-items:flex-start;padding:14px 0;border-top:1px solid var(--border)}
+    .bd-row:first-of-type{border-top:none}
+    .bd-row-main{min-width:0;flex:1}
+    .bd-pill{display:inline-block;font-size:11px;font-weight:700;border-radius:10px;padding:2px 9px;margin-right:6px}
+    .bd-fit5{background:#DCFCE7;color:#166534}.bd-fit4{background:#E0F2FE;color:#075985}.bd-fit3{background:#F3F4F6;color:#4B5563}
+    .bd-lane{font-size:11.5px;color:var(--txt3)}
+    .bd-row-title{font-size:15px;font-weight:700;color:var(--txt);margin:5px 0 2px}
+    .bd-row-fit{font-size:13.5px;color:var(--txt2);line-height:1.5}
+    .bd-row-meta{font-size:12.5px;color:var(--txt3);margin-top:5px}
+    .bd-row-act{display:flex;flex-direction:column;gap:8px;align-items:flex-end;flex-shrink:0}
+    .bd-row-act a{font-size:12.5px;color:var(--em);font-weight:600;text-decoration:none}
+    @media(max-width:600px){.bd-row{flex-direction:column}.bd-row-act{flex-direction:row;align-items:center}}
+    .bd-org label{font-size:11px}
+    .bd-side summary{cursor:pointer;list-style:none}
+    .bd-side summary::-webkit-details-marker{display:none}
+    .bd-sum{font-size:12.5px;color:var(--txt3);margin-top:3px;line-height:1.45}
+    .bd-how{font-size:12.5px;color:var(--txt2);line-height:1.65;padding-left:16px;margin:6px 0 0}
+    #bd-manual summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--em)}
+    .bd-man-blk{border-top:1px solid var(--border);padding:14px 0 4px;margin-top:12px}
+    .bd-man-blk h4{font-size:13px;margin:0 0 4px;color:var(--txt)}
+    .bd-man-blk p{font-size:12.5px;color:var(--txt3);margin:0 0 10px}
+    .bd-pullnote{font-size:13px;line-height:1.55;padding:10px 12px;border-radius:10px;background:var(--bg);color:var(--txt2);margin-top:12px}
+  </style>
 
-  <!-- ══ STEP 1 · FIND FUNDING ══════════════════════════════ -->
-  <div style="display:flex;align-items:center;gap:12px;margin:4px 0 14px">
-    <span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--em);color:#fff;font-size:13px;font-weight:700;flex-shrink:0">1</span>
-    <div>
-      <div style="font-size:16px;font-weight:700;color:var(--txt)">Find funding opportunities</div>
-      <div style="font-size:12px;color:var(--txt3)">Live web search for open grants and contracts that fit your organisation</div>
-    </div>
-  </div>
-  <div class="card">
-    <div class="form-grid-2" style="margin-bottom:12px">
-      <div class="form-row"><label>Primary delivery area</label><input id="bd-area" list="bd-area-list" value="London" placeholder="Type any place, or pick one — e.g. Peterborough, Ealing, Leeds"/><datalist id="bd-area-list"><option value="London"><option value="Greater Manchester"><option value="Birmingham / West Midlands"><option value="Leeds / West Yorkshire"><option value="Bristol / South West"><option value="National / England-wide"></datalist></div>
-      <div class="form-row"><label>Org turnover</label><select id="bd-size"><option value="micro">Under £100k</option><option value="small">£100k–£500k</option><option value="medium">£500k–£2m</option><option value="large">£2m+</option></select></div>
-    </div>
-    <div class="form-row" style="margin-top:8px"><label>Specific funders or programmes of interest</label><input id="bd-specific" placeholder="e.g. MoJ HMPPS, GLA Good Work, National Lottery, UKSPF…"/></div>
-    <button class="btn btn-ai" onclick="runBDResearch()" style="margin-top:4px">✦ Find opportunities</button>
-  </div>
-  <div id="bd-opps-wrap" style="display:none">
-    <div class="ai-panel"><div class="ai-panel-title"><span class="ai-icon">🔍</span>Funding opportunities identified</div><div id="bd-opps-result"></div></div>
-  </div>
-  <!-- ══ STEP 2 · WRITE AN EOI ══════════════════════════════ -->
-  <div style="display:flex;align-items:center;gap:12px;margin:28px 0 14px">
-    <span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--em);color:#fff;font-size:13px;font-weight:700;flex-shrink:0">2</span>
-    <div>
-      <div style="font-size:16px;font-weight:700;color:var(--txt)">Write an Expression of Interest</div>
-      <div style="font-size:12px;color:var(--txt3)">Every answer is drafted from your organisation profile and real CRM outcomes</div>
-    </div>
+  <div class="page-header"><div><div class="page-title">💼 BD Manager</div><div class="page-sub">Find funding · we pull the funder's own form and fill it in</div></div></div>
+
+  <div class="bd-flow">
+    <a id="bd-chip-1" class="on" onclick="bdGo(1)"><b>1</b> Find funding</a><i></i>
+    <a id="bd-chip-2" class="off" onclick="bdGo(2)"><b>2</b> Their form</a><i></i>
+    <a id="bd-chip-3" class="off" onclick="bdGo(3)"><b>3</b> Review &amp; download</a>
   </div>
 
-  <div class="card">
-    <div class="card-title">About this bid</div>
-    <div class="form-row">
-      <label>Funder / scheme name</label>
-      <input id="eoi-funder" placeholder="e.g. GLA Grow London Local"/>
-      <div style="font-size:11px;color:var(--txt3);margin-top:4px">Used to research the funder's priorities and as the document title — be specific.</div>
+  <div class="bd-grid">
+    <div class="bd-main">
+
+      <!-- 1 · FIND FUNDING -->
+      <div class="card" id="bd-s1">
+        <div class="bd-sec-h"><span class="n">1</span><div><div class="t">Find funding</div><div class="s">Councils and government, trusts and the Lottery, and company funders, searched live for your area</div></div></div>
+        <div class="bd-find">
+          <div class="form-row"><label>Any funders you already have in mind? <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label><input id="bd-specific" placeholder="e.g. National Lottery, your local council, Veolia…"/></div>
+          <button class="btn btn-ai" onclick="runBDResearch()" style="height:40px">✦ Find opportunities</button>
+        </div>
+        <div class="bd-hint">It uses the details on the right. Takes about a minute. Already have a funder's form? <a href="#" onclick="bdManualStart();return false" style="color:var(--em);font-weight:600">Upload it instead</a></div>
+        <div id="bd-opps-wrap" style="display:none;margin-top:16px;padding-top:6px;border-top:1px solid var(--border)">
+          <div id="bd-opps-result"></div>
+        </div>
+      </div>
+
+      <!-- 2 · THEIR FORM -->
+      <div class="card" id="bd-s2" style="display:none;margin-top:16px">
+        <div class="bd-sec-h"><span class="n">2</span><div><div class="t">Their form</div><div class="s" id="bd-funder-bar">We find it, read it, answer it and fill it in</div></div></div>
+        <div class="form-row"><label>Funder / scheme</label><input id="eoi-funder" placeholder="e.g. Veolia Environmental Trust — Community grants"/></div>
+        <div id="bd-pull-steps"></div>
+        <div id="bd-pull-note"></div>
+        <div id="eoi-questions" style="display:none;margin-top:14px"></div>
+        <details id="bd-manual" style="margin-top:14px">
+          <summary>Use your own form or brief instead</summary>
+          <div class="bd-man-blk">
+            <h4>📄 Upload their form</h4>
+            <p>Word forms are filled in for you, box by box. PDFs are read and the answers written out for you to copy across.</p>
+            <input type="file" id="eoi-form-file" accept=".docx,.pdf,.txt" onchange="handleEOIFormUpload(this)" style="font-size:13px"/>
+          </div>
+          <div class="bd-man-blk">
+            <h4>📋 Paste their questions</h4>
+            <div class="form-row"><textarea id="eoi-form-text" style="min-height:90px" placeholder="Paste the funder's questions here — one per line is fine…"></textarea></div>
+            <button class="btn btn-ai btn-sm" onclick="parseEOIForm()">Read the questions</button>
+          </div>
+          <div class="bd-man-blk">
+            <h4>✍️ No form — write from a brief</h4>
+            <div class="form-row"><textarea id="eoi-brief" style="min-height:100px" placeholder="Paste the funding brief, or describe what outcomes they want…"></textarea></div>
+            <button class="btn btn-ai btn-sm" onclick="runEOIGenerator()">Write my bid</button>
+          </div>
+        </details>
+      </div>
+
+      <!-- 3 · REVIEW & DOWNLOAD -->
+      <div id="eoi-output" style="display:none;margin-top:16px">
+        <div class="ai-panel">
+          <div class="ai-panel-title"><span class="ai-icon">📄</span>Review &amp; download</div>
+          <div id="eoi-result"></div>
+          <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+            <button class="btn btn-p btn-sm" onclick="downloadEOIPDF()">⬇ Download as PDF</button>
+            <button class="btn btn-ghost btn-sm" onclick="copyEOI()">📋 Copy text</button>
+            <button class="btn btn-ghost btn-sm" onclick="runEOIGenerator()">↻ Regenerate</button>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="form-row"><label>Your unique selling points (optional)</label><textarea id="eoi-usps" style="min-height:56px" placeholder="e.g. 10 years' delivery in the area · the only repair café in the district · strong council and school partnerships…"></textarea></div>
-    <details style="margin-top:4px">
-      <summary style="cursor:pointer;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:9px;font-weight:700;font-size:13px;color:var(--txt);user-select:none">🏢 Organisation profile <span style="font-weight:400;color:var(--txt3)">— set once, used in every EOI</span></summary>
-      <div style="padding:12px 2px 2px">
-        <p style="font-size:12px;color:var(--txt2);margin-bottom:10px">The writer only knows what's in your CRM plus what you put here. Paste your key facts once — legal &amp; trading name, charity/company number, registered address, website, socials, lead contact, year founded, boroughs, mission, and prior delivery history <em>with real numbers</em>, partnerships, accreditations. It inserts [INSERT: …] wherever something is missing.</p>
-        <div class="form-row"><textarea id="eoi-org-profile" style="min-height:150px" placeholder="Legal &amp; trading name: [your organisation] (charity no. …, company no. …)
+
+    <!-- YOUR ORGANISATION — always visible, set once -->
+    <aside class="bd-side">
+      <div class="card bd-org">
+        <details id="bd-org" open>
+          <summary><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:15px;color:var(--txt)">Your organisation</b><span style="font-size:12px;color:var(--em);font-weight:600">Edit</span></div>
+            <div class="bd-sum" id="bd-org-sum">Set once — used for every search and bid</div></summary>
+          <div style="margin-top:14px">
+            <div class="form-row"><label>Where you deliver</label><input id="bd-area" list="bd-area-list" onchange="bdSetupLocalSave()" placeholder="e.g. Peterborough and Cambridgeshire"/>
+              <datalist id="bd-area-list"><option value="London"><option value="Greater Manchester"><option value="Birmingham / West Midlands"><option value="Leeds / West Yorkshire"><option value="Bristol / South West"><option value="Peterborough / Cambridgeshire"><option value="National / England-wide"></datalist></div>
+            <div class="form-row"><label>What you do <span style="font-weight:400;text-transform:none;letter-spacing:0">— tap all that apply</span></label>
+              <div id="bd-what" style="display:flex;flex-wrap:wrap;gap:6px"></div></div>
+            <div class="form-grid-2">
+              <div class="form-row"><label>Type</label><select id="bd-type" onchange="bdSetupLocalSave()"><option>Registered charity</option><option>CIC</option><option>CIO</option><option>Community group (unincorporated)</option><option>Company</option><option>Social enterprise</option></select></div>
+              <div class="form-row"><label>Yearly income</label><select id="bd-size" onchange="bdSetupLocalSave()"><option value="micro">Under £100k</option><option value="small">£100k–£500k</option><option value="medium">£500k–£2m</option><option value="large">£2m+</option></select></div>
+            </div>
+            <div class="form-row"><label>About your organisation <span style="font-weight:400;text-transform:none;letter-spacing:0">— every bid starts from this</span></label>
+              <textarea id="eoi-org-profile" oninput="bdRefreshSummary()" style="min-height:140px;font-size:13px" placeholder="Legal &amp; trading name: [your organisation] (charity no. …, company no. …)
 Registered address: …
 Website: …
 Lead contact: name, role — email — phone
@@ -483,47 +567,17 @@ Mission: one or two sentences
 Track record: programme, years, numbers (e.g. 320 people supported, 140 into work, 1.2 tonnes diverted from waste)
 Partnerships: councils, Jobcentre Plus, schools, employers, other charities
 Accreditations and policies: e.g. Matrix, safeguarding, Cyber Essentials"></textarea></div>
-        <button class="btn btn-p btn-sm" onclick="saveOrgProfileFromField()">Save profile</button>
-        <span id="eoi-profile-saved" style="display:none;color:var(--em);font-size:12px;margin-left:8px;font-weight:600">✓ Saved</span>
+            <div style="display:flex;gap:6px;margin-bottom:10px"><input id="bd-site" placeholder="Your website (optional)" style="flex:1;font-size:13px"/><button class="btn btn-ghost btn-sm" onclick="fillOrgProfileFromWeb()" style="white-space:nowrap" title="Looks up your website, the Charity Commission and Companies House and drafts the profile for you to check">✨ Look us up</button></div>
+            <div class="form-row"><label>What makes you different? <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label><input id="eoi-usps" placeholder="e.g. 10 years in the area · the only repair café in the district"/></div>
+            <div style="display:flex;gap:10px;align-items:center"><button class="btn btn-p btn-sm" onclick="saveOrgProfileFromField()">Save</button><span id="eoi-profile-saved" style="display:none;color:var(--em);font-size:12px;font-weight:600">✓ Saved for your whole team</span></div>
+          </div>
+        </details>
       </div>
-    </details>
-  </div>
-
-  <div class="card">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="font-size:18px">📄</span><div class="card-title" style="margin-bottom:0">Fill in the funder's own form</div><span style="font-size:10px;font-weight:700;color:#fff;background:var(--em);border-radius:20px;padding:2px 8px;letter-spacing:.5px">RECOMMENDED</span></div>
-    <p style="font-size:13px;color:var(--txt2);margin-bottom:12px">Upload the funder's blank EOI form (Word or PDF) or paste its questions — Vorlana answers each one, within every word limit. Or use <strong>✍️ Draft EOI for this</strong> on a funding result above to pull the questions in automatically.</p>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
-      <input type="file" id="eoi-form-file" accept=".docx,.pdf,.txt" onchange="handleEOIFormUpload(this)" style="font-size:13px"/>
-      <span style="font-size:11px;color:var(--txt3)">or paste the questions below</span>
-    </div>
-    <div class="form-row"><textarea id="eoi-form-text" style="min-height:90px" placeholder="Paste the funder's EOI questions here (one per line is fine)…"></textarea></div>
-    <button class="btn btn-ai btn-sm" onclick="parseEOIForm()">① Pull out the questions</button>
-    <div id="eoi-questions" style="display:none;margin-top:14px"></div>
-  </div>
-
-  <div style="display:flex;align-items:center;gap:12px;margin:16px 2px">
-    <div style="flex:1;height:1px;background:var(--border)"></div>
-    <div style="font-size:12px;font-weight:700;color:var(--txt3);letter-spacing:1px">OR</div>
-    <div style="flex:1;height:1px;background:var(--border)"></div>
-  </div>
-
-  <div class="card">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="font-size:18px">✍️</span><div class="card-title" style="margin-bottom:0">No form? Write from a brief</div></div>
-    <p style="font-size:13px;color:var(--txt2);margin-bottom:12px">For funders who just ask for a free-form expression of interest with no set questions. Paste the brief and get a full EOI narrative.</p>
-    <div class="form-row"><label>Paste the brief or describe what they're looking for</label><textarea id="eoi-brief" style="min-height:100px" placeholder="Paste the funding brief or describe what outcomes they want…"></textarea></div>
-    <button class="btn btn-ai" onclick="runEOIGenerator()">✦ Generate EOI from brief</button>
-  </div>
-
-  <div id="eoi-output" style="display:none">
-    <div class="ai-panel">
-      <div class="ai-panel-title"><span class="ai-icon">📄</span>Expression of Interest draft</div>
-      <div id="eoi-result"></div>
-      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
-        <button class="btn btn-p btn-sm" onclick="downloadEOIPDF()">⬇ Download as PDF</button>
-        <button class="btn btn-ghost btn-sm" onclick="copyEOI()">📋 Copy text</button>
-        <button class="btn btn-ghost btn-sm" onclick="runEOIGenerator()">↻ Regenerate</button>
+      <div class="card" style="margin-top:14px">
+        <div style="font-size:14px;font-weight:700;color:var(--txt)">How it works</div>
+        <ol class="bd-how"><li><b>Find</b> funders that fit you</li><li><b>Pull their form</b> — we download the funder's own Word or PDF form</li><li>We <b>write every answer</b> from your profile and real records, and <b>fill the form in</b></li><li><b>Check</b> the yellow gaps, download, send</li></ol>
       </div>
-    </div>
+    </aside>
   </div>
 </div>
 
@@ -781,7 +835,7 @@ Accreditations and policies: e.g. Matrix, safeguarding, Cyber Essentials"></text
 <script src="js/auth.js?v=20"></script>
 
 <!-- AI + branding -->
-<script src="js/agents.js?v=40"></script>
+<script src="js/agents.js?v=41"></script>
 <script src="js/branding.js?v=19"></script>
 
 <!-- UI logic -->
@@ -790,7 +844,7 @@ Accreditations and policies: e.g. Matrix, safeguarding, Cyber Essentials"></text
 <script src="js/circular.js?v=8"></script>
 <script src="js/modals.js?v=43"></script>
 <script src="js/demo.js?v=22"></script>
-<script src="js/router.js?v=24"></script>
+<script src="js/router.js?v=25"></script>
 
 <!-- Module visibility — shows/hides sidebar items per currentOrg.modules -->
 <script>
