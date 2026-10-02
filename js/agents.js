@@ -1686,6 +1686,14 @@ function bdInit() {
   if ($('bd-type') && s.type) $('bd-type').value = s.type;
   bdPaintWhat();
   const ta = $('eoi-org-profile'); if (ta && !ta.value) ta.value = getOrgProfile();
+  if (ta && ta.value) {
+    const tidy = ta.value.split('\n').filter(l => !_CHATTER.test(l)).join('\n').trim();
+    if (tidy !== ta.value.trim()) {
+      const removed = ta.value.split('\n').filter(l => l.trim()).length - tidy.split('\n').filter(l => l.trim()).length;
+      ta.value = tidy;
+      const sv = $('eoi-profile-saved'); if (sv) { sv.textContent = 'We removed ' + removed + ' line' + (removed === 1 ? ' that wasn\'t' : 's that weren\'t') + ' about your organisation — press Save to keep this'; sv.style.display = 'inline'; }
+    }
+  }
   bdRefreshSummary();
   // on a phone, tuck the details away once they're complete so the page opens on the work
   const complete = !!(s.area && (ta || {}).value);
@@ -1704,9 +1712,12 @@ async function runBDResearch() {
   const sizeTxt = { micro: 'under £100k', small: '£100k–£500k', medium: '£500k–£2m', large: 'over £2m' }[size] || size;
   const profile = _eoiCleanProfile(getOrgProfile());
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-  const base = 'Today is ' + today + '. Organisation: a ' + type + ' with turnover ' + sizeTxt + ', delivering ' + what + ' in ' + area + '.' +
-    (specific ? ' Particularly interested in: ' + specific + '.' : '') + (profile ? '\nAbout them: ' + profile.slice(0, 900) : '');
-  const rules = ' Find up to 6 funding opportunities that are OPEN NOW or open on a rolling basis and that this organisation is actually eligible for (right area, right size, right type). ' +
+  const baseCore = 'Today is ' + today + '. Organisation: a ' + type + ' with turnover ' + sizeTxt + ', delivering ' + what + ' in ' + area + '.' +
+    (specific ? ' Particularly interested in: ' + specific + '.' : '');
+  // a short, tidy extract of the profile (labelled lines only) — never free chatter
+  const profBits = profile.split('\n').filter(l => /^(mission|track record|partnerships|founded|where you deliver|accreditations)[^:]*:/i.test(l.trim())).join('\n').slice(0, 700);
+  const base = baseCore + (profBits ? '\nAbout them: ' + profBits : '');
+  const rules = ' You will NEVER ask questions or ask for clarification, and you do NOT need the organisation\'s name or registration number to search: search now with the details given and return results. If you are unsure of something, make a sensible assumption and carry on. Find up to 6 funding opportunities that are OPEN NOW or open on a rolling basis and that this organisation is actually eligible for (right area, right size, right type). ' +
     'For each give: funder, programme name, deadline (or "rolling"), grant or contract value, eligibility in one line, one sentence on why it fits THIS organisation, and the application or information URL. ' +
     'Prefer local and regional funders over national ones where an area is given. Never invent deadlines, values or URLs — if unsure, say "check". Skip anything closed.';
   const lanes = [
@@ -1718,8 +1729,21 @@ async function runBDResearch() {
   res.innerHTML = '';
   const shell = document.createElement('div'); res.appendChild(shell);
   const header = runAgent({ container: shell, headerLabel: 'BD Manager Agent', headerSub: 'Three live searches · ' + area, steps, sys: 'Reply with the single word OK.', prompt: 'OK', maxTok: 5 });
-  const raws = await Promise.all(lanes.map(l => callClaude(l[1] + rules, base, 1400, true).catch(() => '')));
+  const lane = async l => {
+    let out = '';
+    try { out = await callClaude(l[1] + rules, base, 1400, true); } catch (e) { return ''; }
+    const refused = t => !t || _eoiLooksLikeRefusal(t) || (!/https?:\/\//i.test(t) && /\b(please (clarify|confirm|provide)|could you|i need (you )?to|what i need)\b/i.test(t));
+    if (refused(out)) {                                           // retry once, on the bare details only
+      try { out = await callClaude(l[1] + rules + ' Your last reply asked questions instead of searching. That is not allowed. Search now.', baseCore, 1400, true); } catch (e) { return ''; }
+    }
+    return refused(out) ? '' : out;
+  };
+  const raws = await Promise.all(lanes.map(lane));
   await header;
+  if (!raws.some(r => r && String(r).trim())) {          // every search came back empty or refused
+    res.innerHTML = '<div class="alert alert-warn" style="margin:0">We couldn\'t get funding matches this time. Try again, or type a funder you have in mind in the box above and search for that.</div>';
+    return;
+  }
   const joined = lanes.map((l, i) => '### ' + l[0] + '\n' + String(raws[i] || '').replace(/<\/?cite[^>]*>/gi, '')).join('\n\n');
 
   res.innerHTML = '<div class="alert alert-info" style="margin:0">Organising the results…</div>';
@@ -1733,7 +1757,10 @@ async function runBDResearch() {
     if (m) items = JSON.parse(m[0]);
   } catch (e) { items = []; }
   items = Array.isArray(items) ? items.filter(o => o && (o.funder || o.programme)) : [];
-  if (!items.length) { aiResult(res, joined); return; }
+  if (!items.length) {
+    res.innerHTML = '<div class="alert alert-warn" style="margin:0">We couldn\'t get funding matches this time. Try again, or type a funder you have in mind in the box above and search for that.</div>';
+    return;
+  }
   items.sort((a, b) => (+b.score || 0) - (+a.score || 0));
 
   _bdOpps = {};
@@ -2256,17 +2283,18 @@ function _eoiApplicant(profile) {
   return (m && m[1].trim()) || '';
 }
 // A stale warning pasted into the profile (e.g. "no organisation called X exists…") must never be treated as a fact about the applicant
+const _CHATTER = /(no (such )?organisation|(does ?n['’]?t|do(es)? not|did ?n['’]?t) (appear|exist|match|seem)|not (found|registered|listed|exist)|could ?n['’]?t (find|verify|confirm)|cannot (confirm|verify)|critical mismatch|mismatch|clarif|please (confirm|provide|clarify)|what i need|i (need|appreciate|cannot|can['’]?t|could ?n['’]?t)|your (search|request) (findings|results)|you['’]?ve (given|provided)|the website you|test account|\btester\d*\b)/i;
 function _eoiCleanProfile(profile) {
-  return String(profile || '').split('\n').filter(l => !/(no organisation (called|named)|not (found|registered|listed) (in|on|with) |critical mismatch|mismatch (between|with)|cannot (confirm|verify)|could ?n['’]?t (find|verify|confirm)|does not exist in)/i.test(l)).join('\n').trim();
+  return String(profile || '').split('\n').filter(l => !_CHATTER.test(l)).join('\n').trim();
 }
 const _EOI_NEVER_STOP = 'ABSOLUTE RULE: you are producing finished text that is pasted straight into an application. You must ALWAYS write the full draft. ' +
   'If anything looks inconsistent, unverifiable, mismatched or missing (names, registration numbers, websites, or track record that does not obviously match the funder), do NOT stop, do NOT ask questions, do NOT list what you need and do NOT comment. ' +
   'Treat the organisation facts as true, write the best honest draft, and use [INSERT: ...] for anything missing. ' +
   'Where the funder\'s priorities differ from the organisation\'s main work, describe the organisation\'s real activities in the terms the funder values (never claim work that is not in the facts) and use [INSERT: ...] for specific evidence. ';
 function _eoiLooksLikeRefusal(t) {
-  const x = String(t || '').trim().slice(0, 700).toLowerCase();
-  return /^(i need to pause|i('| a)?m unable|i cannot|i can't|before i can|unfortunately|i('| a)?m sorry|sorry,|there('| i)?s a (critical )?(mismatch|problem|issue))/.test(x) ||
-    /(what i need from you|i need you to (confirm|clarify)|could you (please )?(confirm|clarify)|critical mismatch|once you clarify|please confirm (the|your))/.test(x);
+  const x = String(t || '').trim().slice(0, 900).toLowerCase();
+  return /^(i need to pause|i need to clarify|i appreciate|thank you for (the|your) (clarification|context|details)|i('| a)?m unable|i cannot|i can't|before i can|unfortunately|i('| a)?m sorry|sorry,|there('| i)?s a (critical )?(mismatch|problem|issue)|let me start fresh|i think there may be)/.test(x) ||
+    /(what i need from you|i need you to (confirm|clarify)|i need to clarify|could you (please )?(confirm|clarify|provide)|critical mismatch|once you (clarify|confirm)|please (confirm|clarify|provide) (the|your|which)|what is the correct)/.test(x);
 }
 async function _eoiCallNoRefusal(sys, user, maxTok) {
   let raw = await callClaude(sys, user, maxTok, false);
