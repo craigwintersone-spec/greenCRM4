@@ -34,7 +34,7 @@ function _renderForPage(page) {
     reports:      renderReports,
     hr:           renderHR,
     social:       () => {}, // form-only page, no render needed
-    bd:           () => {}  // form-only page, no render needed
+    bd:           () => { if (typeof populateOrgProfileField === 'function') populateOrgProfileField(); }   // profile + chips
   };
   return renders[page];
 }
