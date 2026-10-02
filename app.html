@@ -439,7 +439,8 @@
     .bd-flow a.on{color:var(--txt);border-color:var(--em)}
     .bd-flow a.on b{background:var(--em)}
     .bd-flow a.done b{background:#16A34A}
-    .bd-flow a.off{opacity:.45;pointer-events:none}
+    .bd-flow a.todo{color:var(--txt3)}
+    .bd-flow a:hover{border-color:var(--em)}
     .bd-flow i{flex:0 0 16px;height:1px;background:var(--border)}
     .bd-grid{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:18px;align-items:start}
     @media(max-width:980px){.bd-grid{grid-template-columns:1fr}.bd-side{order:-1}}
@@ -481,8 +482,8 @@
 
   <div class="bd-flow">
     <a id="bd-chip-1" class="on" onclick="bdGo(1)"><b>1</b> Find funding</a><i></i>
-    <a id="bd-chip-2" class="off" onclick="bdGo(2)"><b>2</b> Their form</a><i></i>
-    <a id="bd-chip-3" class="off" onclick="bdGo(3)"><b>3</b> Review &amp; download</a>
+    <a id="bd-chip-2" class="todo" onclick="bdGo(2)" title="Upload a funder's form, or pull one from a result"><b>2</b> Their form</a><i></i>
+    <a id="bd-chip-3" class="todo" onclick="bdGo(3)" title="Your filled-in form and answers appear here"><b>3</b> Review &amp; download</a>
   </div>
 
   <div class="bd-grid">
@@ -835,7 +836,7 @@ Accreditations and policies: e.g. Matrix, safeguarding, Cyber Essentials"></text
 <script src="js/auth.js?v=20"></script>
 
 <!-- AI + branding -->
-<script src="js/agents.js?v=42"></script>
+<script src="js/agents.js?v=43"></script>
 <script src="js/branding.js?v=19"></script>
 
 <!-- UI logic -->
@@ -844,7 +845,7 @@ Accreditations and policies: e.g. Matrix, safeguarding, Cyber Essentials"></text
 <script src="js/circular.js?v=8"></script>
 <script src="js/modals.js?v=43"></script>
 <script src="js/demo.js?v=22"></script>
-<script src="js/router.js?v=25"></script>
+<script src="js/router.js?v=24"></script>
 
 <!-- Module visibility — shows/hides sidebar items per currentOrg.modules -->
 <script>
