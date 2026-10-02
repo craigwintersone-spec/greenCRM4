@@ -1588,30 +1588,113 @@ async function deleteSocialDraft(id) {
   } catch (e) { alert('Could not remove: ' + e.message); }
 }
 
-// What the organisation does — chips, pre-ticked from the areas switched on
+// ── BD page: one button, three short screens ─────────────────
+function bdSetupGet() {
+  const org = (currentOrg && currentOrg.settings && currentOrg.settings.bd_setup) || null;
+  let loc = null; try { loc = JSON.parse(localStorage.getItem('vorlana_bd_setup_' + orgId) || 'null'); } catch (e) { /* ignore */ }
+  return org || loc || {};
+}
+function bdSetupRead() {
+  return { area: (($('bd-area') || {}).value || '').trim(), size: ($('bd-size') || {}).value || 'micro', type: ($('bd-type') || {}).value || 'Registered charity',
+    what: Array.from(document.querySelectorAll('#bd-what button.on')).map(b => b.dataset.k) };
+}
+function bdSetupLocalSave() { try { localStorage.setItem('vorlana_bd_setup_' + orgId, JSON.stringify(bdSetupRead())); } catch (e) { /* ignore */ } bdRefreshSummary(); }
+function bdRefreshSummary() {
+  const el = $('bd-sum'); if (!el) return;
+  const s = bdSetupRead();
+  const sizeL = { micro: 'under £100k', small: '£100k–£500k', medium: '£500k–£2m', large: '£2m+' }[s.size] || '';
+  const what = bdWhat();
+  el.textContent = [s.area, what.length ? what.slice(0, 2).join(', ') + (what.length > 2 ? ' +' + (what.length - 2) : '') : '', s.type, sizeL].filter(Boolean).join(' · ');
+  bdHero();
+}
+function bdHero() {
+  const t = $('bd-hero-title'), sub = $('bd-hero-sub'), go = $('bd-go'), sum = $('bd-sum'), ch = $('bd-change'); if (!t) return;
+  const org = (currentOrg && currentOrg.name) || 'your organisation';
+  const ready = !!bdSetupRead().area;
+  t.textContent = ready ? 'Find funding for ' + org : 'Let\'s find you funding';
+  sub.textContent = ready ? 'We search councils and government, trusts and the Lottery, and company funders, then show the best matches first.'
+                          : 'Tell us a little about you first. It takes two minutes and makes every search and bid better.';
+  go.textContent = ready ? 'Find funding' : 'Get started';
+  if (sum) sum.style.display = ready ? '' : 'none';
+  if (ch) ch.style.display = ready ? '' : 'none';
+  const tip = $('bd-write-tip'); if (tip) tip.style.display = (($('eoi-org-profile') || {}).value || '').trim() ? 'none' : 'block';
+}
+function bdPrimary() { if (!bdSetupRead().area) return bdSheet(1); runBDResearch(); }
+function bdShowSpecific() { const w = $('bd-specific-wrap'); if (w) { w.style.display = 'block'; const i = $('bd-specific'); if (i) i.focus(); } }
+
+let _bdStep = 1;
+function bdStepShow(n) {
+  _bdStep = Math.max(1, Math.min(3, n));
+  document.querySelectorAll('#bd-sheet .bd-step').forEach(el => { el.style.display = (+el.dataset.step === _bdStep) ? 'block' : 'none'; });
+  document.querySelectorAll('#bd-dots i').forEach((d, i) => d.classList.toggle('on', i + 1 === _bdStep));
+  const back = $('bd-sheet-back'), next = $('bd-sheet-next');
+  if (back) back.style.visibility = _bdStep === 1 ? 'hidden' : 'visible';
+  if (next) next.textContent = _bdStep === 3 ? 'Done' : 'Continue';
+  const first = document.querySelector('#bd-sheet .bd-step[data-step="' + _bdStep + '"] input, #bd-sheet .bd-step[data-step="' + _bdStep + '"] textarea');
+  if (first && _bdStep !== 2) setTimeout(() => { try { first.focus(); } catch (e) { /* ignore */ } }, 50);
+}
+function bdSheet(n) { const sh = $('bd-sheet'); if (!sh) return; sh.classList.add('open'); bdStepShow(n || 1); }
+function bdSheetClose() { const sh = $('bd-sheet'); if (sh) sh.classList.remove('open'); bdSetupLocalSave(); }
+function bdSheetBack() { bdStepShow(_bdStep - 1); }
+async function bdSheetNext() {
+  if (_bdStep === 1 && !bdSetupRead().area) { const a = $('bd-area'); if (a) a.focus(); return; }
+  if (_bdStep < 3) return bdStepShow(_bdStep + 1);
+  await saveOrgProfileFromField();
+  bdSheetClose();
+}
+function bdTab(name) {
+  ['find', 'write'].forEach(t => { const pane = $('bd-tab-' + t); if (pane) pane.style.display = t === name ? '' : 'none'; });
+  try { sessionStorage.setItem('vorlana_bd_tab', name); } catch (e) { /* ignore */ }
+  const pg = $('page-bd'); if (pg && pg.scrollIntoView) pg.scrollIntoView({ block: 'start' });
+  bdHero();
+}
+function bdMode(m) {
+  const form = m !== 'brief';
+  if ($('bd-pane-form')) $('bd-pane-form').style.display = form ? '' : 'none';
+  if ($('bd-pane-brief')) $('bd-pane-brief').style.display = form ? 'none' : '';
+  if ($('bd-mode-form')) $('bd-mode-form').classList.toggle('on', form);
+  if ($('bd-mode-brief')) $('bd-mode-brief').classList.toggle('on', !form);
+}
+function bdFilterLane(lane, btn) {
+  document.querySelectorAll('#bd-opps-result .bd-seg button').forEach(b => b.classList.toggle('on', b === btn));
+  document.querySelectorAll('#bd-opps-result .bd-opp').forEach(c => { c.style.display = (!lane || c.dataset.lane === lane) ? '' : 'none'; });
+}
 const BD_WHAT = [['employability', 'Employment & skills'], ['circular', 'Reuse, repair & circular economy'], ['growing', 'Food growing & community food'], ['environment', 'Environment & nature'],
   ['wellbeing', 'Mental health & wellbeing'], ['young', 'Children & young people'], ['older', 'Older people'], ['justice', 'Criminal justice'], ['migrants', 'Refugees & migrants'],
   ['disability', 'Disability'], ['community', 'Community & volunteering'], ['arts', 'Arts, culture & heritage'], ['digital', 'Digital inclusion'], ['housing', 'Housing & homelessness']];
 function bdPaintWhat() {
-  const box = $('bd-what'); if (!box || box.children.length) return;
-  let saved = []; try { saved = JSON.parse(localStorage.getItem('vorlana_bd_what_' + orgId) || 'null') || []; } catch (e) { /* ignore */ }
+  const box = $('bd-what'); if (!box) return;
+  const setup = bdSetupGet();
+  let saved = Array.isArray(setup.what) ? setup.what.slice() : [];
   const m = (currentOrg && currentOrg.modules) || {};
   if (!saved.length) { if (m.participants !== false) saved.push('employability'); if (m.circular !== false) saved.push('circular'); saved.push('community'); }
   const paint = (b, on) => { b.classList.toggle('on', on); b.style.background = on ? 'var(--em)' : 'var(--surface)'; b.style.color = on ? '#fff' : 'var(--txt2)'; b.style.borderColor = on ? 'var(--em)' : 'var(--border)'; };
-  box.innerHTML = BD_WHAT.map(([k, l]) => '<button type="button" data-k="' + k + '" style="border:1px solid var(--border);border-radius:16px;padding:6px 12px;font-size:12.5px;cursor:pointer">' + l + '</button>').join('');
+  box.innerHTML = BD_WHAT.map(([k, l]) => '<button type="button" data-k="' + k + '" style="border:1px solid var(--border);border-radius:18px;padding:8px 14px;font-size:13.5px;cursor:pointer">' + l + '</button>').join('');
   Array.from(box.children).forEach(b => paint(b, saved.includes(b.dataset.k)));
-  box.onclick = e => { const b = e.target.closest('button'); if (!b) return; paint(b, !b.classList.contains('on')); try { localStorage.setItem('vorlana_bd_what_' + orgId, JSON.stringify(Array.from(box.querySelectorAll('button.on')).map(x => x.dataset.k))); } catch (x) { /* ignore */ } };
-  const area = $('bd-area');
-  if (area) { if (!area.value) { try { area.value = localStorage.getItem('vorlana_bd_area_' + orgId) || ''; } catch (e) { /* ignore */ } } area.onchange = () => { try { localStorage.setItem('vorlana_bd_area_' + orgId, area.value); } catch (e) { /* ignore */ } }; }
+  box.onclick = e => { const b = e.target.closest('button'); if (!b) return; paint(b, !b.classList.contains('on')); bdSetupLocalSave(); };
+}
+function bdSetupLoad() {
+  const s = bdSetupGet();
+  if ($('bd-area')) $('bd-area').value = s.area || '';
+  if ($('bd-size') && s.size) $('bd-size').value = s.size;
+  if ($('bd-type') && s.type) $('bd-type').value = s.type;
 }
 function bdWhat() { return Array.from(document.querySelectorAll('#bd-what button.on')).map(b => (BD_WHAT.find(x => x[0] === b.dataset.k) || [])[1]).filter(Boolean); }
+function bdInit() {
+  bdSetupLoad(); bdPaintWhat();
+  const ta = $('eoi-org-profile'); if (ta && !ta.value) ta.value = getOrgProfile();
+  bdRefreshSummary();
+  let tab = 'find'; try { tab = sessionStorage.getItem('vorlana_bd_tab') || 'find'; } catch (e) { /* ignore */ }
+  ['find', 'write'].forEach(t => { const pane = $('bd-tab-' + t); if (pane) pane.style.display = t === tab ? '' : 'none'; });
+  bdHero();
+}
 
 // Three live searches in parallel — each a different corner of the funding world — merged, de-duplicated and scored for fit
 async function runBDResearch() {
   const wrap = $('bd-opps-wrap'); const res = $('bd-opps-result');
   wrap.style.display = 'block';
-  bdPaintWhat();
-  const area = ($('bd-area').value || '').trim() || 'England', size = $('bd-size').value, specific = $('bd-specific').value, type = $('bd-type') ? $('bd-type').value : 'charity';
+  if (!(($('bd-area') || {}).value || '').trim()) { wrap.style.display = 'none'; bdSheet(1); return; }
+  const area = ($('bd-area').value || '').trim(), size = $('bd-size').value, specific = $('bd-specific').value, type = $('bd-type') ? $('bd-type').value : 'charity';
   const what = bdWhat().join(', ') || 'community work';
   const sizeTxt = { micro: 'under £100k', small: '£100k–£500k', medium: '£500k–£2m', large: 'over £2m' }[size] || size;
   const profile = getOrgProfile();
@@ -1650,26 +1733,27 @@ async function runBDResearch() {
   items.sort((a, b) => (+b.score || 0) - (+a.score || 0));
 
   _bdOpps = {};
-  const laneColour = { 'Government, UKSPF and councils': '#DBEAFE', 'Trusts, foundations and the Lottery': '#FCE7F3', 'Corporate and environmental funders': '#DCFCE7' };
-  res.innerHTML = '<div style="font-size:12.5px;color:var(--txt3);margin-bottom:10px">' + items.length + ' opportunities · best fit first · deadlines and values are as published and should be checked on the funder page.</div>' +
+  const laneShort = { 'Government, UKSPF and councils': 'Councils & government', 'Trusts, foundations and the Lottery': 'Trusts & Lottery', 'Corporate and environmental funders': 'Companies' };
+  const laneNames = Object.keys(laneShort).filter(l => items.some(o => o.lane === l));
+  res.innerHTML = '<div style="font-size:13px;color:var(--txt3);margin-bottom:12px">' + items.length + ' matches, best first. Check dates and amounts on the funder\'s page before you apply.</div>' +
+    (laneNames.length > 1 ? '<div class="bd-seg"><button class="on" onclick="bdFilterLane(\'\', this)">All</button>' + laneNames.map(l => '<button onclick="bdFilterLane(this.dataset.l, this)" data-l="' + escapeHTML(l) + '">' + escapeHTML(laneShort[l]) + '</button>').join('') + '</div>' : '') +
     items.map((o, i) => {
       const key = 'opp' + i; _bdOpps[key] = o;
-      const funder = escapeHTML(o.funder || o.programme || 'Opportunity');
-      const programme = o.programme && o.funder ? (' — ' + escapeHTML(o.programme)) : '';
       const sc = Math.max(1, Math.min(5, +o.score || 3));
-      const stars = '★'.repeat(sc) + '☆'.repeat(5 - sc);
-      const meta = [o.deadline ? ('⏱ ' + escapeHTML(o.deadline)) : '', o.value ? ('💷 ' + escapeHTML(o.value)) : ''].filter(Boolean).join('&nbsp;&nbsp;&nbsp;');
-      return '<div class="card" style="margin-bottom:10px">' +
-        '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div style="font-weight:700;font-size:14px;color:var(--txt)">' + funder + programme + '</div>' +
-        '<span style="font-size:11px;color:var(--em);white-space:nowrap" title="Fit for your organisation">' + stars + '</span></div>' +
-        (o.lane ? '<span style="display:inline-block;font-size:10.5px;font-weight:600;border-radius:10px;padding:2px 8px;margin:4px 0;background:' + (laneColour[o.lane] || 'var(--bg)') + ';color:var(--txt2)">' + escapeHTML(o.lane) + '</span>' : '') +
-        (meta ? '<div style="font-size:12px;color:var(--txt3);margin:4px 0 6px">' + meta + '</div>' : '') +
-        (o.eligibility ? '<div style="font-size:12px;color:var(--txt3);margin-bottom:6px"><strong>Eligibility:</strong> ' + escapeHTML(o.eligibility) + '</div>' : '') +
-        (o.fit ? '<div style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:10px">' + escapeHTML(o.fit) + '</div>' : '') +
-        '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-          '<button class="btn btn-ai btn-sm" onclick="startEOIFromOpportunity(\'' + key + '\')">✍️ Draft EOI for this</button>' +
-          (o.url ? ('<a class="btn btn-ghost btn-sm" href="' + escapeHTML(o.url) + '" target="_blank" rel="noopener" style="text-decoration:none">🔗 Funder page</a>') : '') +
-        '</div></div>';
+      const fit = sc >= 5 ? ['bd-fit5', 'Great fit'] : sc === 4 ? ['bd-fit4', 'Good fit'] : ['bd-fit3', 'Possible fit'];
+      const meta = [o.deadline ? ('Closes: ' + escapeHTML(o.deadline)) : '', o.value ? escapeHTML(o.value) : ''].filter(Boolean).join(' &nbsp;·&nbsp; ');
+      return '<div class="card bd-opp" data-lane="' + escapeHTML(o.lane || '') + '" style="margin-bottom:12px">' +
+        '<span class="bd-pill ' + fit[0] + '">' + fit[1] + '</span>' +
+        '<h3>' + escapeHTML(o.funder || o.programme || 'Opportunity') + '</h3>' +
+        (o.programme && o.funder ? '<div class="bd-prog">' + escapeHTML(o.programme) + '</div>' : '') +
+        (o.fit ? '<p class="bd-fitline">' + escapeHTML(o.fit) + '</p>' : '') +
+        (meta ? '<div class="bd-meta">' + meta + '</div>' : '') +
+        '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">' +
+          '<button class="btn btn-ai" onclick="startEOIFromOpportunity(\'' + key + '\')">Write a bid</button>' +
+          (o.url ? ('<a href="' + escapeHTML(o.url) + '" target="_blank" rel="noopener" style="font-size:13.5px;font-weight:600;color:var(--em);text-decoration:none">Funder page ↗</a>') : '') +
+        '</div>' +
+        (o.eligibility ? '<details style="margin-top:10px"><summary style="font-size:12.5px;color:var(--txt3);cursor:pointer">Who can apply</summary><div style="font-size:13px;color:var(--txt2);margin-top:6px;line-height:1.5">' + escapeHTML(o.eligibility) + '</div></details>' : '') +
+        '</div>';
     }).join('');
 }
 
@@ -1679,6 +1763,7 @@ async function startEOIFromOpportunity(key) {
   const o = _bdOpps[key]; if (!o) return;
   const name = (o.funder && o.programme) ? (o.funder + ' — ' + o.programme) : (o.programme || o.funder || '');
   if ($('eoi-funder')) $('eoi-funder').value = name;
+  bdTab('write'); bdMode('form');
 
   const ta = $('eoi-form-text');
   if (ta) { ta.value = 'Finding this funder\'s application questions…'; ta.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
@@ -1718,31 +1803,32 @@ function getOrgProfile() {
   if (org) return String(org).trim();
   try { return (localStorage.getItem(_orgProfileKey()) || '').trim(); } catch (e) { return ''; }
 }
-function populateOrgProfileField() { const el = $('eoi-org-profile'); if (el) el.value = getOrgProfile(); if (typeof bdPaintWhat === 'function') bdPaintWhat(); }
+function populateOrgProfileField() { const el = $('eoi-org-profile'); if (el) el.value = getOrgProfile(); if (typeof bdInit === 'function') bdInit(); }
 async function saveOrgProfileFromField() {
   const el = $('eoi-org-profile'); if (!el) return;
   const text = el.value || '';
   try { localStorage.setItem(_orgProfileKey(), text); } catch (e) { /* ignore */ }
   try {
-    const settings = Object.assign({}, (currentOrg && currentOrg.settings) || {}, { bd_profile: text });
+    const settings = Object.assign({}, (currentOrg && currentOrg.settings) || {}, { bd_profile: text, bd_setup: bdSetupRead() });
     await sbUpdate('organisations', { settings }, orgId);
     if (currentOrg) currentOrg.settings = settings;
   } catch (e) { /* advisers can't save for the org; the local copy still works */ }
-  const s = $('eoi-profile-saved'); if (s) { s.style.display = 'inline'; setTimeout(() => { s.style.display = 'none'; }, 2500); }
+  bdSetupLocalSave();
+  const s = $('eoi-profile-saved'); if (s) { s.style.display = 'block'; setTimeout(() => { s.style.display = 'none'; }, 2500); }
 }
 // Looks the organisation up and drafts the profile — the person checks it, then saves
 async function fillOrgProfileFromWeb() {
   const el = $('eoi-org-profile'); if (!el) return;
   const name = (currentOrg && currentOrg.name) || '';
-  const site = prompt('Your website address (and charity or company number if you know it):', '');
-  if (site === null) return;
+  const site = (($('bd-site') || {}).value || '').trim();
   el.value = 'Looking up ' + (name || 'your organisation') + '…';
   const sys = 'You are a UK bid researcher. Using web search, build an organisation profile for an Expression of Interest. Use the organisation\'s own website, the Charity Commission register and Companies House. ' +
     'Return plain text in exactly this layout, one item per line, and write [CHECK] after anything you could not confirm:\n' +
     'Legal & trading name: … (charity no. …, company no. …)\nRegistered address: …\nWebsite: …\nLead contact: … [CHECK]\nFounded: … · Where you deliver: …\nMission: …\nTrack record: … (only real, published numbers)\nPartnerships: …\nAccreditations and policies: …';
   try {
-    const out = await callClaude(sys, 'Organisation: ' + name + '\nWebsite / details given: ' + site, 900, true);
+    const out = await callClaude(sys, 'Organisation: ' + name + '\nWebsite / details given: ' + (site || 'none given — search for the organisation by name'), 900, true);
     el.value = String(out || '').replace(/<\/?cite[^>]*>/gi, '').trim() || 'Nothing found — please type the profile in.';
+    bdRefreshSummary();
   } catch (e) { el.value = 'Could not look it up: ' + (e.message || e); }
 }
 
