@@ -1588,6 +1588,10 @@ async function deleteSocialDraft(id) {
   } catch (e) { alert('Could not remove: ' + e.message); }
 }
 
+// The older "Opportunities Finder" extensions swap in their own search and cards when this flag is unset.
+// This page has its own three-lane search and the Pull-their-form button, so tell them to stand down.
+window._civaraBDPatched = true;
+
 // ═════════════════════════════════════════════════════════════
 // BD WORKSPACE — find funding, pull the funder's form, fill it in
 // ═════════════════════════════════════════════════════════════
