@@ -97,6 +97,7 @@ textarea{min-height:88px;resize:vertical}
     <div class="ev-head">
       <div class="ev-name" id="ev-name">—</div>
       <div class="ev-meta" id="ev-meta"></div>
+      <a href="#" id="ev-switch" style="display:none;font-size:13px;color:var(--muted);text-decoration:underline;margin-top:6px">← Not this session? Choose again</a>
     </div>
 
     <div class="tabs" id="tabs">
@@ -294,6 +295,11 @@ function call(action, payload) {
 
 // ── boot ───────────────────────────────────────────────────
 function escapeText(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function backToSessions() { CHOSEN_EVENT = null; show('s-loading'); boot(); }
+window.addEventListener('popstate', function () { if (CHOSEN_EVENT) backToSessions(); });
+document.addEventListener('click', function (e) {
+  if (e.target && e.target.id === 'ev-switch') { e.preventDefault(); try { history.back(); } catch (x) { backToSessions(); } }
+});
 function renderChoose(choices) {
   if (!choices.length) { $('invalid-msg').textContent = 'Nothing is set up for today yet — please ask a member of staff.'; show('s-invalid'); return; }
   $('choose-list').innerHTML = choices.map(function (c) {
@@ -301,7 +307,11 @@ function renderChoose(choices) {
       escapeText(c.name) + (c.location ? '<div style="font-weight:400;font-size:13px;color:var(--muted);margin-top:2px">' + escapeText(c.location) + '</div>' : '') + '</button>';
   }).join('');
   Array.prototype.forEach.call($('choose-list').querySelectorAll('.btn-choose'), function (b) {
-    b.addEventListener('click', function () { CHOSEN_EVENT = b.getAttribute('data-id'); show('s-loading'); boot(); });
+    b.addEventListener('click', function () {
+      CHOSEN_EVENT = b.getAttribute('data-id');
+      try { history.pushState({ chosen: CHOSEN_EVENT }, ''); } catch (e) { /* older browsers */ }
+      show('s-loading'); boot();
+    });
   });
 }
 
@@ -314,6 +324,7 @@ function boot() {
       var ev = j.event || {};
       var site = j.mode === 'site';
       $('ev-name').textContent = site ? (ev.org_name || 'Volunteer sign-in') : (ev.name || 'Event');
+      $('ev-switch').style.display = CHOSEN_EVENT ? 'inline-block' : 'none';
       var bits = [];
       if (site) bits.push(ev.name || 'Volunteer sign-in');
       if (ev.date) bits.push(new Date(ev.date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }));
