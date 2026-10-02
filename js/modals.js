@@ -471,9 +471,11 @@ function renderEvQuestions(selectedIds) {
       : '<div style="font-size:12px;color:var(--txt3);margin:4px 0 8px">No questions set up yet — add one below or under Settings → Feedback questions.</div>') +
     '<div style="display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap">' +
       '<input id="evf-newq" placeholder="Add a new question, e.g. Would you come again?" style="flex:1;min-width:220px;font-size:13px"/>' +
-      '<select id="evf-newq-kind" style="width:auto"><option value="yesno">Yes / no</option><option value="score">Score 1–5</option><option value="choice">Choice</option><option value="text">Comment</option></select>' +
+      '<select id="evf-newq-kind" style="width:auto" onchange="evNewQKind()"><option value="yesno">Yes / no</option><option value="score">Score 1–5</option><option value="choice">Choice</option><option value="text">Comment</option></select>' +
       '<button type="button" class="btn btn-ghost btn-sm" onclick="evAddQuestion()">+ Add</button>' +
-    '</div>';
+    '</div>' +
+    '<div id="evf-newq-opts-wrap" style="display:none;margin-top:6px"><input id="evf-newq-opts" placeholder="The choices, separated by commas — e.g. Friend, Facebook, Poster, Other" style="font-size:13px;width:100%"/>' +
+      '<div style="font-size:11px;color:var(--txt3);margin-top:3px">People tap one. You\'ll see how many chose each in your reports.</div></div>';
 }
 function getEvQuestionIds() {
   const boxes = [].slice.call(document.querySelectorAll('#evf-questions input[type=checkbox]'));
@@ -481,20 +483,27 @@ function getEvQuestionIds() {
   const on = boxes.filter(b => b.checked).map(b => b.value);
   return on.length === boxes.length ? null : on;   // all ticked = "every active question"
 }
+function evNewQKind() { const w = $('evf-newq-opts-wrap'); if (w) w.style.display = $('evf-newq-kind').value === 'choice' ? 'block' : 'none'; if (w && w.style.display === 'block') $('evf-newq-opts').focus(); }
+// "Friend, Facebook, Poster" → ['Friend','Facebook','Poster'] (commas or new lines; no blanks, no repeats)
+function parseChoiceOptions(text) {
+  const seen = {}; return String(text || '').split(/[,\n;]/).map(x => x.trim()).filter(x => x && !seen[x.toLowerCase()] && (seen[x.toLowerCase()] = 1)).slice(0, 12);
+}
 async function evAddQuestion() {
   const q = ($('evf-newq').value || '').trim();
   if (!q) return;
   const kind = $('evf-newq-kind').value;
+  const options = kind === 'choice' ? parseChoiceOptions(($('evf-newq-opts') || {}).value) : null;
+  if (kind === 'choice' && options.length < 2) { alert('Add at least two choices, separated by commas — e.g. Friend, Facebook, Poster.'); if ($('evf-newq-opts')) $('evf-newq-opts').focus(); return; }
   const btn = document.querySelector('#evf-questions-wrap button'); if (btn) { btn.disabled = true; btn.textContent = '…'; }
   try {
     const sel = getEvQuestionIds();
-    const r = await sb.from('survey_measures').upsert({ org_id: orgId, question: q, kind, maps_to: null, label: q.slice(0, 60), active: true, sort: (DB.survey_measures || []).length }, { onConflict: 'org_id,question' }).select();
+    const r = await sb.from('survey_measures').upsert(Object.assign({ org_id: orgId, question: q, kind, maps_to: null, label: q.slice(0, 60), active: true, sort: (DB.survey_measures || []).length }, options ? { options } : {}), { onConflict: 'org_id,question' }).select();
     if (r.error) throw r.error;
     await refreshTable('survey_measures');
     const added = (DB.survey_measures || []).find(m => m.question === q);
     renderEvQuestions(sel == null ? null : sel.concat(added ? [String(added.id)] : []));
   } catch (e) {
-    alert('Could not add question: ' + (e.message || e) + (/survey_measures|active|sort/i.test(e.message || '') ? '\n\nRun sql/import-v3.sql in Supabase first.' : ''));
+    alert('Could not add question: ' + (e.message || e) + (/options/i.test(e.message || '') ? '\n\nRun feedback-choices.sql in Supabase first, then try again.' : /survey_measures|active|sort/i.test(e.message || '') ? '\n\nRun sql/import-v3.sql in Supabase first.' : ''));
     if (btn) { btn.disabled = false; btn.textContent = '+ Add'; }
   }
 }
