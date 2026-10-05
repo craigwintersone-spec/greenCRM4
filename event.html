@@ -10,7 +10,7 @@
 :root{
   --bg:#F5F1EA;--surface:#FFFFFF;--border:#E0DAD0;
   --em:#1F6F6D;--em2:#175655;--em3:#2A9D8F;
-  --txt:#22312E;--txt2:#4A5552;--txt3:#7A847F;
+  --txt:#0F1715;--txt2:#1E2926;--txt3:#38433F;
   --amber:#C98A2B;--red:#C84545;--r:14px;
 }
 body{background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,sans-serif;font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 16px 48px}
@@ -39,7 +39,12 @@ textarea{min-height:88px;resize:vertical}
 .tab.active{background:var(--em);color:#fff}
 .pane{display:none}.pane.active{display:block}
 .stars{display:flex;gap:8px}
-.star{flex:1;aspect-ratio:1;max-height:52px;border:1px solid var(--border);background:var(--surface);border-radius:10px;font-size:17px;font-weight:700;color:var(--txt3);cursor:pointer;font-family:inherit}
+.star{flex:1;aspect-ratio:1;max-height:52px;border:1px solid var(--border);background:var(--surface);border-radius:10px;font-size:18px;font-weight:800;color:var(--txt);cursor:pointer;font-family:inherit}
+.scale-lab{display:flex;justify-content:space-between;gap:12px;margin-top:7px;font-size:13.5px;font-weight:700;color:var(--txt);line-height:1.35}
+.scale-lab span:last-child{text-align:right}
+/* clear edges on every control so nothing disappears into the page */
+.star,.yn button,.chs button,.chip,input,textarea,select{border-color:#A39C8E}
+.star.on,.yn button.on,.chs button.on{border-color:var(--em)}
 .star.on{background:var(--em);border-color:var(--em);color:#fff}
 .chips{display:flex;flex-direction:column;gap:9px}
 .chip{display:flex;align-items:center;gap:11px;padding:13px 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface);cursor:pointer;font-size:15px;color:var(--txt2)}
@@ -257,12 +262,21 @@ var STANDARD = [
   { question: "Anything you'd like to say?", kind: 'text', key: 'quote' }
 ];
 function formQuestions() { return QUESTIONS.length ? QUESTIONS : STANDARD; }
+// What 1 and 5 mean. A question can set its own; otherwise we pick words that fit how it is asked.
+function scaleLabels(q) {
+  if (q.options && q.options.length === 2 && q.options[0] && q.options[1]) return [String(q.options[0]), String(q.options[1])];
+  var t = String(q.question || '').toLowerCase();
+  if (/confiden/.test(t)) return ['Not at all confident', 'Very confident'];
+  if (/enjoy|like(d)? it|happy|satisf/.test(t)) return ['Not at all', 'Loved it'];
+  if (/^(and )?(how|to what extent)\b|how (much|well|likely|useful|helpful)/.test(t)) return ['Not at all', 'Very much'];
+  return ['Strongly disagree', 'Strongly agree'];
+}
 function renderFeedbackForm() {
   var list = formQuestions();
   $('fb-questions').innerHTML = list.map(function (q, i) {
     var id = 'fq-' + i;
-    var lbl = '<label style="text-transform:none;letter-spacing:0;font-size:15px;font-weight:600;color:var(--txt)">' + esc(q.question) + '</label>';
-    if (q.kind === 'score') return '<div class="field">' + lbl + '<div class="stars" id="' + id + '"></div></div>';
+    var lbl = '<label style="text-transform:none;letter-spacing:0;font-size:16px;font-weight:700;color:var(--txt)">' + esc(q.question) + '</label>';
+    if (q.kind === 'score') { var sl = scaleLabels(q); return '<div class="field">' + lbl + '<div class="stars" id="' + id + '"></div><div class="scale-lab"><span>1 = ' + esc(sl[0]) + '</span><span>5 = ' + esc(sl[1]) + '</span></div></div>'; }
     if (q.kind === 'yesno') return '<div class="field">' + lbl + '<div class="yn" id="' + id + '"></div></div>';
     if (hasChoices(q)) return '<div class="field">' + lbl + '<div class="chs" id="' + id + '"></div></div>';
     if (q.kind === 'text')  return '<div class="field">' + lbl + '<textarea id="' + id + '" placeholder="Optional"></textarea></div>';
