@@ -168,7 +168,8 @@ async function getQuestions(ctx) {
     if (sub.length) rows = sub;
   }
   return rows.map(r => ({ id: r.id, question: r.question, kind: r.kind, maps_to: r.maps_to || null,
-    options: r.kind === 'choice' && Array.isArray(r.options) ? r.options.map(x => String(x).slice(0, 80)).slice(0, 12) : undefined }));
+    options: r.kind === 'choice' && Array.isArray(r.options) ? r.options.map(x => String(x).slice(0, 80)).slice(0, 12)
+           : r.kind === 'score' && Array.isArray(r.options) && r.options.length === 2 ? r.options.map(x => String(x).slice(0, 40)) : undefined }));
 }
 
 // ── scoring (same rules as the app) ────────────────────────
