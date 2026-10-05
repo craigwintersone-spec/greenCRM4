@@ -60,6 +60,10 @@ function renderFeedbackQuestionsCard() {
         '<div class="st-q-edit">' +
           '<div class="form-row"><label>Question</label><input id="fq-q-' + i + '" value="' + e(m.question || '') + '" placeholder="As people will read it" onchange="fqSet(' + i + ',\'question\',this.value)"/>' +
           (m.id ? '<div style="font-size:11px;color:var(--txt3);margin-top:4px">Changing the wording starts a new question in reports.</div>' : '') + '</div>' +
+          (m.kind === 'score' ? (auto => '<div class="form-grid-2">' +
+            '<div class="form-row"><label>1 means</label><input value="' + e((m.options || [])[0] || '') + '" placeholder="' + e(auto[0]) + '" onchange="fqSetScale(' + i + ',0,this.value)"/></div>' +
+            '<div class="form-row"><label>5 means</label><input value="' + e((m.options || [])[1] || '') + '" placeholder="' + e(auto[1]) + '" onchange="fqSetScale(' + i + ',1,this.value)"/></div></div>' +
+            '<div style="font-size:11px;color:var(--txt3);margin:-4px 0 10px">Shown under the 1–5 buttons so people know which way is good. Leave blank to use the wording in grey.</div>')(scaleLabelsFor(m.question)) : '') +
           (m.kind === 'choice' ? '<div class="form-row"><label>The choices people can pick</label>' +
             '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">' + ((m.options || []).length ? choicePills(m.options, 'fqRemoveOpt.bind(null,' + i + ')') : '<span style="font-size:12px;color:var(--txt3)">No choices yet — type one below and press Enter.</span>') + '</div>' +
             '<div style="display:flex;gap:6px"><input id="fq-opt-' + i + '" placeholder="Type a choice, then press Enter" onkeydown="if(event.key===\'Enter\'){event.preventDefault();fqAddOpt(' + i + ')}" style="flex:1"/>' +
@@ -99,6 +103,23 @@ function fqToggleOpen(i) { _fqOpen = _fqOpen === i ? -1 : i; renderFeedbackQuest
 function fqSet(i, f, v) {
   const r = _fqRows[i]; if (!r) return;
   r[f] = f === 'question' ? String(v || '').trim() : v;
+  renderFeedbackQuestionsCard(); fqQueueSave();
+}
+// Words for the ends of a 1–5 scale (same rules as the public form)
+function scaleLabelsFor(question) {
+  const t = String(question || '').toLowerCase();
+  if (/confiden/.test(t)) return ['Not at all confident', 'Very confident'];
+  if (/enjoy|like(d)? it|happy|satisf/.test(t)) return ['Not at all', 'Loved it'];
+  if (/^(and )?(how|to what extent)\b|how (much|well|likely|useful|helpful)/.test(t)) return ['Not at all', 'Very much'];
+  return ['Strongly disagree', 'Strongly agree'];
+}
+function fqSetScale(i, idx, text) {
+  const r = _fqRows[i]; if (!r) return;
+  const auto = scaleLabelsFor(r.question);
+  const cur = (r.options && r.options.length === 2) ? r.options.slice() : auto.slice();
+  cur[idx] = String(text || '').trim().slice(0, 40) || auto[idx];          // blank = use the automatic wording
+  if (cur[0] === auto[0] && cur[1] === auto[1]) { r.options = []; r._clearScale = true; }   // both automatic → nothing custom to keep
+  else r.options = cur;
   renderFeedbackQuestionsCard(); fqQueueSave();
 }
 // choices are added one at a time: type, Enter, type, Enter
@@ -142,6 +163,7 @@ async function fqSave() {
     const rows = _fqRows.filter(r => r.question && r.question.trim()).map((r, i) => {
       const o = { org_id: orgId, question: r.question.trim(), kind: r.kind || 'text', maps_to: r.maps_to || null, label: r.question.trim().slice(0, 60), active: r.active !== false, sort: i };
       if (o.kind === 'choice') o.options = (r.options || []).slice(0, 12);      // only written for choice questions
+      else if (o.kind === 'score' && ((r.options || []).length === 2 || r._clearScale)) o.options = (r.options || []).length === 2 ? r.options.slice() : [];   // and for scales whose ends were worded
       const orig = r.id && saved.find(m => m.id === r.id);
       if (orig && orig.question === o.question) o.id = r.id;   // reworded = new question
       return o;
@@ -234,14 +256,14 @@ async function fqCopyRun() {
 function fqPreview() {
   const qs = _fqRows.filter(r => r.active !== false && r.question && r.kind !== 'ignore');
   const logo = typeof getOrgLogoUrl === 'function' ? getOrgLogoUrl(currentOrg) : '';
-  const ans = (k, opts) => k === 'score' ? '<div class="st-dots">' + [1, 2, 3, 4, 5].map(n => '<span>' + n + '</span>').join('') + '</div>'
+  const ans = (k, opts, qtext) => k === 'score' ? (lab => '<div class="st-dots">' + [1, 2, 3, 4, 5].map(n => '<span>' + n + '</span>').join('') + '</div><div style="display:flex;justify-content:space-between;font-size:10px;font-weight:700;color:#222;margin-top:4px"><span>1 = ' + escapeHTML(lab[0]) + '</span><span>5 = ' + escapeHTML(lab[1]) + '</span></div>')((opts && opts.length === 2) ? opts : scaleLabelsFor(qtext))
     : k === 'yesno' ? '<div class="st-dots"><span style="width:auto;padding:0 16px;border-radius:17px">Yes</span><span style="width:auto;padding:0 16px;border-radius:17px">No</span></div>'
     : k === 'choice' ? '<div style="font-size:12px;color:#777;line-height:1.9">' + ((opts && opts.length) ? opts : ['Option A', 'Option B']).map(x => '○ ' + escapeHTML(x)).join('<br>') + '</div>'
     : '<div style="border:1px solid #ddd;border-radius:8px;height:56px"></div>';
   setModal('<h2>How the form looks on a phone</h2><div class="st-phone">' +
     (logo ? '<div style="text-align:center;margin-bottom:10px"><img src="' + escapeHTML(logo) + '" style="max-height:34px;max-width:140px"/></div>' : '') +
     '<div style="font-size:15px;font-weight:700;text-align:center;margin-bottom:16px;color:#222">How was today?</div>' +
-    qs.map(q => '<div class="st-phone-q"><p>' + escapeHTML(q.question) + '</p>' + ans(q.kind, q.options) + '</div>').join('') +
+    qs.map(q => '<div class="st-phone-q"><p>' + escapeHTML(q.question) + '</p>' + ans(q.kind, q.options, q.question) + '</div>').join('') +
     '<div style="background:' + escapeHTML(currentOrg.brand_color || '#1F6F6D') + ';color:#fff;text-align:center;padding:11px;border-radius:10px;font-weight:700;font-size:14px">Send</div></div>' +
     '<div class="modal-footer"><button class="btn btn-p" onclick="setCloseModal()">Done</button></div>', 380);
 }
