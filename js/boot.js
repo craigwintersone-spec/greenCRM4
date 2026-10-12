@@ -57,10 +57,10 @@ async function boot() {
       const b = $('org-banner');
       b.style.display = 'flex';
       $('ob-txt').textContent = orgData.name + (orgData.sector ? ' · ' + orgData.sector : '');
-      $('ob-plan').textContent = orgData.plan === 'pro' ? '✦ PRO'
-                               : orgData.plan === 'network' ? 'Network'
-                               : orgData.plan === 'starter' ? 'Starter'
-                               : 'Free';
+      $('ob-plan').textContent = orgData.plan === 'pro' ? 'Standard'
+                               : orgData.plan === 'network' ? 'Provider'
+                               : orgData.plan === 'starter' ? 'Community'
+                               : 'Trial';
       applyModules(orgData.modules || {});
     }
   }
@@ -80,10 +80,10 @@ async function boot() {
   // 7. Upgrade prompt for non-Pro plans
   const plan = (currentOrg && currentOrg.plan) || 'free';
   const wrap = $('upgrade-btn-wrap');
-  if (wrap && !['pro', 'network'].includes(plan)) {
+  if (wrap && !['starter', 'pro', 'network'].includes(plan)) {
     wrap.innerHTML =
       '<button class="btn btn-sm" style="width:100%;margin-bottom:8px;background:linear-gradient(135deg,#5E4CB8,#7C5BCB);color:#fff;border:none" ' +
-      'onclick="showUpgradeModal()">✦ Upgrade to Pro</button>';
+      'onclick="window.open(\'/index.html#pricing\',\'_blank\')">✦ Choose a plan</button>';
   }
 
   // 8. First view: ?page=… (e.g. from the old settings page or an app shortcut), else the dashboard
