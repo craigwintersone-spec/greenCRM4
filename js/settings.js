@@ -486,7 +486,7 @@ function setOrgHTML(body) {
   const sectors = ['Charity / VCSE', 'Social enterprise', 'Local authority', 'Housing association', 'Education', 'Health', 'Community group', 'Other'];
   const cur = currentOrg.sector || 'Charity / VCSE';
   if (!sectors.includes(cur)) sectors.push(cur);
-  const plan = currentOrg.plan === 'pro' ? 'Pro ✦' : currentOrg.plan === 'network' ? 'Network' : currentOrg.plan === 'starter' ? 'Starter' : 'Free';
+  const plan = currentOrg.plan === 'pro' ? 'Standard' : currentOrg.plan === 'network' ? 'Provider' : currentOrg.plan === 'starter' ? 'Community' : 'Trial';
   body.innerHTML =
     '<div class="form-grid-2">' +
       '<div class="form-row"><label>Organisation name</label><input id="set-name" value="' + escapeHTML(currentOrg.name || '') + '" onchange="setSaveOrg()"/></div>' +
