@@ -56,8 +56,8 @@ function checkAIAccess() {
     const msg = document.createElement('div');
     msg.style.cssText = 'position:fixed;top:24px;right:24px;background:var(--surface);border:1px solid var(--amber);border-radius:var(--radiuslg);padding:16px 20px;z-index:999;max-width:320px;box-shadow:0 8px 24px rgba(0,0,0,.12)';
     msg.innerHTML =
-      '<div style="font-size:13px;font-weight:700;color:var(--amber);margin-bottom:4px">✦ AI features — Pro plan only</div>' +
-      '<div style="font-size:12px;color:var(--txt2)">Org Brain agents are available on the Pro and Network plans.</div>' +
+      '<div style="font-size:13px;font-weight:700;color:var(--amber);margin-bottom:4px">✦ AI features — start a plan</div>' +
+      '<div style="font-size:12px;color:var(--txt2)">Org Brain agents come with every paid plan (Community, Standard and Provider).</div>' +
       '<button onclick="this.parentElement.remove()" style="position:absolute;top:8px;right:10px;background:none;border:none;color:var(--txt3);cursor:pointer;font-size:16px">✕</button>';
     document.body.appendChild(msg);
     setTimeout(() => msg.remove(), 5000);
