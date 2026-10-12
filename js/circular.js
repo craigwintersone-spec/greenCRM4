@@ -374,6 +374,24 @@ async function cxLog(item, action, from, to, data) {
 }
 
 // ── Impact ───────────────────────────────────────────────────
+// Growing is about the harvest, not waste diverted: tiles that say what was grown and where it went
+function cxGrowingStats(items) {
+  let kg = 0, shared = 0, value = 0, income = 0; const beds = {}, crops = {};
+  items.forEach(i => {
+    const w = +i.weight_kg || 0; kg += w;
+    if (i.outcome_type === 'share') { shared += w; value += +i.value_gbp || 0; }
+    if (i.custom && +i.custom.sale_gbp) income += +i.custom.sale_gbp;
+    const b = i.custom && i.custom.bed_planter; if (b) beds[b] = (beds[b] || 0) + w;
+    if (i.item_type) crops[i.item_type] = 1;
+  });
+  const top = Object.keys(beds).sort((a, b) => beds[b] - beds[a])[0];
+  return '<div class="stats-grid cxp-stats">' +
+    statCard('Harvested', cxFmt(kg, 1) + ' kg', cxFmt(items.length) + ' harvest' + (items.length === 1 ? '' : 's') + ' logged') +
+    statCard('Shared and sold', cxFmt(shared, 1) + ' kg', '\u2248 ' + cxFmt(shared / CX_KG_PER_MEAL) + ' meals') +
+    statCard('Value to people', '\u00a3' + cxFmt(value), income ? '\u00a3' + cxFmt(income) + ' sales income' : 'at shop prices') +
+    (top ? statCard('Best bed', cxE(top), cxFmt(beds[top], 1) + ' kg harvested') : statCard('Crops grown', cxFmt(Object.keys(crops).length), 'different crops harvested')) +
+    '</div>';
+}
 function cxImpact(items) {
   const r = { inProgress: 0, finished: 0, kg: 0, co2: 0, value: 0, reused: 0, foodKg: 0, income: 0, repairTried: 0, repairFixed: 0 };
   items.forEach(i => {
@@ -459,6 +477,7 @@ function cxDraw() {
       ? statCard('Fix rate', im.repairTried ? Math.round(im.repairFixed / im.repairTried * 100) + '%' : '—', cxFmt(im.repairFixed) + ' of ' + cxFmt(im.repairTried) + ' fixed')
       : statCard('Value to people', '£' + cxFmt(im.value), im.income ? '£' + cxFmt(im.income) + ' sales income' : cxFmt(im.reused) + ' items reused')) +
     '</div>';
+  if (act && act.template === 'growing') stats = cxGrowingStats(scope);
 
   const backlog = CX.tab !== 'all' ? CX.items.filter(i => i.activity_id === CX.tab && !i.outcome_type).length : 0;
   const wasTracked = act && circMode(act) === 'tracked';
@@ -585,7 +604,7 @@ function cxQuickHTML(act) {
   else { big = cxFmt(todayKg, 1) + ' kg'; small = food ? '≈ ' + cxFmt(todayKg / CX_KG_PER_MEAL) + ' meals today' : cxFmt(todayN) + ' entries today'; }
   const speech = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 
-  let h = '<div class="card cxq"><div class="cxq-top"><div><div class="cxq-k">' + e(act.icon) + ' ' + e(act.name) + '</div><div class="cxq-h">' + (tracked ? 'Add an item' : 'Log it') + '</div></div>' +
+  let h = '<div class="card cxq"><div class="cxq-top"><div><div class="cxq-k">' + e(act.icon) + ' ' + e(act.name) + '</div><div class="cxq-h">' + (act.template === 'growing' ? 'Log a harvest' : tracked ? 'Add an item' : 'Log it') + '</div></div>' +
     '<div style="text-align:right"><div class="cxq-big">' + big + '</div><div class="cxq-small">' + small + '</div></div></div>';
 
   if ((DB.events || []).length) {
@@ -619,7 +638,11 @@ function cxQuickHTML(act) {
       h += '<div class="cxq-amt"><input id="cxq-amt-' + id + '" type="number" inputmode="decimal" min="0" step="' + (kg ? '0.1' : '1') + '" placeholder="' + (kg ? '0.0' : '1') + '" value="' + e(q.amt) + '" oninput="cxQ(cxAct(\'' + id + '\')).amt=this.value"/><span>' + (kg ? 'kg' : 'items') + '</span></div>' +
         (q.estAmt && String(q.amt) === String(q.estAmt) ? '<div class="cxp-s" style="margin:-6px 0 12px">≈ Estimated from the photo — reports will say so. Change it if you weigh it.</div>' : '');
     }
-    if (tracked) {
+    if (act.template === 'growing') {
+      const showG = q.more || q.bed || q.picker;
+      h += showG ? '<div class="cxq-more"><input placeholder="Bed or planter" value="' + e(q.bed || '') + '" oninput="cxQ(cxAct(\'' + id + '\')).bed=this.value"/><input placeholder="Picked by" value="' + e(q.picker || '') + '" oninput="cxQ(cxAct(\'' + id + '\')).picker=this.value"/></div>'
+        : '<div style="margin:-4px 0 10px"><a href="#" class="cxp-s" onclick="cxQ(cxAct(\'' + id + '\')).more=true;cxDraw();return false">+ Bed or planter, picked by</a></div>';
+    } else if (tracked) {
       const show = q.more || q.brand || q.model || q.serial;
       h += show ? '<div class="cxq-more"><input placeholder="Brand" value="' + e(q.brand || '') + '" oninput="cxQ(cxAct(\'' + id + '\')).brand=this.value"/><input placeholder="Model" value="' + e(q.model || '') + '" oninput="cxQ(cxAct(\'' + id + '\')).model=this.value"/><input placeholder="Serial" value="' + e(q.serial || '') + '" oninput="cxQ(cxAct(\'' + id + '\')).serial=this.value"/></div>'
         : '<div style="margin:-4px 0 10px"><a href="#" class="cxp-s" onclick="cxQ(cxAct(\'' + id + '\')).more=true;cxDraw();return false">+ Brand, model, serial</a></div>';
@@ -703,10 +726,15 @@ async function cxQInsert(act, typeKey, amount, kind, key, extra) {
   const qs = CX.q[act.id];
   // Only the one-tap path uses the photo estimate (totals and 'just tell it' use typed numbers)
   const estimated = !(extra && extra._via) && !!(qs && qs.estAmt && String(qs.amt) === String(qs.estAmt) && String(amount) === String(qs.estAmt));
+  const _custom = estimated && kg ? { weight_estimated: true, estimate_basis: qs.estBasis || '' } : {};
+  if (act.template === 'growing' && qs) {      // where it grew and who picked it
+    if ((qs.bed || '').trim()) _custom.bed_planter = qs.bed.trim();
+    if ((qs.picker || '').trim()) _custom.harvester = qs.picker.trim();
+  }
   const d = Object.assign({
     org_id: orgId, activity_id: act.id, item_type: t.key, name: cxLbl(t), category: act.name,
     event_id: qs && qs.event ? qs.event : null,
-    quantity: qty, weight_kg: weight, co2e_kg: f.co2, value_gbp: f.value, custom: estimated && kg ? { weight_estimated: true, estimate_basis: qs.estBasis || '' } : {}, updated_at: now
+    quantity: qty, weight_kg: weight, co2e_kg: f.co2, value_gbp: f.value, custom: _custom, updated_at: now
   }, extra || {});
   if (kind === 'outcome') {
     const o = cxOutcome(act, key);
@@ -730,7 +758,7 @@ async function cxQuickLog(actId, kind, key) {
     const r = await cxQInsert(act, q.type, q.amt, kind, key, extra);
     const dest = cxOutcome(act, key) || cxStage(act, key);
     CX.undo = { act: actId, ids: [r.row.id], at: Date.now(), text: r.text + ' → ' + (dest ? dest.label : ''), label: kind === 'stage' };
-    Object.assign(q, { amt: '', brand: '', model: '', serial: '', name: '', status: '', newType: null, more: false, estAmt: null, estBasis: '' });
+    Object.assign(q, { amt: '', brand: '', model: '', serial: '', name: '', bed: '', picker: '', status: '', newType: null, more: false, estAmt: null, estBasis: '' });
     cxDraw(); cxUndoTimer();
     if (kind === 'stage' && (act.fields || []).some(f => cxFieldStage(act, f) === key)) {
       _cxPass = { id: r.row.id, action: { kind: 'move', key }, recip: 'person', personId: '', channel: '' };
