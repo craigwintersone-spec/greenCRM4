@@ -575,13 +575,13 @@ function cxSessionLabel(id) {
   const ev = (DB.events || []).find(e => String(e.id) === String(id)); if (!ev) return '';
   const today = new Date().toISOString().slice(0, 10);
   const d = String(ev.date || '').slice(0, 10);
-  return (d === today ? 'Today' : new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })) + ' · ' + (ev.name || 'Session');
+  return (d === today ? 'Today' : new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })) + ' · ' + (ev.name || 'Event');
 }
 function cxSessionOptions(sel) {
   const list = cxSessions();
   const has = sel && list.some(e => String(e.id) === String(sel));
-  return '<option value="">No session</option>' +
-    (sel && !has ? '<option value="' + cxE(sel) + '" selected>' + cxE(cxSessionLabel(sel) || 'Linked session') + '</option>' : '') +
+  return '<option value="">Not linked to an event</option>' +
+    (sel && !has ? '<option value="' + cxE(sel) + '" selected>' + cxE(cxSessionLabel(sel) || 'Linked event') + '</option>' : '') +
     list.map(e => '<option value="' + cxE(e.id) + '"' + (String(e.id) === String(sel) ? ' selected' : '') + '>' + cxE(cxSessionLabel(e.id)) + '</option>').join('');
 }
 
@@ -608,7 +608,7 @@ function cxQuickHTML(act) {
     '<div style="text-align:right"><div class="cxq-big">' + big + '</div><div class="cxq-small">' + small + '</div></div></div>';
 
   if ((DB.events || []).length) {
-    h += '<div class="cxq-sess"><span>Session</span><select onchange="cxQ(cxAct(\'' + id + '\')).event=this.value">' + cxSessionOptions(q.event) + '</select></div>';
+    h += '<div class="cxq-sess" title="Optional. Link this to a workshop or volunteer day and it counts in that event\'s funder report."><span>Event</span><select onchange="cxQ(cxAct(\'' + id + '\')).event=this.value">' + cxSessionOptions(q.event) + '</select></div>';
   }
   h += '<div class="cxq-cap">' +
     '<label class="cxq-cam"><span>📷</span><div>Photo' + (kg || !t ? '<small>on the scales</small>' : '') + '</div><input type="file" accept="image/*" capture="environment" style="display:none" onchange="cxQPhoto(event,\'' + id + '\')"/></label>' +
@@ -1613,7 +1613,7 @@ function cxOpenLog(o) {
       '<div class="form-row"><label>Stage</label><select id="cx-stage"></select></div>' +
       '<div class="form-row"><label>Source / donor</label><input id="cx-source" placeholder="e.g. WLWA Southall site"/></div>' +
     '</div>' +
-    ((DB.events || []).length ? '<div class="form-row"><label>Session</label><select id="cx-event">' + cxSessionOptions(edit ? edit.event_id : (CX.q[actId] && CX.q[actId].event != null ? CX.q[actId].event : cxDefaultSession())) + '</select></div>' : '') +
+    ((DB.events || []).length ? '<div class="form-row"><label>Event (optional)</label><select id="cx-event">' + cxSessionOptions(edit ? edit.event_id : (CX.q[actId] && CX.q[actId].event != null ? CX.q[actId].event : cxDefaultSession())) + '</select></div>' : '') +
     '<details id="cx-more"><summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--txt2);margin-bottom:10px">Brand, model, serial</summary>' +
       '<div class="form-grid-2"><div class="form-row"><label>Brand</label><input id="cx-brand"/></div><div class="form-row"><label>Model</label><input id="cx-model"/></div></div>' +
       '<div class="form-row"><label>Serial / frame number</label><input id="cx-serial"/></div>' +
