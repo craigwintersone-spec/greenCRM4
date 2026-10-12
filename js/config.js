@@ -8,7 +8,7 @@ const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── Claude (AI) ───────────────────────────────────────────────
 const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
-const AI_PLANS = ['pro', 'network'];
+const AI_PLANS = ['starter', 'pro', 'network'];   // every paid plan has the AI; plans differ by size
 const AI_MIN_GAP_MS = 1500;
 
 // ── Domain enumerations ──────────────────────────────────────
