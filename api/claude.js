@@ -9,7 +9,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 
-const ALLOWED_PLANS = ['pro', 'network'];
+const ALLOWED_PLANS = ['starter', 'pro', 'network'];   // every paid plan has the AI
 
 // ── Hardening knobs ─────────────────────────────────────────────
 // Only these exact origins may call from a browser. NO wildcard vercel.app.
@@ -32,7 +32,8 @@ const MAX_TOKENS_CEILING = 2000;   // server-enforced output cap per call
 const MAX_MESSAGES = 30;           // sane conversation length
 const MAX_BODY_CHARS = 200_000;    // ~50k tokens of input, generous
 const MAX_FILE_BODY_CHARS = 3_500_000; // one photo or PDF (Vercel's request limit is 4.5 MB)
-const DAILY_CALLS_PER_ORG = 300;   // quota; tune per plan later
+const DAILY_CALLS_PER_ORG = 300;   // default quota
+const DAILY_CALLS_BY_PLAN = { starter: 60, pro: 300, network: 600 };   // Community / Standard / Provider
 // ────────────────────────────────────────────────────────────────
 
 function setCors(req, res) {
@@ -144,14 +145,15 @@ module.exports = async function handler(req, res) {
   if (!admin) {
     if (!org) return res.status(403).json({ error: 'No active organisation found for this account.' });
     if (!ALLOWED_PLANS.includes(org.plan)) {
-      return res.status(403).json({ error: 'AI features require the Pro or Network plan.', code: 'AI_PLAN_GATE' });
+      return res.status(403).json({ error: 'AI features need a paid plan (Community, Standard or Provider).', code: 'AI_PLAN_GATE' });
     }
   }
   const orgId = org ? org.orgId : user.id; // admins with no org: quota against their own id
 
   // 3. Daily quota
   const used = await callsToday(orgId);
-  if (used >= DAILY_CALLS_PER_ORG) {
+  const cap = (!admin && org && DAILY_CALLS_BY_PLAN[org.plan]) || DAILY_CALLS_PER_ORG;
+  if (used >= cap) {
     return res.status(429).json({
       error: 'Daily AI limit reached for your organisation. Resets at midnight UTC.',
       code: 'AI_QUOTA',
