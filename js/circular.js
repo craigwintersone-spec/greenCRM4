@@ -610,6 +610,8 @@ function cxGrowShownTypes(act, q) {
   if (sel && top.indexOf(sel) < 0) top[top.length - 1] = sel;
   return top;
 }
+// An old destination called "Harvested" is not a place food goes: it is not offered, and entries that carry it read "Not recorded"
+const cxGrowDests = act => (act.outcomes || []).filter(o => !/^harvested$/i.test(String(o.label).trim()));
 function cxGrowOtherHTML(act, q) {
   const total = (act.item_types || []).length;
   return (total > 12 ? '<button class="cxq-chip" style="border-style:dashed" onclick="cxQ(cxAct(\'' + act.id + '\')).allCrops=!cxQ(cxAct(\'' + act.id + '\')).allCrops;cxDraw()">' + (q.allCrops ? 'Fewer crops' : 'All ' + total + ' crops') + '</button>' : '') +
@@ -655,7 +657,7 @@ function cxGrowSplitOpen(actId) {
 function cxGrowSplitHTML(act, q) {
   const id = act.id, total = +q.amt || 0, t = cxType(act, q.type);
   return '<div class="cxg-step">3. Split ' + cxFmt(total, 1) + ' kg' + (t ? ' of ' + cxE(cxLbl(t)) : '') + ' between places</div><div class="cxg-split">' +
-    (act.outcomes || []).map(o => '<div class="cxg-row"><span class="cxg-n">' + cxE(o.label) + '</span><input type="number" inputmode="decimal" min="0" step="0.1" placeholder="0" class="cxg-part-' + id + '" data-out="' + cxE(o.key) + '" oninput="cxGrowSplitCalc(\'' + id + '\')"/><span style="flex:none;font-size:13px;color:var(--txt3)">kg</span></div>').join('') +
+    cxGrowDests(act).map(o => '<div class="cxg-row"><span class="cxg-n">' + cxE(o.label) + '</span><input type="number" inputmode="decimal" min="0" step="0.1" placeholder="0" class="cxg-part-' + id + '" data-out="' + cxE(o.key) + '" oninput="cxGrowSplitCalc(\'' + id + '\')"/><span style="flex:none;font-size:13px;color:var(--txt3)">kg</span></div>').join('') +
     '<div class="cxg-left" id="cxg-left-' + id + '">Not placed yet: ' + cxFmt(total, 1) + ' kg</div>' +
     '<div style="display:flex;gap:6px;justify-content:flex-end"><button class="btn btn-ghost btn-sm" onclick="cxQ(cxAct(\'' + id + '\')).split=false;cxDraw()">Back</button><button class="btn btn-p btn-sm" id="cxg-go-' + id + '" onclick="cxGrowSplitLog(\'' + id + '\')">Log split</button></div></div>';
 }
@@ -694,7 +696,8 @@ async function cxGrowSplitLog(actId) {
 }
 // Recent harvests: short, one line each, a split shows as one harvest
 function cxGrowRecentHTML(act) {
-  const its = CX.items.filter(i => i.activity_id === act.id && cxIsHarvest(i, act));
+  const its = CX.items.filter(i => i.activity_id === act.id && cxIsHarvest(i, act))
+    .sort((a, b) => String(b.outcome_at || b.created_at || '').localeCompare(String(a.outcome_at || a.created_at || '')));
   const groups = [], seen = {};
   its.forEach(i => {
     const k = i.custom && i.custom.split_id;
@@ -707,7 +710,7 @@ function cxGrowRecentHTML(act) {
     const bed = first.custom && first.custom.bed_planter;
     const d = new Date(first.outcome_at || first.created_at);
     const when = cxIsToday(first) ? 'Today ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString('en-GB');
-    const chips = g.rows.map(i => { const o = cxOutcome(act, i.outcome); return '<span class="cxg-chip">' + (g.rows.length > 1 ? cxFmt(i.weight_kg, 1) + ' kg ' : '') + cxE(o ? o.label : 'Not recorded') + '</span>'; }).join('');
+    const chips = g.rows.map(i => { const o = cxOutcome(act, i.outcome); return '<span class="cxg-chip">' + (g.rows.length > 1 ? cxFmt(i.weight_kg, 1) + ' kg ' : '') + cxE(o && !/^harvested$/i.test(String(o.label).trim()) ? o.label : 'Not recorded') + '</span>'; }).join('');
     const click = g.rows.length === 1 ? 'cxOpenItem(\'' + first.id + '\')' : '';
     const del = g.rows.length === 1 ? 'cxDelEntry(\'' + first.id + '\')' : 'cxGrowDelGroup(\'' + cxE(first.custom.split_id) + '\')';
     return '<div class="cxg-r"' + (click ? ' onclick="' + click + '"' : '') + '><div><div class="cxg-t">' + cxFmt(kg, 1) + ' kg ' + cxE(t ? cxLbl(t) : cxLbl(first.name)) + (bed ? ' <span style="font-weight:400;color:var(--txt3)">\u00b7 ' + cxE(bed) + '</span>' : '') + '</div><div class="cxg-s">' + when + '</div></div>' +
@@ -825,7 +828,7 @@ function cxQuickHTML(act) {
       h += show ? '<div class="cxq-more"><input placeholder="Brand" value="' + e(q.brand || '') + '" oninput="cxQ(cxAct(\'' + id + '\')).brand=this.value"/><input placeholder="Model" value="' + e(q.model || '') + '" oninput="cxQ(cxAct(\'' + id + '\')).model=this.value"/><input placeholder="Serial" value="' + e(q.serial || '') + '" oninput="cxQ(cxAct(\'' + id + '\')).serial=this.value"/></div>'
         : '<div style="margin:-4px 0 10px"><a href="#" class="cxp-s" onclick="cxQ(cxAct(\'' + id + '\')).more=true;cxDraw();return false">+ Brand, model, serial</a></div>';
     }
-    const opts = tracked ? (act.stages || []) : (act.outcomes || []);
+    const opts = tracked ? (act.stages || []) : (grow ? cxGrowDests(act) : (act.outcomes || []));
     if (grow && q.split) h += cxGrowSplitHTML(act, q);
     else {
     h += '<div class="' + (grow ? 'cxg-step' : 'cxq-lbl') + '">' + (grow ? '3. Where did it go? Tap to log' : tracked ? 'Where is it now?' : act.template === 'repair_cafe' ? 'How did it go?' : 'Where did it go?') + '</div>' +
