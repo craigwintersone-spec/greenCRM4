@@ -633,7 +633,7 @@ function renderEvents() {
     sg.innerHTML =
       statCard('Events', E.length) +
       statCard('Total attendees', totalAttendees) +
-      statCard('Average fill', avgFill + '%');
+      (capacityTracked(E) ? statCard('Average fill', avgFill + '%') : statCard('Average attendance', (E.length ? Math.round(totalAttendees / E.length * 10) / 10 : 0) + ' per event'));
   }
 
   if (!E.length) {
