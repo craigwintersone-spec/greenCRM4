@@ -244,6 +244,7 @@
       'Open the Executive Summary with the three figures that matter most to this funder. State progress against targets and relate it to the share of the contract period elapsed; explain variance plainly. ' +
       (hasCirc ? 'In Circular Economy use only the circular figures supplied and say CO2e and value are estimates. ' : '') +
       '600-800 words. Use only data provided — never invent participants, outcomes, figures or quotes, and never recalculate a number. ' +
+      'Write the ethnicity figure as "black and ethnic minority" (lower-case "black"), never "BAME". Use "attendances" for visits and "responses" for feedback, never "participants" for attendances. Never write "significant" about results, never mention any individual\'s health, and do not speculate about causes. ' +
       'All events, feedback and volunteer figures given relate ONLY to activity delivered under this contract. ' +
       'In Participant Voice, use only the quotes supplied, verbatim; if none are supplied, say feedback quotes were not collected for this period. ' +
       'State the reporting period clearly in the Executive Summary. If a data point is not provided, omit gracefully. ' +
