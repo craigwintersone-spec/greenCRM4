@@ -75,3 +75,15 @@ function downloadCSV(rows, filename) {
   a.download = filename;
   a.click();
 }
+
+// ── Honest figures for reports ───────────────────────────────
+// Event capacity defaults to 20 on every event, so an "attendance rate" only means something once real capacities are entered.
+function capacityTracked(events) {
+  try { if (typeof currentOrg !== 'undefined' && currentOrg && currentOrg.settings && currentOrg.settings.capacity_tracked === true) return true; } catch (e) { /* ignore */ }
+  const E = (events || (typeof DB !== 'undefined' && DB.events) || []).filter(e => +e.capacity > 0);
+  return E.length >= 8 && E.filter(e => +e.capacity !== 20).length / E.length >= 0.25;
+}
+// 1135.3 -> "1,135.3"; whole numbers stay whole
+function fmtNum(v, d) { const x = +v; if (!isFinite(x)) return String(v); return x.toLocaleString('en-GB', { maximumFractionDigits: d == null ? 1 : d }); }
+// A quote that mentions someone's health or condition never goes into a funder report
+const HEALTH_QUOTE_RX = /\b(health|illness|ill|sick|disab\w*|condition|medicat\w*|diagnos\w*|depress\w*|anxiety|anxious|cancer|pregnan\w*|surgery|operation|hospital|doctor|gp|pain|chronic|circulation|arthritis|diabet\w*|dementia|autis\w*|adhd|dyslexi\w*|mental|therapy|counsell\w*|addict\w*)\b/i;
