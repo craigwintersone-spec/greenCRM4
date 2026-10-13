@@ -45,6 +45,11 @@ textarea{min-height:88px;resize:vertical}
 /* clear edges on every control so nothing disappears into the page */
 .star,.yn button,.chs button,.chip,input,textarea,select{border-color:#A39C8E}
 .star.on,.yn button.on,.chs button.on{border-color:var(--em)}
+.place{display:flex;flex-direction:column;gap:8px;margin:0 0 6px}
+.place button{display:flex;align-items:center;gap:12px;text-align:left;padding:13px 14px;border:1px solid #A39C8E;background:var(--surface);border-radius:12px;font-family:inherit;font-size:15px;font-weight:600;color:var(--txt);cursor:pointer}
+.place button.on{border:2px solid var(--em);padding:12px 13px}
+.place .dot{width:20px;height:20px;border-radius:50%;border:2px solid #A39C8E;flex-shrink:0;background:#fff}
+.place button.on .dot{border-color:var(--em);background:var(--em);box-shadow:inset 0 0 0 3px #fff}
 .star.on{background:var(--em);border-color:var(--em);color:#fff}
 .chips{display:flex;flex-direction:column;gap:9px}
 .chip{display:flex;align-items:center;gap:11px;padding:13px 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface);cursor:pointer;font-size:15px;color:var(--txt2)}
@@ -160,6 +165,15 @@ textarea{min-height:88px;resize:vertical}
           </div>
           <button class="btn btn-p" id="vol-new-go" type="button" style="margin-bottom:10px"><span class="spin"></span><span>Sign me up &amp; check in</span></button>
           <button class="btn btn-ghost" id="vol-new-cancel" type="button">That's not right — go back</button>
+        </div>
+
+        <div id="vol-place" style="display:none">
+          <label style="margin-bottom:8px">Where are you helping?</label>
+          <div class="place">
+            <button type="button" id="pl-event" class="on"><span class="dot"></span><span id="pl-event-t">At the event</span></button>
+            <button type="button" id="pl-site"><span class="dot"></span><span id="pl-site-t">Around the site</span></button>
+          </div>
+          <div class="note" style="margin:0 0 14px">Leaving? Skip this and tap Check out below.</div>
         </div>
 
         <div id="vol-actions">
@@ -353,6 +367,7 @@ function boot() {
       if (j.mode === 'choose') { renderChoose(j.choices || []); show('s-choose'); return; }
       QUESTIONS = j.questions || [];
       var ev = j.event || {};
+      setupPlace(ev, j.site);
       var site = j.mode === 'site';
       $('ev-name').textContent = site ? (ev.org_name || 'Volunteer sign-in') : (ev.name || 'Event');
       $('ev-switch').style.display = CHOSEN_EVENT ? 'inline-block' : 'none';
@@ -415,6 +430,21 @@ $('fb-submit').addEventListener('click', function () {
     .finally(function () { busy(btn, false); });
 });
 
+// Where a volunteer is helping, when the same code is both the event's and the site's
+var PLACE = 'event', SITE = null;
+function selectPlace(p) {
+  PLACE = p;
+  $('pl-event').className = p === 'event' ? 'on' : '';
+  $('pl-site').className = p === 'site' ? 'on' : '';
+}
+function setupPlace(ev, site) {
+  SITE = site || null; PLACE = 'event';
+  $('vol-place').style.display = SITE ? 'block' : 'none';
+  if (SITE) { $('pl-event-t').textContent = 'At ' + (ev.name || 'the event'); $('pl-site-t').textContent = 'Around the site, not the event'; selectPlace('event'); }
+}
+$('pl-event').addEventListener('click', function () { selectPlace('event'); });
+$('pl-site').addEventListener('click', function () { selectPlace('site'); });
+
 // ── volunteer check in / out ───────────────────────────────
 function who() { return $('vol-who').value.trim().replace(/\s+/g, ' '); }
 function remember(w) { try { localStorage.setItem('vorlana-who', w); } catch (e) {} }
@@ -427,8 +457,9 @@ function afterCheckin(j) {
   remember(who());
   resetVol();
   var first = j.name ? ', ' + j.name.split(' ')[0] : '';
-  if (j.already) doneScreen('Already checked in', 'You checked in at ' + j.at + first + '. Scan again and tap “Check out” when you leave.', true);
-  else doneScreen(j.created ? 'Welcome' + first + '!' : 'Checked in' + first, 'Checked in at ' + j.at + '. Scan again and tap “Check out” when you leave.', true);
+  var again = '. Scan again and tap \u201cCheck out\u201d when you leave.';
+  if (j.already) doneScreen('Already checked in', 'You checked in at ' + j.at + first + (j.where ? ' (' + j.where + ')' : '') + again, true);
+  else doneScreen(j.created ? 'Welcome' + first + '!' : 'Checked in' + first, 'Checked in at ' + j.at + (j.where && SITE ? ' for ' + j.where : '') + again, true);
 }
 
 $('vol-in').addEventListener('click', function () {
@@ -436,7 +467,7 @@ $('vol-in').addEventListener('click', function () {
   clearMsg('vol-err');
   if (who().length < 3) { msg('vol-err', 'Please enter your full name or email.', 'err'); return; }
   busy(btn, true);
-  call('checkin', { who: who() })
+  call('checkin', { who: who(), place: PLACE })
     .then(afterCheckin)
     .catch(function (e) {
       if (e.unknown && who().indexOf('@') < 0) {
@@ -456,7 +487,7 @@ $('vol-new-go').addEventListener('click', function () {
   clearMsg('vol-err');
   if (who().indexOf(' ') < 0) { resetVol(); msg('vol-err', 'Please use your full name (first and last), then tap Check in again.', 'err'); return; }
   busy(btn, true);
-  call('checkin', { who: who(), newVolunteer: true, email: $('vol-new-email').value.trim() })
+  call('checkin', { who: who(), newVolunteer: true, email: $('vol-new-email').value.trim(), place: PLACE })
     .then(afterCheckin)
     .catch(function (e) { msg('vol-err', e.message, 'err'); })
     .finally(function () { busy(btn, false); });
