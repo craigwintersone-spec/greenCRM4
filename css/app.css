@@ -249,7 +249,10 @@ tr:hover td{background:rgba(31,111,109,.03)}
 .report-actions{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
 
 /* PRINT — ready-to-submit PDF */
+@page vlpage{size:A4;margin:0}
+.no-print{}
 @media print{
+  .no-print{display:none !important}
   @page{size:A4;margin:18mm 16mm}
   body{background:#fff !important;color:#000 !important}
   body *{visibility:hidden !important}
