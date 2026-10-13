@@ -886,9 +886,18 @@ function downloadReportPDF() {
   }
   const orig = document.title;
   document.title = (_lastReportTitle || window._lastReportTitle || 'Vorlana Report').replace(/[^a-z0-9 \-]/gi, '').slice(0, 80);
+  // The delivery report brings its own page margins (a repeating top and bottom gap), so the browser's page margin can be zero:
+  // with no margin there is no room for the browser's URL and date header and footer.
+  let st = null;
+  if (document.querySelector('#report-output .pf')) {
+    st = document.createElement('style'); st.id = 'vl-print-margin'; st.textContent = '@page{size:A4;margin:0}';
+    document.head.appendChild(st);
+  }
+  const done = () => { document.title = orig; if (st) st.remove(); };
+  window.addEventListener('afterprint', done, { once: true });
   setTimeout(() => {
     window.print();
-    setTimeout(() => { document.title = orig; }, 1000);
+    setTimeout(done, 60000);
   }, 100);
 }
 
