@@ -41,6 +41,8 @@ function esc(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 function n(v) { return isNaN(+v) ? 0 : +v; }
+// An event named only by its date ("19 Apr 2025", "2025-04-19") was recorded without a real name
+var DATE_NAME = /^(\d{1,2}(st|nd|rd|th)?\s+[A-Za-z]{3,9}\.?\s+\d{2,4}|\d{4}-\d{2}-\d{2}|\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4})$/;
 function pct(a, b) { return b ? Math.round(a / b * 100) : 0; }
 function gv(id) { var e = $(id); return e ? (e.value || '') : ''; }
 function money(v) { return '£' + Math.round(v).toLocaleString('en-GB'); }
@@ -169,14 +171,30 @@ function buildStats(p) {
     else volHours += n(h.hours);
   });
 
-  var byType = {};
+  // An event with no attendance, feedback or hours recorded against it has not been "delivered" as far as the figures go
+  var EVALL = EV;
+  EV = EV.filter(function (e) {
+    return n(e.attendees) > 0 ||
+      FB.some(function (f) { return String(f.eventId || f.event_id || '') === String(e.id); }) ||
+      HRS.some(function (h) { return String(h.event_id || '') === String(e.id); });
+  });
+  var emptyEvents = EVALL.length - EV.length;
+  var dateNamed = EV.filter(function (e) { return DATE_NAME.test(String(e.name || '').trim()); }).length;
+  var capTracked = capacityTracked(DB.events);     // capacity defaults to 20 on every event, so only trust it when real values were entered
+
+  var byType = {}, byMonthEv = {};
   var attendees = 0, capacity = 0;
   EV.forEach(function (e) {
     var t = e.type || 'Other';
     byType[t] = (byType[t] || 0) + 1;
     attendees += n(e.attendees);
-    capacity += n(e.capacity);
+    if (capTracked) capacity += n(e.capacity);
+    var mk = String(e.date || '').slice(0, 7);
+    if (mk) byMonthEv[mk] = (byMonthEv[mk] || 0) + n(e.attendees);
   });
+  var typeKeys = Object.keys(byType).sort(function (a, b) { return byType[b] - byType[a]; });
+  // when nearly everything has the same generic type, splitting by type tells the funder nothing
+  var typeDominant = typeKeys.length <= 1 || (byType[typeKeys[0]] / (EV.length || 1) >= 0.9 && /^(community event|other)$/i.test(typeKeys[0]));
 
   var fbCount = FB.length;
   // Averages over people who ANSWERED — a blank is not a zero
@@ -193,7 +211,8 @@ function buildStats(p) {
   var quotes = (typeof measureQuotes === 'function' ? measureQuotes(FB).map(function (q) { return q.quote; })
                : FB.map(function (f) { return f.quote; }))
     .filter(function (q) { return q && String(q).trim().length > 15 && !/^(nothing|none|n\/?a|no|not really|all good)\b/i.test(String(q).trim()); })
-    .map(function (q) { return String(q).trim(); });
+    .map(function (q) { return String(q).trim(); })
+    .filter(function (q) { return !HEALTH_QUOTE_RX.test(q); });
 
   // The org's own questions (same figures as the Feedback page)
   var ownMeasures = [];
@@ -206,6 +225,7 @@ function buildStats(p) {
       ownMeasures.push({ q: st.m.question, text: line, n: st.n, allYes: st.kind === 'yesno' && st.pctYes === 100 && st.n >= 20 });
     });
   }
+  var allYesQs = ownMeasures.filter(function (m) { return m.allYes; });
   var journey = (typeof measureJourney === 'function') ? measureJourney(FB) : null;
 
   // Demographics — tidied the same way as the Demographics page
@@ -227,7 +247,7 @@ function buildStats(p) {
       age: tally('age'), ethnicity: tally('ethnicity'), gender: tally('gender'), disability: tally('disability'), postcode: pcs,
       ethN: eth.length, bemPct: eth.length ? pct(eth.filter(function (d) { return T.isBEM(d.ethnicity); }).length, eth.length) : null,
       disN: dis.length, disabledPct: dis.length ? pct(dis.filter(function (d) { return T.isDisabled(d.disability); }).length, dis.length) : null,
-      topPostcodes: topPc, topPostcodePct: pcTotal ? pct(topPc.slice(0, 2).reduce(function (a, k) { return a + pcs[k]; }, 0), pcTotal) : null
+      postcodeTotal: pcTotal, topPostcodes: topPc, topPostcodePct: pcTotal ? pct(topPc.slice(0, 2).reduce(function (a, k) { return a + pcs[k]; }, 0), pcTotal) : null
     };
   }
   var volDemo = demoSummary(activeVols.map(function (v) { return T.tidyRecord(v.equality_data); }));
@@ -250,6 +270,11 @@ function buildStats(p) {
     events: EV,
     eventCount: EV.length,
     byType: byType,
+    typeDominant: typeDominant,
+    emptyEvents: emptyEvents,
+    dateNamed: dateNamed,
+    capTracked: capTracked,
+    byMonthEv: byMonthEv,
     attendees: attendees,
     capacity: capacity,
     fillRate: capacity ? pct(attendees, capacity) : null,
@@ -275,6 +300,7 @@ function buildStats(p) {
     connectedPct: answeredPct('connected'),
     friendPct: answeredPct('friend'),
     ownMeasures: ownMeasures,
+    allYesQs: allYesQs,
     quotes: quotes,
     eqCount: volDemo.count,
     eqAge: volDemo.age,
@@ -295,11 +321,29 @@ function gapsFor(s) {
     gaps.push('Demographic data was given in ' + s.attDemo.count + ' of ' + s.fbCount + ' feedback responses (' + pct(s.attDemo.count, s.fbCount) + '%); it is optional and anonymous.');
   }
   if (s.eventCount && !s.fbCount) gaps.push('No feedback responses were collected in this period.');
-  if (s.eventCount && !s.capacity) gaps.push('Capacity was not recorded for these events, so an attendance rate is not given.');
+  if (s.emptyEvents) gaps.push(s.emptyEvents + ' event' + (s.emptyEvents === 1 ? ' has' : 's have') + ' no attendance, feedback or hours recorded and ' + (s.emptyEvents === 1 ? 'is' : 'are') + ' not counted as delivered.');
+  if (s.dateNamed) gaps.push(s.dateNamed + ' event' + (s.dateNamed === 1 ? ' is' : 's are') + ' recorded under a date rather than a name.');
   if (s.contract && !s.eventCount) gaps.push('No events are linked to this contract in this period.');
   if (s.unlinkedHours) gaps.push(s.unlinkedHours + ' volunteer hours in this period are not linked to an event.');
   if (typeof cxReportGaps === 'function') gaps = gaps.concat(cxReportGaps(s.circ));
   return gaps;
+}
+
+// Things worth fixing before this goes to a funder. Shown on screen only, never printed or sent to the writer.
+function doctorNotes(s) {
+  var d = [];
+  if (s.allYesQs && s.allYesQs.length) d.push(s.allYesQs.length + ' yes/no question' + (s.allYesQs.length === 1 ? '' : 's') + ' got 100% "yes" (' + s.allYesQs.map(function (m) { return '"' + m.q + '"'; }).join(', ') + '), so they are left out of the report. If people could only answer yes, add a No option on the form.');
+  if (s.dateNamed) d.push(s.dateNamed + ' event' + (s.dateNamed === 1 ? ' is' : 's are') + ' named by a date (such as "19 Apr 2025"). Give ' + (s.dateNamed === 1 ? 'it' : 'them') + ' real names so the report shows what happened.');
+  if (s.emptyEvents) d.push(s.emptyEvents + ' event' + (s.emptyEvents === 1 ? ' has' : 's have') + ' nothing recorded against ' + (s.emptyEvents === 1 ? 'it' : 'them') + ', so ' + (s.emptyEvents === 1 ? 'it is' : 'they are') + ' left out. Add attendance, or delete ' + (s.emptyEvents === 1 ? 'it' : 'them') + '.');
+  if (s.typeDominant && s.eventCount > 20) d.push('Nearly every event has the same generic type, so the report does not split events by type. Set each event\'s type to show your mix of activity.');
+  if (!s.capTracked && s.eventCount) d.push('Capacity is still the default (20) on most events, so the report gives no attendance rate. Enter real capacities to switch it on.');
+  return d;
+}
+function doctorHTML(s, printable) {
+  var d = doctorNotes(s);
+  if (!d.length) return '';
+  return '<div class="no-print" style="border:1px solid #BFDBFE;background:#EFF6FF;border-radius:10px;padding:10px 14px;font-size:12.5px;margin:0 0 16px;line-height:1.6">' +
+    '<b>Worth fixing before you send</b> <span style="color:#555">(only you see this; it is not printed)</span><br/>' + d.map(function (x) { return '&bull; ' + esc(x); }).join('<br/>') + '</div>';
 }
 
 // ── Funder language ──────────────────────────────────────────
@@ -535,13 +579,41 @@ function renderPreview() {
       stat('Hours', s.totalHours) +
       stat('Value', money(s.value)) +
       stat('Feedback', s.fbCount) +
-      (s.circ && s.circ.entries ? stat('Kg diverted', s.circ.kg) : '') +
+      (s.circ && s.circ.growing ? stat('Kg harvested', fmtNum(s.circ.growing.kg)) : '') +
+      (s.circ && s.circ.entries && (!s.circ.growing || s.circ.finished) ? stat('Kg diverted', fmtNum(s.circ.kg)) : '') +
       (s.circ && s.circ.co2 ? stat('CO₂e (t)', Math.round(s.circ.co2 / 100) / 10) : '') +
       (s.circ && s.circ.foodKg ? stat('Meals', s.circ.meals) : '') +
     '</div>' +
     (gaps.length
       ? '<div class="alert alert-warn" style="margin:0;font-size:12px"><strong>Data gaps — these will be stated in the report:</strong><br/>• ' + gaps.map(esc).join('<br/>• ') + '</div>'
-      : '<div class="alert alert-ok" style="margin:0;font-size:12px">✓ Complete data for this period.</div>');
+      : '<div class="alert alert-ok" style="margin:0;font-size:12px">✓ Complete data for this period.</div>') +
+    '<div style="margin-top:10px">' + doctorHTML(s) + '</div>';
+}
+// A small bar chart as an inline picture, so it prints and survives a copy. items: [{ label, value }]
+function barChart(title, items, color, unit) {
+  if (!items.length) return '';
+  var W = 560, H = 150, padL = 8, padR = 8, padT = 22, padB = 28;
+  var max = Math.max.apply(null, items.map(function (x) { return x.value; })) || 1;
+  var bw = (W - padL - padR) / items.length, gap = Math.min(6, bw * 0.25);
+  var showVals = items.length <= 14, step = Math.ceil(items.length / 12);
+  var bars = items.map(function (x, i) {
+    var h = Math.max(x.value > 0 ? 2 : 0, (H - padT - padB) * x.value / max), cx = padL + i * bw;
+    return '<rect x="' + (cx + gap / 2).toFixed(1) + '" y="' + (H - padB - h).toFixed(1) + '" width="' + Math.max(2, bw - gap).toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2" fill="' + color + '"/>' +
+      (showVals && x.value > 0 ? '<text x="' + (cx + bw / 2).toFixed(1) + '" y="' + (H - padB - h - 4).toFixed(1) + '" text-anchor="middle" font-size="9.5" fill="#333">' + esc(fmtNum(x.value)) + '</text>' : '') +
+      (i % step === 0 ? '<text x="' + (cx + bw / 2).toFixed(1) + '" y="' + (H - 10) + '" text-anchor="middle" font-size="9.5" fill="#666">' + esc(x.label) + '</text>' : '');
+  }).join('');
+  return '<div style="flex:1 1 300px;min-width:260px;border:1px solid #e3e3e3;border-radius:8px;padding:10px 12px;break-inside:avoid">' +
+    '<div style="font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#555;margin-bottom:2px">' + esc(title) + '</div>' +
+    '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" role="img" aria-label="' + esc(title) + '"><line x1="' + padL + '" y1="' + (H - padB) + '" x2="' + (W - padR) + '" y2="' + (H - padB) + '" stroke="#ccc"/>' + bars + '</svg></div>';
+}
+function monthItems(obj, last) {
+  var keys = Object.keys(obj).sort().slice(-last);
+  return keys.map(function (k) { return { label: new Date(k + '-01').toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }), value: round1(obj[k]) }; });
+}
+function chartsHTML(s) {
+  var a = barChart('Attendances by month', monthItems(s.byMonthEv || {}, 18), '#1F6F6D');
+  var b = barChart('Volunteer hours by month', monthItems(s.byMonth || {}, 18), '#E91E63');
+  return (a || b) ? '<div style="display:flex;gap:12px;flex-wrap:wrap;margin:0 0 22px">' + a + b + '</div>' : '';
 }
 function stat(label, val) {
   return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">' +
@@ -568,21 +640,35 @@ function monthTable(byMonth) {
   return '<table class="dr-tbl"><thead><tr><th>Month</th><th>Hours</th></tr></thead><tbody>' +
     keys.map(function (k) {
       var lbl = new Date(k + '-01').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-      return '<tr><td>' + esc(lbl) + '</td><td>' + round1(byMonth[k]) + '</td></tr>';
+      return '<tr><td>' + esc(lbl) + '</td><td>' + fmtNum(round1(byMonth[k])) + '</td></tr>';
     }).join('') +
     '</tbody></table>';
 }
 function eventTable(s) {
   if (!s.events.length) return '';
   var rows = s.events.slice().sort(function (a, b) { return (a.date || '').localeCompare(b.date || ''); });
-  return '<table class="dr-tbl"><thead><tr><th>Date</th><th>Event</th><th>Type</th><th>Attendees</th><th>Volunteer hours</th></tr></thead><tbody>' +
-    rows.map(function (e) {
-      var h = s.byEvent[String(e.id)] || 0;
-      var d = e.date ? new Date(e.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : '—';
-      return '<tr><td>' + esc(d) + '</td><td>' + esc(e.name || '—') + '</td><td>' + esc(e.type || '—') + '</td>' +
-             '<td>' + n(e.attendees) + '</td><td>' + round1(h) + '</td></tr>';
-    }).join('') +
-    '</tbody></table>';
+  function when(e) { return e.date ? new Date(e.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : '\u2014'; }
+  function label(e) { var nm = String(e.name || '').trim(); return !nm ? 'Unnamed session' : DATE_NAME.test(nm) ? 'Session (recorded by date)' : nm; }
+  function row(e) {
+    var h = s.byEvent[String(e.id)] || 0;
+    return '<tr><td style="white-space:nowrap">' + esc(when(e)) + '</td><td>' + esc(label(e)) + '</td><td>' + esc(e.type || '\u2014') + '</td><td>' + fmtNum(n(e.attendees)) + '</td><td>' + fmtNum(round1(h)) + '</td></tr>';
+  }
+  var head = '<thead><tr><th>Date</th><th>Event</th><th>Type</th><th>Attendances</th><th>Volunteer hours</th></tr></thead>';
+  if (rows.length <= 40) return '<table class="dr-tbl">' + head + '<tbody>' + rows.map(row).join('') + '</tbody></table>';
+  // a long period: a month-by-month summary, then the ten best-attended sessions; the full list is in Vorlana
+  var by = {};
+  rows.forEach(function (e) {
+    var k = String(e.date || '').slice(0, 7); if (!k) return;
+    var m = by[k] || (by[k] = { ev: 0, att: 0, hrs: 0 });
+    m.ev++; m.att += n(e.attendees); m.hrs += s.byEvent[String(e.id)] || 0;
+  });
+  var monthly = '<table class="dr-tbl"><thead><tr><th>Month</th><th>Events</th><th>Attendances</th><th>Volunteer hours at events</th></tr></thead><tbody>' +
+    Object.keys(by).sort().map(function (k) {
+      return '<tr><td>' + esc(new Date(k + '-01').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })) + '</td><td>' + by[k].ev + '</td><td>' + fmtNum(by[k].att) + '</td><td>' + fmtNum(round1(by[k].hrs)) + '</td></tr>';
+    }).join('') + '</tbody></table>';
+  var top = rows.slice().sort(function (a, b) { return n(b.attendees) - n(a.attendees); }).slice(0, 10).sort(function (a, b) { return (a.date || '').localeCompare(b.date || ''); });
+  return monthly + '<p style="font-size:12px;color:#555;margin:6px 0">The ten best-attended sessions. The full list of ' + rows.length + ' events is held in Vorlana and available on request.</p>' +
+    '<table class="dr-tbl">' + head + '<tbody>' + top.map(row).join('') + '</tbody></table>';
 }
 
 // ── generate ───────────────────────────────────────────────
@@ -622,7 +708,9 @@ function generateNow() {
   ];
 
   var prof = currentProfile(s);
-  var sections = prof.p.sections.map(function (x) { return x === '%CIRC%' ? (hasCirc ? 'Circular Economy' : '') : x; }).filter(Boolean);
+  var growing = !!(s.circ && s.circ.growing), growOnly = growing && !s.circ.finished;
+  var circTitle = growOnly ? 'Growing' : (growing ? 'Growing and Circular Economy' : 'Circular Economy');
+  var sections = prof.p.sections.map(function (x) { return x === '%CIRC%' ? (hasCirc ? circTitle : '') : x; }).filter(Boolean);
   var prevP = previousPeriod(p), prev = prevP ? buildStats(prevP) : null;
   var targets = targetLines(s, p);
   var checks = reconcile(s);
@@ -634,7 +722,14 @@ function generateNow() {
     (prev ? 'Where a previous-period figure is supplied, say whether it is up or down and by how much, using only the supplied percentage. ' : '') +
     'Use participant quotes verbatim where supplied. Never describe a "case study" or any individual unless a quote is supplied. ' +
     'In the learning / lessons section draw only on the data gaps and the figures (e.g. low attendance against capacity), never on assumptions. ' +
-    (hasCirc ? 'In Circular Economy, report weight diverted, reuse and repair, food shared and CO2e using only the figures supplied, and say CO2e and value are estimates. ' : '') +
+    (hasCirc ? (growOnly
+      ? 'In Growing, report kilograms harvested, food shared or sold, meals and value using only the figures supplied, and say value is an estimate at shop prices. Never describe harvested food as waste diverted, reused or repaired. '
+      : 'In the circular economy section, report weight diverted, reuse and repair, food shared and CO2e using only the figures supplied, and say CO2e and value are estimates. Harvested food is not waste diverted. ') : '') +
+    'WORDING RULES: use "attendances" for the visits recorded and "responses" for feedback; never call attendances "participants" or "people", because unique people are not counted. ' +
+    'Never write "significant" or "significantly", "universal", "all participants" or "everyone" about results; give the number of answers (n) beside any percentage that is not based on every response. ' +
+    'Call the largest group the "largest" or "most common"; write "majority" only if the share supplied is over 50%. ' +
+    'Do not comment on how the survey or form was designed, and do not state doubts about the data beyond the listed data quality notes. ' +
+    'Never mention any individual\'s health, condition or personal circumstances. Refer to the organisation only by the Organisation name given. ' +
     'In Who We Reached, describe the people reached using only the demographic figures supplied, in plain respectful language, and say they are from optional anonymous answers. ' +
     'CRITICAL: use ONLY the figures supplied. Never invent, estimate, extrapolate or recalculate any number — ' +
     'every statistic has already been computed from the database. Do not add totals of your own. ' +
@@ -652,9 +747,9 @@ function generateNow() {
     targets.length ? 'PROGRESS AGAINST CONTRACT TARGETS\n' + targets.join('\n') + '\n' : '',
     'DELIVERY' + (prev ? ' (with comparison to the previous period, ' + prevP.from + ' to ' + prevP.to + ')' : ''),
     compareLine('Events delivered', s.eventCount, prev ? prev.eventCount : null),
-    compareLine('Total attendances', s.attendees, prev ? prev.attendees : null),
+    compareLine('Total attendances (visits recorded; unique people are not counted)', s.attendees, prev ? prev.attendees : null),
     s.fillRate != null ? 'Attendance against capacity: ' + s.fillRate + '%' : '',
-    'Events by type: ' + (Object.keys(s.byType).map(function (k) { return k + ' ' + s.byType[k]; }).join(', ') || 'none'),
+    s.typeDominant ? '' : 'Events by type: ' + (Object.keys(s.byType).map(function (k) { return k + ' ' + s.byType[k]; }).join(', ') || 'none'),
     '',
     'VOLUNTEERING',
     'Volunteers active: ' + s.activeVolunteers + ' (of ' + s.totalVolunteers + ' registered)',
@@ -667,13 +762,11 @@ function generateNow() {
     compareLine('Responses', s.fbCount, prev ? prev.fbCount : null),
     s.fbCount && s.avgCB && s.avgCA ? 'Confidence before: ' + s.avgCB + ' → after: ' + s.avgCA + ' out of 5 (average gain ' + s.confGain + ')' : '',
     s.ownMeasures.length
-      ? s.ownMeasures.map(function (m) { return '"' + m.q + '": ' + m.text + ' (' + m.n + ' answers)'; }).join('\n')
+      ? s.ownMeasures.filter(function (m) { return !m.allYes; }).map(function (m) { return '"' + m.q + '": ' + m.text + ' (' + m.n + ' answers)'; }).join('\n')
       : [s.fbCount && s.avgEnjoyed ? 'Average enjoyment: ' + s.avgEnjoyed + ' out of 5' : '',
          s.fbCount ? 'Learned something new: ' + s.learnedPct + '%' : '',
          s.fbCount ? 'Felt more connected: ' + s.connectedPct + '%' : '',
          s.fbCount ? 'Made a new friend: ' + s.friendPct + '%' : ''].filter(Boolean).join('\n'),
-    s.ownMeasures.some(function (m) { return m.allYes; })
-      ? 'Caveat: every answer to ' + s.ownMeasures.filter(function (m) { return m.allYes; }).map(function (m) { return '"' + m.q + '"'; }).join(' and ') + ' was "Yes" — the form may only have offered Yes; mention this and do not present those as evidence.' : '',
     '',
     'WHO WE REACHED (event attendees, from anonymous optional answers)',
     s.attDemo.count ? 'Responses with demographic data: ' + s.attDemo.count + ' of ' + s.fbCount : 'No attendee demographic data in this period.',
@@ -734,7 +827,7 @@ function renderDoc(raw, s, orgName, todayStr, funderName) {
     bodyHTML = bodyHTML.replace(re, '<mark title="This number is not in your records — check it before sending" style="background:#FEF3C7">$1' + num + '$2</mark>');
   });
   var checksOk = (s.checks || []).filter(function (c) { return c.ok; }).length, checksAll = (s.checks || []).length;
-  var verifyBox = '<div style="border:1px solid ' + ((s.unverified || []).length || checksOk < checksAll ? '#FDE68A' : '#BBF7D0') + ';background:' + ((s.unverified || []).length || checksOk < checksAll ? '#FFFBEB' : '#F0FDF4') + ';border-radius:10px;padding:10px 14px;font-size:12.5px;margin:0 0 16px;line-height:1.6">' +
+  var verifyBox = '<div class="no-print" style="border:1px solid ' + ((s.unverified || []).length || checksOk < checksAll ? '#FDE68A' : '#BBF7D0') + ';background:' + ((s.unverified || []).length || checksOk < checksAll ? '#FFFBEB' : '#F0FDF4') + ';border-radius:10px;padding:10px 14px;font-size:12.5px;margin:0 0 16px;line-height:1.6">' +
     '<b>Verification</b> · written as ' + esc(s.profile ? s.profile.p.label : 'general') + ' · ' + checksOk + ' of ' + checksAll + ' arithmetic checks passed · ' +
     ((s.unverified || []).length ? '<span style="color:#92400E">' + s.unverified.length + ' number(s) could not be matched to your records and are highlighted — check before sending.</span>' : 'every number in the narrative matches your records.') +
     ((s.checks || []).filter(function (c) { return !c.ok; }).map(function (c) { return '<div style="color:#92400E">⚠ ' + esc(c.text) + '</div>'; }).join('')) + '</div>';
@@ -756,7 +849,8 @@ function renderDoc(raw, s, orgName, todayStr, funderName) {
         '<div class="report-subtitle">' + esc(orgName) + ' · ' + esc(todayStr) + '</div>' +
       '</div>';
 
-  var headline = verifyBox +
+  var gr0 = s.circ && s.circ.growing, growOnly0 = !!gr0 && !s.circ.finished;
+  var headline = verifyBox + doctorHTML(s) +
     '<div class="dr-figs">' +
       fig('Events delivered', s.eventCount) +
       fig('Total attendances', s.attendees) +
@@ -764,10 +858,11 @@ function renderDoc(raw, s, orgName, todayStr, funderName) {
       fig('Hours contributed', s.totalHours) +
       fig('Value of volunteer time', money(s.value)) +
       fig('Feedback responses', s.fbCount) +
-      (s.circ && s.circ.entries ? fig('Diverted from waste', s.circ.kg + ' kg') : '') +
+      (gr0 ? fig('Harvested', fmtNum(gr0.kg) + ' kg') : '') +
+      (s.circ && s.circ.entries && !growOnly0 ? fig('Diverted from waste', fmtNum(s.circ.kg) + ' kg') : '') +
       (s.circ && s.circ.co2 ? fig('CO₂e avoided (est.)', (Math.round(s.circ.co2 / 100) / 10) + ' t') : '') +
-      (s.circ && s.circ.foodKg ? fig('Meals equivalent', s.circ.meals) : '') +
-    '</div>';
+      (s.circ && s.circ.foodKg ? fig('Meals equivalent', fmtNum(s.circ.meals, 0)) : '') +
+    '</div>' + chartsHTML(s);
 
   function demoBlock(title, d, who) {
     if (!d.count) return '';
@@ -782,7 +877,13 @@ function renderDoc(raw, s, orgName, todayStr, funderName) {
       tableFrom(d.ethnicity, 'Ethnicity') +
       tableFrom(d.gender, 'Gender') +
       tableFrom(d.disability, 'Disability') +
-      tableFrom(topN(d.postcode, 10), 'Postcode area');
+      tableFrom(postcodeRows(d), 'Postcode area', d.postcodeTotal);
+  }
+  // top ten areas plus an "Other areas" row, all as a share of everyone who gave a postcode (same base as the headline figure)
+  function postcodeRows(d) {
+    var top = topN(d.postcode, 10), shown = Object.keys(top).reduce(function (a, k) { return a + top[k]; }, 0);
+    if (d.postcodeTotal > shown) top['Other areas'] = d.postcodeTotal - shown;
+    return top;
   }
   function topN(obj, k) {
     var out = {};
@@ -794,9 +895,9 @@ function renderDoc(raw, s, orgName, todayStr, funderName) {
     demoBlock('Volunteer demographics', s.volDemo, 'active volunteers');
 
   var appendix =
-    '<h3>Appendix A — Events delivered</h3>' + (eventTable(s) || '<p>No events in this period.</p>') +
+        '<h3>' + (s.events.length > 40 ? 'Appendix A — Events by month and best-attended sessions' : 'Appendix A — Events delivered') + '</h3>' + (eventTable(s) || '<p>No events in this period.</p>') +
     '<h3>Appendix B — Volunteer hours by month</h3>' + (monthTable(s.byMonth) || '<p>No hours logged in this period.</p>') +
-    (Object.keys(s.byType).length ? '<h3>Appendix C — Events by type</h3>' + tableFrom(s.byType, 'Type', s.eventCount) : '') +
+    (Object.keys(s.byType).length && !s.typeDominant ? '<h3>Appendix C — Events by type</h3>' + tableFrom(s.byType, 'Type', s.eventCount) : '') +
     demographics +
     (typeof cxReportDocHTML === 'function' ? cxReportDocHTML(s.circ, 'Appendix D — Circular economy') : '') +
     '<p style="font-size:11px;color:#777;margin-top:18px">Volunteer time valued at £' + s.rate.toFixed(2) + ' per hour — ' + esc(RATE_LABEL) + '. ' +
@@ -811,18 +912,21 @@ function renderDoc(raw, s, orgName, todayStr, funderName) {
       '.dr-tbl{width:100%;border-collapse:collapse;margin:10px 0 18px;font-size:13px}' +
       '.dr-tbl th{text-align:left;border-bottom:2px solid #ccc;padding:6px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#555}' +
       '.dr-tbl td{border-bottom:1px solid #eee;padding:6px 8px}' +
-      '@media print{.dr-tbl{page-break-inside:avoid}}' +
+      '.pf{width:100%;border-collapse:collapse}.pf td{padding:0;border:0}.pf-gap{display:none}' +
+      '@media print{.dr-tbl{page-break-inside:avoid}.pf-gap{display:block;height:14mm}.pf>tbody>tr>td{padding:0 14mm}.pf{page:vlpage}}' +
     '</style>' +
     '<div class="report-actions">' +
       '<button class="btn btn-p" onclick="downloadReportPDF()">⬇ Download as PDF</button>' +
       '<button class="btn btn-ghost btn-sm" onclick="copyReportText()" id="copy-report-btn">📋 Copy text</button>' +
       '<button class="btn btn-ghost btn-sm" id="dr-regen">↻ Regenerate</button>' +
     '</div>' +
+    '<table class="pf"><thead><tr><td><div class="pf-gap"></div></td></tr></thead><tbody><tr><td>' +
     '<div class="report-doc">' +
       header +
       '<div class="report-body">' + headline + bodyHTML + appendix + '</div>' +
       '<div class="report-footer">Generated by Vorlana · ' + esc(todayStr) + ' · Period: ' + esc(s.period.label) + '</div>' +
-    '</div>';
+    '</div>' +
+    '</td></tr></tbody><tfoot><tr><td><div class="pf-gap"></div></td></tr></tfoot></table>';
 
   var rg = $('dr-regen');
   if (rg) rg.addEventListener('click', generate);
@@ -831,7 +935,7 @@ function renderDoc(raw, s, orgName, todayStr, funderName) {
 }
 
 function fig(label, val) {
-  return '<div class="dr-fig"><div class="dr-fig-v">' + esc(String(val)) + '</div><div class="dr-fig-l">' + esc(label) + '</div></div>';
+  return '<div class="dr-fig"><div class="dr-fig-v">' + esc(typeof val === 'number' ? fmtNum(val) : String(val)) + '</div><div class="dr-fig-l">' + esc(label) + '</div></div>';
 }
 
 // ── init ───────────────────────────────────────────────────
@@ -839,6 +943,9 @@ function whenReady(fn) {
   if (typeof DB !== 'undefined' && typeof renderReports === 'function') return setTimeout(fn, 350);
   setTimeout(function () { whenReady(fn); }, 150);
 }
+
+// test hook: only present when a test page asks for it
+if (window.__VORLANA_TEST) window.__drTest = { buildStats: buildStats, gapsFor: gapsFor, doctorNotes: doctorNotes, renderDoc: renderDoc, currentPeriod: currentPeriod, eventTable: eventTable, generateNow: generateNow };
 
 whenReady(function () {
   var orig = window.renderReports;
