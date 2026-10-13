@@ -696,7 +696,7 @@ const CIRC_TALLY_DEFAULT = ['growing', 'food', 'textiles', 'scrap_store', 'repai
 
 function _circSlug(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40) || 'x'; }
 function _circRid(p) { return p + '_' + Math.random().toString(36).slice(2, 8); }
-function circMode(a) { return a.mode || (CIRC_TALLY_DEFAULT.includes(a.template) ? 'tally' : 'tracked'); }
+function circMode(a) { if (a.template === 'growing') return 'tally'; return a.mode || (CIRC_TALLY_DEFAULT.includes(a.template) ? 'tally' : 'tracked'); }   // Growing is a harvest log, never item-by-item stages
 
 // Item rows: [label, unit ('kg' or 'each'), kg each, CO₂e kg avoided per unit, £ value per unit]
 function _circT(key, name, icon, desc, stages, outcomes, items, fields, links) {
