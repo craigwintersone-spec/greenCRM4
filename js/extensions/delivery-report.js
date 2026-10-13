@@ -730,6 +730,8 @@ function generateNow() {
     'Call the largest group the "largest" or "most common"; write "majority" only if the share supplied is over 50%. ' +
     'Do not comment on how the survey or form was designed, and do not state doubts about the data beyond the listed data quality notes. ' +
     'Never mention any individual\'s health, condition or personal circumstances. Refer to the organisation only by the Organisation name given. ' +
+    'Write the ethnicity figure as "black and ethnic minority" (lower-case "black"), never "BAME" or "Black or from an ethnic minority background". ' +
+    'In any lessons or "what we would change" section, state only what the figures show: do not guess at causes, and do not write what the organisation "does not yet know". End that section with exactly one placeholder sentence in the form [INSERT: what you plan to change, in your own words] so the manager adds their own reflection. ' +
     'In Who We Reached, describe the people reached using only the demographic figures supplied, in plain respectful language, and say they are from optional anonymous answers. ' +
     'CRITICAL: use ONLY the figures supplied. Never invent, estimate, extrapolate or recalculate any number — ' +
     'every statistic has already been computed from the database. Do not add totals of your own. ' +
@@ -826,6 +828,9 @@ function renderDoc(raw, s, orgName, todayStr, funderName) {
     var re = new RegExp('(£?)' + num.replace(/\./g, '\\.') + '(%?)(?![\\d])', 'g');
     bodyHTML = bodyHTML.replace(re, '<mark title="This number is not in your records — check it before sending" style="background:#FEF3C7">$1' + num + '$2</mark>');
   });
+  var phCount = (cleaned.match(/\[INSERT:[^\]]*\]/g) || []).length;
+  bodyHTML = bodyHTML.replace(/\[INSERT:[^\]]*\]/g, function (m) { return '<mark style="background:#FFF3B0">' + m + '</mark>'; });
+  var phBox = phCount ? '<div class="no-print" style="border:1px solid #FDE68A;background:#FFFBEB;border-radius:10px;padding:10px 14px;font-size:12.5px;margin:0 0 16px;line-height:1.6"><b>' + phCount + ' placeholder' + (phCount === 1 ? '' : 's') + ' to complete</b> (highlighted yellow): add your own words before you send. This note is not printed.</div>' : '';
   var checksOk = (s.checks || []).filter(function (c) { return c.ok; }).length, checksAll = (s.checks || []).length;
   var verifyBox = '<div class="no-print" style="border:1px solid ' + ((s.unverified || []).length || checksOk < checksAll ? '#FDE68A' : '#BBF7D0') + ';background:' + ((s.unverified || []).length || checksOk < checksAll ? '#FFFBEB' : '#F0FDF4') + ';border-radius:10px;padding:10px 14px;font-size:12.5px;margin:0 0 16px;line-height:1.6">' +
     '<b>Verification</b> · written as ' + esc(s.profile ? s.profile.p.label : 'general') + ' · ' + checksOk + ' of ' + checksAll + ' arithmetic checks passed · ' +
@@ -850,7 +855,7 @@ function renderDoc(raw, s, orgName, todayStr, funderName) {
       '</div>';
 
   var gr0 = s.circ && s.circ.growing, growOnly0 = !!gr0 && !s.circ.finished;
-  var headline = verifyBox + doctorHTML(s) +
+  var headline = verifyBox + phBox + doctorHTML(s) +
     '<div class="dr-figs">' +
       fig('Events delivered', s.eventCount) +
       fig('Total attendances', s.attendees) +
