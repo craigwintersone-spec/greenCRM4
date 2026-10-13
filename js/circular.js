@@ -414,6 +414,13 @@ function cxImpact(items) {
       r.harvestKg += +i.weight_kg || 0;
       if (i.outcome_type === 'share') r.foodKg += +i.weight_kg || 0;
       if (i.custom && +i.custom.sale_gbp) r.income += +i.custom.sale_gbp;
+      if (cxIsCompostIn(act0, i)) r.compostIn = (r.compostIn || 0) + (+i.weight_kg || 0);
+      return;
+    }
+    if (act0 && act0.template === 'compost' && i.outcome_type) {
+      const ckg = +i.weight_kg || 0;
+      if (cxIsCompostIn(act0, i)) { r.compostIn = (r.compostIn || 0) + ckg; r.kg += ckg; r.finished++; }   // kept out of landfill
+      else { r.compostOut = (r.compostOut || 0) + ckg; r.finished++; if (i.custom && +i.custom.sale_gbp) r.income += +i.custom.sale_gbp; }
       return;
     }
     if (!i.outcome_type) { r.inProgress++; return; }
@@ -499,7 +506,9 @@ function cxDraw() {
       : statCard('Value to people', '£' + cxFmt(im.value), im.income ? '£' + cxFmt(im.income) + ' sales income' : (im.reused ? cxFmt(im.reused) + ' items reused' : 'from reuse and repair'))) +
     '</div>';
   if (act && act.template === 'growing') stats = cxGrowingStats(scope);
-  else if (!act && im.harvests) stats = stats.replace(/<\/div>$/, statCard('Harvested', cxFmt(im.harvestKg, 1) + ' kg', cxFmt(im.harvests) + ' harvest' + (im.harvests === 1 ? '' : 's') + ' logged') + '</div>');
+  else if (act && act.template === 'compost') stats = cxCompostTiles(scope);
+  if (!act && (im.compostIn || im.compostOut)) stats = stats.replace(/<\/div>$/, statCard('Compost', cxFmt(im.compostIn || 0, 1) + ' kg in', cxFmt(im.compostOut || 0, 1) + ' kg out') + '</div>');
+  if (!act && im.harvests) stats = stats.replace(/<\/div>$/, statCard('Harvested', cxFmt(im.harvestKg, 1) + ' kg', cxFmt(im.harvests) + ' harvest' + (im.harvests === 1 ? '' : 's') + ' logged') + '</div>');
 
   const backlog = CX.tab !== 'all' ? CX.items.filter(i => i.activity_id === CX.tab && !i.outcome_type).length : 0;
   const wasTracked = act && circMode(act) === 'tracked';
@@ -528,7 +537,7 @@ function cxSummaryHTML(acts) {
         ? '<div style="margin:6px 0 8px">' + (live.length && a.template !== 'growing' ? '<span class="cxp-chip" style="color:var(--amber);border-color:var(--amber)">' + live.length + ' to sort</span>' : '') + '<span class="cxp-chip">' + its.filter(cxIsToday).length + ' today</span><span class="cxp-chip">' + cxFmt(its.filter(i => i.created_at && new Date(i.created_at).getMonth() === new Date().getMonth() && new Date(i.created_at).getFullYear() === new Date().getFullYear()).reduce((x, i) => x + (+i.weight_kg || 0), 0), 1) + ' kg this month</span></div>'
         : '<div style="margin:6px 0 8px">' + (a.stages || []).map(s =>
         '<span class="cxp-chip">' + cxE(s.label) + ' · ' + live.filter(i => i.stage === s.key).length + '</span>').join('') + '</div>') +
-      '<div class="cxp-s">' + (a.template === 'growing' ? cxFmt(im.harvests) + ' harvest' + (im.harvests === 1 ? '' : 's') + ' \u00b7 ' + cxFmt(im.harvestKg, 1) + ' kg harvested' : cxFmt(im.finished) + ' finished · ' + cxFmt(im.kg, 1) + ' kg diverted') +
+      '<div class="cxp-s">' + (a.template === 'compost' ? cxFmt(im.compostIn || 0, 1) + ' kg in \u00b7 ' + cxFmt(im.compostOut || 0, 1) + ' kg out' : a.template === 'growing' ? cxFmt(im.harvests) + ' harvest' + (im.harvests === 1 ? '' : 's') + ' \u00b7 ' + cxFmt(im.harvestKg, 1) + ' kg harvested' : cxFmt(im.finished) + ' finished · ' + cxFmt(im.kg, 1) + ' kg diverted') +
       (stuck ? ' · <span style="color:var(--amber);font-weight:700">' + stuck + ' waiting over 14 days</span>' : '') + '</div>' +
     '</div>';
   }).join('') + '</div>' +
@@ -815,6 +824,33 @@ async function cxGrowDelGroup(splitId) {
   CX.items = CX.items.filter(i => !ids.includes(i.id)); cxDraw();
 }
 
+// ── Compost: in and out ───────────────────────────────────────
+// "Into the heap" is compost in (waste kept out of landfill). Anything else is finished compost going out.
+// A harvest portion placed as Compost is compost in too, so it is never typed twice.
+function cxIsCompostIn(act, i) {
+  if (!act) return false;
+  if (act.template === 'compost') { const o = cxOutcome(act, i.outcome); return !!o && /heap|into/i.test(o.label); }
+  if (act.template === 'growing') { const o = cxOutcome(act, i.outcome); return !!o && /compost/i.test(o.label); }
+  return false;
+}
+function cxCompostStats(items) {
+  let inKg = 0, outKg = 0, fromHarvest = 0; const byIn = {}, byOut = {};
+  items.forEach(i => {
+    const a = cxAct(i.activity_id), kg = +i.weight_kg || 0; if (!a || !i.outcome_type) return;
+    if (cxIsCompostIn(a, i)) { inKg += kg; if (a.template === 'growing') fromHarvest += kg; const t = cxType(a, i.item_type); const k = a.template === 'growing' ? 'Our own harvest' : (t ? cxLbl(t) : 'Other'); byIn[k] = (byIn[k] || 0) + kg; }
+    else if (a.template === 'compost') { outKg += kg; const o = cxOutcome(a, i.outcome); const k = o ? o.label : 'Out'; byOut[k] = (byOut[k] || 0) + kg; }
+  });
+  return { inKg, outKg, fromHarvest, byIn, byOut };
+}
+function cxCompostTiles(items) {
+  const c = cxCompostStats(items), top = o => Object.keys(o).sort((a, b) => o[b] - o[a])[0];
+  return '<div class="stats-grid cxp-stats">' +
+    statCard('Compost in', cxFmt(c.inKg, 1) + ' kg', 'kept out of landfill' + (c.fromHarvest ? ' \u00b7 ' + cxFmt(c.fromHarvest, 1) + ' kg from your harvests' : '')) +
+    statCard('Compost out', cxFmt(c.outKg, 1) + ' kg', 'finished compost') +
+    statCard('Mostly from', top(c.byIn) ? cxE(top(c.byIn)) : '\u2014', top(c.byIn) ? cxFmt(c.byIn[top(c.byIn)], 1) + ' kg' : 'nothing in yet') +
+    statCard('Mostly went to', top(c.byOut) ? cxE(top(c.byOut)) : '\u2014', top(c.byOut) ? cxFmt(c.byOut[top(c.byOut)], 1) + ' kg' : 'nothing out yet') +
+    '</div><div class="cxp-s" style="margin:-8px 0 14px">In and out are shown separately: compost shrinks as it rots, so they never balance.</div>';
+}
 function cxQ(act) {
   if (!CX.q[act.id]) CX.q[act.id] = { type: ((act.item_types || [])[0] || {}).key || '', amt: '', batch: false, tell: false, event: cxDefaultSession() };
   return CX.q[act.id];
@@ -871,7 +907,7 @@ function cxQuickHTML(act) {
   else { big = cxFmt(todayKg, 1) + ' kg'; small = food ? '≈ ' + cxFmt(todayKg / CX_KG_PER_MEAL) + ' meals today' : cxFmt(todayN) + ' entries today'; }
   const speech = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 
-  let h = '<div class="card cxq"><div class="cxq-top"><div><div class="cxq-k">' + e(act.icon) + ' ' + e(act.name) + '</div><div class="cxq-h">' + (act.template === 'growing' ? 'Log a harvest' : tracked ? 'Add an item' : 'Log it') + '</div></div>' +
+  let h = '<div class="card cxq"><div class="cxq-top"><div><div class="cxq-k">' + e(act.icon) + ' ' + e(act.name) + '</div><div class="cxq-h">' + (act.template === 'compost' ? 'Log compost' : act.template === 'growing' ? 'Log a harvest' : tracked ? 'Add an item' : 'Log it') + '</div></div>' +
     '<div style="text-align:right"><div class="cxq-big">' + big + '</div><div class="cxq-small">' + small + '</div></div></div>';
 
   if (!grow && (DB.events || []).length) {
@@ -917,7 +953,7 @@ function cxQuickHTML(act) {
     const opts = tracked ? (act.stages || []) : (grow ? cxGrowDests(act) : (act.outcomes || []));
     if (grow && q.split) h += cxGrowSplitHTML(act, q);
     else {
-    h += '<div class="' + (grow ? 'cxg-step' : 'cxq-lbl') + '">' + (grow ? '3. Where did it go? Tap to log' : tracked ? 'Where is it now?' : act.template === 'repair_cafe' ? 'How did it go?' : 'Where did it go?') + '</div>' +
+    h += '<div class="' + (grow ? 'cxg-step' : 'cxq-lbl') + '">' + (grow ? '3. Where did it go? Tap to log' : tracked ? 'Where is it now?' : act.template === 'repair_cafe' ? 'How did it go?' : act.template === 'compost' ? 'In or out? Tap to log' : 'Where did it go?') + '</div>' +
       '<div class="cxq-btns">' + opts.map((o, i) => '<button class="cxq-btn ' + (i === 0 ? 'first' : '') + '" onclick="cxQuickLog(\'' + id + '\',\'' + (tracked ? 'stage' : 'outcome') + '\',\'' + e(o.key) + '\')">' + e(o.label) + '</button>').join('') + (grow ? '<button class="cxq-btn" title="Picked, no destination yet" onclick="cxQuickLog(\'' + id + '\',\'none\',\'\')">Harvested</button>' : '') + '</div>';
     if (grow) h += cxGrowLinksHTML(id, kg);
     else if (!tracked) h += '<div style="text-align:center;margin-top:10px"><a href="#" class="cxp-s" onclick="cxQ(cxAct(\'' + id + '\')).batch=true;cxDraw();return false">Enter totals for a whole session instead</a></div>';
@@ -1288,7 +1324,15 @@ function cxReportStats(o) {
       gr.byCrop[crop] = (gr.byCrop[crop] || 0) + kg;
       if (i.outcome_type) { const o3 = (a.outcomes || []).find(x => x.key === i.outcome); const ol3 = o3 ? o3.label : (i.status || i.outcome_type); gr.byOutcome[ol3] = (gr.byOutcome[ol3] || 0) + 1; }
       if (i.outcome_type === 'share') { gr.sharedKg += kg; gr.value += +i.value_gbp || 0; r.foodKg += kg; }
+      if (cxIsCompostIn(a, i)) { const c = r.compost || (r.compost = { inKg: 0, outKg: 0, fromHarvest: 0, byIn: {}, byOut: {} }); c.inKg += kg; c.fromHarvest += kg; c.byIn['Our own harvest'] = (c.byIn['Our own harvest'] || 0) + kg; }
       if (i.custom && +i.custom.sale_gbp) r.income += +i.custom.sale_gbp;
+      return;
+    }
+    if (a.template === 'compost') {
+      if (!i.outcome_type) { r.inProgress++; r.undecided++; return; }
+      const c = r.compost || (r.compost = { inKg: 0, outKg: 0, fromHarvest: 0, byIn: {}, byOut: {} }); r.finished++; row.items++; row.kg += kg;
+      if (cxIsCompostIn(a, i)) { c.inKg += kg; r.kg += kg; const ty = cxType(a, i.item_type); const k = ty ? cxLbl(ty) : 'Other'; c.byIn[k] = (c.byIn[k] || 0) + kg; }
+      else { c.outKg += kg; const o = cxOutcome(a, i.outcome); const k = o ? o.label : 'Out'; c.byOut[k] = (c.byOut[k] || 0) + kg; if (i.custom && +i.custom.sale_gbp) r.income += +i.custom.sale_gbp; }
       return;
     }
     if (!i.outcome_type) { r.inProgress++; if (circMode(a) === 'tracked') r.inStock++; else r.undecided++; return; }
@@ -1310,6 +1354,7 @@ function cxReportStats(o) {
   const r1 = v => Math.round(v * 10) / 10;
   r.kg = r1(r.kg); r.estKg = r1(r.estKg); r.co2 = r1(r.co2); r.value = Math.round(r.value); r.foodKg = r1(r.foodKg); r.recycledKg = r1(r.recycledKg);
   r.meals = Math.round(r.foodKg / CX_KG_PER_MEAL);
+  if (r.compost) { r.compost.inKg = r1(r.compost.inKg); r.compost.outKg = r1(r.compost.outKg); r.compost.fromHarvest = r1(r.compost.fromHarvest); }
   if (r.growing) { delete r.growing._seen; r.growing.kg = r1(r.growing.kg); r.growing.sharedKg = r1(r.growing.sharedKg); r.growing.value = Math.round(r.growing.value); r.growing.meals = Math.round(r.growing.sharedKg / CX_KG_PER_MEAL); }
   r.fixRate = r.repairTried ? Math.round(r.repairFixed / r.repairTried * 100) : null;
   r.activities = Object.keys(r.byActivity);
@@ -1331,8 +1376,17 @@ function cxReportLines(r) {
     Object.keys(r.byBed).length ? 'Yield by bed or planter (kg): ' + Object.keys(r.byBed).sort((a, b) => r.byBed[b] - r.byBed[a]).slice(0, 5).map(k => k + ' ' + (Math.round(r.byBed[k] * 10) / 10)).join(', ') : '',
     r.income ? 'Income from sales: ' + m(r.income) : ''
   ].filter(Boolean) : [];
-  if (gr && !r.finished) return growLines;     // growing only: nothing here was reused, repaired or recycled
-  return growLines.concat([
+  const cp = r.compost;
+  const compostLines = cp ? [
+    '',
+    'COMPOST (calculated from compost records; in and out are separate figures and never balance, because compost shrinks as it rots)',
+    'Compost in, kept out of landfill: ' + cp.inKg + ' kg' + (cp.fromHarvest ? ' (of which ' + cp.fromHarvest + ' kg was our own harvest waste)' : ''),
+    Object.keys(cp.byIn).length ? 'What went in: ' + Object.keys(cp.byIn).sort((a, b) => cp.byIn[b] - cp.byIn[a]).map(k => k + ' ' + (Math.round(cp.byIn[k] * 10) / 10) + ' kg').join(', ') : '',
+    'Finished compost out: ' + cp.outKg + ' kg' + (Object.keys(cp.byOut).length ? ' (' + Object.keys(cp.byOut).sort((a, b) => cp.byOut[b] - cp.byOut[a]).map(k => k + ' ' + (Math.round(cp.byOut[k] * 10) / 10) + ' kg').join(', ') + ')' : '')
+  ].filter(Boolean) : [];
+  if (gr && !r.finished) return growLines.concat(compostLines);     // growing only: nothing here was reused, repaired or recycled
+  if (cp && !r.finished) return growLines.concat(compostLines);
+  return growLines.concat(compostLines).concat([
     '',
     'CIRCULAR ECONOMY (calculated from item records)',
     'Activities: ' + r.activities.join(', '),
