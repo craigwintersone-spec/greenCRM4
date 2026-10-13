@@ -645,8 +645,7 @@ function cxGrowMoreHTML(act, q) {
     ((DB.events || []).length ? '<div class="cxq-sess" title="Optional. Link this to a workshop or volunteer day and it counts in that event\'s funder report."><span>Event</span><select onchange="cxQ(cxAct(\'' + id + '\')).event=this.value">' + cxSessionOptions(q.event) + '</select></div>' : '');
 }
 function cxGrowLinksHTML(id, kg) {
-  return '<div class="cxg-links">' + (kg ? '<a href="#" onclick="cxGrowSplitOpen(\'' + id + '\');return false">Split it between places</a><span>\u00b7</span>' : '') +
-    '<a href="#" onclick="cxQuickLog(\'' + id + '\',\'none\',\'\');return false">Not sure yet</a></div>';
+  return kg ? '<div class="cxg-links"><a href="#" onclick="cxGrowSplitOpen(\'' + id + '\');return false">Split it between places</a></div>' : '';
 }
 // Split one harvest between places: 2 kg shared, 1 kg sold, 1 kg to the compost
 function cxGrowSplitOpen(actId) {
@@ -658,7 +657,7 @@ function cxGrowSplitHTML(act, q) {
   const id = act.id, total = +q.amt || 0, t = cxType(act, q.type);
   return '<div class="cxg-step">3. Split ' + cxFmt(total, 1) + ' kg' + (t ? ' of ' + cxE(cxLbl(t)) : '') + ' between places</div><div class="cxg-split">' +
     cxGrowDests(act).map(o => '<div class="cxg-row"><span class="cxg-n">' + cxE(o.label) + '</span><input type="number" inputmode="decimal" min="0" step="0.1" placeholder="0" class="cxg-part-' + id + '" data-out="' + cxE(o.key) + '" oninput="cxGrowSplitCalc(\'' + id + '\')"/><span style="flex:none;font-size:13px;color:var(--txt3)">kg</span></div>').join('') +
-    '<div class="cxg-left" id="cxg-left-' + id + '">Not placed yet: ' + cxFmt(total, 1) + ' kg</div>' +
+    '<div class="cxg-left" id="cxg-left-' + id + '">Not placed yet: ' + cxFmt(total, 1) + ' kg (kept as harvested)</div>' +
     '<div style="display:flex;gap:6px;justify-content:flex-end"><button class="btn btn-ghost btn-sm" onclick="cxQ(cxAct(\'' + id + '\')).split=false;cxDraw()">Back</button><button class="btn btn-p btn-sm" id="cxg-go-' + id + '" onclick="cxGrowSplitLog(\'' + id + '\')">Log split</button></div></div>';
 }
 function cxGrowSplitCalc(actId) {
@@ -667,7 +666,7 @@ function cxGrowSplitCalc(actId) {
   const left = Math.round((total - sum) * 100) / 100, el = $('cxg-left-' + actId);
   if (!el) return;
   el.className = 'cxg-left' + (left < -0.001 ? ' bad' : '');
-  el.textContent = left < -0.001 ? 'That is ' + cxFmt(-left, 2) + ' kg more than you picked' : left > 0.001 ? 'Not placed yet: ' + cxFmt(left, 2) + ' kg (saved as not recorded)' : 'All placed';
+  el.textContent = left < -0.001 ? 'That is ' + cxFmt(-left, 2) + ' kg more than you picked' : left > 0.001 ? 'Not placed yet: ' + cxFmt(left, 2) + ' kg (kept as harvested)' : 'All placed';
 }
 async function cxGrowSplitLog(actId) {
   const act = cxAct(actId), q = cxQ(act), total = +q.amt || 0;
@@ -683,7 +682,7 @@ async function cxGrowSplitLog(actId) {
     for (const p of parts) { const r = await cxQInsert(act, q.type, p.kg, 'outcome', p.key, { _via: 'split' }); ids.push(r.row.id); }
     if (left > 0.001) { const r = await cxQInsert(act, q.type, left, 'none', '', { _via: 'split' }); ids.push(r.row.id); }
     const t = cxType(act, q.type);
-    CX.undo = { act: actId, ids, at: Date.now(), text: cxFmt(total, 1) + ' kg ' + (t ? cxLbl(t) : '') + ' split: ' + parts.map(p => cxFmt(p.kg, 1) + ' kg ' + ((cxOutcome(act, p.key) || {}).label || '').toLowerCase()).join(', ') + (left > 0.001 ? ', ' + cxFmt(left, 1) + ' kg not recorded' : '') };
+    CX.undo = { act: actId, ids, at: Date.now(), text: cxFmt(total, 1) + ' kg ' + (t ? cxLbl(t) : '') + ' split: ' + parts.map(p => cxFmt(p.kg, 1) + ' kg ' + ((cxOutcome(act, p.key) || {}).label || '').toLowerCase()).join(', ') + (left > 0.001 ? ', ' + cxFmt(left, 1) + ' kg harvested, no destination yet' : '') };
     Object.assign(q, { amt: '', bed: '', picker: '', status: '', newType: null, more: false, split: false, estAmt: null, estBasis: '' });
     q._splitId = null;
     cxDraw(); cxUndoTimer();
@@ -710,7 +709,7 @@ function cxGrowRecentHTML(act) {
     const bed = first.custom && first.custom.bed_planter;
     const d = new Date(first.outcome_at || first.created_at);
     const when = cxIsToday(first) ? 'Today ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString('en-GB');
-    const chips = g.rows.map(i => { const o = cxOutcome(act, i.outcome); return '<span class="cxg-chip">' + (g.rows.length > 1 ? cxFmt(i.weight_kg, 1) + ' kg ' : '') + cxE(o && !/^harvested$/i.test(String(o.label).trim()) ? o.label : 'Not recorded') + '</span>'; }).join('');
+    const chips = g.rows.map(i => { const o = cxOutcome(act, i.outcome); return '<span class="cxg-chip">' + (g.rows.length > 1 ? cxFmt(i.weight_kg, 1) + ' kg ' : '') + cxE(o && !/^harvested$/i.test(String(o.label).trim()) ? o.label : 'Harvested') + '</span>'; }).join('');
     const click = g.rows.length === 1 ? 'cxOpenItem(\'' + first.id + '\')' : '';
     const del = g.rows.length === 1 ? 'cxDelEntry(\'' + first.id + '\')' : 'cxGrowDelGroup(\'' + cxE(first.custom.split_id) + '\')';
     return '<div class="cxg-r"' + (click ? ' onclick="' + click + '"' : '') + '><div><div class="cxg-t">' + cxFmt(kg, 1) + ' kg ' + cxE(t ? cxLbl(t) : cxLbl(first.name)) + (bed ? ' <span style="font-weight:400;color:var(--txt3)">\u00b7 ' + cxE(bed) + '</span>' : '') + '</div><div class="cxg-s">' + when + '</div></div>' +
@@ -832,7 +831,7 @@ function cxQuickHTML(act) {
     if (grow && q.split) h += cxGrowSplitHTML(act, q);
     else {
     h += '<div class="' + (grow ? 'cxg-step' : 'cxq-lbl') + '">' + (grow ? '3. Where did it go? Tap to log' : tracked ? 'Where is it now?' : act.template === 'repair_cafe' ? 'How did it go?' : 'Where did it go?') + '</div>' +
-      '<div class="cxq-btns">' + opts.map((o, i) => '<button class="cxq-btn ' + (i === 0 ? 'first' : '') + '" onclick="cxQuickLog(\'' + id + '\',\'' + (tracked ? 'stage' : 'outcome') + '\',\'' + e(o.key) + '\')">' + e(o.label) + '</button>').join('') + '</div>';
+      '<div class="cxq-btns">' + opts.map((o, i) => '<button class="cxq-btn ' + (i === 0 ? 'first' : '') + '" onclick="cxQuickLog(\'' + id + '\',\'' + (tracked ? 'stage' : 'outcome') + '\',\'' + e(o.key) + '\')">' + e(o.label) + '</button>').join('') + (grow ? '<button class="cxq-btn" title="Picked, no destination yet" onclick="cxQuickLog(\'' + id + '\',\'none\',\'\')">Harvested</button>' : '') + '</div>';
     if (grow) h += cxGrowLinksHTML(id, kg);
     else if (!tracked) h += '<div style="text-align:center;margin-top:10px"><a href="#" class="cxp-s" onclick="cxQ(cxAct(\'' + id + '\')).batch=true;cxDraw();return false">Enter totals for a whole session instead</a></div>';
     }
@@ -928,7 +927,7 @@ async function cxQInsert(act, typeKey, amount, kind, key, extra) {
     const o = cxOutcome(act, key);
     Object.assign(d, { outcome: key, outcome_type: o.type, outcome_at: now, status: o.label, stage: null });
   } else if (kind === 'none') {
-    Object.assign(d, { stage: null, status: '' });         // harvested, destination not recorded yet
+    Object.assign(d, { stage: null, status: act.template === 'growing' ? 'Harvested' : '' });         // picked, no destination yet
   } else {
     const s = cxStage(act, key);
     Object.assign(d, { stage: key, status: s ? s.label : '' });
@@ -947,7 +946,7 @@ async function cxQuickLog(actId, kind, key) {
     if (kind === 'stage') { ['brand', 'model', 'serial'].forEach(k => { if (q[k]) extra[k] = q[k].trim(); }); if (q.name) extra.name = q.name; }
     const r = await cxQInsert(act, q.type, q.amt, kind, key, extra);
     const dest = kind === 'none' ? null : (cxOutcome(act, key) || cxStage(act, key));
-    CX.undo = { act: actId, ids: [r.row.id], at: Date.now(), text: r.text + (kind === 'none' ? ' (destination not recorded)' : ' → ' + (dest ? dest.label : '')), label: kind === 'stage' };
+    CX.undo = { act: actId, ids: [r.row.id], at: Date.now(), text: r.text + (kind === 'none' ? ' → Harvested' : ' → ' + (dest ? dest.label : '')), label: kind === 'stage' };
     Object.assign(q, { amt: '', brand: '', model: '', serial: '', name: '', bed: '', picker: '', status: '', newType: null, more: false, split: false, addCrop: false, estAmt: null, estBasis: '' });
     cxDraw(); cxUndoTimer();
     if (kind === 'stage' && (act.fields || []).some(f => cxFieldStage(act, f) === key)) {
