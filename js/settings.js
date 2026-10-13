@@ -692,7 +692,7 @@ const CIRC_OUT_TYPES = [
 ];
 const CIRC_FIELD_TYPES = [['text', 'Text'], ['number', 'Number'], ['date', 'Date'], ['yesno', 'Yes / no']];
 const CIRC_STARTER = 'Vorlana starter estimate';
-const CIRC_TALLY_DEFAULT = ['growing', 'food', 'textiles', 'scrap_store', 'repair_cafe'];
+const CIRC_TALLY_DEFAULT = ['growing', 'food', 'textiles', 'scrap_store', 'repair_cafe', 'compost'];
 
 function _circSlug(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40) || 'x'; }
 function _circRid(p) { return p + '_' + Math.random().toString(36).slice(2, 8); }
@@ -745,6 +745,11 @@ const CIRC_TEMPLATES = [
     [['Shared', 'share'], ['Food bank', 'share'], ['Sold', 'share'], ['Compost', 'recycle']],
     [['Tomatoes', 'kg', 1, 0, 3], ['Potatoes', 'kg', 1, 0, 1.5], ['Courgettes', 'kg', 1, 0, 2.5], ['Salad leaves', 'kg', 1, 0, 8], ['Beans', 'kg', 1, 0, 5], ['Fruit', 'kg', 1, 0, 4]],
     [['Bed / planter', 'text'], ['Batch number', 'text'], ['Harvester', 'text'], ['Packer', 'text'], ['Packing date', 'date']]),
+  _circT('compost', 'Compost', '\u{1F342}', 'What goes into the heap, and the finished compost that comes out.',
+    [],
+    [['Into the heap', 'recycle'], ['Used in our beds', 'reuse'], ['Shared', 'share'], ['Sold', 'share']],
+    [['Garden waste', 'kg', 1, 0.6, 0], ['Food scraps', 'kg', 1, 0.6, 0], ['Leaves & wood chip', 'kg', 1, 0.6, 0], ['Cardboard', 'kg', 1, 0.6, 0], ['Manure', 'kg', 1, 0.6, 0], ['Finished compost', 'kg', 1, 0, 0.4]],
+    [['Heap or bay', 'text']]),
   _circT('tool_library', 'Library of things', '🧰', 'Tools and equipment loaned out and returned.',
     ['Available', 'On loan', 'Under repair'],
     [['Retired', 'recycle']],
