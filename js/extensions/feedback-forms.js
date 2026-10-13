@@ -28,8 +28,9 @@
     return b.every(function (x) { return s[String(x)]; });
   }
   function usedBy(f) {
-    var ids = liveIds(f);
-    return (typeof DB !== 'undefined' && DB.events ? DB.events : []).filter(function (ev) { return ev.question_ids && sameSet(ev.question_ids.map(String), ids); }).length;
+    var ids = liveIds(f), isAll = sameSet(ids, activeQs().map(function (m) { return String(m.id); }));
+    // an event with no saved list asks every question, so it uses the form that holds them all
+    return (typeof DB !== 'undefined' && DB.events ? DB.events : []).filter(function (ev) { return ev.question_ids ? sameSet(ev.question_ids.map(String), ids) : isAll; }).length;
   }
   // Write our part of the settings without overwriting anything else (read the latest, add ours, write)
   async function saveSettings(patch) {
@@ -151,6 +152,7 @@
 
   function injectCard(sel) {
     var box = $('evf-questions-wrap'); if (!box) return;
+    if (!forms().length && !orgSettings().feedback_forms_seeded) maybeSeed();
     var key = isNewEvent() ? 'new' : String(typeof _editEvId === 'undefined' ? '' : _editEvId);
     if (sel == null || _st.key !== key) resetState(key);
     var old = $('vlfm-card'); if (old) old.remove();
@@ -311,6 +313,51 @@
     }
   };
 
+  // ── forms you already use ───────────────────────────────────
+  // Before anyone has dropped a form in, the card is not empty: every different set of questions your events already use becomes a form,
+  // and the questions you ask today (everything on the platform) becomes "Your current questions". Done once, never overwrites anything.
+  var _seeding = false, _seedTried = false;
+  function deriveForms() {
+    var qs = activeQs(); if (!qs.length) return [];
+    var allIds = qs.map(function (m) { return String(m.id); }), on = {}; allIds.forEach(function (id) { on[id] = 1; });
+    var groups = {};
+    (DB.events || []).forEach(function (e) {
+      if (!Array.isArray(e.question_ids) || !e.question_ids.length) return;
+      var ids = e.question_ids.map(String).filter(function (x) { return on[x]; });
+      if (!ids.length) return;
+      var key = ids.slice().sort().join(',');
+      (groups[key] = groups[key] || { ids: ids, events: [] }).events.push(e);
+    });
+    var list = Object.keys(groups).map(function (k) { return groups[k]; }).sort(function (a, b) { return b.events.length - a.events.length; }).slice(0, 8);
+    var out = [], used = {}, allKey = allIds.slice().sort().join(','), hasAll = false;
+    function uniq(nm) { var base = nm, n = 2; while (used[nm.toLowerCase()]) nm = base + ' (' + (n++) + ')'; used[nm.toLowerCase()] = 1; return nm.slice(0, 80); }
+    function mk(name, ids) { return { id: 'f_' + (Date.now() + out.length).toString(36), name: uniq(name), question_ids: ids, is_default: false }; }
+    list.forEach(function (g) {
+      var key = g.ids.slice().sort().join(','), types = {};
+      g.events.forEach(function (e) { var t = e.type || ''; types[t] = (types[t] || 0) + 1; });
+      var tk = Object.keys(types).sort(function (a, b) { return types[b] - types[a]; });
+      var recent = g.events.slice().sort(function (a, b) { return String(b.date || '').localeCompare(String(a.date || '')); })[0];
+      var name = key === allKey ? 'Your current questions' : (tk.length === 1 && tk[0] ? tk[0] + ' form' : (recent && recent.name ? 'Form used at ' + recent.name : 'Feedback form'));
+      if (key === allKey) hasAll = true;
+      out.push(mk(name, g.ids));
+    });
+    if (!hasAll) out.push(mk('Your current questions', allIds));
+    return out;
+  }
+  async function maybeSeed() {
+    if (_seeding || _seedTried) return;
+    if (forms().length || orgSettings().feedback_forms_seeded) return;
+    _seeding = true; _seedTried = true;
+    try {
+      var d = deriveForms();
+      if (!d.length) return;                         // no questions yet: nothing to show
+      await saveSettings({ feedback_forms: d, feedback_forms_seeded: true });
+      if (typeof renderFeedbackQuestionsCard === 'function') renderFeedbackQuestionsCard();
+      try { paintCard(); } catch (e) { /* event form not open */ }
+    } catch (e) { console.warn('[feedback-forms] could not list your existing forms:', e && e.message ? e.message : e); }
+    finally { _seeding = false; }
+  }
+
   // ── Settings: drop in a form here too; rename a form by typing over its name ──
   var _ss = { mode: 'idle', parsed: null, fileName: '', msg: '' };
   function eventTypes() {
@@ -379,6 +426,7 @@
     var old = $('vlfm-card-settings'); if (old) old.remove();
     body.insertAdjacentHTML('afterbegin', settingsCard());
     wireDrop();
+    maybeSeed();
   }
   window.ffsMode = function (m) { _ss.mode = m; if (m !== 'idle') _ss.msg = ''; paintSettingsDrop(); };
   async function ffsRun(text, name) {
@@ -479,5 +527,5 @@
     });
   });
 
-  if (window.__VORLANA_TEST) window.__ffTest = { forms: forms, clean: clean, norm: norm, suggestFor: suggestFor, state: function () { return _st; } };
+  if (window.__VORLANA_TEST) window.__ffTest = { derive: deriveForms, forms: forms, clean: clean, norm: norm, suggestFor: suggestFor, state: function () { return _st; } };
 })();
