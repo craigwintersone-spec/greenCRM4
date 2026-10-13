@@ -1003,6 +1003,16 @@ function cxReportStats(o) {
     if (a.template === 'growing' && i.custom && i.custom.bed_planter) r.byBed[i.custom.bed_planter] = (r.byBed[i.custom.bed_planter] || 0) + kg;
     const row = r.byActivity[a.name] || (r.byActivity[a.name] = { icon: a.icon || '♻️', items: 0, kg: 0, co2: 0, value: 0 });
     if (!i.event_id) r.noSession++;
+    if (a.template === 'growing') {          // a harvest is food grown, not waste diverted: counted on its own
+      const gr = r.growing || (r.growing = { harvests: 0, kg: 0, sharedKg: 0, value: 0, byCrop: {}, byOutcome: {} });
+      gr.harvests++; gr.kg += kg; row.items++; row.kg += kg;
+      const ty0 = (a.item_types || []).find(x => x.key === i.item_type); const crop = ty0 ? ty0.label : (i.item_type || 'Other');
+      gr.byCrop[crop] = (gr.byCrop[crop] || 0) + kg;
+      if (i.outcome_type) { const o3 = (a.outcomes || []).find(x => x.key === i.outcome); const ol3 = o3 ? o3.label : (i.status || i.outcome_type); gr.byOutcome[ol3] = (gr.byOutcome[ol3] || 0) + 1; }
+      if (i.outcome_type === 'share') { gr.sharedKg += kg; gr.value += +i.value_gbp || 0; r.foodKg += kg; }
+      if (i.custom && +i.custom.sale_gbp) r.income += +i.custom.sale_gbp;
+      return;
+    }
     if (!i.outcome_type) { r.inProgress++; if (circMode(a) === 'tracked') r.inStock++; else r.undecided++; return; }
     r.finished++; row.items += qty;
     const t = i.outcome_type;
@@ -1022,6 +1032,7 @@ function cxReportStats(o) {
   const r1 = v => Math.round(v * 10) / 10;
   r.kg = r1(r.kg); r.estKg = r1(r.estKg); r.co2 = r1(r.co2); r.value = Math.round(r.value); r.foodKg = r1(r.foodKg); r.recycledKg = r1(r.recycledKg);
   r.meals = Math.round(r.foodKg / CX_KG_PER_MEAL);
+  if (r.growing) { r.growing.kg = r1(r.growing.kg); r.growing.sharedKg = r1(r.growing.sharedKg); r.growing.value = Math.round(r.growing.value); r.growing.meals = Math.round(r.growing.sharedKg / CX_KG_PER_MEAL); }
   r.fixRate = r.repairTried ? Math.round(r.repairFixed / r.repairTried * 100) : null;
   r.activities = Object.keys(r.byActivity);
   return r;
@@ -1030,7 +1041,20 @@ function cxReportStats(o) {
 function cxReportLines(r) {
   if (!r || !r.entries) return [];
   const m = v => '£' + Math.round(v).toLocaleString('en-GB');
-  return [
+  const gr = r.growing;
+  const growLines = gr ? [
+    '',
+    'GROWING (calculated from harvest records; harvested food is not "waste diverted")',
+    'Harvests logged: ' + gr.harvests,
+    'Harvested: ' + gr.kg + ' kg',
+    gr.sharedKg ? 'Shared or sold: ' + gr.sharedKg + ' kg (about ' + gr.meals + ' meals at 420 g per meal, WRAP)' : '',
+    gr.value ? 'Value of food shared or sold at shop prices (estimate): ' + m(gr.value) : '',
+    Object.keys(gr.byCrop).length ? 'Biggest crops by weight: ' + Object.keys(gr.byCrop).sort((a, b) => gr.byCrop[b] - gr.byCrop[a]).slice(0, 5).map(k => k + ' ' + (Math.round(gr.byCrop[k] * 10) / 10) + ' kg').join(', ') : '',
+    Object.keys(r.byBed).length ? 'Yield by bed or planter (kg): ' + Object.keys(r.byBed).sort((a, b) => r.byBed[b] - r.byBed[a]).slice(0, 5).map(k => k + ' ' + (Math.round(r.byBed[k] * 10) / 10)).join(', ') : '',
+    r.income ? 'Income from sales: ' + m(r.income) : ''
+  ].filter(Boolean) : [];
+  if (gr && !r.finished) return growLines;     // growing only: nothing here was reused, repaired or recycled
+  return growLines.concat([
     '',
     'CIRCULAR ECONOMY (calculated from item records)',
     'Activities: ' + r.activities.join(', '),
@@ -1045,7 +1069,7 @@ function cxReportLines(r) {
     r.income ? 'Income from resale: ' + m(r.income) : '',
     'By outcome: ' + Object.keys(r.byOutcome).map(k => k + ' ' + r.byOutcome[k]).join(', '),
     'Method: CO2e and value use per-item factors held in Vorlana' + (r.starter ? ', some of which are Vorlana starter estimates not yet set by the organisation' : ' set by the organisation') + '. State that these are estimates.'
-  ].filter(Boolean);
+  ]).filter(Boolean);
 }
 
 function cxReportGaps(r) {
@@ -1061,7 +1085,14 @@ function cxReportGaps(r) {
 function cxReportDocHTML(r, title) {
   if (!r || !r.entries) return '';
   const esc = escapeHTML, m = v => '£' + Math.round(v).toLocaleString('en-GB');
-  const figs = [
+  const gr = r.growing, growOnly = !!gr && !r.finished;
+  const figs = growOnly ? [
+    ['Harvested', fmtNum(gr.kg) + ' kg'],
+    gr.sharedKg ? ['Shared or sold', fmtNum(gr.sharedKg) + ' kg'] : null,
+    gr.sharedKg ? ['Meals equivalent', fmtNum(gr.meals, 0)] : null,
+    gr.value ? ['Value of food shared (est.)', m(gr.value)] : null,
+    r.income ? ['Sales income', m(r.income)] : null
+  ].filter(Boolean) : [
     ['Diverted from waste', r.kg.toLocaleString('en-GB') + ' kg'],
     r.co2 ? ['CO₂e avoided (est.)', (Math.round(r.co2 / 100) / 10) + ' t'] : null,
     r.reused ? ['Items reused or repaired', r.reused] : null,
@@ -1071,14 +1102,15 @@ function cxReportDocHTML(r, title) {
     r.value ? ['Value to people (est.)', m(r.value)] : null,
     r.income ? ['Resale income', m(r.income)] : null
   ].filter(Boolean);
-  const actRows = r.activities.map(k => { const a = r.byActivity[k]; return '<tr><td>' + esc(a.icon + ' ' + k) + '</td><td>' + a.items + '</td><td>' + (Math.round(a.kg * 10) / 10) + '</td><td>' + (Math.round(a.co2 * 10) / 10) + '</td></tr>'; }).join('');
+  if (gr && !growOnly) figs.unshift(['Harvested', fmtNum(gr.kg) + ' kg']);
+  const actRows = r.activities.map(k => { const a = r.byActivity[k]; return '<tr><td>' + esc(a.icon + ' ' + k) + '</td><td>' + a.items + '</td><td>' + fmtNum(a.kg) + '</td>' + (growOnly ? '' : '<td>' + fmtNum(a.co2) + '</td>') + '</tr>'; }).join('');
   const outKeys = Object.keys(r.byOutcome).sort((a, b) => r.byOutcome[b] - r.byOutcome[a]);
   const bedKeys = Object.keys(r.byBed || {}).sort((a, b) => r.byBed[b] - r.byBed[a]);
   return '<h3>' + esc(title || 'Circular economy') + '</h3>' +
     '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0 16px">' + figs.map(f =>
       '<div style="border:1px solid #ddd;border-radius:8px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:800;color:#1F6F6D">' + esc(String(f[1])) + '</div>' +
       '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#777;font-weight:700">' + esc(f[0]) + '</div></div>').join('') + '</div>' +
-    '<table class="dr-tbl" style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px"><thead><tr><th style="text-align:left">Activity</th><th style="text-align:left">Items</th><th style="text-align:left">kg</th><th style="text-align:left">CO₂e kg</th></tr></thead><tbody>' + actRows + '</tbody></table>' +
+    '<table class="dr-tbl" style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px"><thead><tr><th style="text-align:left">Activity</th><th style="text-align:left">' + (growOnly ? 'Harvests' : 'Items') + '</th><th style="text-align:left">kg</th>' + (growOnly ? '' : '<th style="text-align:left">CO₂e kg</th>') + '</tr></thead><tbody>' + actRows + '</tbody></table>' +
     (outKeys.length ? '<table class="dr-tbl" style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:10px"><thead><tr><th style="text-align:left">Where it went</th><th style="text-align:left">Items</th></tr></thead><tbody>' +
       outKeys.map(k => '<tr><td>' + esc(k) + '</td><td>' + r.byOutcome[k] + '</td></tr>').join('') + '</tbody></table>' : '') +
     (bedKeys.length ? '<table class="dr-tbl" style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:10px"><thead><tr><th style="text-align:left">Yield by bed / planter</th><th style="text-align:left">kg</th></tr></thead><tbody>' +
