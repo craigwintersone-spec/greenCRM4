@@ -208,7 +208,7 @@
     const learnedPct   = pctOf(f => f.learned);
     const connectedPct = pctOf(f => f.connected);
     const quotes = fbInPeriod
-      .filter(f => f.quote && String(f.quote).trim().length > 15)
+      .filter(f => f.quote && String(f.quote).trim().length > 15 && !HEALTH_QUOTE_RX.test(String(f.quote)))
       .map(f => String(f.quote).trim())
       .slice(0, 4);
 
