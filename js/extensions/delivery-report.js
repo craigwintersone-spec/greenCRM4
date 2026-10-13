@@ -708,9 +708,15 @@ function generateNow() {
   var prof = currentProfile(s);
   var growing = !!(s.circ && s.circ.growing), growOnly = growing && !s.circ.finished;
   var circTitle = growOnly ? 'Growing' : (growing ? 'Growing and Circular Economy' : 'Circular Economy');
+  var plansText = ((typeof currentOrg !== 'undefined' && currentOrg && currentOrg.settings && currentOrg.settings.report_plans) || '').toString().trim();
   var sections = prof.p.sections.map(function (x) { return x === '%CIRC%' ? (hasCirc ? circTitle : '') : x; }).filter(Boolean);
+  if (!plansText) {   // no plans on file: drop the forward-looking sections instead of leaving blanks for someone to fill
+    sections = sections.filter(function (x) { return !/^(what happens next|next steps|next period|forward view)$/i.test(x); })
+      .map(function (x) { return x.replace(/\s*(,|and)\s*(what happens )?(next period|next steps|forward view)\s*$/i, ''); });
+  }
   var prevP = previousPeriod(p), prev = prevP ? buildStats(prevP) : null;
   var targets = targetLines(s, p);
+  s.hasTargets = targets.length > 0;
   var checks = reconcile(s);
   var sys = 'You are a senior UK charity impact writer. You are writing ' + prof.p.tone + ' ' +
     'Call the people "' + prof.p.people + '". Write clean formal British English, no jargon the funder would not use themselves. ' +
@@ -729,10 +735,11 @@ function generateNow() {
     'Do not comment on how the survey or form was designed, and do not state doubts about the data beyond the listed data quality notes. ' +
     'Never mention any individual\'s health, condition or personal circumstances. Refer to the organisation only by the Organisation name given. ' +
     'Never estimate, round up or describe a figure that was not supplied (for example "several hundred pounds" or "around half"): if a figure is not in the data, leave it out. ' +
-    'Never write commitments, plans or promises in the organisation\'s name ("we will...", "we plan to..."). Any "what happens next", "next steps" or "forward view" section must contain only one placeholder sentence: [INSERT: your plans for the next period, in your own words]. ' +
+    'Never write commitments, plans or promises in the organisation\'s name ("we will...", "we plan to..."). Any section whose title contains "lessons", "learn", "risks" or "sustainab" must contain only observations the figures support; never write what the organisation intends to do. ' +
+    'If no targets or profile figures are supplied, never say there is no variance, that delivery is on profile or on track, or that targets were met: say instead that no targets were entered for this period. ' +
     'State each figure once outside the Summary; do not repeat the same number in a later section. ' +
     'Write the ethnicity figure as "black and ethnic minority" (lower-case "black"), never "BAME" or "Black or from an ethnic minority background". ' +
-    'In any lessons or "what we would change" section, state only what the figures show: do not guess at causes, and do not write what the organisation "does not yet know". End that section with exactly one placeholder sentence in the form [INSERT: what you plan to change, in your own words] so the manager adds their own reflection. ' +
+    'In any lessons section, state only what the figures show: do not guess at causes, and do not write what the organisation "does not yet know". ' +
     'In Who We Reached, describe the people reached using only the demographic figures supplied, in plain respectful language, and say they are from optional anonymous answers. ' +
     'CRITICAL: use ONLY the figures supplied. Never invent, estimate, extrapolate or recalculate any number — ' +
     'every statistic has already been computed from the database. Do not add totals of your own. ' +
@@ -765,7 +772,7 @@ function generateNow() {
     compareLine('Responses', s.fbCount, prev ? prev.fbCount : null),
     s.fbCount && s.avgCB && s.avgCA ? 'Confidence before: ' + s.avgCB + ' → after: ' + s.avgCA + ' out of 5 (average gain ' + s.confGain + ')' : '',
     s.ownMeasures.length
-      ? s.ownMeasures.filter(function (m) { return !m.allYes; }).map(function (m) { return '"' + m.q + '": ' + m.text + ' (' + m.n + ' answers)'; }).join('\n')
+      ? s.ownMeasures.filter(function (m) { return !m.allYes && !(s.avgCB && s.avgCA && /confiden/i.test(m.q)); }).map(function (m) { return '"' + m.q + '": ' + m.text + ' (' + m.n + ' answers)'; }).join('\n')
       : [s.fbCount && s.avgEnjoyed ? 'Average enjoyment: ' + s.avgEnjoyed + ' out of 5' : '',
          s.fbCount ? 'Learned something new: ' + s.learnedPct + '%' : '',
          s.fbCount ? 'Felt more connected: ' + s.connectedPct + '%' : '',
@@ -807,20 +814,65 @@ function generateNow() {
     if (!raw) return;
     // Verification: any number the writer used that isn't in the data pack gets one correction pass
     var bad = unknownNumbers(raw, lines);
-    if (!bad.length) { s.unverified = []; return renderDoc(raw, s, orgName, todayStr, funderName); }
+    var fixCtx = { attendances: s.attendees, responses: s.fbCount, hasTargets: s.hasTargets };
+    var finish = function (t) {
+      var fx = (typeof vlAutoFix === 'function') ? vlAutoFix(t, fixCtx) : { text: t, fixes: 0 };
+      s.autoFixes = fx.fixes;
+      var out = fx.text + (plansText ? '\n\n## Plans for the next period\n' + plansText : '');
+      renderDoc(out, s, orgName, todayStr, funderName);
+    };
+    var issues = lintFindings(raw, s);
+    if (!bad.length && !issues.length) { s.unverified = []; return finish(raw); }
     return runAgent({
       container: progressEl, headerLabel: 'Org Brain — Delivery Report', headerSub: 'Correcting ' + bad.length + ' figure(s) not in the records',
       steps: [{ label: 'Checking every number against the records', meta: bad.length + ' to correct' }, { label: 'Ready', meta: '' }],
-      sys: sys + ' You previously wrote a draft containing numbers that are NOT in the supplied data: ' + bad.join(', ') + '. Rewrite the full report so that every number appears in the supplied data; remove or reword any sentence that needs a number you were not given. Keep everything else the same.',
+      sys: sys + (bad.length ? ' You previously wrote a draft containing numbers that are NOT in the supplied data: ' + bad.join(', ') + '. Rewrite the full report so that every number appears in the supplied data; remove or reword any sentence that needs a number you were not given.' : '') +
+        (issues.length ? ' Your draft also contains wording that must not appear in a funder report: ' + issues.map(function (i) { return '"' + i.m + '" (' + i.why + ')'; }).join('; ') + '. Rewrite those sentences so the problem is gone, using only the supplied figures.' : '') + ' Keep everything else the same.',
       prompt: lines + '\n\nPREVIOUS DRAFT:\n' + raw, maxTok: 1800
     }).then(function (raw2) {
       var text = raw2 || raw;
       s.unverified = unknownNumbers(text, lines);
-      renderDoc(text, s, orgName, todayStr, funderName);
+      finish(text);
     });
   });
 }
 
+// Wording a funder would pick at: found by rule, not by asking the writer to behave
+function lintRules(s, hasTargets) {
+  var nums = {};
+  [s.attendees, s.fbCount].forEach(function (v) { if (v) { nums[String(v)] = 1; nums[Number(v).toLocaleString('en-GB')] = 1; } });
+  var numRx = Object.keys(nums).map(function (x) { return x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }).join('|');
+  var rules = [
+    { rx: /\bsignificant(ly)?\b/gi, why: '"significant" implies a statistical test that was not run. Say what the figure is.' },
+    { rx: /\b(universal(ly)?|everyone)\b/gi, why: 'Overclaims. Say how many answered and what they said.' },
+    { rx: /\bwe (will|plan to|intend to|aim to|are going to|shall)\b/gi, why: 'A promise made in your name. Replace it with your own plan.' },
+    { rx: /\b(several|many) (hundred|thousand)\b|\b(approximately|roughly)\b/gi, why: 'A guessed figure that is not in your records.' },
+    { rx: /\bBAME\b|\bBlack or from (an |other )?ethnic minorit\w*( background)?/gi, why: 'Use "black and ethnic minority".' }
+  ];
+  if (numRx) rules.push({ rx: new RegExp('\\b(?:all\\s+)?(?:' + numRx + ')\\s+(participants|people)\\b', 'gi'), why: 'That number counts attendances or feedback responses, not people.' });
+  if (!hasTargets) rules.push({ rx: /\bno variance\b|\bvariance from (the )?profile\b|\b(on|ahead of) (track|profile)\b|\bmet (the |its |our )?(profile|targets?)\b/gi, why: 'No targets were entered, so nothing can be on or off profile.' });
+  return rules;
+}
+// the same rules over plain text, so the writer can be asked to fix them before the author ever sees the report
+function lintFindings(text, s) {
+  var found = [];
+  lintRules(s, !!s.hasTargets).forEach(function (r) {
+    var m = String(text).match(new RegExp(r.rx.source, r.rx.flags));
+    if (m) m.forEach(function (x) { found.push({ m: x, why: r.why }); });
+  });
+  return found;
+}
+function lintHTML(html, rules) {
+  var found = [];
+  var out = html.split(/(<[^>]+>)/).map(function (seg) {
+    if (!seg || seg.charAt(0) === '<') return seg;
+    rules.forEach(function (r) {
+      seg = seg.replace(r.rx, function (m) { found.push({ m: m, why: r.why }); return '<mark class="vl-lint" style="background:#FECACA">' + m + '</mark>'; });
+    });
+    return seg;
+  }).join('');
+  return { html: out, found: found };
+}
 function renderDoc(raw, s, orgName, todayStr, funderName) {
   var outEl = $('report-output');
   var cleaned = (typeof cleanReportText === 'function') ? cleanReportText(raw) : raw;
@@ -829,6 +881,10 @@ function renderDoc(raw, s, orgName, todayStr, funderName) {
     var re = new RegExp('(£?)' + num.replace(/\./g, '\\.') + '(%?)(?![\\d])', 'g');
     bodyHTML = bodyHTML.replace(re, '<mark title="This number is not in your records — check it before sending" style="background:#FEF3C7">$1' + num + '$2</mark>');
   });
+  var lint = lintHTML(bodyHTML, lintRules(s, !!s.hasTargets));
+  bodyHTML = lint.html;
+  var lintBox = lint.found.length ? '<div class="no-print" style="border:1px solid #FECACA;background:#FEF2F2;border-radius:10px;padding:10px 14px;font-size:12.5px;margin:0 0 16px;line-height:1.6"><b>' + lint.found.length + ' wording problem' + (lint.found.length === 1 ? '' : 's') + ' to check</b> (marked red in the report; this note is not printed)<br/>' +
+    lint.found.slice(0, 8).map(function (f) { return '&bull; &ldquo;' + esc(f.m) + '&rdquo;: ' + esc(f.why); }).join('<br/>') + (lint.found.length > 8 ? '<br/>&hellip; and ' + (lint.found.length - 8) + ' more' : '') + '</div>' : '';
   var phCount = (cleaned.match(/\[INSERT:[^\]]*\]/g) || []).length;
   bodyHTML = bodyHTML.replace(/\[INSERT:[^\]]*\]/g, function (m) { return '<mark style="background:#FFF3B0">' + m + '</mark>'; });
   var phBox = phCount ? '<div class="no-print" style="border:1px solid #FDE68A;background:#FFFBEB;border-radius:10px;padding:10px 14px;font-size:12.5px;margin:0 0 16px;line-height:1.6"><b>' + phCount + ' placeholder' + (phCount === 1 ? '' : 's') + ' to complete</b> (highlighted yellow): add your own words before you send. This note is not printed.</div>' : '';
@@ -856,7 +912,8 @@ function renderDoc(raw, s, orgName, todayStr, funderName) {
       '</div>';
 
   var gr0 = s.circ && s.circ.growing, growOnly0 = !!gr0 && !s.circ.finished;
-  var headline = verifyBox + phBox + doctorHTML(s) +
+  var fixedNote = s.autoFixes ? '<div class="no-print" style="font-size:12px;color:#166534;margin:-8px 0 14px">&#10003; ' + s.autoFixes + ' wording fix' + (s.autoFixes === 1 ? '' : 'es') + ' applied automatically. Nothing for you to edit. (Not printed.)</div>' : '';
+  var headline = verifyBox + fixedNote + lintBox + phBox + doctorHTML(s) +
     '<div class="dr-figs">' +
       fig('Events delivered', s.eventCount) +
       fig('Total attendances', s.attendees) +
