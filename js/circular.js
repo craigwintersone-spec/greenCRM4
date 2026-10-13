@@ -374,8 +374,17 @@ async function cxLog(item, action, from, to, data) {
 }
 
 // ── Impact ───────────────────────────────────────────────────
+// A planting record is not a harvest. In Growing, a record counts as a harvest if it has a destination,
+// is at the harvest step, or carries a weight (planted and growing records carry none).
+function cxIsHarvest(i, act) {
+  if (i.outcome_type || i.outcome) return true;
+  const hs = ((act && act.stages) || []).find(s => /harvest/i.test(s.label));
+  if (hs && i.stage === hs.key) return true;
+  return (+i.weight_kg || 0) > 0;
+}
 // Growing is about the harvest, not waste diverted: tiles that say what was grown and where it went
 function cxGrowingStats(items) {
+  items = items.filter(i => cxIsHarvest(i, cxAct(i.activity_id)));
   let kg = 0, shared = 0, value = 0, income = 0; const beds = {}, crops = {};
   items.forEach(i => {
     const w = +i.weight_kg || 0; kg += w;
@@ -397,6 +406,7 @@ function cxImpact(items) {
   items.forEach(i => {
     const act0 = cxAct(i.activity_id);
     if (act0 && act0.template === 'growing') {      // harvested food: its own figures, never "diverted from waste" or "items reused"
+      if (!cxIsHarvest(i, act0)) return;            // a planting record is not a harvest
       r.harvests++; r.harvestKg += +i.weight_kg || 0;
       if (i.outcome_type === 'share') r.foodKg += +i.weight_kg || 0;
       if (i.custom && +i.custom.sale_gbp) r.income += +i.custom.sale_gbp;
@@ -1012,6 +1022,7 @@ function cxReportStats(o) {
     const row = r.byActivity[a.name] || (r.byActivity[a.name] = { icon: a.icon || '♻️', items: 0, kg: 0, co2: 0, value: 0 });
     if (!i.event_id) r.noSession++;
     if (a.template === 'growing') {          // a harvest is food grown, not waste diverted: counted on its own
+      if (!cxIsHarvest(i, a)) return;        // a planting record is not a harvest
       const gr = r.growing || (r.growing = { harvests: 0, kg: 0, sharedKg: 0, value: 0, byCrop: {}, byOutcome: {} });
       gr.harvests++; gr.kg += kg; row.items++; row.kg += kg;
       const ty0 = (a.item_types || []).find(x => x.key === i.item_type); const crop = ty0 ? ty0.label : (i.item_type || 'Other');
@@ -1123,7 +1134,7 @@ function cxReportDocHTML(r, title) {
       outKeys.map(k => '<tr><td>' + esc(k) + '</td><td>' + r.byOutcome[k] + '</td></tr>').join('') + '</tbody></table>' : '') +
     (bedKeys.length ? '<table class="dr-tbl" style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:10px"><thead><tr><th style="text-align:left">Yield by bed / planter</th><th style="text-align:left">kg</th></tr></thead><tbody>' +
       bedKeys.map(k => '<tr><td>' + esc(k) + '</td><td>' + (Math.round(r.byBed[k] * 10) / 10) + '</td></tr>').join('') + '</tbody></table>' : '') +
-    '<p style="font-size:11px;color:#777">' + (growOnly ? 'Value is an estimate from per-item shop-price factors' + (r.starter ? ' (including Vorlana starter estimates)' : ' set by the organisation') + '. Meals at 420 g per meal (WRAP).' : 'CO₂e and value are estimates from per-item factors' + (r.starter ? ' (including Vorlana starter estimates)' : ' set by the organisation') + '. Meals at 420 g per meal (WRAP). Weight diverted includes items reused, repaired, shared or recycled.') + (r.estKg ? ' ' + r.estKg + ' kg of weight was estimated from photos rather than weighed.' : '') + '</p>';
+    '<p style="font-size:11px;color:#777">' + (growOnly ? (gr.value ? 'Value is an estimate from per-item shop-price factors' + (r.starter ? ' (including Vorlana starter estimates)' : ' set by the organisation') + '. ' : '') + (gr.sharedKg ? 'Meals at 420 g per meal (WRAP).' : '') : 'CO₂e and value are estimates from per-item factors' + (r.starter ? ' (including Vorlana starter estimates)' : ' set by the organisation') + '. Meals at 420 g per meal (WRAP). Weight diverted includes items reused, repaired, shared or recycled.') + (r.estKg ? ' ' + r.estKg + ' kg of weight was estimated from photos rather than weighed.' : '') + '</p>';
 }
 
 // Social Impact page card
@@ -1594,7 +1605,7 @@ function cxTidyOpen(actId, quick) {
   // Pre-pick where the file's wording matches a destination
   _cxTidy.groups.forEach(g => { if (g.raw) g.pick = cxiMatch(act.outcomes || [], g.raw) || ''; });
   // "Fix this for me": everything still unpicked defaults to the activity's most-used outcome
-  if (quick) {
+  if (quick && act.template !== 'growing') {     // for Growing the destination is never guessed: the entries already count as harvested
     const counts = {};
     CX.items.filter(i => i.activity_id === actId && i.outcome_type).forEach(i => { counts[i.outcome] = (counts[i.outcome] || 0) + 1; });
     const common = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0] || (act.outcomes[0] || {}).key;
@@ -1607,7 +1618,9 @@ function cxTidyDraw() {
   const opts = sel => '<option value="">Leave for now</option>' + (act.outcomes || []).map(o => '<option value="' + e(o.key) + '"' + (o.key === sel ? ' selected' : '') + '>' + e(o.label) + '</option>').join('');
   const total = t.groups.reduce((a, g) => a + g.ids.length, 0);
   cxModal((t.quick ? '<h2>✓ Switched to quick tally</h2>' : '<h2>Sort ' + total + ' undecided entr' + (total === 1 ? 'y' : 'ies') + '</h2>') +
-    '<div class="cxp-s" style="margin-bottom:12px">' + (t.quick
+    '<div class="cxp-s" style="margin-bottom:12px">' + (t.quick && act.template === 'growing'
+      ? 'New harvests will now log in one tap. Your ' + total + ' earlier entries still count as harvested. Pick where they went if you know, or leave them as they are.'
+      : t.quick
       ? 'New entries will now log in one tap. These ' + total + ' older entries have no outcome — check the guess below, then confirm. Dates stay as they were logged.'
       : 'These have no destination, so reports leave them out. Pick where each group went — dates stay as they were logged.') + '</div>' +
     '<div class="form-row"><label>Quick: set every group to</label><select onchange="_cxTidy.groups.forEach(g=>g.pick=this.value);cxTidyDraw()">' + opts(t.quick ? t.groups[0].pick : '') + '</select></div>' +
