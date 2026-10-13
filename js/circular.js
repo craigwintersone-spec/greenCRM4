@@ -393,8 +393,15 @@ function cxGrowingStats(items) {
     '</div>';
 }
 function cxImpact(items) {
-  const r = { inProgress: 0, finished: 0, kg: 0, co2: 0, value: 0, reused: 0, foodKg: 0, income: 0, repairTried: 0, repairFixed: 0 };
+  const r = { inProgress: 0, finished: 0, kg: 0, co2: 0, value: 0, reused: 0, foodKg: 0, income: 0, repairTried: 0, repairFixed: 0, harvests: 0, harvestKg: 0 };
   items.forEach(i => {
+    const act0 = cxAct(i.activity_id);
+    if (act0 && act0.template === 'growing') {      // harvested food: its own figures, never "diverted from waste" or "items reused"
+      r.harvests++; r.harvestKg += +i.weight_kg || 0;
+      if (i.outcome_type === 'share') r.foodKg += +i.weight_kg || 0;
+      if (i.custom && +i.custom.sale_gbp) r.income += +i.custom.sale_gbp;
+      return;
+    }
     if (!i.outcome_type) { r.inProgress++; return; }
     r.finished++;
     const t = i.outcome_type;
@@ -475,9 +482,10 @@ function cxDraw() {
       : statCard('CO₂e avoided', cxFmt(im.co2 / 1000, 2) + ' t', 'reuse and repair')) +
     (act && act.template === 'repair_cafe'
       ? statCard('Fix rate', im.repairTried ? Math.round(im.repairFixed / im.repairTried * 100) + '%' : '—', cxFmt(im.repairFixed) + ' of ' + cxFmt(im.repairTried) + ' fixed')
-      : statCard('Value to people', '£' + cxFmt(im.value), im.income ? '£' + cxFmt(im.income) + ' sales income' : cxFmt(im.reused) + ' items reused')) +
+      : statCard('Value to people', '£' + cxFmt(im.value), im.income ? '£' + cxFmt(im.income) + ' sales income' : (im.reused ? cxFmt(im.reused) + ' items reused' : 'from reuse and repair'))) +
     '</div>';
   if (act && act.template === 'growing') stats = cxGrowingStats(scope);
+  else if (!act && im.harvests) stats = stats.replace(/<\/div>$/, statCard('Harvested', cxFmt(im.harvestKg, 1) + ' kg', cxFmt(im.harvests) + ' harvest' + (im.harvests === 1 ? '' : 's') + ' logged') + '</div>');
 
   const backlog = CX.tab !== 'all' ? CX.items.filter(i => i.activity_id === CX.tab && !i.outcome_type).length : 0;
   const wasTracked = act && circMode(act) === 'tracked';
@@ -504,7 +512,7 @@ function cxSummaryHTML(acts) {
         ? '<div style="margin:6px 0 8px">' + (live.length ? '<span class="cxp-chip" style="color:var(--amber);border-color:var(--amber)">' + live.length + ' to sort</span>' : '') + '<span class="cxp-chip">' + its.filter(cxIsToday).length + ' today</span><span class="cxp-chip">' + cxFmt(its.filter(i => i.created_at && new Date(i.created_at).getMonth() === new Date().getMonth() && new Date(i.created_at).getFullYear() === new Date().getFullYear()).reduce((x, i) => x + (+i.weight_kg || 0), 0), 1) + ' kg this month</span></div>'
         : '<div style="margin:6px 0 8px">' + (a.stages || []).map(s =>
         '<span class="cxp-chip">' + cxE(s.label) + ' · ' + live.filter(i => i.stage === s.key).length + '</span>').join('') + '</div>') +
-      '<div class="cxp-s">' + cxFmt(im.finished) + ' finished · ' + cxFmt(im.kg, 1) + ' kg diverted' +
+      '<div class="cxp-s">' + (a.template === 'growing' ? cxFmt(im.harvests) + ' harvest' + (im.harvests === 1 ? '' : 's') + ' \u00b7 ' + cxFmt(im.harvestKg, 1) + ' kg harvested' : cxFmt(im.finished) + ' finished · ' + cxFmt(im.kg, 1) + ' kg diverted') +
       (stuck ? ' · <span style="color:var(--amber);font-weight:700">' + stuck + ' waiting over 14 days</span>' : '') + '</div>' +
     '</div>';
   }).join('') + '</div>' +
@@ -1115,7 +1123,7 @@ function cxReportDocHTML(r, title) {
       outKeys.map(k => '<tr><td>' + esc(k) + '</td><td>' + r.byOutcome[k] + '</td></tr>').join('') + '</tbody></table>' : '') +
     (bedKeys.length ? '<table class="dr-tbl" style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:10px"><thead><tr><th style="text-align:left">Yield by bed / planter</th><th style="text-align:left">kg</th></tr></thead><tbody>' +
       bedKeys.map(k => '<tr><td>' + esc(k) + '</td><td>' + (Math.round(r.byBed[k] * 10) / 10) + '</td></tr>').join('') + '</tbody></table>' : '') +
-    '<p style="font-size:11px;color:#777">CO₂e and value are estimates from per-item factors' + (r.starter ? ' (including Vorlana starter estimates)' : ' set by the organisation') + '. Meals at 420 g per meal (WRAP). Weight diverted includes items reused, repaired, shared or recycled.' + (r.estKg ? ' ' + r.estKg + ' kg of weight was estimated from photos rather than weighed.' : '') + '</p>';
+    '<p style="font-size:11px;color:#777">' + (growOnly ? 'Value is an estimate from per-item shop-price factors' + (r.starter ? ' (including Vorlana starter estimates)' : ' set by the organisation') + '. Meals at 420 g per meal (WRAP).' : 'CO₂e and value are estimates from per-item factors' + (r.starter ? ' (including Vorlana starter estimates)' : ' set by the organisation') + '. Meals at 420 g per meal (WRAP). Weight diverted includes items reused, repaired, shared or recycled.') + (r.estKg ? ' ' + r.estKg + ' kg of weight was estimated from photos rather than weighed.' : '') + '</p>';
 }
 
 // Social Impact page card
