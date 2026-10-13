@@ -935,7 +935,7 @@ function _impactStats(r) {
 
   const withOutcome = P.filter(p => toArr(p.outcomes).length > 0).length;
   const att = E.reduce((a, e) => a + num(e.attendees), 0);
-  const cap = E.reduce((a, e) => a + num(e.capacity), 0);
+  const cap = capacityTracked() ? E.reduce((a, e) => a + num(e.capacity), 0) : 0;
   const byType = {};
   E.forEach(e => { const t = e.type || 'Other'; byType[t] = (byType[t] || 0) + 1; });
 
@@ -992,7 +992,7 @@ async function generateImpactReport() {
 
   const gaps = [];
   if (s.events && !s.fbN) gaps.push('No feedback was collected at events in this period.');
-  if (s.events && s.fill == null) gaps.push('Event capacity was not recorded, so an attendance rate is not given.');
+  if (s.events && s.fill == null && capacityTracked()) gaps.push('Event capacity was not recorded, so an attendance rate is not given.');
   if (s.events && !s.hours) gaps.push('No volunteer hours were logged in this period.');
   if (hasCirc) cxReportGaps(circ).forEach(g => gaps.push(g));
 
