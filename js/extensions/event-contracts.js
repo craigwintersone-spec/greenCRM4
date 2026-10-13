@@ -176,8 +176,8 @@ function eventStats(ev) {
     value: totalHours * rate,
     rate: rate,
     attendees: n(ev.attendees),
-    capacity: n(ev.capacity),
-    fill: n(ev.capacity) ? pct(n(ev.attendees), n(ev.capacity)) : null,
+    capacity: capacityTracked() ? n(ev.capacity) : 0,
+    fill: capacityTracked() && n(ev.capacity) ? pct(n(ev.attendees), n(ev.capacity)) : null,
     fb: fb,
     fbCount: fb.length,
     avgEnjoyed: avg('enjoyed'),
@@ -185,7 +185,7 @@ function eventStats(ev) {
     avgCA: avg('ca'),
     learnedPct: fb.length ? pct(fb.filter(function (f) { return f.learned; }).length, fb.length) : 0,
     connectedPct: fb.length ? pct(fb.filter(function (f) { return f.connected; }).length, fb.length) : 0,
-    quotes: fb.filter(function (f) { return f.quote && String(f.quote).trim().length > 15; })
+    quotes: fb.filter(function (f) { return f.quote && String(f.quote).trim().length > 15 && !HEALTH_QUOTE_RX.test(String(f.quote)); })
               .map(function (f) { return String(f.quote).trim(); })
   };
 }
@@ -213,7 +213,7 @@ function runEventReport(ev) {
   var gaps = [];
   if (!s.fbCount) gaps.push('No feedback was collected for this session.');
   if (!s.hours.length) gaps.push('No volunteer hours were logged against this session.');
-  if (!s.capacity) gaps.push('Capacity was not recorded, so an attendance rate is not given.');
+  if (!s.capacity && capacityTracked()) gaps.push('Capacity was not recorded, so an attendance rate is not given.');
   if (typeof cxReportGaps === 'function') gaps = gaps.concat(cxReportGaps(s.circ));
 
   var steps = [
