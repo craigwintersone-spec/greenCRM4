@@ -1282,6 +1282,22 @@ function cxiDate(v, order) {
   return !isNaN(d) && /\d{4}/.test(s) ? d.toISOString().slice(0, 10) : null;
 }
 function cxiNum(v) { const n = parseFloat(String(v || '').replace(/,/g, '').replace(/[^0-9.\-]/g, '')); return isNaN(n) ? null : n; }
+// "840g", "1.2kg", "2 lb", "0.5 t": read the unit written next to the number; with no unit, use the file's unit.
+// (Letters used to be thrown away, so 840g was read as 840 kg: a thousand times too heavy.)
+function cxiWeightKg(raw, defaultUnit) {
+  const t = String(raw == null ? '' : raw).trim().toLowerCase().replace(/,/g, '');
+  const dflt = n => defaultUnit === 'g' ? n / 1000 : defaultUnit === 'lb' ? n * 0.45359237 : n;
+  const m = /^(-?\d*\.?\d+)\s*([a-z]*)\.?$/.exec(t);
+  if (!m) { const n = cxiNum(raw); return n == null ? null : dflt(n); }
+  const n = parseFloat(m[1]), u = m[2];
+  if (!u) return dflt(n);
+  if (/^(kg|kgs|kilo|kilos|kilogram|kilograms)$/.test(u)) return n;
+  if (/^(g|gm|gms|gr|gram|grams)$/.test(u)) return n / 1000;
+  if (/^(lb|lbs|pound|pounds)$/.test(u)) return n * 0.45359237;
+  if (/^(oz|ounce|ounces)$/.test(u)) return n * 0.0283495;
+  if (/^(t|tonne|tonnes|ton|tons)$/.test(u)) return n * 1000;
+  return dflt(n);
+}
 function cxiFp(actId, date, type, kg, qty, dest, serial) {
   return [actId, date || '', type || '', Math.round((+kg || 0) * 100) / 100, +qty || 1, dest || '', (serial || '').toLowerCase()].join('|');
 }
@@ -1355,7 +1371,8 @@ function cxiBuild() {
     }
 
     // amounts — never estimated: a missing weight is imported as 0 kg and listed
-    let kg = cxiNum(rawKg); if (kg != null && CXI.gUnit === 'g') kg = kg / 1000;
+    let kg = cxiWeightKg(rawKg, CXI.gUnit);
+    if (kg != null && kg >= 250) note(rowNo, kg + ' kg looks unusually heavy: check the unit');
     let qty = cxiNum(rawQty);
     const perKg = t.unit === 'kg' || (t.unit !== 'each' && /per\s*kg/i.test(t.label));
     let noWeight = false;
