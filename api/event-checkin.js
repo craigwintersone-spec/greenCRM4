@@ -104,7 +104,8 @@ async function getContext(token) {
     // all. No event today → falls back to plain volunteer sign-in. Nothing
     // to reprint when a new event is added.
     const today = await todaysEvent(s.org_id, s.name);
-    return today || site;
+    if (today) { today.siteId = String(s.id); today.siteName = s.name || 'Volunteer sign-in'; return today; }   // same code, both options
+    return site;
   }
   return null;
 }
@@ -239,12 +240,14 @@ async function resolveVolunteer(ctx, body, allowCreate) {
 
 // Open session for this volunteer at this event / site.
 async function openSession(ctx, volunteerId) {
-  const place = ctx.eventId ? `event_id=eq.${encodeURIComponent(ctx.eventId)}`
-                            : `event_id=is.null&site_id=eq.${encodeURIComponent(ctx.siteId)}`;
+  const ev = ctx.eventId ? encodeURIComponent(ctx.eventId) : null, st = ctx.siteId ? encodeURIComponent(ctx.siteId) : null;
+  const place = (ev && st) ? `or=(event_id.eq.${ev},and(event_id.is.null,site_id.eq.${st}))`
+              : ev ? `event_id=eq.${ev}`
+              : `event_id=is.null&site_id=eq.${st}`;
   const rows = await sb(
     `volunteer_checkins?org_id=eq.${ctx.orgId}&${place}` +
     `&volunteer_id=eq.${encodeURIComponent(volunteerId)}&checked_out_at=is.null` +
-    `&select=id,checked_in_at&order=checked_in_at.desc&limit=1`
+    `&select=id,checked_in_at,event_id${st ? ',site_id' : ''}&order=checked_in_at.desc&limit=1`
   );
   return (Array.isArray(rows) && rows[0]) || null;
 }
@@ -305,7 +308,7 @@ module.exports = async function handler(req, res) {
     const ev = (evs || [])[0];
     if (!ev || String(ev.org_id) !== String(ctx.orgId) || ev.public_enabled === false) return bad(res, 'That session is not available.');
     if (!ev.public_token) { ev.public_token = genToken(); try { await sb(`events?id=eq.${ev.id}`, { method: 'PATCH', body: JSON.stringify({ public_token: ev.public_token }) }); } catch (e) { /* non-fatal */ } }
-    ctx = { mode: 'event', orgId: ctx.orgId, eventId: String(ev.id), siteId: null, name: ev.name || 'Event',
+    ctx = { mode: 'event', orgId: ctx.orgId, eventId: String(ev.id), siteId: ctx.siteId || null, siteName: ctx.siteName || '', name: ev.name || 'Event',
             date: ev.event_date || null, location: ev.location || '', questionIds: ev.question_ids || null };
   }
   if (ctx.mode === 'choose' && action !== 'info') return bad(res, 'Please choose today\u2019s session first.');
@@ -319,6 +322,7 @@ module.exports = async function handler(req, res) {
         ok: true,
         mode: ctx.mode,
         event: { name: ctx.name, date: ctx.date, location: ctx.location, org_name: orgName },
+        site: (ctx.mode === 'event' && ctx.siteId) ? { name: ctx.siteName || 'Volunteer sign-in' } : null,   // on an event day the same code also offers general site volunteering
         questions,
         choices: ctx.mode === 'choose' ? (ctx.choices || []) : undefined   // today's sessions to tap between
       });
@@ -383,19 +387,22 @@ module.exports = async function handler(req, res) {
       const v = r.v;
 
       const nowIso = new Date().toISOString();
+      const wantSite = body.place === 'site' && !!ctx.siteId;
+      const target = wantSite ? { eventId: null, siteId: ctx.siteId, label: ctx.siteName || 'the site' }
+                              : { eventId: ctx.eventId, siteId: ctx.eventId ? null : ctx.siteId, label: ctx.name };
       const existing = await openSession(ctx, v.id);
       if (existing) {
         // Same day → already in. Earlier day → they forgot to check out: close it (0h, flagged) and start fresh.
         if (londonDay(existing.checked_in_at) === londonDay(nowIso)) {
-          return res.status(200).json({ ok: true, at: hhmm(existing.checked_in_at), already: true, name: v.name || '' });
+          return res.status(200).json({ ok: true, at: hhmm(existing.checked_in_at), already: true, name: v.name || '', where: existing.event_id ? ctx.name : (ctx.siteName || ctx.name) });
         }
         await patchCheckin(existing.id, { checked_out_at: existing.checked_in_at, hours: 0, flagged: 'forgot to check out' });
       }
 
-      const row = { org_id: ctx.orgId, event_id: ctx.eventId, volunteer_id: String(v.id), checked_in_at: nowIso };
-      if (ctx.siteId) row.site_id = ctx.siteId;
+      const row = { org_id: ctx.orgId, event_id: target.eventId, volunteer_id: String(v.id), checked_in_at: nowIso };
+      if (target.siteId) row.site_id = target.siteId;
       await sb('volunteer_checkins', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([row]) });
-      return res.status(200).json({ ok: true, at: hhmm(nowIso), name: v.name || '', created: !!r.created });
+      return res.status(200).json({ ok: true, at: hhmm(nowIso), name: v.name || '', created: !!r.created, where: target.label });
     }
 
     // ── volunteer check out ─────────────────────────────────
@@ -424,11 +431,11 @@ module.exports = async function handler(req, res) {
       await insertHours({
         org_id: ctx.orgId,
         volunteer_id: String(v.id),
-        event_id: ctx.eventId,
-        site_id: ctx.siteId,
+        event_id: open.event_id || null,      // the hours go where the volunteer signed in
+        site_id: open.site_id || null,
         session_date: londonDay(outIso),
         hours,
-        activity: trim(body.activity, 200) || (ctx.mode === 'event' ? 'Volunteered at ' + ctx.name : ctx.name),
+        activity: trim(body.activity, 200) || (open.event_id ? 'Volunteered at ' + ctx.name : (ctx.siteName || ctx.name)),
         wellbeing: (wb >= 1 && wb <= 5) ? wb : null,
         source: 'qr'
       });
