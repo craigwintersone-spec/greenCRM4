@@ -693,31 +693,118 @@ async function cxGrowSplitLog(actId) {
     err('Could not save the split: ' + (e.message || e) + '. Nothing was logged.');
   }
 }
-// Recent harvests: short, one line each, a split shows as one harvest
+// Place a harvest: put some or all of its kilos somewhere. What is not placed stays in the Harvested list.
+function cxGrowPlaceHTML(it, act) {
+  const e = cxE, W = +it.weight_kg || 0, t = cxType(act, it.item_type), isSold = o => /sold/i.test(o.label);
+  if (!(W > 0)) return '<div class="pp-sec"><div class="pp-lbl">No weight recorded</div><div class="cxp-s">Open the pencil to add the kilograms, then place it.</div></div>';
+  return '<div class="pp-sec"><div class="pp-lbl">Harvested: ' + cxFmt(W, 1) + ' kg' + (t ? ' of ' + e(cxLbl(t)) : '') + '. Where did it go?</div>' +
+    '<div class="cxg-split" style="margin-top:6px">' + cxGrowDests(act).map(o =>
+      '<div class="cxg-row"><span class="cxg-n">' + e(o.label) + '</span>' +
+      (isSold(o) ? '<span style="flex:none;color:var(--txt3);font-size:13px">\u00a3</span><input type="number" inputmode="decimal" min="0" step="0.01" placeholder="price" id="cxg-price-' + it.id + '" style="width:78px"/>' : '') +
+      '<input type="number" inputmode="decimal" min="0" step="0.1" placeholder="0" class="cxg-pl-' + it.id + '" data-out="' + e(o.key) + '" oninput="cxGrowPlaceCalc(\'' + it.id + '\')"/>' +
+      '<a href="#" class="cxp-s" title="Put all of what is left here" onclick="cxGrowPlaceAll(\'' + it.id + '\',\'' + e(o.key) + '\');return false">all</a></div>').join('') +
+    '<div class="cxg-left" id="cxg-pleft-' + it.id + '">Still to place: ' + cxFmt(W, 1) + ' kg</div>' +
+    '<div style="display:flex;justify-content:flex-end"><button class="btn btn-p btn-sm" id="cxg-pgo-' + it.id + '" onclick="cxGrowPlace(\'' + it.id + '\')">Place it</button></div></div>' +
+    '<div class="cxp-s" style="margin-top:6px">Anything you do not place stays in your Harvested list.</div></div>';
+}
+function cxGrowPlaceInputs(id) { return Array.from(document.querySelectorAll('.cxg-pl-' + id)); }
+function cxGrowPlaceCalc(id) {
+  const it = CX.items.find(i => String(i.id) === String(id)), W = it ? +it.weight_kg || 0 : 0;
+  const sum = cxGrowPlaceInputs(id).reduce((a, i) => a + (+i.value || 0), 0), left = Math.round((W - sum) * 100) / 100, el = $('cxg-pleft-' + id);
+  if (!el) return;
+  el.className = 'cxg-left' + (left < -0.001 ? ' bad' : '');
+  el.textContent = left < -0.001 ? 'That is ' + cxFmt(-left, 2) + ' kg more than was picked' : left > 0.001 ? 'Still to place: ' + cxFmt(left, 2) + ' kg (stays in Harvested)' : 'All placed';
+}
+function cxGrowPlaceAll(id, key) {
+  const it = CX.items.find(i => String(i.id) === String(id)); if (!it) return;
+  const inputs = cxGrowPlaceInputs(id), mine = inputs.find(i => i.getAttribute('data-out') === key); if (!mine) return;
+  const others = inputs.filter(i => i !== mine).reduce((a, i) => a + (+i.value || 0), 0);
+  mine.value = Math.max(0, Math.round(((+it.weight_kg || 0) - others) * 100) / 100) || '';
+  cxGrowPlaceCalc(id);
+}
+async function cxGrowPlace(id) {
+  const R = CX.items.find(i => String(i.id) === String(id)); if (!R) return;
+  const act = cxAct(R.activity_id), W = +R.weight_kg || 0, leftEl = $('cxg-pleft-' + id);
+  const fail = m => { if (leftEl) { leftEl.className = 'cxg-left bad'; leftEl.textContent = m; } };
+  const parts = cxGrowPlaceInputs(id).map(i => ({ key: i.getAttribute('data-out'), kg: +i.value || 0 })).filter(p => p.kg > 0);
+  const sum = parts.reduce((a, p) => a + p.kg, 0), left = Math.round((W - sum) * 100) / 100;
+  if (!parts.length) return fail('Put some of it somewhere first');
+  if (left < -0.001) return fail('That is more than the ' + cxFmt(W, 1) + ' kg that was picked');
+  const price = +(($('cxg-price-' + id) || {}).value) || 0, now = new Date().toISOString();
+  const splitId = (R.custom && R.custom.split_id) || ('h_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5));
+  const backup = { weight_kg: R.weight_kg, co2e_kg: R.co2e_kg, value_gbp: R.value_gbp, custom: Object.assign({}, R.custom || {}), outcome: R.outcome, outcome_type: R.outcome_type, outcome_at: R.outcome_at, status: R.status, stage: R.stage, updated_at: R.updated_at };
+  const btn = $('cxg-pgo-' + id); if (btn) { btn.disabled = true; btn.textContent = 'Saving\u2026'; }
+  const inserted = [];
+  try {
+    const baseCustom = Object.assign({}, R.custom || {}, { split_id: splitId });
+    const toInsert = parts.slice();
+    const lastOnOriginal = left <= 0.001 ? toInsert.pop() : null;           // everything placed: the original row becomes the last portion
+    const portion = (p, o) => {
+      const f = cxCalc(act, R.item_type, 1, p.kg), cust = Object.assign({}, baseCustom);
+      if (price && /sold/i.test(o.label)) cust.sale_gbp = price;
+      return { weight_kg: p.kg, co2e_kg: f.co2, value_gbp: f.value, custom: cust, outcome: p.key, outcome_type: o.type, outcome_at: null, status: o.label, stage: null };   // dates stay as harvested, so reports keep the harvest date
+    };
+    for (const p of toInsert) {
+      const o = cxOutcome(act, p.key);
+      const row = Object.assign({ org_id: orgId, activity_id: act.id, item_type: R.item_type, name: R.name, category: R.category, event_id: R.event_id || null, quantity: 1, created_at: R.created_at, updated_at: now }, portion(p, o));
+      const { data, error } = await cxFrom('circular_items').insert([row]).select().single();
+      if (error) throw error;
+      inserted.push(data);
+    }
+    let upd;
+    if (lastOnOriginal) upd = Object.assign(portion(lastOnOriginal, cxOutcome(act, lastOnOriginal.key)), { updated_at: now });
+    else { const f = cxCalc(act, R.item_type, 1, left); upd = { weight_kg: left, co2e_kg: f.co2, value_gbp: f.value, custom: baseCustom, updated_at: now }; }
+    const { error: ue } = await cxFrom('circular_items').update(upd).eq('id', R.id);
+    if (ue) throw ue;
+    Object.assign(R, upd); inserted.forEach(r => CX.items.push(r));
+    for (const r of inserted) await cxLog(r, 'finished', null, r.outcome, { via: 'placed from a harvest', from_item: R.id, weight_kg: r.weight_kg });
+    if (lastOnOriginal) await cxLog(R, 'finished', null, R.outcome, { via: 'placed from a harvest', weight_kg: R.weight_kg });
+    if (typeof CXR !== 'undefined') CXR.at = 0;
+    cxCloseModal(); cxDraw();
+  } catch (e) {
+    // stopped part-way: put everything back exactly as it was
+    for (const r of inserted) { try { await cxFrom('circular_items').delete().eq('id', r.id); } catch (e2) { /* nothing more to do */ } }
+    try { await cxFrom('circular_items').update(backup).eq('id', R.id); } catch (e3) { /* nothing more to do */ }
+    Object.assign(R, backup);
+    if (btn) { btn.disabled = false; btn.textContent = 'Place it'; }
+    fail('Could not save: ' + (e.message || e) + '. Nothing was changed.');
+  }
+}
+function cxGrowTab(t) { CX.growTab = t; CX.growAll = false; cxDraw(); }
+// Two lists: Harvested (still to deal with) and Dealt with. A harvest split between places shows as one line in Dealt with.
 function cxGrowRecentHTML(act) {
   const its = CX.items.filter(i => i.activity_id === act.id && cxIsHarvest(i, act))
     .sort((a, b) => String(b.outcome_at || b.created_at || '').localeCompare(String(a.outcome_at || a.created_at || '')));
+  const todo = its.filter(i => !i.outcome_type), doneRows = its.filter(i => i.outcome_type);
   const groups = [], seen = {};
-  its.forEach(i => {
+  doneRows.forEach(i => {
     const k = i.custom && i.custom.split_id;
     if (k) { if (seen[k]) { seen[k].rows.push(i); return; } seen[k] = { rows: [i] }; groups.push(seen[k]); }
     else groups.push({ rows: [i] });
   });
-  const shown = groups.slice(0, CX.growAll ? 100 : 8);
-  const row = g => {
+  const tab = CX.growTab || (todo.length ? 'todo' : 'done');
+  const when = i => { const d = new Date(i.outcome_at || i.created_at); return cxIsToday(i) ? 'Today ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString('en-GB'); };
+  const bedOf = i => i.custom && i.custom.bed_planter ? ' <span style="font-weight:400;color:var(--txt3)">\u00b7 ' + cxE(i.custom.bed_planter) + '</span>' : '';
+  const todoRow = i => {
+    const t = cxType(act, i.item_type);
+    return '<div class="cxg-r" onclick="cxOpenItem(\'' + i.id + '\')"><div><div class="cxg-t">' + cxFmt(i.weight_kg, 1) + ' kg ' + cxE(t ? cxLbl(t) : cxLbl(i.name)) + bedOf(i) + '</div><div class="cxg-s">' + when(i) + '</div></div>' +
+      '<div style="display:flex;align-items:center;gap:6px"><button class="btn btn-p btn-sm" onclick="event.stopPropagation();cxOpenItem(\'' + i.id + '\')">Place it</button>' +
+      '<button class="btn btn-ghost btn-sm" title="Delete" onclick="event.stopPropagation();cxDelEntry(\'' + i.id + '\')">\u00d7</button></div></div>';
+  };
+  const doneRow = g => {
     const first = g.rows[0], t = cxType(act, first.item_type), kg = g.rows.reduce((a, i) => a + (+i.weight_kg || 0), 0);
-    const bed = first.custom && first.custom.bed_planter;
-    const d = new Date(first.outcome_at || first.created_at);
-    const when = cxIsToday(first) ? 'Today ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString('en-GB');
-    const chips = g.rows.map(i => { const o = cxOutcome(act, i.outcome); return '<span class="cxg-chip">' + (g.rows.length > 1 ? cxFmt(i.weight_kg, 1) + ' kg ' : '') + cxE(o && !/^harvested$/i.test(String(o.label).trim()) ? o.label : 'Harvested') + '</span>'; }).join('');
+    const chips = g.rows.map(i => { const o = cxOutcome(act, i.outcome); return '<span class="cxg-chip">' + (g.rows.length > 1 ? cxFmt(i.weight_kg, 1) + ' kg ' : '') + cxE(o ? o.label : (i.status || '')) + '</span>'; }).join('');
     const click = g.rows.length === 1 ? 'cxOpenItem(\'' + first.id + '\')' : '';
     const del = g.rows.length === 1 ? 'cxDelEntry(\'' + first.id + '\')' : 'cxGrowDelGroup(\'' + cxE(first.custom.split_id) + '\')';
-    return '<div class="cxg-r"' + (click ? ' onclick="' + click + '"' : '') + '><div><div class="cxg-t">' + cxFmt(kg, 1) + ' kg ' + cxE(t ? cxLbl(t) : cxLbl(first.name)) + (bed ? ' <span style="font-weight:400;color:var(--txt3)">\u00b7 ' + cxE(bed) + '</span>' : '') + '</div><div class="cxg-s">' + when + '</div></div>' +
+    return '<div class="cxg-r"' + (click ? ' onclick="' + click + '"' : '') + '><div><div class="cxg-t">' + cxFmt(kg, 1) + ' kg ' + cxE(t ? cxLbl(t) : cxLbl(first.name)) + bedOf(first) + '</div><div class="cxg-s">' + when(first) + '</div></div>' +
       '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">' + chips + '<button class="btn btn-ghost btn-sm" title="Delete" onclick="event.stopPropagation();' + del + '">\u00d7</button></div></div>';
   };
-  return '<div class="card"><div class="card-title">Recent harvests</div>' +
-    (shown.length ? shown.map(row).join('') + (groups.length > 8 ? '<div style="text-align:center;margin-top:8px"><a href="#" class="cxp-s" onclick="CX.growAll=!CX.growAll;cxDraw();return false">' + (CX.growAll ? 'Show fewer' : 'See all ' + groups.length) + '</a></div>' : '<div class="cxg-s" style="margin-top:8px">Tap a harvest to change it.</div>')
-      : renderEmpty('Nothing logged yet. Log your first harvest above.')) + '</div>';
+  const tabBtn = (k, label) => '<button class="cxp-tab ' + (tab === k ? 'on' : '') + '" onclick="cxGrowTab(\'' + k + '\')">' + label + '</button>';
+  const list = tab === 'todo' ? todo : groups, shown = list.slice(0, CX.growAll ? 200 : 8);
+  return '<div class="card"><div class="cxp-tabs" style="margin:0 0 6px">' + tabBtn('todo', 'Harvested \u00b7 to deal with (' + todo.length + ')') + tabBtn('done', 'Dealt with (' + groups.length + ')') + '</div>' +
+    (shown.length
+      ? shown.map(tab === 'todo' ? todoRow : doneRow).join('') + (list.length > 8 ? '<div style="text-align:center;margin-top:8px"><a href="#" class="cxp-s" onclick="CX.growAll=!CX.growAll;cxDraw();return false">' + (CX.growAll ? 'Show fewer' : 'See all ' + list.length) + '</a></div>' : '<div class="cxg-s" style="margin-top:8px">' + (tab === 'todo' ? 'Tap a harvest, or Place it, to say where it went.' : 'Tap a line to change it.') + '</div>')
+      : renderEmpty(tab === 'todo' ? 'Nothing waiting. Every harvest has been placed.' : 'Nothing placed yet. Open a harvest and place it.')) + '</div>';
 }
 async function cxGrowDelGroup(splitId) {
   const rows = CX.items.filter(i => i.custom && i.custom.split_id === splitId); if (!rows.length) return;
@@ -2085,7 +2172,8 @@ async function cxOpenItem(id, justLogged) {
   const stages = (act && act.stages) || [];
   const idx = stages.findIndex(s => s.key === it.stage);
   const tracked = act && circMode(act) === 'tracked';
-  cxInjectPassStyle();
+  const grow = !!act && act.template === 'growing';
+  cxInjectPassStyle(); if (grow) cxInjectGrowStyle();
 
   // Progress rail (tracked) or status line
   const rail = tracked && stages.length
@@ -2110,7 +2198,9 @@ async function cxOpenItem(id, justLogged) {
 
   // Actions
   let actions = '';
-  if (act && !it.outcome_type) {
+  if (grow && !it.outcome_type) {
+    actions = cxGrowPlaceHTML(it, act);
+  } else if (act && !it.outcome_type) {
     const next = stages[idx + 1];
     const others = stages.filter((s, i) => i !== idx && (!next || s.key !== next.key));
     actions = '<div class="pp-sec">' +
@@ -2129,7 +2219,7 @@ async function cxOpenItem(id, justLogged) {
     (justLogged ? '<div class="pp-ok">✓ Logged — print the label and stick it on the item.</div>' : '') +
     '<div class="pp-head"><div style="min-width:0"><div class="pp-code">' + e(it.passport_code || '') + '</div>' +
       '<div class="pp-name">' + e(it.name) + (+it.quantity > 1 ? ' ×' + cxFmt(it.quantity) : '') + '</div>' +
-      '<div class="cxp-s">' + e(act ? act.icon + ' ' + act.name : '') + (t ? ' · ' + e(t.label) : '') + (it.stage && !it.outcome_type ? ' · ' + cxDays(it.updated_at) + ' days at this step' : '') + '</div></div>' +
+      '<div class="cxp-s">' + e(act ? act.icon + ' ' + act.name : '') + (t ? ' · ' + e(t.label) : '') + (it.stage && !it.outcome_type && !grow ? ' · ' + cxDays(it.updated_at) + ' days at this step' : '') + '</div></div>' +
       '<div class="pp-tools"><button class="btn btn-ghost btn-sm" title="Custody record for this item" onclick="cxCustodyOpen({itemId:\'' + it.id + '\'})">📄</button><button class="btn btn-ghost btn-sm" title="Print label" onclick="cxPrintLabels([\'' + it.id + '\'])">🏷️</button><button class="btn btn-ghost btn-sm" title="Edit details" onclick="cxOpenLog({id:\'' + it.id + '\'})">✎</button><button class="btn btn-ghost btn-sm" title="Close" onclick="cxCloseModal()">✕</button></div></div>' +
     rail + actions +
     '<div class="pp-grid">' + det.map(d => '<div><span>' + e(d[0]) + '</span><b>' + e(d[1]) + '</b></div>').join('') + '</div>' +
