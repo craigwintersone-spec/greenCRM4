@@ -507,7 +507,7 @@ function cxDraw() {
     '<span>' + backlog + ' entries aren\'t counted in your figures yet' + (wasTracked ? ' — this activity has been tracking every item one by one' : '') + '.</span>' +
     '<button class="btn btn-p btn-sm" onclick="' + (wasTracked ? 'cxFixActivity(\'' + CX.tab + '\')' : 'cxTidyOpen(\'' + CX.tab + '\')') + '">' + (wasTracked ? 'Fix this for me' : 'Sort them in bulk') + '</button></div>' : '';
   h += CX.tab === 'all' ? stats + cxSummaryHTML(acts)
-    : act.template === 'growing' ? stats + cxQuickHTML(act) + cxGrowRecentHTML(act)
+    : act.template === 'growing' ? stats + '<div class="cxg-grid">' + cxQuickHTML(act) + cxGrowRecentHTML(act) + '</div>'
     : cxQuickHTML(act) + bulkBtn + stats + (circMode(act) === 'tally' ? cxRecentHTML(act) : cxBoardHTML(act));
   p.innerHTML = h;
 }
@@ -579,6 +579,10 @@ function cxInjectGrowStyle() {
   if (document.getElementById('cxg-style')) return;
   const st = document.createElement('style'); st.id = 'cxg-style';
   st.textContent = `
+.cxg-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
+.cxg-grid>.card{max-width:none;margin:0}
+.cxg-grid .cxq{max-width:none}
+@media(max-width:980px){.cxg-grid{grid-template-columns:minmax(0,1fr)}}
 .cxg-step{font-size:12px;font-weight:700;color:var(--txt3);margin:14px 0 6px;text-transform:none;letter-spacing:0}
 .cxg-links{display:flex;gap:10px;align-items:center;justify-content:center;margin-top:12px;font-size:13px;color:var(--txt3);flex-wrap:wrap;text-transform:none;letter-spacing:0}
 .cxg-links a{color:var(--txt2);text-decoration:underline}
@@ -596,8 +600,20 @@ function cxInjectGrowStyle() {
 `;
   document.head.appendChild(st);
 }
+// the crops you log most come first (the one you picked is always showing); the rest are one tap away
+function cxGrowShownTypes(act, q) {
+  const types = (act.item_types || []).slice();
+  if (q.allCrops || types.length <= 12) return types;
+  const n = {}; CX.items.forEach(i => { if (i.activity_id === act.id) n[i.item_type] = (n[i.item_type] || 0) + 1; });
+  types.sort((a, b) => (n[b.key] || 0) - (n[a.key] || 0));
+  const top = types.slice(0, 12), sel = types.find(t => t.key === q.type);
+  if (sel && top.indexOf(sel) < 0) top[top.length - 1] = sel;
+  return top;
+}
 function cxGrowOtherHTML(act, q) {
-  return '<button class="cxq-chip" style="border-style:dashed" onclick="cxQ(cxAct(\'' + act.id + '\')).addCrop=!cxQ(cxAct(\'' + act.id + '\')).addCrop;cxDraw()">+ Other</button>';
+  const total = (act.item_types || []).length;
+  return (total > 12 ? '<button class="cxq-chip" style="border-style:dashed" onclick="cxQ(cxAct(\'' + act.id + '\')).allCrops=!cxQ(cxAct(\'' + act.id + '\')).allCrops;cxDraw()">' + (q.allCrops ? 'Fewer crops' : 'All ' + total + ' crops') + '</button>' : '') +
+  '<button class="cxq-chip" style="border-style:dashed" onclick="cxQ(cxAct(\'' + act.id + '\')).addCrop=!cxQ(cxAct(\'' + act.id + '\')).addCrop;cxDraw()">+ Other</button>';
 }
 function cxGrowAddCropHTML(act) {
   return '<div style="display:flex;gap:6px;margin:8px 0 4px"><input id="cxg-crop-' + act.id + '" placeholder="Name of the crop, e.g. Pak choi" maxlength="40" onkeydown="if(event.key===\'Enter\'){event.preventDefault();cxGrowAddCrop(\'' + act.id + '\')}"/>' +
@@ -697,7 +713,7 @@ function cxGrowRecentHTML(act) {
     return '<div class="cxg-r"' + (click ? ' onclick="' + click + '"' : '') + '><div><div class="cxg-t">' + cxFmt(kg, 1) + ' kg ' + cxE(t ? cxLbl(t) : cxLbl(first.name)) + (bed ? ' <span style="font-weight:400;color:var(--txt3)">\u00b7 ' + cxE(bed) + '</span>' : '') + '</div><div class="cxg-s">' + when + '</div></div>' +
       '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">' + chips + '<button class="btn btn-ghost btn-sm" title="Delete" onclick="event.stopPropagation();' + del + '">\u00d7</button></div></div>';
   };
-  return '<div class="card" style="max-width:640px"><div class="card-title">Recent harvests</div>' +
+  return '<div class="card"><div class="card-title">Recent harvests</div>' +
     (shown.length ? shown.map(row).join('') + (groups.length > 8 ? '<div style="text-align:center;margin-top:8px"><a href="#" class="cxp-s" onclick="CX.growAll=!CX.growAll;cxDraw();return false">' + (CX.growAll ? 'Show fewer' : 'See all ' + groups.length) + '</a></div>' : '<div class="cxg-s" style="margin-top:8px">Tap a harvest to change it.</div>')
       : renderEmpty('Nothing logged yet. Log your first harvest above.')) + '</div>';
 }
@@ -792,7 +808,7 @@ function cxQuickHTML(act) {
       '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:8px"><button class="btn btn-ghost btn-sm" onclick="cxQ(cxAct(\'' + id + '\')).pending=null;cxDraw()">Cancel</button><button class="btn btn-p btn-sm" onclick="cxQConfirm(\'' + id + '\')">✓ Log all</button></div></div>';
   }
 
-  h += (grow ? '<div class="cxg-step">1. What did you pick?</div>' : '') + '<div class="cxq-chips">' + types.map(x => '<button class="cxq-chip ' + (x.key === q.type ? 'on' : '') + '" onclick="cxQ(cxAct(\'' + id + '\')).type=\'' + e(x.key) + '\';cxDraw()">' + e(cxLbl(x)) + '</button>').join('') +
+  h += (grow ? '<div class="cxg-step">1. What did you pick?</div>' : '') + '<div class="cxq-chips">' + (grow ? cxGrowShownTypes(act, q) : types).map(x => '<button class="cxq-chip ' + (x.key === q.type ? 'on' : '') + '" onclick="cxQ(cxAct(\'' + id + '\')).type=\'' + e(x.key) + '\';cxDraw()">' + e(cxLbl(x)) + '</button>').join('') +
     (types.length ? '' : '<span class="cxp-s">No items yet — add them in ⚙️ Set up, or take a photo.</span>') + (grow ? cxGrowOtherHTML(act, q) : '') + '</div>' + (grow && q.addCrop ? cxGrowAddCropHTML(act) : '');
 
   if (!q.batch) {
@@ -886,7 +902,7 @@ async function cxQInsert(act, typeKey, amount, kind, key, extra) {
   if (!t) throw new Error('Pick what it is first');
   const kg = cxPerKg(t);
   const amt = +amount || 0;
-  if (kg && !amt) throw new Error('Enter the weight in kg');
+  if (kg && !amt) throw new Error(act.template === 'growing' ? 'Enter how much you picked, in kg, first' : 'Enter the weight in kg');
   const qty = kg ? 1 : Math.max(1, Math.round(amt || 1));
   const weight = kg ? amt : +((+t.weight_kg || 0) * qty).toFixed(2);
   const f = cxCalc(act, t.key, qty, weight);
