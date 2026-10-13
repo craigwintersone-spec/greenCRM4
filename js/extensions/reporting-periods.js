@@ -309,6 +309,7 @@
       unverified = window.unknownReportNumbers(raw, prompt);
     }
 
+    if (typeof vlAutoFix === 'function') raw = vlAutoFix(raw, { hasTargets: undefined }).text;   // nothing for the author to edit
     const cleaned = window.cleanReportText ? window.cleanReportText(raw) : raw;
     let bodyHTML = window.reportTextToHTML ? window.reportTextToHTML(cleaned, raw) : '<pre>' + escapeHTML(cleaned) + '</pre>';
     unverified.forEach(numStr => { bodyHTML = bodyHTML.replace(new RegExp('(£?)' + numStr.replace(/\./g, '\\.') + '(%?)(?![\\d])', 'g'), '<mark title="This number is not in your records — check it before sending" style="background:#FEF3C7">$1' + numStr + '$2</mark>'); });
