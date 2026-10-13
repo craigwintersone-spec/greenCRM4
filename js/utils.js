@@ -87,3 +87,48 @@ function capacityTracked(events) {
 function fmtNum(v, d) { const x = +v; if (!isFinite(x)) return String(v); return x.toLocaleString('en-GB', { maximumFractionDigits: d == null ? 1 : d }); }
 // A quote that mentions someone's health or condition never goes into a funder report
 const HEALTH_QUOTE_RX = /\b(health|illness|ill|sick|disab\w*|condition|medicat\w*|diagnos\w*|depress\w*|anxiety|anxious|cancer|pregnan\w*|surgery|operation|hospital|doctor|gp|pain|chronic|circulation|arthritis|diabet\w*|dementia|autis\w*|adhd|dyslexi\w*|mental|therapy|counsell\w*|addict\w*)\b/i;
+
+// ── Reports that need no editing ─────────────────────────────
+// Whatever the writer produced, risky phrases are fixed or removed here before anyone sees the report.
+// text: the writer's markdown. o: { attendances, responses, hasTargets }
+function vlAutoFix(text, o) {
+  o = o || {}; let n = 0; text = String(text || '');
+  const bump = (re, fn) => { text = text.replace(re, (...a) => { n++; return typeof fn === 'function' ? fn(...a) : fn; }); };
+  // wording
+  bump(/\bBAME\b/g, 'black and ethnic minority');
+  bump(/\bBlack (?:and|or from (?:an |other )?)ethnic minorit(?:y|ies)(?: background)?/gi, 'black and ethnic minority');
+  bump(/(^|[.!?]\s+|\n)Significant(?:ly)?\s+(\w)/g, (m, pre, ch) => pre + ch.toUpperCase());
+  bump(/\bsignificant(?:ly)?\s+/gi, '');
+  // "575 participants" when 575 counts attendances or feedback responses, not people
+  const swaps = [];
+  if (o.responses) swaps.push([o.responses, 'responses']);
+  if (o.attendances && o.attendances !== o.responses) swaps.push([o.attendances, 'attendances']);
+  swaps.forEach(([v, word]) => {
+    [String(v), Number(v).toLocaleString('en-GB')].filter((x, i, a) => a.indexOf(x) === i).forEach(x => {
+      bump(new RegExp('\\b(?:all\\s+)?(' + x + ')\\s+(?:participants|people)\\b', 'gi'), (m, num) => num + ' ' + word);
+    });
+  });
+  // whole sentences that should not be in a funder report: promises, guesses, overclaims, "no variance" with no targets
+  const kill = [
+    /\bwe (?:will|plan to|intend to|aim to|are going to|shall)\b/i,
+    /\b(?:several|many) (?:hundred|thousand)\b|\b(?:approximately|roughly)\b/i,
+    /\b(?:universal(?:ly)?|everyone)\b/i
+  ];
+  if (o.hasTargets === false) kill.push(/\bno variance\b|\bvariance from (?:the )?profile\b|\b(?:on|ahead of) (?:track|profile)\b|\bmet (?:the |its |our )?(?:profile|targets?)\b/i);
+  let lines = text.split('\n').map(line => {
+    if (/^\s*#/.test(line)) return line;
+    const parts = line.split(/(?<=[.!?])\s+(?=[A-Z"\u201c(\u2018])/);
+    return parts.filter(p => { const hit = kill.some(rx => rx.test(p)); if (hit) n++; return !hit; }).join(' ');
+  });
+  // a heading with nothing left under it goes too
+  const keep = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (/^\s*#/.test(lines[i])) {
+      let j = i + 1; while (j < lines.length && !lines[j].trim()) j++;
+      if (j >= lines.length || /^\s*#/.test(lines[j])) { n++; continue; }
+    }
+    keep.push(lines[i]);
+  }
+  text = keep.join('\n').replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+  return { text, fixes: n };
+}
