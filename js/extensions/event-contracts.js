@@ -275,6 +275,7 @@ function runEventReport(ev) {
 
 function renderEventDoc(raw, s, orgName, todayStr, funderNames) {
   var outEl = $('report-output');
+  if (typeof vlAutoFix === 'function') raw = vlAutoFix(raw, { attendances: s && s.attendees, responses: s && s.fbCount, hasTargets: undefined }).text;   // nothing for the author to edit
   var cleaned = (typeof cleanReportText === 'function') ? cleanReportText(raw) : raw;
   var body = (typeof reportTextToHTML === 'function') ? reportTextToHTML(cleaned, raw) : '<pre>' + esc(cleaned) + '</pre>';
 
