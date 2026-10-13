@@ -719,7 +719,9 @@ function cxInjectQuickStyle() {
 .cxq-lbl{font-size:12px;color:var(--txt3);margin-bottom:6px}
 .cxq-btns{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
 .cxq-btn{height:56px;border-radius:12px;border:1px solid var(--border);background:var(--surface);font-size:14px;font-weight:600;color:var(--txt)}
-.cxq-btn.first{background:var(--em);border-color:var(--em);color:#fff}
+.cxq-btn:focus{outline:none}
+@media (hover:hover){.cxq-btn:hover{border-color:var(--em)}}
+.cxq-btn:active{background:var(--em);border-color:var(--em);color:#fff}
 .cxq-btn:active{transform:scale(.97)}
 .cxq-batch{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
 .cxq-batch label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--txt2)}
