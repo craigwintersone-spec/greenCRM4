@@ -321,10 +321,8 @@ function gapsFor(s) {
     gaps.push('Demographic data was given in ' + s.attDemo.count + ' of ' + s.fbCount + ' feedback responses (' + pct(s.attDemo.count, s.fbCount) + '%); it is optional and anonymous.');
   }
   if (s.eventCount && !s.fbCount) gaps.push('No feedback responses were collected in this period.');
-  if (s.emptyEvents) gaps.push(s.emptyEvents + ' event' + (s.emptyEvents === 1 ? ' has' : 's have') + ' no attendance, feedback or hours recorded and ' + (s.emptyEvents === 1 ? 'is' : 'are') + ' not counted as delivered.');
-  if (s.dateNamed) gaps.push(s.dateNamed + ' event' + (s.dateNamed === 1 ? ' is' : 's are') + ' recorded under a date rather than a name.');
   if (s.contract && !s.eventCount) gaps.push('No events are linked to this contract in this period.');
-  if (s.unlinkedHours) gaps.push(s.unlinkedHours + ' volunteer hours in this period are not linked to an event.');
+  if (s.unlinkedHours) gaps.push(s.unlinkedHours + ' volunteer hours in this period were general volunteering across the organisation, not tied to a particular event.');
   if (typeof cxReportGaps === 'function') gaps = gaps.concat(cxReportGaps(s.circ));
   return gaps;
 }
@@ -602,7 +600,7 @@ function barChart(title, items, color, unit) {
       (showVals && x.value > 0 ? '<text x="' + (cx + bw / 2).toFixed(1) + '" y="' + (H - padB - h - 4).toFixed(1) + '" text-anchor="middle" font-size="9.5" fill="#333">' + esc(fmtNum(x.value)) + '</text>' : '') +
       (i % step === 0 ? '<text x="' + (cx + bw / 2).toFixed(1) + '" y="' + (H - 10) + '" text-anchor="middle" font-size="9.5" fill="#666">' + esc(x.label) + '</text>' : '');
   }).join('');
-  return '<div style="flex:1 1 300px;min-width:260px;border:1px solid #e3e3e3;border-radius:8px;padding:10px 12px;break-inside:avoid">' +
+  return '<div style="min-width:0;border:1px solid #e3e3e3;border-radius:8px;padding:10px 12px;break-inside:avoid">' +
     '<div style="font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#555;margin-bottom:2px">' + esc(title) + '</div>' +
     '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" role="img" aria-label="' + esc(title) + '"><line x1="' + padL + '" y1="' + (H - padB) + '" x2="' + (W - padR) + '" y2="' + (H - padB) + '" stroke="#ccc"/>' + bars + '</svg></div>';
 }
@@ -613,7 +611,7 @@ function monthItems(obj, last) {
 function chartsHTML(s) {
   var a = barChart('Attendances by month', monthItems(s.byMonthEv || {}, 18), '#1F6F6D');
   var b = barChart('Volunteer hours by month', monthItems(s.byMonth || {}, 18), '#E91E63');
-  return (a || b) ? '<div style="display:flex;gap:12px;flex-wrap:wrap;margin:0 0 22px">' + a + b + '</div>' : '';
+  return (a || b) ? '<div class="dr-charts">' + a + b + '</div>' : '';
 }
 function stat(label, val) {
   return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">' +
@@ -651,7 +649,7 @@ function eventTable(s) {
   function label(e) { var nm = String(e.name || '').trim(); return !nm ? 'Unnamed session' : DATE_NAME.test(nm) ? 'Session (recorded by date)' : nm; }
   function row(e) {
     var h = s.byEvent[String(e.id)] || 0;
-    return '<tr><td style="white-space:nowrap">' + esc(when(e)) + '</td><td>' + esc(label(e)) + '</td><td>' + esc(e.type || '\u2014') + '</td><td>' + fmtNum(n(e.attendees)) + '</td><td>' + fmtNum(round1(h)) + '</td></tr>';
+    return '<tr><td style="white-space:nowrap;padding-right:14px">' + esc(when(e)) + '</td><td>' + esc(label(e)) + '</td><td>' + esc(e.type || '\u2014') + '</td><td>' + fmtNum(n(e.attendees)) + '</td><td>' + fmtNum(round1(h)) + '</td></tr>';
   }
   var head = '<thead><tr><th>Date</th><th>Event</th><th>Type</th><th>Attendances</th><th>Volunteer hours</th></tr></thead>';
   if (rows.length <= 40) return '<table class="dr-tbl">' + head + '<tbody>' + rows.map(row).join('') + '</tbody></table>';
@@ -730,6 +728,9 @@ function generateNow() {
     'Call the largest group the "largest" or "most common"; write "majority" only if the share supplied is over 50%. ' +
     'Do not comment on how the survey or form was designed, and do not state doubts about the data beyond the listed data quality notes. ' +
     'Never mention any individual\'s health, condition or personal circumstances. Refer to the organisation only by the Organisation name given. ' +
+    'Never estimate, round up or describe a figure that was not supplied (for example "several hundred pounds" or "around half"): if a figure is not in the data, leave it out. ' +
+    'Never write commitments, plans or promises in the organisation\'s name ("we will...", "we plan to..."). Any "what happens next", "next steps" or "forward view" section must contain only one placeholder sentence: [INSERT: your plans for the next period, in your own words]. ' +
+    'State each figure once outside the Summary; do not repeat the same number in a later section. ' +
     'Write the ethnicity figure as "black and ethnic minority" (lower-case "black"), never "BAME" or "Black or from an ethnic minority background". ' +
     'In any lessons or "what we would change" section, state only what the figures show: do not guess at causes, and do not write what the organisation "does not yet know". End that section with exactly one placeholder sentence in the form [INSERT: what you plan to change, in your own words] so the manager adds their own reflection. ' +
     'In Who We Reached, describe the people reached using only the demographic figures supplied, in plain respectful language, and say they are from optional anonymous answers. ' +
@@ -917,6 +918,7 @@ function renderDoc(raw, s, orgName, todayStr, funderName) {
       '.dr-tbl{width:100%;border-collapse:collapse;margin:10px 0 18px;font-size:13px}' +
       '.dr-tbl th{text-align:left;border-bottom:2px solid #ccc;padding:6px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#555}' +
       '.dr-tbl td{border-bottom:1px solid #eee;padding:6px 8px}' +
+      '.dr-charts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 0 22px}@media(max-width:640px){.dr-charts{grid-template-columns:1fr}}' +
       '.pf{width:100%;border-collapse:collapse}.pf td{padding:0;border:0}.pf-gap{display:none}' +
       '@media print{.dr-tbl{page-break-inside:avoid}.pf-gap{display:block;height:14mm}.pf>tbody>tr>td{padding:0 14mm}.pf{page:vlpage}}' +
     '</style>' +
