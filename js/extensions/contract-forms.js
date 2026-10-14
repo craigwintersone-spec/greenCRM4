@@ -69,7 +69,8 @@
   function style() {
     if ($('cf-style')) return;
     var st = document.createElement('style'); st.id = 'cf-style';
-    st.textContent = '.cf-wrap{margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}.cf-h{font-size:11px;font-weight:700;color:var(--txt3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}' +
+    st.textContent = '#fund-list .civ-tpl-btn,#fund-list .civ-map-btn{display:none !important}' +
+      '.cf-wrap{margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}.cf-h{font-size:11px;font-weight:700;color:var(--txt3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}' +
       '.cf-slot{display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:10px;padding:9px 12px;margin-bottom:6px;background:#fff}.cf-slot.cf-empty{border-style:dashed;cursor:pointer;color:var(--txt3)}' +
       '.cf-ico{font-size:18px;flex:none}.cf-t{font-size:13px;font-weight:600;color:var(--txt)}.cf-empty .cf-t{color:var(--txt2)}.cf-s{font-size:12px;color:var(--txt3)}';
     document.head.appendChild(st);
