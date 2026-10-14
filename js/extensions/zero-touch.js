@@ -73,6 +73,7 @@
       ['civara-period-from', 'civara-period-to'].forEach(function (id) { $(id).dispatchEvent(new Event('change')); });
       var out = $('report-output');
       if (out) out.insertAdjacentHTML('beforebegin', '<div id="zt-banner" class="alert alert-ok" style="margin:0 0 12px;font-size:13px">\u270E Writing your <b>' + esc(c.funder || c.name) + '</b> report for ' + esc(fmt(q.from)) + ' to ' + esc(fmt(q.to)) + '. Read it, then download or send it. Nothing to edit.</div>');
+      window.__ztAutoFill = true;
       await generateAIReport(c.report_type || 'other', String(c.id));
       var b = $('zt-banner'); if (b) b.innerHTML = '\u2713 Your <b>' + esc(c.funder || c.name) + '</b> report for ' + esc(fmt(q.from)) + ' to ' + esc(fmt(q.to)) + ' is written. Read it, then download or send it.';
     } catch (e) { console.warn('[zero-touch]', e); } finally { _running = false; }
@@ -86,4 +87,67 @@
     var tries = 0; (function boot() { if ((DB.contracts || []).length || typeof currentOrg !== 'undefined' && currentOrg && currentOrg.id) return runFromLink(); if (++tries < 150) setTimeout(boot, 200); })();
   });
   if (window.__VORLANA_TEST) window.__ztTest = { nextReport: nextReport, fromLink: fromLink, runFromLink: runFromLink };
+})();
+
+// ── The funder's own reporting form (Word): filled from the report, downloaded with one click ──
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) { return (typeof escapeHTML === 'function') ? escapeHTML(String(s == null ? '' : s)) : String(s == null ? '' : s); };
+  function b64ToBlob(b64) { var bin = atob(b64), a = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return new Blob([a], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }); }
+
+  async function fillFunderForm(auto) {
+    var R = window._lastReport; if (!R) return;
+    var btn = $('zt-ff-btn'), note = $('zt-ff-note');
+    var say = function (m, err) { if (note) { note.textContent = m; note.style.color = err ? '#B91C1C' : 'var(--txt3)'; } };
+    if (btn) { btn.disabled = true; btn.textContent = 'Filling\u2026'; }
+    try {
+      var row = await sb.from('contracts').select('report_template_name,report_template_data').eq('id', R.contractId).single();
+      if (row.error || !row.data || !row.data.report_template_data) throw new Error('No reporting form on this contract');
+      if (!/\.docx$/i.test(row.data.report_template_name || '')) throw new Error('Only Word (.docx) returns can be filled so far');
+      say('Reading the funder\u2019s form\u2026');
+      var p = await _postJSON('/api/eoi-form', { action: 'parse', docxBase64: row.data.report_template_data });
+      if (!p || !p.ok || !(p.items || []).length) throw new Error((p && p.error) || 'No answer boxes were found on that form');
+      say('Answering ' + p.items.length + ' questions from your report\u2026');
+      var qs = p.items.map(function (it, i) { return (i + 1) + '. [' + it.id + '] ' + it.question + (it.wordLimit ? ' (max ' + it.wordLimit + ' words)' : ''); }).join('\n');
+      var out = await runAgent({ container: $('brain-progress'), headerLabel: 'Org Brain \u00b7 Funder form', headerSub: 'Filling ' + esc(row.data.report_template_name), maxTok: 2400,
+        sys: 'You complete a UK funder\u2019s monitoring return. Use ONLY the report and the figures supplied: never invent a number, name, date or plan. If a question cannot be answered from them, answer exactly "Not recorded this period". Respect each word limit. No promises in the organisation\u2019s name. Write "black and ethnic minority" for ethnicity. Return JSON only: {"answers":{"<id>":"<text>"}}',
+        prompt: 'QUESTIONS ON THE FORM:\n' + qs + '\n\nTHE REPORT:\n' + R.text + '\n\nTHE FIGURES (calculated from records):\n' + R.prompt, silent: true });
+      var j; try { j = JSON.parse(String(out).replace(/```json|```/g, '').trim()); } catch (e) { var m = String(out).match(/\{[\s\S]*\}/); j = m ? JSON.parse(m[0]) : null; }
+      var answers = (j && j.answers) || {}; var n = 0;
+      Object.keys(answers).forEach(function (k) { var a = String(answers[k] || ''); if (typeof vlAutoFix === 'function') a = vlAutoFix(a, { hasTargets: undefined }).text; answers[k] = a; if (a.trim()) n++; });
+      if (!n) throw new Error('The answers could not be written');
+      say('Writing them into the form\u2026');
+      var f = await _postJSON('/api/eoi-form', { action: 'fill', docxBase64: row.data.report_template_data, answers: answers });
+      if (!f || !f.ok || !f.filledBase64) throw new Error((f && f.error) || 'The form could not be filled');
+      var name = (row.data.report_template_name || 'return.docx').replace(/\.docx$/i, '') + ' \u2013 ' + (R.period && R.period.label ? R.period.label : 'filled') + '.docx';
+      var a = document.createElement('a'); a.href = URL.createObjectURL(b64ToBlob(f.filledBase64)); a.download = name; a.click();
+      say('\u2713 ' + f.filled + ' of ' + f.total + ' boxes filled. Downloaded ' + name + '. Read it before you send it.');
+      if (btn) btn.textContent = 'Fill it again';
+    } catch (e) { say((e && e.message) || String(e), true); if (btn) btn.textContent = 'Fill the funder\u2019s form'; }
+    finally { if (btn) btn.disabled = false; }
+  }
+  window.ztFillFunderForm = fillFunderForm;
+
+  async function addButton() {
+    var R = window._lastReport, out = $('report-output'); if (!R || !out || $('zt-ff')) return;
+    var c = (DB.contracts || []).find(function (x) { return String(x.id) === R.contractId; }); if (!c) return;
+    try {
+      var r = await sb.from('contracts').select('report_template_name').eq('id', c.id).single();
+      if (!r.data || !r.data.report_template_name) return;
+      var isWord = /\.docx$/i.test(r.data.report_template_name);
+      out.insertAdjacentHTML('afterbegin', '<div id="zt-ff" class="no-print" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:1px solid var(--border);background:#fff;border-radius:10px;padding:10px 14px;margin:0 0 12px">' +
+        '<span style="font-size:13px;color:var(--txt)">\uD83D\uDCC4 ' + esc(r.data.report_template_name) + '</span>' +
+        (isWord ? '<button class="btn btn-p btn-sm" id="zt-ff-btn" onclick="ztFillFunderForm()">Fill the funder\u2019s form</button>' : '<span style="font-size:12px;color:var(--txt3)">Excel returns can\u2019t be filled yet; copy the figures across.</span>') +
+        '<span id="zt-ff-note" style="font-size:12px;color:var(--txt3)"></span></div>');
+      if (isWord && window.__ztAutoFill) { window.__ztAutoFill = false; fillFunderForm(true); }
+    } catch (e) { /* columns not there yet */ }
+  }
+  var orig = window.generateAIReport, tries = 0;
+  (function wait() {
+    if (typeof window.generateAIReport === 'function' && window._civaraReportPatched) {
+      var g = window.generateAIReport;
+      window.generateAIReport = async function () { var r = await g.apply(this, arguments); try { await addButton(); } catch (e) { /* ignore */ } return r; };
+    } else if (++tries < 100) setTimeout(wait, 150);
+  })();
 })();
