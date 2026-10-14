@@ -215,6 +215,7 @@ const MAPPERS = {
     end_date: r.end_date || '',
     status: r.status || 'live',
     report_every: r.report_every || null,
+    report_due_days: r.report_due_days || null,
     report_reminded: r.report_reminded || null
   }),
   evidence: r => ({
