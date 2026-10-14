@@ -317,6 +317,7 @@
       (unverified.length ? '<span style="color:#92400E">' + unverified.length + ' number(s) could not be matched to your records and are highlighted — check before sending.</span>' : 'every number in the narrative matches your records.') + '</div>' + bodyHTML;
     const reportTitle = ((contract && contract.name) || 'Programme Report') + ' — ' + orgName + ' (' + periodLabel + ')';
     window._lastReportText = cleaned;
+    window._lastReport = { contractId: String(contractId), funder: (funder && funder.name) || (contract && contract.funder) || '', period, prompt, text: cleaned };   // for filling the funder's own form
     window._lastReportTitle = reportTitle;
 
     const _logoUrl = window.getOrgLogoUrl ? window.getOrgLogoUrl(currentOrg) : '';
