@@ -339,13 +339,14 @@
     m.classList.add('open');
   }
   function ffClose() { const m = $id('ff-modal'); if (m) m.classList.remove('open'); }
-  function formKey() { return FF.oneOff ? 'file:' + FF.oneOff.name + ':' + FF.oneOff.data.length : 'contract:' + FF.pick; }
-  function formLabel() { return FF.oneOff ? FF.oneOff.name.replace(/\.docx$/i, '') : ((FF.forms.find(r => String(r.id) === FF.pick) || {}).name || 'Form'); }
+  function formKey() { return FF.oneOff ? 'file:' + FF.oneOff.name + ':' + FF.oneOff.data.length : 'contract:' + FF.pick + (FF.kind === 'outcome' ? ':outcome' : ''); }
+  function formLabel() { return FF.oneOff ? FF.oneOff.name.replace(/\.docx$/i, '') : ((FF.forms.find(r => String(r.id) === FF.pick && (r.kind || 'start') === (FF.kind || 'start')) || FF.forms.find(r => String(r.id) === FF.pick) || {}).name || 'Form'); }
   async function formDoc() {
     if (FF.oneOff) return FF.oneOff.data;
-    const { data, error } = await sb.from('contracts').select('template_data').eq('id', FF.pick).single();
-    if (error || !data) throw new Error('Could not load that form');
-    return data.template_data;
+    const col = FF.kind === 'outcome' ? 'outcome_template_data' : 'template_data';
+    const { data, error } = await sb.from('contracts').select(col).eq('id', FF.pick).single();
+    if (error || !data || !data[col]) throw new Error('Could not load that form');
+    return data[col];
   }
   async function api(body) {
     const tok = typeof vToken === 'function' ? vToken : async () => { const { data: { session } } = await sb.auth.getSession(); return session ? session.access_token : ''; };
@@ -360,22 +361,25 @@
 
   async function openFill() {
     style();
-    Object.assign(FF, { pick: null, oneOff: null, map: null });
+    Object.assign(FF, { pick: null, oneOff: null, map: null, kind: 'start' });
     ffModal('<h2>📄 Fill a funder form</h2><div class="cxp-s" style="font-size:13px">Loading forms…</div>');
     let rows = [];
-    try { const { data } = await sb.from('contracts').select('id,name,template_name').eq('org_id', orgId).not('template_data', 'is', null); rows = data || []; } catch (e) { rows = []; }
+    try {
+      const { data } = await sb.from('contracts').select('id,name,template_name,outcome_template_name').eq('org_id', orgId).or('template_data.not.is.null,outcome_template_data.not.is.null');
+      (data || []).forEach(r => { if (r.template_name) rows.push({ id: r.id, name: r.name + ' · start form', kind: 'start' }); if (r.outcome_template_name) rows.push({ id: r.id, name: r.name + ' · outcome form', kind: 'outcome' }); });
+    } catch (e) { rows = []; }
     const linked = (typeof getSelectedContractIds === 'function') ? getSelectedContractIds().map(String) : [];
     rows.sort((a, b) => (linked.includes(String(b.id)) ? 1 : 0) - (linked.includes(String(a.id)) ? 1 : 0));
-    FF.forms = rows; if (rows.length) FF.pick = String(rows[0].id);
+    FF.forms = rows; if (rows.length) { FF.pick = String(rows[0].id); FF.kind = rows[0].kind; }
     drawPicker(linked);
   }
   function drawPicker(linked) {
     const who = [val('mp-fn'), val('mp-ln')].filter(Boolean).join(' ') || 'this participant';
     ffModal('<h2>📄 Fill a funder form</h2><div class="cxp-s" style="font-size:13px;margin-bottom:6px">For <b>' + esc(who) + '</b> — answers come from their record.</div>' +
-      '<div class="ff-list">' + FF.forms.map(r => '<div class="ff-opt ' + (FF.pick === String(r.id) && !FF.oneOff ? 'on' : '') + '" data-id="' + esc(r.id) + '"><div>📄</div><div><b>' + esc(r.name) + '</b><span>' + esc(r.template_name || 'form.docx') + (linked.includes(String(r.id)) ? ' · linked to this participant' : '') + '</span></div></div>').join('') +
+      '<div class="ff-list">' + FF.forms.map(r => '<div class="ff-opt ' + (FF.pick === String(r.id) && (FF.kind || 'start') === (r.kind || 'start') && !FF.oneOff ? 'on' : '') + '" data-id="' + esc(r.id) + '" data-kind="' + esc(r.kind || 'start') + '"><div>📄</div><div><b>' + esc(r.name) + '</b><span>' + esc(r.template_name || 'form.docx') + (linked.includes(String(r.id)) ? ' · linked to this participant' : '') + '</span></div></div>').join('') +
         '<label class="ff-opt ' + (FF.oneOff ? 'on' : '') + '" style="margin:0"><div>⬆</div><div><b>' + (FF.oneOff ? esc(FF.oneOff.name) : 'Use a different form') + '</b><span>' + (FF.oneOff ? 'Ready' : 'Upload any funder\'s blank Word form (.docx)') + '</span></div><input type="file" id="ff-file" accept=".docx" style="display:none"/></label></div>' +
       '<div class="modal-footer"><button class="btn btn-ghost" id="ff-cancel">Cancel</button><button class="btn btn-p" id="ff-go"' + (FF.pick || FF.oneOff ? '' : ' disabled') + '>Next</button></div>');
-    document.querySelectorAll('#ff-modal .ff-opt[data-id]').forEach(el => el.onclick = () => { FF.pick = el.getAttribute('data-id'); FF.oneOff = null; drawPicker(linked); });
+    document.querySelectorAll('#ff-modal .ff-opt[data-id]').forEach(el => el.onclick = () => { FF.pick = el.getAttribute('data-id'); FF.kind = el.getAttribute('data-kind') || 'start'; FF.oneOff = null; drawPicker(linked); });
     $id('ff-file').onchange = async ev => {
       const f = ev.target.files && ev.target.files[0]; if (!f) return;
       if (!/\.docx$/i.test(f.name)) { alert('Please choose a Word .docx file. (Older .doc: open in Word and Save As .docx.)'); return; }
@@ -867,15 +871,17 @@
   }
 
   // Manager: set up a contract's form from the Contracts page (or the quick-add note)
-  async function setupContract(contractId, fromQuickAdd) {
+  async function setupContract(contractId, fromQuickAdd, kind) {
     style(); qaStyle();
-    FF.pick = String(contractId); FF.oneOff = null; FF.setupOnly = true; FF.afterSetup = fromQuickAdd ? () => { delete MAPS[contractId]; drawQAForms(); } : null;
+    FF.pick = String(contractId); FF.kind = kind === 'outcome' ? 'outcome' : 'start'; FF.oneOff = null; FF.setupOnly = true; FF.afterSetup = fromQuickAdd ? () => { delete MAPS[contractId]; drawQAForms(); } : null;
     const c = (DB.contracts || []).find(x => String(x.id) === String(contractId));
-    FF.forms = c ? [{ id: c.id, name: c.name }] : [];
-    const { data } = await sb.from('contracts').select('id,template_name').eq('id', contractId).not('template_data', 'is', null).maybeSingle().then(r => r, () => ({ data: null }));
-    if (!data) { alert('Upload the funder\'s blank Word form on this contract first (⬆ Form).'); return; }
+    FF.forms = c ? [{ id: c.id, name: c.name + (FF.kind === 'outcome' ? ' · outcome form' : ' · start form'), kind: FF.kind }] : [];
+    const col = FF.kind === 'outcome' ? 'outcome_template_data' : 'template_data';
+    const { data } = await sb.from('contracts').select('id').eq('id', contractId).not(col, 'is', null).maybeSingle().then(r => r, () => ({ data: null }));
+    if (!data) { alert('Drop the funder\'s blank Word form into this slot first.'); return; }
     setup();
   }
+  window.civaraSetupContractForm = setupContract;
   function addSetupButtons() {
     if (!isManager()) return;
     document.querySelectorAll('#fund-list .civ-tpl-btn').forEach(b => {
