@@ -33,7 +33,7 @@
       var p = nextReport(c), every = c.report_every || 'quarter';
       var line = document.createElement('div'); line.className = 'zt-line';
       line.style.cssText = 'font-size:11px;color:var(--txt3);margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap';
-      line.innerHTML = (every === 'off' ? '<span>No report needed</span>' : p ? '<span>Next: <b>' + esc(fmt(p.from)) + ' to ' + esc(fmt(p.to)) + '</b>, written for you and emailed on ' + esc(fmt(p.emailOn)) + '</span>' : '<span>No more reports: contract has ended</span>') +
+      line.innerHTML = (every === 'off' ? '<span>No report needed</span>' : p ? '<span>Next: <b>' + esc(fmt(p.from)) + ' to ' + esc(fmt(p.to)) + '</b>, written for you and emailed on ' + esc(fmt(p.emailOn)) + (c.report_due_days ? ', due ' + esc(fmt(day(new Date(new Date(p.to + 'T00:00:00Z').getTime() + c.report_due_days * 864e5)))) : '') + '</span>' : '<span>No more reports: contract has ended</span>') +
         '<select style="width:auto;font-size:11px;padding:2px 6px" title="How often does this funder want a report?" onchange="ztSetEvery(\'' + esc(String(c.id)) + '\',this.value)">' +
         Object.keys(LABEL).map(function (k) { return '<option value="' + k + '"' + (k === every ? ' selected' : '') + '>' + LABEL[k] + '</option>'; }).join('') + '</select>';
       var left = row.firstElementChild; if (left) left.appendChild(line);
