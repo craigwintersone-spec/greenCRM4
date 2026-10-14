@@ -54,7 +54,7 @@ async function sendMail(to, subject, html) {
 async function runReportReminders(now) {
   const today = now ? new Date(now) : new Date();
   const todayStr = day(today);
-  const contracts = await sb(`contracts?select=id,org_id,name,funder,report_type,start_date,end_date,status,report_every,report_reminded&status=neq.closed`);
+  const contracts = await sb(`contracts?select=id,org_id,name,funder,report_type,start_date,end_date,status,report_every,report_due_days,report_reminded&status=neq.closed`);
   const results = { checked: 0, sent: 0, skipped: 0, errors: [] };
   const orgNames = {};
   for (const c of contracts || []) {
@@ -73,11 +73,12 @@ async function runReportReminders(now) {
       const link = `${APP_URL}/app.html#reports?contract=${encodeURIComponent(c.id)}&from=${p.from}&to=${p.to}`;
       const funder = c.funder || c.name || 'your funder';
       const ended = new Date(p.to + 'T00:00:00Z') <= today;
+      const dueBy = c.report_due_days ? fmt(new Date(new Date(p.to + 'T00:00:00Z').getTime() + c.report_due_days * 864e5)) : null;
       const subject = `Your ${funder} report for ${fmt(p.from)} to ${fmt(p.to)} is ready`;
       const html = `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#222;max-width:560px">
 <p>Hello,</p>
 <p>The reporting period for <b>${funder}</b> (${c.name || ''}) ${ended ? 'ended' : 'ends'} on <b>${fmt(p.to)}</b>.</p>
-<p>Your report is written and waiting. Open it, read it, and send it on.</p>
+<p>Your report is written and waiting. Open it, read it, and send it on.${dueBy ? ` <b>${funder} needs it by ${dueBy}.</b>` : ''}</p>
 <p style="margin:22px 0"><a href="${link}" style="background:#1F6F6D;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:bold">Open my ${funder} report</a></p>
 <p style="font-size:13px;color:#666">Every number is calculated from ${orgNames[c.org_id]}'s records in Vorlana and checked before you see it. Funders usually want a report within a month of the period ending.</p>
 <p style="font-size:12px;color:#999">Vorlana sends this once per reporting period. To change how often ${funder} needs a report, open the Reports page.</p></div>`;
