@@ -287,6 +287,9 @@ module.exports = async function handler(req, res) {
   try { results.onboarding = await runOnboardingScan(); }
   catch (e) { results.errors.push({ agent: 'onboarding', error: e.message }); }
 
+  try { results.reports = await require('./_lib/report-reminders.js').runReportReminders(); }
+  catch (e) { results.errors.push({ agent: 'reports', error: e.message }); }
+
   try { results.insights = await runInsights(); }
   catch (e) { results.errors.push({ agent: 'insights', error: e.message }); }
 
