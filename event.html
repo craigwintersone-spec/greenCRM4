@@ -77,6 +77,8 @@ textarea{min-height:88px;resize:vertical}
 .chs button.on{background:var(--em);border-color:var(--em);color:#fff}
 .divider{border-top:1px solid var(--border);margin:18px 0 14px}
 .faces .star{font-size:22px}
+.ci-q{margin-bottom:18px}.ci-l{font-weight:600;font-size:15px;color:var(--txt);margin-bottom:6px;line-height:1.35}.ci-h{font-size:13px;color:var(--txt3);margin:-2px 0 7px}.ci-req{color:#C84545}
+.ci-other{margin-top:8px}.ci-fresh{font-size:13px;color:var(--txt3);text-align:center;margin:-6px 0 14px}.ci-fresh a{color:var(--em2);text-decoration:underline}
 </style>
 </head>
 <body>
@@ -114,8 +116,23 @@ textarea{min-height:88px;resize:vertical}
     </div>
 
     <div class="tabs" id="tabs">
+      <button class="tab" id="tab-ci" type="button" style="display:none">Check in</button>
       <button class="tab active" id="tab-fb" type="button">Give feedback</button>
       <button class="tab" id="tab-vol" type="button">Volunteer</button>
+    </div>
+
+    <!-- CHECK IN (attendance) -->
+    <div class="pane" id="pane-ci">
+      <div class="card">
+        <h2>Check in</h2>
+        <p class="sub">A few quick taps so we know who came today. We don\'t ask for your name.</p>
+        <div class="msg err" id="ci-err"></div>
+        <div class="ci-fresh" id="ci-fresh" style="display:none">Using your answers from last time. <a href="#">Not you? Start fresh</a></div>
+        <div id="ci-form"></div>
+        <input id="ci-hp" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;opacity:0;height:0;width:0"/>
+        <button class="btn btn-p" id="ci-go" type="button"><span class="spin"></span><span>Check in</span></button>
+      </div>
+      <div class="note">Your answers are anonymous and only used to report on who we reach. If you give an email it is kept separately from your answers.</div>
     </div>
 
     <!-- FEEDBACK (events only) -->
@@ -191,6 +208,21 @@ textarea{min-height:88px;resize:vertical}
           <button class="btn btn-ghost" id="vol-out" type="button"><span class="spin"></span><span>Check out</span></button>
         </div>
       </div>
+      <div class="card" id="vi-card">
+        <h2>Interested in volunteering?</h2>
+        <p class="sub">Leave your details and someone will get in touch. No commitment.</p>
+        <div class="msg ok" id="vi-ok"></div>
+        <div id="vi-body">
+          <div class="msg err" id="vi-err"></div>
+          <div class="field"><input id="vi-first" placeholder="First name" autocomplete="given-name"/></div>
+          <div class="field"><input id="vi-last" placeholder="Last name" autocomplete="family-name"/></div>
+          <div class="field"><input id="vi-contact" placeholder="Email or phone number" autocomplete="off" spellcheck="false"/></div>
+          <div class="field"><input id="vi-note" placeholder="Anything you\'d like us to know? (optional)" maxlength="400"/></div>
+          <input id="vi-hp" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;opacity:0;height:0;width:0"/>
+          <button class="btn btn-p" id="vi-go" type="button"><span class="spin"></span><span>Send my details</span></button>
+          <div class="note" style="margin-top:10px">We will only use these to talk to you about volunteering.</div>
+        </div>
+      </div>
       <div class="note">Your hours count towards what this project shows its funders. Thank you.</div>
     </div>
   </div>
@@ -202,6 +234,7 @@ textarea{min-height:88px;resize:vertical}
       <h2 id="done-title">Thank you</h2>
       <p id="done-msg">Your feedback has been sent.</p>
       <button class="btn btn-ghost" id="done-again" type="button" style="margin-top:18px;display:none">Back</button>
+      <button class="btn btn-p" id="done-vol" type="button" style="margin-top:10px;display:none">Interested in volunteering? Tap here</button>
     </div>
   </div>
 </div>
@@ -315,9 +348,7 @@ function readFeedback() {
 
 // ── tabs ───────────────────────────────────────────────────
 function openTab(which) {
-  var fb = which === 'fb';
-  $('tab-fb').classList.toggle('active', fb); $('tab-vol').classList.toggle('active', !fb);
-  $('pane-fb').classList.toggle('active', fb); $('pane-vol').classList.toggle('active', !fb);
+  ['ci', 'fb', 'vol'].forEach(function (k) { var t = $('tab-' + k), p = $('pane-' + k); if (t) t.classList.toggle('active', k === which); if (p) p.classList.toggle('active', k === which); });
 }
 $('tab-fb').addEventListener('click', function () { openTab('fb'); });
 $('tab-vol').addEventListener('click', function () { openTab('vol'); });
@@ -388,6 +419,7 @@ function boot() {
         $('vol-title').textContent = 'Here to help today?';
       } else {
         renderFeedbackForm();
+        if (setupCheckin(j.checkin)) openTab(ciCheckedInToday() ? 'fb' : 'ci');   // arriving: check in. Already checked in today: feedback.
       }
       try { var saved = localStorage.getItem('vorlana-who'); if (saved) $('vol-who').value = saved; } catch (e) {}
       show('s-main');
@@ -399,14 +431,127 @@ function boot() {
 }
 
 function doneScreen(title, text, back) {
+  $('done-again').textContent = 'Back'; $('done-vol').style.display = 'none'; window.__ciDone = false;
   $('done-title').textContent = title;
   $('done-msg').textContent = text;
   $('done-again').style.display = back ? 'flex' : 'none';
   show('s-done');
 }
-$('done-again').addEventListener('click', function () { show('s-main'); });
+$('done-again').addEventListener('click', function () { var ci = window.__ciDone; window.__ciDone = false; show('s-main'); if (ci && CI) { ciReset(true); openTab('ci'); } });
 
 // ── feedback submit ────────────────────────────────────────
+// ── check in (attendance): the form comes from the organisation, the standard one if it has none ──
+var CI = null, CI_ANS = {}, CI_PREFILLED = false, CI_BOUND = false;
+function ciDay() { return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' }); }
+function ciFlagKey() { return 'vl-ci:' + TOKEN + ':' + (CHOSEN_EVENT || '') + ':' + ciDay(); }
+function ciCheckedInToday() { try { return localStorage.getItem(ciFlagKey()) === '1'; } catch (e) { return false; } }
+function ciMaxAge(opt) { var t = String(opt || ''); if (/prefer not/i.test(t)) return null; if (/\+/.test(t)) return Infinity; var n = t.match(/\d+/g); return n ? +n[n.length - 1] : null; }
+function ciQ(id) { for (var i = 0; i < CI.questions.length; i++) if (CI.questions[i].id === id) return CI.questions[i]; return null; }
+function ciVisible(q) { if (!q.showIf) return true; var a = CI_ANS[q.showIf.q], mx = ciMaxAge(a); return mx != null && mx <= q.showIf.maxAge; }
+function ciLoadProfile() { try { return JSON.parse(localStorage.getItem('vl-ci-profile') || '{}') || {}; } catch (e) { return {}; } }
+function ciSaveProfile() {
+  var p = {}; CI.questions.forEach(function (q) { if (!q.perVisit && q.role !== 'email' && CI_ANS[q.id] != null && CI_ANS[q.id] !== '') p[q.label] = CI_ANS[q.id]; });
+  try { localStorage.setItem('vl-ci-profile', JSON.stringify(p)); } catch (e) { /* private mode */ }
+}
+function ciReset(fresh) {
+  CI_ANS = {}; CI_PREFILLED = false;
+  if (!fresh) { var p = ciLoadProfile(); CI.questions.forEach(function (q) { if (!q.perVisit && p[q.label] != null) { CI_ANS[q.id] = p[q.label]; CI_PREFILLED = true; } }); }
+  ciRender();
+}
+function ciRender() {
+  var host = $('ci-form'); var html = '';
+  CI.questions.forEach(function (q) {
+    if (!ciVisible(q)) return;
+    var val = CI_ANS[q.id], opts = q.options || [], isOther = typeof val === 'string' && /^Other: /.test(val);
+    html += '<div class="ci-q" data-q="' + escapeText(q.id) + '"><div class="ci-l">' + escapeText(q.label) + (q.required ? ' <span class="ci-req">*</span>' : '') + '</div>' + (q.hint ? '<div class="ci-h">' + escapeText(q.hint) + '</div>' : '');
+    if (q.kind === 'single' || q.kind === 'count' || q.kind === 'multi') {
+      var multi = q.kind === 'multi', chosen = multi ? (Array.isArray(val) ? val : []) : [val];
+      html += '<div class="chs">' + opts.map(function (o, i) { return '<button type="button" data-o="' + i + '" class="' + (chosen.indexOf(o) >= 0 ? 'on' : '') + '">' + escapeText(o) + '</button>'; }).join('') +
+        (q.other ? '<button type="button" data-other="1" class="' + (isOther || (multi && chosen.some(function (c) { return /^Other: /.test(c); })) ? 'on' : '') + '">Other</button>' : '') + '</div>';
+      if (q.other && (isOther || (multi && chosen.some(function (c) { return /^Other: /.test(c); })))) {
+        var ov = multi ? (chosen.filter(function (c) { return /^Other: /.test(c); })[0] || '') : val;
+        html += '<input class="ci-other" data-oq="' + escapeText(q.id) + '" maxlength="80" placeholder="Please say" value="' + escapeText(String(ov).replace(/^Other: /, '')) + '"/>';
+      }
+    } else if (q.kind === 'number') html += '<input type="number" inputmode="numeric" min="0" max="50" data-t="' + escapeText(q.id) + '" value="' + escapeText(val == null ? '' : val) + '"/>';
+    else if (q.kind === 'email') html += '<input type="email" inputmode="email" autocomplete="off" data-t="' + escapeText(q.id) + '" placeholder="Optional" value="' + escapeText(val == null ? '' : val) + '"/>';
+    else if (q.kind === 'postcode') html += '<input data-t="' + escapeText(q.id) + '" maxlength="8" autocapitalize="characters" autocomplete="off" placeholder="e.g. PE2" style="text-transform:uppercase;max-width:140px" value="' + escapeText(val == null ? '' : val) + '"/>';
+    else html += '<input data-t="' + escapeText(q.id) + '" maxlength="200" value="' + escapeText(val == null ? '' : val) + '"/>';
+    html += '</div>';
+  });
+  host.innerHTML = html;
+  $('ci-fresh').style.display = CI_PREFILLED ? 'block' : 'none';
+}
+function ciBind() {
+  var host = $('ci-form');
+  host.addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('button') : null; if (!b) return;
+    var qEl = b.closest('.ci-q'); if (!qEl) return; var q = ciQ(qEl.getAttribute('data-q')); if (!q) return;
+    var multi = q.kind === 'multi', cur = CI_ANS[q.id];
+    if (b.hasAttribute('data-other')) {
+      if (multi) { var arr = Array.isArray(cur) ? cur.slice() : []; var has = arr.some(function (c) { return /^Other: /.test(c); }); arr = arr.filter(function (c) { return !/^Other: /.test(c); }); if (!has) arr.push('Other: '); CI_ANS[q.id] = arr; }
+      else CI_ANS[q.id] = /^Other: /.test(String(cur)) ? '' : 'Other: ';
+    } else {
+      var o = q.options[+b.getAttribute('data-o')];
+      if (multi) { var a2 = Array.isArray(cur) ? cur.slice() : []; var at = a2.indexOf(o); if (at >= 0) a2.splice(at, 1); else a2.push(o); CI_ANS[q.id] = a2; }
+      else CI_ANS[q.id] = (cur === o) ? '' : o;
+    }
+    ciRender(); clearMsg('ci-err');
+  });
+  host.addEventListener('input', function (e) {
+    var t = e.target; if (!t) return;
+    if (t.hasAttribute('data-t')) CI_ANS[t.getAttribute('data-t')] = t.value;
+    else if (t.hasAttribute('data-oq')) {
+      var q = ciQ(t.getAttribute('data-oq')), txt = 'Other: ' + t.value;
+      if (q.kind === 'multi') { var arr = (Array.isArray(CI_ANS[q.id]) ? CI_ANS[q.id] : []).filter(function (c) { return !/^Other: /.test(c); }); arr.push(txt); CI_ANS[q.id] = arr; } else CI_ANS[q.id] = txt;
+    }
+  });
+}
+function setupCheckin(cfg) {
+  if (!cfg || !cfg.form || !(cfg.form.questions || []).length) { $('tab-ci').style.display = 'none'; CI = null; return false; }
+  CI = cfg.form; $('tab-ci').style.display = '';
+  if (!CI_BOUND) { ciBind(); CI_BOUND = true; }
+  ciReset(false);
+  return true;
+}
+$('tab-ci').addEventListener('click', function () { openTab('ci'); });
+$('ci-fresh').addEventListener('click', function (e) { e.preventDefault(); ciReset(true); });
+$('ci-go').addEventListener('click', function () {
+  var btn = $('ci-go'); clearMsg('ci-err');
+  for (var i = 0; i < CI.questions.length; i++) {
+    var q = CI.questions[i]; if (!ciVisible(q) || !q.required) continue;
+    var v = CI_ANS[q.id], empty = v == null || v === '' || (Array.isArray(v) && !v.length) || (typeof v === 'string' && /^Other: ?$/.test(v)) || (Array.isArray(v) && v.length === 1 && /^Other: ?$/.test(v[0]));
+    if (empty) { msg('ci-err', 'Please answer: ' + q.label, 'err'); var el = document.querySelector('.ci-q[data-q="' + q.id + '"]'); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center' }); return; }
+  }
+  var out = {}; CI.questions.forEach(function (q) { if (!ciVisible(q)) return; var v = CI_ANS[q.id]; if (v == null || v === '' || (Array.isArray(v) && !v.length)) return; if (typeof v === 'string' && /^Other: ?$/.test(v)) return; out[q.id] = Array.isArray(v) ? v.filter(function (x) { return !/^Other: ?$/.test(x); }) : v; });
+  busy(btn, true);
+  call('attend', { answers: out, hp: $('ci-hp').value })
+    .then(function () {
+      try { localStorage.setItem(ciFlagKey(), '1'); } catch (e) { /* private mode */ }
+      ciSaveProfile();
+      ciDone();
+    })
+    .catch(function (e) { msg('ci-err', e.message || 'That didn\u2019t go through. Please try again.', 'err'); })
+    .finally(function () { busy(btn, false); });
+});
+function ciDone() {
+  doneScreen('You\u2019re checked in', 'Enjoy the session. Scan the same code at the end to tell us how it went.', true);
+  $('done-again').textContent = 'Check in someone else'; $('done-vol').style.display = 'flex'; window.__ciDone = true;
+}
+$('done-vol').addEventListener('click', function () { window.__ciDone = false; show('s-main'); openTab('vol'); var c = $('vi-card'); if (c && c.scrollIntoView) c.scrollIntoView({ block: 'start' }); });
+
+// ── interested in volunteering: a lead for the organisation's Contacts, nothing more ──
+$('vi-go').addEventListener('click', function () {
+  var btn = $('vi-go'); clearMsg('vi-err');
+  var first = $('vi-first').value.trim(), last = $('vi-last').value.trim(), contact = $('vi-contact').value.trim();
+  if (!first || !last) { msg('vi-err', 'Please add your first and last name.', 'err'); return; }
+  if (!contact) { msg('vi-err', 'Please add an email or phone number so we can reach you.', 'err'); return; }
+  busy(btn, true);
+  call('volunteer_interest', { first: first, last: last, contact: contact, note: $('vi-note').value.trim(), hp: $('vi-hp').value })
+    .then(function () { $('vi-body').style.display = 'none'; msg('vi-ok', 'Thank you ' + first + '! We\u2019ll be in touch about volunteering.', 'ok'); })
+    .catch(function (e) { msg('vi-err', e.message || 'That didn\u2019t go through. Please try again.', 'err'); })
+    .finally(function () { busy(btn, false); });
+});
+
 $('fb-submit').addEventListener('click', function () {
   var btn = $('fb-submit');
   clearMsg('fb-err');
