@@ -80,16 +80,16 @@ async function getContext(token) {
   const t = encodeURIComponent(token);
   let evs;
   try {
-    evs = await sb(`events?public_token=eq.${t}&select=id,org_id,name,event_date,location,public_enabled,question_ids&limit=1`);
+    evs = await sb(`events?public_token=eq.${t}&select=id,org_id,name,event_date,location,type,public_enabled,question_ids&limit=1`);
   } catch (e) {
     // question_ids column not added yet
-    evs = await sb(`events?public_token=eq.${t}&select=id,org_id,name,event_date,location,public_enabled&limit=1`);
+    evs = await sb(`events?public_token=eq.${t}&select=id,org_id,name,event_date,location,type,public_enabled&limit=1`);
   }
   if (Array.isArray(evs) && evs.length) {
     const ev = evs[0];
     if (ev.public_enabled === false) return null;
     return { mode: 'event', orgId: ev.org_id, eventId: String(ev.id), siteId: null, name: ev.name || 'Event',
-             date: ev.event_date || null, location: ev.location || '', questionIds: ev.question_ids || null };
+             date: ev.event_date || null, location: ev.location || '', questionIds: ev.question_ids || null, type: ev.type || '' };
   }
   let sites = [];
   try { sites = await sb(`volunteer_sites?public_token=eq.${t}&select=id,org_id,name,public_enabled&limit=1`); }
@@ -116,9 +116,9 @@ async function todaysEvent(orgId, siteName) {
   const today = new Date().toISOString().slice(0, 10);
   let evs;
   try {
-    evs = await sb(`events?org_id=eq.${orgId}&event_date=eq.${today}&public_enabled=neq.false&select=id,name,event_date,location,public_token,public_enabled,question_ids&order=id.asc`);
+    evs = await sb(`events?org_id=eq.${orgId}&event_date=eq.${today}&public_enabled=neq.false&select=id,name,event_date,location,type,public_token,public_enabled,question_ids&order=id.asc`);
   } catch (e) {
-    evs = await sb(`events?org_id=eq.${orgId}&event_date=eq.${today}&public_enabled=neq.false&select=id,name,event_date,location,public_token,public_enabled&order=id.asc`);
+    evs = await sb(`events?org_id=eq.${orgId}&event_date=eq.${today}&public_enabled=neq.false&select=id,name,event_date,location,type,public_token,public_enabled&order=id.asc`);
   }
   evs = (evs || []).filter(e => e.public_enabled !== false);
   if (!evs.length) return null;
@@ -138,7 +138,7 @@ async function todaysEvent(orgId, siteName) {
     try { await sb(`events?id=eq.${ev.id}`, { method: 'PATCH', body: JSON.stringify({ public_token: ev.public_token }) }); } catch (e) { /* non-fatal */ }
   }
   return { mode: 'event', orgId, eventId: String(ev.id), siteId: null, name: ev.name || 'Event',
-           date: ev.event_date || today, location: ev.location || '', questionIds: ev.question_ids || null, viaSite: true };
+           date: ev.event_date || today, location: ev.location || '', questionIds: ev.question_ids || null, type: ev.type || '', viaSite: true };
 }
 function genToken() {
   const a = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let t = '';
@@ -151,6 +151,52 @@ async function getOrgName(orgId) {
     const rows = await sb(`organisations?id=eq.${orgId}&select=name&limit=1`);
     return (Array.isArray(rows) && rows[0] && rows[0].name) || '';
   } catch (e) { return ''; }
+}
+
+// ── participant check-in (attendance) and volunteering interest ──────────────
+// A check-in form is a list of questions: { id, label, kind: single|multi|text|number|email|postcode|count, required, options, other, showIf:{q,maxAge}, role }.
+// Roles: location (the event's own location is used, never asked), people (how many are being checked in), extra_people (under-16s with you), email (kept apart from the answers).
+const CI_STANDARD = org => ({ id: 'standard', name: 'Standard check-in', questions: [
+  { id: 'first', label: 'Is this your first time with ' + (org || 'us') + '?', kind: 'single', required: true, options: ['Yes', 'No'] },
+  { id: 'people', label: 'How many people are you checking in?', kind: 'single', required: true, role: 'people', options: ['Just me', '2', '3', '4', '5 or more'] }
+] });
+async function getCheckin(ctx) {
+  let org = { name: '', settings: {} };
+  try { const r = await sb(`organisations?id=eq.${ctx.orgId}&select=name,settings&limit=1`); if (Array.isArray(r) && r[0]) org = r[0]; } catch (e) { /* use the standard form */ }
+  const st = (org.settings && typeof org.settings === 'object') ? org.settings : {};
+  const forms = Array.isArray(st.checkin_forms) ? st.checkin_forms : [];
+  const map = (st.checkin_form_for_type && typeof st.checkin_form_for_type === 'object') ? st.checkin_form_for_type : {};
+  const byId = id => forms.find(f => f && f.id === id && Array.isArray(f.questions) && f.questions.length);
+  let form = (ctx.type && map[ctx.type]) ? byId(map[ctx.type]) : null;
+  if (!form && st.checkin_default) form = byId(st.checkin_default);
+  return { enabled: st.checkin_enabled !== false, orgName: org.name || '', form: form || CI_STANDARD(org.name) };
+}
+const publicForm = f => ({ id: f.id, name: f.name, questions: (f.questions || []).filter(q => q && q.role !== 'location').map(q => ({
+  id: String(q.id), label: String(q.label || '').slice(0, 300), kind: q.kind || 'text', required: !!q.required, options: Array.isArray(q.options) ? q.options.map(o => String(o).slice(0, 120)).slice(0, 20) : [],
+  other: !!q.other, hint: q.hint ? String(q.hint).slice(0, 300) : '', role: q.role || '', showIf: q.showIf || null, perVisit: !!q.perVisit })) });
+function ciMaxAge(opt) { const t = String(opt || ''); if (/prefer not/i.test(t)) return null; if (/\+/.test(t)) return Infinity; const n = t.match(/\d+/g); return n ? +n[n.length - 1] : null; }
+function ciValidate(form, answers) {
+  const qs = (form.questions || []).filter(q => q && q.role !== 'location'), out = {}; let people = 1, extra = 0, email = '';
+  const byId = {}; qs.forEach(q => { byId[String(q.id)] = q; });
+  if (JSON.stringify(answers || {}).length > 8000) return { error: 'That is too much text.' };
+  const val = (q) => answers ? answers[q.id] : undefined;
+  for (const q of qs) {
+    if (q.showIf && byId[q.showIf.q]) { const a = val(byId[q.showIf.q]), mx = ciMaxAge(a); if (!(mx != null && mx <= q.showIf.maxAge)) continue; }   // e.g. "if you are 25 or under"
+    let v = val(q); const empty = v == null || v === '' || (Array.isArray(v) && !v.length);
+    if (empty) { if (q.required) return { error: 'Please answer: ' + String(q.label).slice(0, 90) }; continue; }
+    const opts = Array.isArray(q.options) ? q.options : [];
+    const okOpt = s => opts.includes(s) || (q.other && /^Other: .{1,80}$/.test(s));
+    if (q.kind === 'single' || q.kind === 'count') { v = String(v).slice(0, 100); if (!okOpt(v)) return { error: 'Please choose one of the answers for: ' + String(q.label).slice(0, 90) }; out[q.label] = v; }
+    else if (q.kind === 'multi') { if (!Array.isArray(v) || v.length > 12 || !v.every(x => typeof x === 'string' && okOpt(x.slice(0, 100)))) return { error: 'Please choose from the answers for: ' + String(q.label).slice(0, 90) }; out[q.label] = v.map(x => x.slice(0, 100)); }
+    else if (q.kind === 'email') { v = String(v).trim().toLowerCase().slice(0, 254); if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) return { error: 'That email doesn\u2019t look right.' }; if (q.role === 'email') email = v; else out[q.label] = v; }
+    else if (q.kind === 'postcode') { const m = /^([A-Z]{1,2}\d[A-Z\d]?)/.exec(String(v).toUpperCase().replace(/\s+/g, '')); if (!m) return { error: 'Please enter the first part of your postcode, like PE2.' }; out[q.label] = m[1]; }
+    else if (q.kind === 'number') { const n = parseInt(v, 10); if (!(n >= 0 && n <= 50)) return { error: 'Please enter a number for: ' + String(q.label).slice(0, 90) }; out[q.label] = n; }
+    else { out[q.label] = String(v).trim().slice(0, 200); }
+    if (q.role === 'people') { const m = /\d+/.exec(String(v)); people = /just me/i.test(String(v)) ? 1 : (m ? Math.min(+m[0], 20) : 1); }
+    if (q.role === 'extra_people') { const m = /\d+/.exec(String(v)); extra = /n\/a|none/i.test(String(v)) ? 0 : (m ? Math.min(+m[0], 20) : 0); }
+  }
+  if (qs.some(q => q.role === 'extra_people')) people = 1 + extra;
+  return { answers: out, people, email };
 }
 
 // The org's own feedback questions for this event (null question_ids = all active).
@@ -304,19 +350,63 @@ module.exports = async function handler(req, res) {
   if (ctx.mode === 'choose' && body.eventId) {
     const pick = (ctx.choices || []).find(c => c.id === String(body.eventId));
     if (!pick) return bad(res, 'Please choose one of today\u2019s sessions.');
-    const evs = await sb(`events?id=eq.${encodeURIComponent(pick.id)}&select=id,org_id,name,event_date,location,public_token,public_enabled,question_ids&limit=1`).catch(() => []);
+    const evs = await sb(`events?id=eq.${encodeURIComponent(pick.id)}&select=id,org_id,name,event_date,location,type,public_token,public_enabled,question_ids&limit=1`).catch(() => []);
     const ev = (evs || [])[0];
     if (!ev || String(ev.org_id) !== String(ctx.orgId) || ev.public_enabled === false) return bad(res, 'That session is not available.');
     if (!ev.public_token) { ev.public_token = genToken(); try { await sb(`events?id=eq.${ev.id}`, { method: 'PATCH', body: JSON.stringify({ public_token: ev.public_token }) }); } catch (e) { /* non-fatal */ } }
     ctx = { mode: 'event', orgId: ctx.orgId, eventId: String(ev.id), siteId: ctx.siteId || null, siteName: ctx.siteName || '', name: ev.name || 'Event',
-            date: ev.event_date || null, location: ev.location || '', questionIds: ev.question_ids || null };
+            date: ev.event_date || null, location: ev.location || '', questionIds: ev.question_ids || null, type: ev.type || '' };
   }
   if (ctx.mode === 'choose' && action !== 'info') return bad(res, 'Please choose today\u2019s session first.');
 
   try {
     // ── info ────────────────────────────────────────────────
+    // ── participant check-in: attendance, with the organisation's own questions ──
+    if (action === 'attend') {
+      if (body.hp) return res.status(200).json({ ok: true });                   // a bot filled the hidden box
+      if (ctx.mode !== 'event') return bad(res, 'Check-in is for a session. There is no session on today.');
+      const cfg = await getCheckin(ctx);
+      if (!cfg.enabled) return bad(res, 'Check-in is not switched on for this session.');
+      const v = ciValidate(cfg.form, body.answers || {});
+      if (v.error) return bad(res, v.error);
+      const day = londonDay(new Date().toISOString());
+      await sb('checkins', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([{ org_id: String(ctx.orgId), event_id: String(ctx.eventId), form_id: String(cfg.form.id), people: v.people, answers: v.answers, day }]) });
+      if (v.email) { try { await sb('checkin_emails', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([{ org_id: String(ctx.orgId), day, email: v.email }]) }); } catch (e) { /* the check-in still counts */ } }
+      // attendance fills itself: the session's count becomes everyone checked in, and never drops below what staff typed
+      try {
+        const rows = await sb(`checkins?event_id=eq.${encodeURIComponent(ctx.eventId)}&select=people&limit=5000`);
+        const total = (rows || []).reduce((a, r) => a + (+r.people || 1), 0);
+        const evs = await sb(`events?id=eq.${encodeURIComponent(ctx.eventId)}&select=attendees&limit=1`);
+        const cur = +(evs && evs[0] && evs[0].attendees) || 0;
+        if (total > cur) await sb(`events?id=eq.${encodeURIComponent(ctx.eventId)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ attendees: total }) });
+      } catch (e) { /* the check-in is saved either way */ }
+      return res.status(200).json({ ok: true, people: v.people });
+    }
+
+    // ── "I'd like to volunteer": a lead for the Contacts tab, never a volunteer until staff decide ──
+    if (action === 'volunteer_interest') {
+      if (body.hp) return res.status(200).json({ ok: true });
+      const first = likeSafe(trim(body.first, 60)), last = likeSafe(trim(body.last, 60)), contact = trim(body.contact, 254), note = trim(body.note, 400);
+      if (!first || !last) return bad(res, 'Please add your first and last name.');
+      if (!contact) return bad(res, 'Please add an email or phone number so we can reach you.');
+      const isEmail = contact.indexOf('@') > 0, email = isEmail ? contact.toLowerCase() : '', phone = isEmail ? '' : contact.replace(/[^\d+ ()-]/g, '').slice(0, 30);
+      if (isEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return bad(res, 'That email doesn\u2019t look right.');
+      if (!isEmail && phone.replace(/\D/g, '').length < 7) return bad(res, 'That phone number doesn\u2019t look right.');
+      const where = ctx.mode === 'event' ? (ctx.name || 'Event') + (ctx.date ? ', ' + ctx.date : '') : (ctx.name || 'Volunteer sign-in');
+      const notes = ('Interested in volunteering. Seen at: ' + where + '.' + (phone ? ' Phone: ' + phone + '.' : '') + (note ? ' Note: ' + note : '')).slice(0, 900);
+      if (email) { try { const dup = await sb(`contacts?org_id=eq.${ctx.orgId}&email=eq.${encodeURIComponent(email)}&select=id&limit=1`); if (Array.isArray(dup) && dup.length) return res.status(200).json({ ok: true, already: true }); } catch (e) { /* carry on */ } }
+      const row = { org_id: ctx.orgId, first_name: first, last_name: last, email, role: 'Volunteer interest', status: 'Prospect', phone: phone || null, notes };
+      try { await sb('contacts', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([row]) }); }
+      catch (e) {   // the phone and notes columns may not be added yet: keep the details in the role so nothing is lost
+        if (!/column|schema cache|does not exist/i.test(e.message || '')) throw e;
+        await sb('contacts', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([{ org_id: ctx.orgId, first_name: first, last_name: last, email, role: ('Volunteer interest: ' + notes).slice(0, 250), status: 'Prospect' }]) });
+      }
+      return res.status(200).json({ ok: true });
+    }
+
     if (action === 'info') {
-      const orgName = await getOrgName(ctx.orgId);
+      const ciCfg = ctx.mode === 'event' ? await getCheckin(ctx) : null;
+      const orgName = (ciCfg && ciCfg.orgName) || await getOrgName(ctx.orgId);
       const questions = ctx.mode === 'event' ? await getQuestions(ctx) : [];
       return res.status(200).json({
         ok: true,
@@ -324,6 +414,7 @@ module.exports = async function handler(req, res) {
         event: { name: ctx.name, date: ctx.date, location: ctx.location, org_name: orgName },
         site: (ctx.mode === 'event' && ctx.siteId) ? { name: ctx.siteName || 'Volunteer sign-in' } : null,   // on an event day the same code also offers general site volunteering
         questions,
+        checkin: (ciCfg && ciCfg.enabled) ? { form: publicForm(ciCfg.form) } : null,   // the Check in tab, with this session's form
         choices: ctx.mode === 'choose' ? (ctx.choices || []) : undefined   // today's sessions to tap between
       });
     }
