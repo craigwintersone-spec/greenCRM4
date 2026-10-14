@@ -178,7 +178,9 @@ const MAPPERS = {
     last_name:  r.last_name  || '',
     email: r.email || '',
     role: r.role || '',
-    status: r.status || 'Prospect'
+    status: r.status || 'Prospect',
+    phone: r.phone || '',
+    notes: r.notes || ''
   }),
   employers: r => ({
     id: r.id,
