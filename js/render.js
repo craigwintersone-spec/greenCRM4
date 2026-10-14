@@ -401,7 +401,7 @@ function renderContacts() {
     return;
   }
   tbody.innerHTML = C.map(c => '<tr>' +
-    '<td style="font-weight:600">' + escapeHTML(c.first_name + ' ' + c.last_name) + '</td>' +
+    '<td style="font-weight:600">' + escapeHTML(c.first_name + ' ' + c.last_name) + (c.phone ? '<div style="font-weight:400;font-size:12px;color:var(--txt3)">' + escapeHTML(c.phone) + '</div>' : '') + (c.notes ? '<div style="font-weight:400;font-size:12px;color:var(--txt3);max-width:420px">' + escapeHTML(c.notes) + '</div>' : '') + '</td>' +
     '<td>' + escapeHTML(c.email || '—') + '</td>' +
     '<td>' + escapeHTML(c.role || '—') + '</td>' +
     '<td>' + stageBadge(c.status) + '</td>' +
