@@ -213,7 +213,9 @@ const MAPPERS = {
     actual_outcomes: num(r.actual_outcomes || 0),
     start_date: r.start_date || '',
     end_date: r.end_date || '',
-    status: r.status || 'live'
+    status: r.status || 'live',
+    report_every: r.report_every || null,
+    report_reminded: r.report_reminded || null
   }),
   evidence: r => ({
     id: r.id,
