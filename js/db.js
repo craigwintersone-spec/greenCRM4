@@ -154,6 +154,7 @@ const MAPPERS = {
     location: r.location || '',
     contract_ids: toArr(r.contract_ids),
     import_batch: r.import_batch || null,
+    checkin_form: r.checkin_form || '',
     question_ids: Array.isArray(r.question_ids) ? r.question_ids.map(String) : null   // null = ask every active question
   }),
   feedback: r => ({
