@@ -281,7 +281,7 @@ const SET_SECTIONS = [
   ['org', '🏢', 'Organisation'],
   ['modules', '🧩', 'What you do'],
   ['look', '🎨', 'Look and feel'],
-  ['feedback', '💬', 'Feedback questions'],
+  ['feedback', '📅', 'Events'],
   ['circular', '♻️', 'Circular activities'],
   ['team', '👥', 'Team'],
   ['demo', '🎭', 'Demo mode']
@@ -461,7 +461,7 @@ function setOpen(sec) {
     org: 'Your details. Used on reports, forms and legal pages.',
     modules: 'Switch on what you do. Only these show in the menu.',
     look: 'Your logo and colour appear in the menu, banner, forms and reports.',
-    feedback: 'What people are asked after a session. Used on QR forms, imports and reports.',
+    feedback: 'What you ask people at events: a check-in form and a feedback form for each funder. Used on QR codes, imports and reports.',
     circular: 'The circular activities you run and how you record them.',
     team: 'Invite staff and set what they can see.',
     access: 'Choose which pages advisers can open. Managers and admins always see everything.',
