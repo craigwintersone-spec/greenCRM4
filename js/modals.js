@@ -243,18 +243,21 @@ function convertToParticipant(id) {
 function openAddC() {
   _editCId = null;
   $('c-title').textContent = 'Add contact';
-  ['cf-fn', 'cf-ln', 'cf-em'].forEach(f => $(f).value = '');
+  ['cf-fn', 'cf-ln', 'cf-em', 'cf-ph', 'cf-notes'].forEach(f => { if ($(f)) $(f).value = ''; });
   $('modal-c').classList.add('open');
 }
 function openEditC(id) {
-  const c = DB.contacts.find(x => x.id === id); if (!c) return;
-  _editCId = id;
+  const c = DB.contacts.find(x => String(x.id) === String(id)); if (!c) return;   // ids from the database are numbers
+  _editCId = c.id;
   $('c-title').textContent = 'Edit contact';
   $('cf-fn').value = c.first_name;
   $('cf-ln').value = c.last_name;
   $('cf-em').value = c.email;
-  $('cf-role').value = c.role;
+  const roleSel = $('cf-role'); if (c.role && ![].slice.call(roleSel.options).some(o => o.value === c.role)) roleSel.add(new Option(c.role, c.role));   // e.g. "Volunteer interest"
+  roleSel.value = c.role;
   $('cf-st').value = c.status;
+  if ($('cf-ph')) $('cf-ph').value = c.phone || '';
+  if ($('cf-notes')) $('cf-notes').value = c.notes || '';
   $('modal-c').classList.add('open');
 }
 async function saveC() {
@@ -264,8 +267,13 @@ async function saveC() {
       first_name: $('cf-fn').value, last_name: $('cf-ln').value,
       email: $('cf-em').value, role: $('cf-role').value, status: $('cf-st').value
     };
-    if (_editCId) await sbUpdate('contacts', d, _editCId);
-    else await sbInsert('contacts', d);
+    if ($('cf-ph')) { d.phone = $('cf-ph').value.trim() || null; d.notes = $('cf-notes').value.trim() || null; }
+    try { if (_editCId) await sbUpdate('contacts', d, _editCId); else await sbInsert('contacts', d); }
+    catch (e) {   // phone and notes columns not added yet (checkin.sql): save the rest
+      if (!/phone|notes|column|schema cache/i.test(e.message || '')) throw e;
+      delete d.phone; delete d.notes;
+      if (_editCId) await sbUpdate('contacts', d, _editCId); else await sbInsert('contacts', d);
+    }
     await refreshTable('contacts');
     closeModal('modal-c');
     renderContacts();
