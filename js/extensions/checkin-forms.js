@@ -312,9 +312,9 @@
         var wrapFn = function (fn) { return async function (table, payload, id) { if (table !== 'events') return fn.apply(null, arguments);
           var p = Object.assign({}, payload, { checkin_form: sel });
           try { return await (id === undefined ? fn(table, p) : fn(table, p, id)); }
-          catch (e) { if (/checkin_form/i.test((e && e.message) || '')) { missing = true; return id === undefined ? fn(table, payload) : fn(table, payload, id); } throw e; } }; };
+          catch (e) { if (!sel) throw e; missing = true; return id === undefined ? fn(table, payload) : fn(table, payload, id); } }; };   // whatever went wrong, the event itself still saves
         window.sbInsert = wrapFn(oi); window.sbUpdate = wrapFn(ou);
-        var done = function () { window.sbInsert = oi; window.sbUpdate = ou; if (missing && sel) alert('The event is saved, but its check-in form choice could not be: run checkin.sql in Supabase first.'); };
+        var done = function () { window.sbInsert = oi; window.sbUpdate = ou; if (missing && sel) alert('The event is saved, but its check-in form choice could not be stored. Run the latest checkin.sql in Supabase, then edit the event and choose the form again.'); };
         var r; try { r = os.apply(this, arguments); } catch (e) { done(); throw e; }
         if (r && typeof r.then === 'function') r.then(done, done); else setTimeout(done, 2500);
         return r;
