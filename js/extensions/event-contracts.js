@@ -198,14 +198,51 @@ window.openEventReport = function (eventId) {
   if (typeof cxReportLoad === 'function') cxReportLoad().then(run, run); else run();
 };
 
+// Check-ins for one session: how many people, and for every question how many gave each answer
+function checkinSummary(rows) {
+  var people = 0, qs = [], by = {};
+  rows.forEach(function (r) {
+    people += (+r.people || 1);
+    Object.keys(r.answers || {}).forEach(function (q) {
+      if (!by[q]) { by[q] = { n: 0, counts: {} }; qs.push(q); }
+      var b = by[q], v = r.answers[q]; b.n++;
+      (Array.isArray(v) ? v : [v]).forEach(function (a) { var t = String(a == null ? '' : a).trim(); if (!t) return; if (/^Other: /.test(t)) t = 'Other'; b.counts[t] = (b.counts[t] || 0) + 1; });
+    });
+  });
+  var out = qs.map(function (q) {
+    var b = by[q], keys = Object.keys(b.counts).sort(function (x, y) { return b.counts[y] - b.counts[x]; });
+    var free = keys.length > 12 && keys.length > b.n * 0.6;                                  // typed answers, not a list
+    return { q: q, n: b.n, free: free, rows: free ? [] : keys.map(function (k) { return { a: k, n: b.counts[k], pct: b.n ? Math.round(b.counts[k] / b.n * 100) : 0 }; }) };
+  });
+  return { checkins: rows.length, people: people, questions: out };
+}
+function checkinLines(c) {
+  if (!c || !c.checkins) return [];
+  var L = ['', 'CHECK-IN (what people told us when they arrived; ' + c.people + ' people from ' + c.checkins + ' check-ins, no names collected)'];
+  c.questions.forEach(function (x) { if (x.free || !x.rows.length) return; L.push(x.q + ' (' + x.n + ' answered): ' + x.rows.slice(0, 8).map(function (r) { return r.a + ' ' + r.n + ' (' + r.pct + '%)'; }).join(', ')); });
+  return L;
+}
+async function loadCheckins(ev) {
+  try {
+    var r = await sb.from('checkins').select('people,answers').eq('org_id', String(orgId)).eq('event_id', String(ev.id)).limit(5000);
+    if (r.error) throw r.error;
+    return checkinSummary(r.data || []);
+  } catch (e) { return null; }
+}
+
 function runEventReport(ev) {
   var progressEl = $('brain-progress');
   var outEl = $('report-output');
   if (!progressEl || !outEl) return;
   outEl.innerHTML = '';
   progressEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
+  loadCheckins(ev).then(function (ci) { runEventReport2(ev, ci); });
+}
+function runEventReport2(ev, ci) {
+  var progressEl = $('brain-progress');
+  var outEl = $('report-output');
   var s = eventStats(ev);
+  s.checkin = ci;
   var orgName = (typeof currentOrg !== 'undefined' && currentOrg && currentOrg.name) || 'Organisation';
   var todayStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
   var funderNames = s.contracts.map(function (c) { var f = funderFor(c); return f ? f.name : c.name; }).join(', ');
@@ -224,7 +261,8 @@ function runEventReport(ev) {
   ];
 
   var sys = 'You are a UK charity impact writer producing a short report on ONE delivered session for a funder. ' +
-    'Structure with these sections, each beginning with ## and the title: Session Overview, Delivery, ' + (s.circ && s.circ.entries ? 'Circular Economy, ' : '') + 'Participant Experience, Notes. ' +
+    'Structure with these sections, each beginning with ## and the title: Session Overview, Delivery, ' + (s.checkin && s.checkin.checkins ? 'Who Came, ' : '') + (s.circ && s.circ.entries ? 'Circular Economy, ' : '') + 'Participant Experience, Notes. ' +
+    (s.checkin && s.checkin.checkins ? 'In Who Came use only the CHECK-IN figures supplied: say how many checked in, how many were first-timers, where they came from and how they heard, as percentages of those who answered. Write "black and ethnic minority" for ethnicity. Never describe any individual. ' : '') +
     (s.circ && s.circ.entries ? 'In Circular Economy use only the circular figures supplied and say CO2e and value are estimates. ' : '') +
     'CRITICAL: use ONLY the figures supplied — never invent, estimate or recalculate anything. ' +
     'Keep it to 300-450 words. Clean formal British English. **bold** for headline figures. ' +
@@ -252,10 +290,11 @@ function runEventReport(ev) {
     s.quotes.length ? 'Quotes you may use verbatim (do not alter):\n' + s.quotes.slice(0, 3).map(function (q) { return '- "' + q + '"'; }).join('\n') : '',
     '',
     (typeof cxReportLines === 'function' ? cxReportLines(s.circ).join('\n') : ''),
+    ''].concat(checkinLines(s.checkin)).concat([
     '',
     'DATA GAPS',
     gaps.length ? gaps.map(function (g) { return '- ' + g; }).join('\n') : '- None.'
-  ].filter(Boolean).join('\n');
+  ]).filter(Boolean).join('\n');
 
   if (typeof runAgent !== 'function') {
     outEl.innerHTML = '<div class="alert alert-warn">The Org Brain agent is not available.</div>';
@@ -304,6 +343,7 @@ function renderEventDoc(raw, s, orgName, todayStr, funderNames) {
       (s.fill != null ? f('Capacity filled', s.fill + '%') : '') +
       f('Value of time', '£' + Math.round(s.value).toLocaleString('en-GB')) +
       f('Feedback', s.fbCount) +
+      (s.checkin && s.checkin.checkins ? f('Checked in', s.checkin.people) : '') +
       (s.circ && s.circ.entries ? f('Diverted from waste', s.circ.kg + ' kg') : '') +
       (s.circ && s.circ.fixRate != null ? f('Fix rate', s.circ.fixRate + '%') : '') +
       (s.circ && s.circ.foodKg ? f('Food shared', s.circ.foodKg + ' kg') : '') +
@@ -318,6 +358,13 @@ function renderEventDoc(raw, s, orgName, todayStr, funderNames) {
       }).join('') + '</tbody></table>'
     : '';
 
+  var ciBlock = (s.checkin && s.checkin.checkins)
+    ? '<h3>Who came (from check-in)</h3><p style="font-size:12px;color:#666;margin:-4px 0 8px">' + s.checkin.people + ' people from ' + s.checkin.checkins + ' check-ins. Aggregate and anonymous: no names were collected.</p>' +
+      s.checkin.questions.filter(function (x) { return !x.free && x.rows.length; }).map(function (x) {
+        return '<table class="dr-tbl" style="margin-bottom:12px"><thead><tr><th style="width:60%">' + esc(x.q) + '</th><th>Count</th><th>%</th></tr></thead><tbody>' +
+          x.rows.map(function (r) { return '<tr><td>' + esc(r.a) + '</td><td>' + r.n + '</td><td>' + r.pct + '%</td></tr>'; }).join('') + '</tbody></table>';
+      }).join('')
+    : '';
   var quoteBlock = s.quotes.length
     ? '<h3>In their words</h3>' + s.quotes.slice(0, 5).map(function (q) {
         return '<blockquote style="border-left:3px solid #1F6F6D;margin:10px 0;padding:6px 14px;color:#444;font-style:italic">' + esc(q) + '</blockquote>';
@@ -340,7 +387,7 @@ function renderEventDoc(raw, s, orgName, todayStr, funderNames) {
       '<button class="btn btn-ghost btn-sm" onclick="openEventReport(\'' + esc(String(s.ev.id)) + '\')">↻ Regenerate</button>' +
     '</div>' +
     '<div class="report-doc">' + header +
-      '<div class="report-body">' + figs + body + volTable + quoteBlock +
+      '<div class="report-body">' + figs + body + volTable + ciBlock + quoteBlock +
         (typeof cxReportDocHTML === 'function' ? cxReportDocHTML(s.circ, 'Circular economy at this session') : '') +
         '<p style="font-size:11px;color:#777;margin-top:18px">Volunteer time valued at £' + s.rate.toFixed(2) + ' per hour. All figures calculated directly from records held in Vorlana.</p>' +
       '</div>' +
