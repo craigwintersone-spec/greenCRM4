@@ -165,11 +165,24 @@ async function getCheckin(ctx) {
   try { const r = await sb(`organisations?id=eq.${ctx.orgId}&select=name,settings&limit=1`); if (Array.isArray(r) && r[0]) org = r[0]; } catch (e) { /* use the standard form */ }
   const st = (org.settings && typeof org.settings === 'object') ? org.settings : {};
   const forms = Array.isArray(st.checkin_forms) ? st.checkin_forms : [];
-  const map = (st.checkin_form_for_type && typeof st.checkin_form_for_type === 'object') ? st.checkin_form_for_type : {};
   const byId = id => forms.find(f => f && f.id === id && Array.isArray(f.questions) && f.questions.length);
-  let form = (ctx.type && map[ctx.type]) ? byId(map[ctx.type]) : null;
+  // the organisation can edit the standard form; otherwise the built-in one
+  const standard = (st.checkin_standard && Array.isArray(st.checkin_standard.questions) && st.checkin_standard.questions.length)
+    ? { id: 'standard', name: 'Standard check-in', questions: st.checkin_standard.questions } : CI_STANDARD(org.name);
+  // this event's own choice, and the funders it is linked to (columns may not exist yet: ask for what is there)
+  let evRow = null;
+  for (const cols of ['checkin_form,contract_ids', 'checkin_form', 'contract_ids']) {
+    try { const r = await sb(`events?id=eq.${encodeURIComponent(ctx.eventId)}&select=${cols}&limit=1`); if (Array.isArray(r) && r[0]) { evRow = r[0]; break; } } catch (e) { /* column not added yet */ }
+  }
+  let form = null;
+  // 1. the form picked on the event   2. the form for a funder the event is linked to   3. the form for this kind of event   4. the default   5. standard
+  if (evRow && evRow.checkin_form) form = evRow.checkin_form === 'standard' ? standard : byId(evRow.checkin_form);
+  const byContract = (st.checkin_form_for_contract && typeof st.checkin_form_for_contract === 'object') ? st.checkin_form_for_contract : {};
+  if (!form && evRow && Array.isArray(evRow.contract_ids)) { for (const cid of evRow.contract_ids) { const f = byContract[String(cid)] ? byId(byContract[String(cid)]) : null; if (f) { form = f; break; } } }
+  const map = (st.checkin_form_for_type && typeof st.checkin_form_for_type === 'object') ? st.checkin_form_for_type : {};
+  if (!form && ctx.type && map[ctx.type]) form = byId(map[ctx.type]);
   if (!form && st.checkin_default) form = byId(st.checkin_default);
-  return { enabled: st.checkin_enabled !== false, orgName: org.name || '', form: form || CI_STANDARD(org.name) };
+  return { enabled: st.checkin_enabled !== false, orgName: org.name || '', form: form || standard };
 }
 const publicForm = f => ({ id: f.id, name: f.name, questions: (f.questions || []).filter(q => q && q.role !== 'location').map(q => ({
   id: String(q.id), label: String(q.label || '').slice(0, 300), kind: q.kind || 'text', required: !!q.required, options: Array.isArray(q.options) ? q.options.map(o => String(o).slice(0, 120)).slice(0, 20) : [],
