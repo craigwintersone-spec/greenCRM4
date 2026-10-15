@@ -19,6 +19,17 @@
     var blocks = [], cur = [];
     lines.forEach(function (l) { if (!l) { if (cur.length) blocks.push(cur); cur = []; } else cur.push(l); });
     if (cur.length) blocks.push(cur);
+    // A Word file often arrives with a blank line after every paragraph, so every answer looks like its own question.
+    // When that happens, ignore the blank lines and let the question-looking lines decide where each question starts.
+    var oneLiners = blocks.filter(function (b) { return b.length === 1; }).length;
+    if (blocks.length >= 6 && oneLiners / blocks.length > 0.6) {
+      var all = lines.filter(Boolean), regrouped = [], g = null;
+      all.forEach(function (l, i) {
+        var looksLikeQuestion = isTitleLine(l, i === 0) || (g && g.length >= 2 && /^[A-Z].{15,}$/.test(l) && !/^(yes|no)\b/i.test(l) && /[a-z]/.test(l) && l.split(' ').length >= 4 && !/^(prefer not|other|n\/a)/i.test(l) && (/\?|\*|:$/.test(l) || /\(e\.g\.?/i.test(l) || /^(what|how|which|do|did|does|are|is|have|has|where|when|would|enter|please|select|tick|your|first part|postcode)\b/i.test(l)));
+        if (looksLikeQuestion || !g) { g = [l]; regrouped.push(g); } else g.push(l);
+      });
+      blocks = regrouped;
+    }
     var qs = [];
     blocks.forEach(function (b) {
       var q = null;
