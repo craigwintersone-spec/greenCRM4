@@ -6,7 +6,7 @@
   function clean(s) { return String(s == null ? '' : s).replace(/\u00a0/g, ' ').replace(/[ \t]+/g, ' ').trim(); }
   function stripBullet(s) { return clean(s).replace(/^([\u2022\u25CF\u25CB\u2610\u2751\u2713\u2714\-\u2013\u2014\*]|\d{1,2}[.)])\s+/, ''); }
   function isTitleLine(l, first) {
-    return first || /\*\s*$/.test(l) || /\?\s*\*?\s*$/.test(l) || /select all that apply/i.test(l) || /^if you('?re| are| a)\b/i.test(l);
+    return first || /\*\s*$/.test(l) || /\?\s*\*?\s*$/.test(l) || /select all that apply/i.test(l) || /^if you('?re| are| a)\b/i.test(l) || /\(e\.g\.?/i.test(l) || /^(enter|please|tell us|first part|postcode)\b/i.test(l);
   }
   function maxAgeOf(opt) {          // "16- 25" -> 25, "65+" -> Infinity, "Prefer not to say" -> null
     var t = String(opt || ''); if (/prefer not/i.test(t)) return null;
