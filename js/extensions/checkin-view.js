@@ -27,12 +27,17 @@
     var head = tbl.querySelector('thead tr'); if (!head || head.querySelector('.civ-th')) return;
     var ths = head.querySelectorAll('th'); var at = ths[3];                       // after Attendees
     var th = document.createElement('th'); th.className = 'civ-th'; th.textContent = 'Checked in'; th.style.textAlign = 'center'; at.insertAdjacentElement('afterend', th);
+    var th2 = document.createElement('th'); th2.className = 'civ-th'; th2.textContent = 'Feedback'; th2.style.textAlign = 'center'; th.insertAdjacentElement('afterend', th2);
+    var fbBy = {}; (DB.feedback || []).forEach(function (f) { var k = String(f.eventId || f.event_id); fbBy[k] = (fbBy[k] || 0) + 1; });
     tbl.querySelectorAll('tbody tr').forEach(function (tr) {
       var edit = tr.querySelector('button[onclick^="openEditEv"]'); if (!edit) return;
       var m = /openEditEv\('([^']+)'\)/.exec(edit.getAttribute('onclick') || ''); if (!m) return;
       var c = COUNTS[m[1]], td = document.createElement('td'); td.style.textAlign = 'center';
       td.innerHTML = c ? '<a href="#" onclick="civOpen(\'' + esc(m[1]) + '\');return false" title="See what people answered" style="font-weight:600">' + c.people + '</a>' : '<span style="color:var(--txt3)">\u2014</span>';
       tr.children[3].insertAdjacentElement('afterend', td);
+      var n = fbBy[m[1]] || 0, td2 = document.createElement('td'); td2.style.textAlign = 'center';
+      td2.innerHTML = n ? '<a href="#" onclick="civFeedback(\'' + esc(m[1]) + '\');return false" title="Read the feedback for this event" style="font-weight:600">' + n + '</a>' : '<span style="color:var(--txt3)">\u2014</span>';
+      td.insertAdjacentElement('afterend', td2);
     });
   }
 
@@ -81,6 +86,11 @@
     var r = await sb.from('checkins').select('*').eq('org_id', String(orgId)).eq('event_id', String(evId)).order('created_at', { ascending: true }).limit(5000);
     if (r.error) throw r.error; return r.data || [];
   }
+  // open the Feedback page already filtered to this event
+  window.civFeedback = function (evId) {
+    if (typeof go === 'function') go('feedback');
+    var tries = 0; (function w() { var sel = $('fb-filter-ev'); if (sel && [].slice.call(sel.options).some(function (o) { return o.value === String(evId); })) { sel.value = String(evId); sel.dispatchEvent(new Event('change')); if (typeof renderFeedback === 'function') renderFeedback(); return; } if (++tries < 30) setTimeout(w, 100); })();
+  };
   window.civOpen = async function (evId) {
     var ev = (DB.events || []).find(function (e) { return String(e.id) === String(evId); }); if (!ev) return;
     setModal('<h2>' + esc(ev.name) + '</h2><div class="cxp-s">Loading check-ins\u2026</div>');
