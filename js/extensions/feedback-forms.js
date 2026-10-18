@@ -195,7 +195,9 @@
       if (text.length < 6 || seen[norm(text)] || out.length >= 25) return;
       seen[norm(text)] = 1;
       var kind = kinds.indexOf(q.kind) >= 0 ? q.kind : 'text';
-      var row = { question: text, kind: kind, maps_to: (q.maps_to && maps.indexOf(q.maps_to) >= 0) ? q.maps_to : null };
+      var mapped = (q.maps_to && maps.indexOf(q.maps_to) >= 0) ? q.maps_to : (typeof vlGuessMap === 'function' ? vlGuessMap(text, kind) : '');
+      if (typeof vlMapIsSafe === 'function' && !vlMapIsSafe(text, mapped)) mapped = '';
+      var row = { question: text, kind: kind, maps_to: mapped || null };
       if (row.maps_to) { if (taken[row.maps_to]) row.maps_to = null; else taken[row.maps_to] = 1; }
       if (kind === 'choice') {
         var o = (Array.isArray(q.options) ? q.options : []).map(function (x) { return String(x).trim().slice(0, 80); }).filter(Boolean).slice(0, 12);
