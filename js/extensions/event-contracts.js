@@ -162,7 +162,18 @@ function eventStats(ev) {
 
   var cons = eventContracts(ev).map(function (id) { return byIdIn(contractsList(), id); }).filter(Boolean);
 
-  function avg(key) { return fb.length ? round1(fb.reduce(function (a, f) { return a + n(f[key]); }, 0) / fb.length) : 0; }
+  // Averages over people who ANSWERED: a blank is not a zero, and an unasked question is not a figure
+  function avg(key) { var v = fb.map(function (f) { return f[key]; }).filter(function (x) { return x != null && x !== '' && n(x) > 0; }).map(n); return v.length ? round1(v.reduce(function (a, b) { return a + b; }, 0) / v.length) : null; }
+  function answeredPct(key) { var v = fb.filter(function (f) { return f[key] === true || f[key] === false; }); return v.length ? pct(v.filter(function (f) { return f[key]; }).length, v.length) : null; }
+  // The form's own questions, with their results (the same engine as the Feedback page)
+  var asked = [];
+  if (fb.length && typeof measureStats === 'function' && typeof activeMeasures === 'function') {
+    measureStats(fb).forEach(function (st) {
+      if (st.m.maps_to === 'ca' && !st.m.question) return;
+      var line = st.kind === 'score' ? st.avg.toFixed(1) + ' out of 5 (' + st.pctHigh + '% rated 4 or 5)' : st.kind === 'yesno' ? st.pctYes + '% yes' : 'most common answer: ' + (st.breakdown ? st.breakdown[0][0] : st.value);
+      asked.push({ q: st.m.question, kind: st.kind, text: line, n: st.n, maps_to: st.m.maps_to || '', avg: st.avg, pctHigh: st.pctHigh, pctYes: st.pctYes, breakdown: st.breakdown || null });
+    });
+  }
 
   var circ = (typeof cxReportStats === 'function') ? cxReportStats({ eventId: ev.id }) : null;
 
@@ -183,8 +194,9 @@ function eventStats(ev) {
     avgEnjoyed: avg('enjoyed'),
     avgCB: avg('cb'),
     avgCA: avg('ca'),
-    learnedPct: fb.length ? pct(fb.filter(function (f) { return f.learned; }).length, fb.length) : 0,
-    connectedPct: fb.length ? pct(fb.filter(function (f) { return f.connected; }).length, fb.length) : 0,
+    learnedPct: answeredPct('learned'),
+    connectedPct: answeredPct('connected'),
+    asked: asked,
     quotes: fb.filter(function (f) { return f.quote && String(f.quote).trim().length > 15 && !HEALTH_QUOTE_RX.test(String(f.quote)); })
               .map(function (f) { return String(f.quote).trim(); })
   };
@@ -248,7 +260,7 @@ function runEventReport2(ev, ci) {
   var funderNames = s.contracts.map(function (c) { var f = funderFor(c); return f ? f.name : c.name; }).join(', ');
 
   var gaps = [];
-  if (!s.fbCount) gaps.push('No feedback was collected for this session.');
+  if (!s.fbCount) gaps.push('No feedback was collected for this session.');   // the only feedback gap that exists: a question not asked is not a gap
   if (!s.hours.length) gaps.push('No volunteer hours were logged against this session.');
   if (!s.capacity && capacityTracked()) gaps.push('Capacity was not recorded, so an attendance rate is not given.');
   if (typeof cxReportGaps === 'function') gaps = gaps.concat(cxReportGaps(s.circ));
@@ -264,7 +276,10 @@ function runEventReport2(ev, ci) {
     'Structure with these sections, each beginning with ## and the title: Session Overview, Delivery, ' + (s.checkin && s.checkin.checkins ? 'Who Came, ' : '') + (s.circ && s.circ.entries ? 'Circular Economy, ' : '') + 'Participant Experience, Notes. ' +
     (s.checkin && s.checkin.checkins ? 'In Who Came use only the CHECK-IN figures supplied: say how many checked in, how many were first-timers, where they came from and how they heard, as percentages of those who answered. Write "black and ethnic minority" for ethnicity. Never describe any individual. ' : '') +
     (s.circ && s.circ.entries ? 'In Circular Economy use only the circular figures supplied and say CO2e and value are estimates. ' : '') +
-    'CRITICAL: use ONLY the figures supplied — never invent, estimate or recalculate anything. ' +
+    'CRITICAL: use ONLY the figures supplied: never invent, estimate or recalculate anything, and never work out a rate or percentage yourself. ' +
+    'Report only the feedback questions listed; a question that is not listed was not asked, so never call it missing, nil, zero or a gap. ' +
+    'State what the figures show and nothing more: no causes, no explanations, no advice, no "should", no "warrants investigation", no comment on data quality or methodology. ' +
+    'Never say "significant". Call ratings what the question asked (e.g. confidence in green skills), not generic "impact indicators". ' +
     'Keep it to 300-450 words. Clean formal British English. **bold** for headline figures. ' +
     'State any listed data gaps plainly in Notes. No hashtags except section markers, no emoji.';
 
@@ -283,10 +298,12 @@ function runEventReport2(ev, ci) {
     'Notional value of volunteer time: £' + Math.round(s.value).toLocaleString('en-GB') + ' (at £' + s.rate.toFixed(2) + '/hour)',
     '',
     'Feedback responses: ' + (s.fbCount || 'none'),
-    s.fbCount ? 'Average enjoyment: ' + s.avgEnjoyed + ' out of 5' : '',
-    s.fbCount ? 'Confidence before: ' + s.avgCB + ' → after: ' + s.avgCA : '',
-    s.fbCount ? 'Learned something new: ' + s.learnedPct + '%' : '',
-    s.fbCount ? 'Felt more connected: ' + s.connectedPct + '%' : '',
+    s.fbCount && s.asked.length ? 'WHAT THE FEEDBACK FORM ASKED, AND THE RESULTS (these are the only feedback figures that exist for this session):' : '',
+    s.fbCount && s.asked.length ? s.asked.map(function (a) { return '- ' + a.q + ' (' + a.n + ' answered): ' + a.text; }).join('\n') : '',
+    s.fbCount && !s.asked.length && s.avgEnjoyed != null ? 'Average enjoyment: ' + s.avgEnjoyed + ' out of 5' : '',
+    s.fbCount && !s.asked.length && s.avgCB != null && s.avgCA != null ? 'Confidence before: ' + s.avgCB + ' \u2192 after: ' + s.avgCA : '',
+    s.fbCount && !s.asked.length && s.learnedPct != null ? 'Learned something new: ' + s.learnedPct + '%' : '',
+    s.fbCount && !s.asked.length && s.connectedPct != null ? 'Felt more connected: ' + s.connectedPct + '%' : '',
     s.quotes.length ? 'Quotes you may use verbatim (do not alter):\n' + s.quotes.slice(0, 3).map(function (q) { return '- "' + q + '"'; }).join('\n') : '',
     '',
     (typeof cxReportLines === 'function' ? cxReportLines(s.circ).join('\n') : ''),
@@ -358,6 +375,10 @@ function renderEventDoc(raw, s, orgName, todayStr, funderNames) {
       }).join('') + '</tbody></table>'
     : '';
 
+  var askedBlock = s.asked.length
+    ? '<h3>What people told us (' + s.fbCount + ' response' + (s.fbCount === 1 ? '' : 's') + ')</h3><table class="dr-tbl"><thead><tr><th style="width:62%">Question</th><th>Answered</th><th>Result</th></tr></thead><tbody>' +
+      s.asked.map(function (a) { return '<tr><td>' + esc(a.q) + '</td><td>' + a.n + '</td><td>' + esc(a.text) + '</td></tr>'; }).join('') + '</tbody></table>'
+    : '';
   var ciBlock = (s.checkin && s.checkin.checkins)
     ? '<h3>Who came (from check-in)</h3><p style="font-size:12px;color:#666;margin:-4px 0 8px">' + s.checkin.people + ' people from ' + s.checkin.checkins + ' check-ins. Aggregate and anonymous: no names were collected.</p>' +
       s.checkin.questions.filter(function (x) { return !x.free && x.rows.length; }).map(function (x) {
@@ -387,7 +408,7 @@ function renderEventDoc(raw, s, orgName, todayStr, funderNames) {
       '<button class="btn btn-ghost btn-sm" onclick="openEventReport(\'' + esc(String(s.ev.id)) + '\')">↻ Regenerate</button>' +
     '</div>' +
     '<div class="report-doc">' + header +
-      '<div class="report-body">' + figs + body + volTable + ciBlock + quoteBlock +
+      '<div class="report-body">' + figs + body + volTable + askedBlock + ciBlock + quoteBlock +
         (typeof cxReportDocHTML === 'function' ? cxReportDocHTML(s.circ, 'Circular economy at this session') : '') +
         '<p style="font-size:11px;color:#777;margin-top:18px">Volunteer time valued at £' + s.rate.toFixed(2) + ' per hour. All figures calculated directly from records held in Vorlana.</p>' +
       '</div>' +
