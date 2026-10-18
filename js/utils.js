@@ -132,3 +132,27 @@ function vlAutoFix(text, o) {
   text = keep.join('\n').replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
   return { text, fixes: n };
 }
+
+// ── What a feedback question counts as in reports ──────────────
+// Decided from the wording, so a funder's form counts without anyone setting anything. Never a name, email, phone,
+// location or consent box. Returns '' when it should stay the organisation's own measure.
+function vlGuessMap(question, kind) {
+  const q = String(question || '').toLowerCase();
+  if (/\b(name|e-?mail|phone|mobile|address|postcode|contact)\b/.test(q) || /where did you|which (site|location|venue)|attend(ed)? the (workshop|session|event) today/.test(q) || /consent|permission|gdpr|opt.?in|hear (more|about)/.test(q)) return '';
+  const score = kind === 'score', yn = kind === 'yesno' || kind === 'score';
+  if (score && /confiden|skill|capab|able to|ability/.test(q)) return /\b(before|prior|previous|used to|at the start)\b/.test(q) ? 'cb' : 'ca';
+  if (score && /\b(enjoy|satisf|rate (the|this|today)|how was|well organised|well-organised|organised|quality|experience)\b/.test(q)) return 'enjoyed';
+  if (yn && /\b(recommend|tell a friend|tell (others|someone))\b/.test(q)) return 'friend';
+  if (yn && /would you like|be part of|sign up|join|take part in (a|the)/.test(q)) return '';          // an offer, not a feeling
+  if (yn && /connected to (nature|the land|green space)|connect(ed|ion)? with nature/.test(q)) return '';            // nature, not people
+  if (yn && /\b(connected|connection|belong|less (lonely|isolated)|new people|made friends|met people|part of (my|the) community)\b/.test(q)) return 'connected';
+  if (yn && /\b(learn|new skill|something new|knowledge|understand)\b/.test(q)) return 'learned';
+  if (kind === 'text' && /\b(comment|feedback|anything else|tell us more|in your own words|what did you (like|think))\b/.test(q)) return 'quote';
+  return '';
+}
+// A mapping that must never stand: a name, email or similar box counted as a measure
+function vlMapIsSafe(question, maps_to) {
+  if (!maps_to) return true;
+  const q = String(question || '').toLowerCase();
+  return !/\b(name|e-?mail|phone|mobile|address|contact)\b/.test(q);
+}
