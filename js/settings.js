@@ -51,7 +51,7 @@ function renderFeedbackQuestionsCard() {
 
   h += _fqRows.map((m, i) => {
     const on = m.active !== false;
-    const meta = fqKindLabel(m.kind) + (m.kind === 'choice' ? ((m.options || []).length ? ': ' + m.options.slice(0, 3).join(', ') + (m.options.length > 3 ? ' +' + (m.options.length - 3) : '') : ' — ⚠ add the choices') : '') + (m.maps_to ? ' · ' + fqMapLabel(m.maps_to) : '');
+    const meta = fqKindLabel(m.kind) + (m.kind === 'choice' ? ((m.options || []).length ? ': ' + m.options.slice(0, 3).join(', ') + (m.options.length > 3 ? ' +' + (m.options.length - 3) : '') : ' — ⚠ add the choices') : '') + (m.maps_to ? ' · counts as ' + fqMapLabel(m.maps_to).toLowerCase() : (m.kind === 'score' || m.kind === 'yesno') ? ' · own measure (not in the standard figures)' : '');
     return '<div class="st-q ' + (on ? '' : 'off') + '" draggable="true" data-i="' + i + '">' +
       '<div class="st-q-row" onclick="fqToggleOpen(' + i + ')"><span class="grip" title="Drag to reorder">⋮⋮</span>' +
         '<div style="flex:1;min-width:0"><div class="st-q-t">' + (m.question ? e(m.question) : '<em>New question</em>') + '</div><div class="st-q-m">' + e(meta) + '</div></div>' +
@@ -161,7 +161,7 @@ async function fqSave() {
   try {
     const saved = (DB.survey_measures || []).filter(m => !m._demo);
     const rows = _fqRows.filter(r => r.question && r.question.trim()).map((r, i) => {
-      const o = { org_id: orgId, question: r.question.trim(), kind: r.kind || 'text', maps_to: r.maps_to || null, label: r.question.trim().slice(0, 60), active: r.active !== false, sort: i };
+      const o = { org_id: orgId, question: r.question.trim(), kind: r.kind || 'text', maps_to: (r.maps_to && (typeof vlMapIsSafe !== 'function' || vlMapIsSafe(r.question, r.maps_to))) ? r.maps_to : null, label: r.question.trim().slice(0, 60), active: r.active !== false, sort: i };
       if (o.kind === 'choice') o.options = (r.options || []).slice(0, 12);      // only written for choice questions
       else if (o.kind === 'score' && ((r.options || []).length === 2 || r._clearScale)) o.options = (r.options || []).length === 2 ? r.options.slice() : [];   // and for scales whose ends were worded
       const orig = r.id && saved.find(m => m.id === r.id);
@@ -196,7 +196,7 @@ function fqClean(list) {
   return (list || []).filter(q => q && q.question && !have.has(q.question.toLowerCase().trim())).map(q => ({
     question: String(q.question).trim(),
     kind: MEASURE_KINDS.some(k => k[0] === q.kind) ? q.kind : 'text',
-    maps_to: MEASURE_MAPS.some(k => k[0] === q.maps_to) && q.maps_to ? q.maps_to : null,
+    maps_to: (function () { const m = MEASURE_MAPS.some(k => k[0] === q.maps_to) && q.maps_to ? q.maps_to : (typeof vlGuessMap === 'function' ? vlGuessMap(q.question, q.kind) : ''); return (typeof vlMapIsSafe === 'function' && !vlMapIsSafe(q.question, m)) ? null : (m || null); })(),
     why: q.why || ''
   }));
 }
