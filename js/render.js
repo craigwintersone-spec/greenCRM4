@@ -809,7 +809,7 @@ function stdAvg(F, key) {
 
 function renderFeedback() {
   const list = $('fb-list'); if (!list) return;
-  let F = (DB.feedback || []).slice();
+  let F = (DB.feedback || []).slice().sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));   // newest first
 
   // Populate event filter dropdown
   const filterSel = $('fb-filter-ev');
