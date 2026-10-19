@@ -109,11 +109,49 @@
     } catch (e) { alert('Couldn\u2019t download: ' + (e.message || e)); }
   };
 
+
+  // ── Feedback page: pick an event, see every question on its form with the results ──
+  function bar(label, n, total, extra) {
+    var pc = total ? Math.round(n / total * 100) : 0;
+    return '<div style="display:flex;align-items:center;gap:8px;font-size:12px;margin:3px 0;' + TXT + '"><span style="flex:0 0 38%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(label) + '">' + esc(label) + '</span>' +
+      '<span style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><span style="display:block;width:' + pc + '%;height:8px;background:var(--em)"></span></span><span style="flex:0 0 74px;text-align:right;color:var(--txt2)">' + n + ' \u00b7 ' + pc + '%' + (extra || '') + '</span></div>';
+  }
+  function fbSummary() {
+    var sel = $('fb-filter-ev'), list = $('fb-list'); if (!sel || !list) return;
+    var old = $('civ-fbsum'); if (old) old.remove();
+    if (!sel.value || typeof activeMeasures !== 'function' || typeof answerFor !== 'function') return;
+    var ev = (DB.events || []).find(function (e) { return String(e.id) === String(sel.value); });
+    var F = (DB.feedback || []).filter(function (f) { return String(f.eventId) === String(sel.value); });
+    if (!F.length) return;
+    var rows = '';
+    activeMeasures().forEach(function (m) {
+      var t = String(m.question || '');
+      if (/where did you attend|which (location|site|venue)|workshop location/i.test(t) || (m.kind === 'text' && /\b(name|e-?mail|phone|contact details?)\b/i.test(t))) return;
+      var vals = F.map(function (f) { return answerFor(f, m); }).filter(function (v) { return v != null && v !== ''; });
+      if (!vals.length) return;
+      var h = '<div style="margin-bottom:14px"><div style="font-size:13px;font-weight:600;color:var(--txt);' + TXT + '">' + esc(t) + ' <span style="font-weight:400;color:var(--txt3)">\u00b7 ' + vals.length + ' answered</span></div>';
+      if (m.kind === 'score' && typeof scoreOf === 'function') {
+        var sc = vals.map(scoreOf).filter(function (x) { return x != null; }), avg = sc.length ? sc.reduce(function (a, b) { return a + b; }, 0) / sc.length : 0;
+        h += '<div style="font-size:12px;color:var(--txt2);margin:2px 0 4px;' + TXT + '">Average <b>' + avg.toFixed(1) + ' out of 5</b> \u00b7 ' + (sc.length ? Math.round(sc.filter(function (x) { return x >= 4; }).length / sc.length * 100) : 0) + '% rated 4 or 5</div>';
+        [5, 4, 3, 2, 1].forEach(function (k) { h += bar(k + (k === 5 ? ' (highest)' : k === 1 ? ' (lowest)' : ''), sc.filter(function (x) { return Math.round(x) === k; }).length, sc.length); });
+      } else if (m.kind === 'text') {
+        h += vals.slice(0, 5).map(function (v) { return '<div style="font-size:12px;color:var(--txt2);border-left:3px solid var(--border);padding:2px 8px;margin:4px 0;' + TXT + '">\u201c' + esc(String(v).slice(0, 240)) + '\u201d</div>'; }).join('') + (vals.length > 5 ? '<div style="font-size:11px;color:var(--txt3)">and ' + (vals.length - 5) + ' more below</div>' : '');
+      } else {
+        var counts = {}; vals.forEach(function (v) { (Array.isArray(v) ? v : [v]).forEach(function (a) { var k = (typeof yesOf === 'function' && m.kind === 'yesno') ? (yesOf(a) ? 'Yes' : 'No') : String(a).trim(); counts[k] = (counts[k] || 0) + 1; }); });
+        Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; }).forEach(function (k) { h += bar(k, counts[k], vals.length); });
+      }
+      rows += h + '</div>';
+    });
+    if (!rows) return;
+    list.insertAdjacentHTML('beforebegin', '<div class="card" id="civ-fbsum" style="margin-bottom:14px"><div class="card-title">What people told us' + (ev ? ' at ' + esc(ev.name) : '') + ' (' + F.length + ' response' + (F.length === 1 ? '' : 's') + ')</div>' + rows + '</div>');
+  }
   function ready(fn) { var t = 0; (function w() { if (typeof renderEvents === 'function' && typeof setModal === 'function') return fn(); if (++t < 100) setTimeout(w, 100); })(); }
   ready(function () {
+    var origFb = window.renderFeedback;
+    if (typeof origFb === 'function') window.renderFeedback = function () { var r = origFb.apply(this, arguments); try { fbSummary(); } catch (e) { console.warn('[checkin-view] feedback summary:', e); } return r; };
     var orig = window.renderEvents;
     window.renderEvents = function () { var r = orig.apply(this, arguments); if (loaded) paint(); else load().then(function () { if (loaded) paint(); }); return r; };
     if (document.querySelector('#ev-list table')) load().then(function () { if (loaded) paint(); });
   });
-  if (window.__VORLANA_TEST) window.__civTest = { tally: tally, summaryHTML: summaryHTML, reload: function () { loaded = false; return load(); } };
+  if (window.__VORLANA_TEST) window.__civTest = { fbSummary: fbSummary, tally: tally, summaryHTML: summaryHTML, reload: function () { loaded = false; return load(); } };
 })();
