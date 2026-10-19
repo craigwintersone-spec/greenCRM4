@@ -187,6 +187,19 @@ async function getCheckin(ctx) {
 const publicForm = f => ({ id: f.id, name: f.name, questions: (f.questions || []).filter(q => q && q.role !== 'location').map(q => ({
   id: String(q.id), label: String(q.label || '').slice(0, 300), kind: q.kind || 'text', required: !!q.required, options: Array.isArray(q.options) ? q.options.map(o => String(o).slice(0, 120)).slice(0, 20) : [],
   other: !!q.other, hint: q.hint ? String(q.hint).slice(0, 300) : '', role: q.role || '', showIf: q.showIf || null, perVisit: !!q.perVisit })) });
+// "Keep me updated": name and email go to the organisation's Contacts as a mailing-list entry, never into the answers
+async function saveOptin(ctx, o) {
+  if (!o || typeof o !== 'object') return false;
+  const email = trim(o.email, 254).toLowerCase(), name = likeSafe(trim(o.name, 120));
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return false;
+  try { const dup = await sb(`contacts?org_id=eq.${ctx.orgId}&email=eq.${encodeURIComponent(email)}&select=id&limit=1`); if (Array.isArray(dup) && dup.length) return true; } catch (e) { /* carry on */ }
+  const parts = name.split(/\s+/).filter(Boolean), first = parts.shift() || '', last = parts.join(' ');
+  const where = ctx.mode === 'event' ? (ctx.name || 'Event') + (ctx.date ? ', ' + ctx.date : '') : (ctx.name || 'Volunteer sign-in');
+  const row = { org_id: ctx.orgId, first_name: first || '(no name given)', last_name: last, email, role: 'Mailing list', status: 'Subscribed', notes: 'Asked for updates at ' + where + '.' };
+  try { await sb('contacts', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([row]) }); }
+  catch (e) { if (!/column|schema cache|does not exist/i.test(e.message || '')) throw e; delete row.notes; await sb('contacts', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([row]) }); }
+  return true;
+}
 function ciMaxAge(opt) { const t = String(opt || ''); if (/prefer not/i.test(t)) return null; if (/\+/.test(t)) return Infinity; const n = t.match(/\d+/g); return n ? +n[n.length - 1] : null; }
 function ciValidate(form, answers) {
   const qs = (form.questions || []).filter(q => q && q.role !== 'location'), out = {}; let people = 1, extra = 0, email = '';
@@ -384,6 +397,7 @@ module.exports = async function handler(req, res) {
       if (v.error) return bad(res, v.error);
       const day = londonDay(new Date().toISOString());
       await sb('checkins', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([{ org_id: String(ctx.orgId), event_id: String(ctx.eventId), form_id: String(cfg.form.id), people: v.people, answers: v.answers, day }]) });
+      try { await saveOptin(ctx, body.optin); } catch (e) { /* the check-in still counts */ }
       if (v.email) { try { await sb('checkin_emails', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([{ org_id: String(ctx.orgId), day, email: v.email }]) }); } catch (e) { /* the check-in still counts */ } }
       // attendance fills itself: the session's count becomes everyone checked in, and never drops below what staff typed
       try {
@@ -481,6 +495,7 @@ module.exports = async function handler(req, res) {
         delete row.answers; delete row.demographics;
         await sb('feedback', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([row]) });
       }
+      try { await saveOptin(ctx, body.optin); } catch (e) { /* the feedback is saved either way */ }
       return res.status(200).json({ ok: true });
     }
 
