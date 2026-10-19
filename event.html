@@ -79,6 +79,10 @@ textarea{min-height:88px;resize:vertical}
 .faces .star{font-size:22px}
 .ci-q{margin-bottom:18px}.ci-l{font-weight:600;font-size:15px;color:var(--txt);margin-bottom:6px;line-height:1.35}.ci-h{font-size:13px;color:var(--txt3);margin:-2px 0 7px}.ci-req{color:#C84545}
 .ci-other{margin-top:8px}.ci-fresh{font-size:13px;color:var(--txt3);text-align:center;margin:-6px 0 14px}.ci-fresh a{color:var(--em2);text-decoration:underline}
+.ci-tick{display:flex;gap:10px;align-items:flex-start;font-size:15px;font-weight:600;color:var(--txt);text-transform:none;letter-spacing:0;cursor:pointer;margin:0}
+.ci-tick input{width:20px;height:20px;flex:none;margin:2px 0 0;padding:0}
+.ci-note{font-size:13px;color:var(--txt3);margin:6px 0 0}
+.ci-kids{font-size:13px;color:#8A5A00;background:#FFF6E0;border-radius:8px;padding:7px 10px;margin:8px 0 0}
 </style>
 </head>
 <body>
@@ -128,7 +132,22 @@ textarea{min-height:88px;resize:vertical}
         <p class="sub">A few quick taps so we know who came today. We don\'t ask for your name.</p>
         <div class="msg err" id="ci-err"></div>
         <div class="ci-fresh" id="ci-fresh" style="display:none">Using your answers from last time. <a href="#">Not you? Start fresh</a></div>
+        <div id="ci-choice" style="display:none">
+          <p class="sub" style="margin-bottom:14px">Someone has already checked in on this phone today.</p>
+          <div id="ci-choice-btns" style="display:flex;flex-direction:column;gap:10px">
+            <button class="btn btn-p" id="ci-next" type="button">Next person on this phone</button>
+            <button class="btn btn-ghost" id="ci-tofb" type="button">Give feedback</button>
+          </div>
+        </div>
         <div id="ci-form"></div>
+        <div class="ci-q" id="ci-optin-wrap" style="display:none">
+          <label class="ci-tick"><input type="checkbox" id="ci-optin"/><span>Keep me updated about workshops and news</span></label>
+          <div id="ci-optin-fields" style="display:none;margin-top:10px">
+            <input id="ci-optin-name" placeholder="Your name" autocomplete="name"/>
+            <input id="ci-optin-email" type="email" inputmode="email" placeholder="Your email" autocomplete="email" style="margin-top:8px"/>
+            <div class="ci-note">Kept separately from your answers. Ask us any time to stop.</div>
+          </div>
+        </div>
         <input id="ci-hp" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;opacity:0;height:0;width:0"/>
         <button class="btn btn-p" id="ci-go" type="button"><span class="spin"></span><span>Check in</span></button>
       </div>
@@ -156,6 +175,14 @@ textarea{min-height:88px;resize:vertical}
         <div class="field">
           <label>Your name (optional)</label>
           <input id="fb-name" placeholder="Leave blank to stay anonymous" autocomplete="name"/>
+        </div>
+        <div class="field" id="fb-optin-wrap" style="display:none">
+          <label class="ci-tick"><input type="checkbox" id="fb-optin"/><span>Keep me updated about workshops and news</span></label>
+          <div id="fb-optin-fields" style="display:none;margin-top:10px">
+            <input id="fb-optin-name" placeholder="Your name" autocomplete="name"/>
+            <input id="fb-optin-email" type="email" inputmode="email" placeholder="Your email" autocomplete="email" style="margin-top:8px"/>
+            <div class="ci-note">Kept separately from your feedback. Ask us any time to stop.</div>
+          </div>
         </div>
         <button class="btn btn-p" id="fb-submit" type="button"><span class="spin"></span><span>Send feedback</span></button>
       </div>
@@ -308,7 +335,14 @@ var STANDARD = [
   { question: 'Did you make a new friend?', kind: 'yesno', key: 'friend' },
   { question: "Anything you'd like to say?", kind: 'text', key: 'quote' }
 ];
-function formQuestions() { return QUESTIONS.length ? QUESTIONS : STANDARD; }
+function formQuestions() {
+  if (!QUESTIONS.length) return STANDARD;
+  return QUESTIONS.filter(function (q) { var t = String(q.question || '');
+    if (/where did you attend|which (location|site|venue)|workshop location/i.test(t)) return false;            // the event already knows
+    if (q.kind === 'text' && /\b(name|e-?mail|phone|contact details?)\b/i.test(t)) return false;              // the opt-in box does this, kept apart from answers
+    return true; });
+}
+function orgCollectsContacts() { return (CI && CI.questions.some(function (q) { return q.role === 'email'; })) || QUESTIONS.some(function (q) { return q.kind === 'text' && /\b(name|e-?mail)\b/i.test(String(q.question || '')); }); }
 // What 1 and 5 mean. A question can set its own; otherwise we pick words that fit how it is asked.
 function scaleLabels(q) {
   if (q.options && q.options.length === 2 && q.options[0] && q.options[1]) return [String(q.options[0]), String(q.options[1])];
@@ -419,7 +453,8 @@ function boot() {
         $('vol-title').textContent = 'Here to help today?';
       } else {
         renderFeedbackForm();
-        if (setupCheckin(j.checkin)) openTab(ciCheckedInToday() ? 'fb' : 'ci');   // arriving: check in. Already checked in today: feedback.
+        if (setupCheckin(j.checkin)) { openTab('ci'); if (ciCheckedInToday()) ciShowChoice(); }   // arriving: check in. Already checked in on this phone today: a choice
+        $('fb-optin-wrap').style.display = orgCollectsContacts() ? '' : 'none';
       }
       try { var saved = localStorage.getItem('vorlana-who'); if (saved) $('vol-who').value = saved; } catch (e) {}
       show('s-main');
@@ -437,14 +472,25 @@ function doneScreen(title, text, back) {
   $('done-again').style.display = back ? 'flex' : 'none';
   show('s-done');
 }
-$('done-again').addEventListener('click', function () { var ci = window.__ciDone; window.__ciDone = false; show('s-main'); if (ci && CI) { ciReset(true); openTab('ci'); } });
+$('done-again').addEventListener('click', function () { var ci = window.__ciDone; window.__ciDone = false; show('s-main'); if (ci && CI) { ciHideChoice(); ciReset(true); openTab('ci'); } });
 
 // ── feedback submit ────────────────────────────────────────
 // ── check in (attendance): the form comes from the organisation, the standard one if it has none ──
 var CI = null, CI_ANS = {}, CI_PREFILLED = false, CI_BOUND = false;
 function ciDay() { return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' }); }
 function ciFlagKey() { return 'vl-ci:' + TOKEN + ':' + (CHOSEN_EVENT || '') + ':' + ciDay(); }
-function ciCheckedInToday() { try { return localStorage.getItem(ciFlagKey()) === '1'; } catch (e) { return false; } }
+function ciCheckedInToday() { try { return !!localStorage.getItem(ciFlagKey()); } catch (e) { return false; } }
+function ciLastAt() { try { return +localStorage.getItem(ciFlagKey()) || 0; } catch (e) { return 0; } }
+function ciKidsKey() { return ciFlagKey() + ':kids'; }
+function ciKidsCounted() { try { return +localStorage.getItem(ciKidsKey()) || 0; } catch (e) { return 0; } }
+var CI_KIDS_NOTE = false;
+function ciShowChoice() {
+  var recent = Date.now() - ciLastAt() < 30 * 60000, next = $('ci-next'), fb = $('ci-tofb'), box = $('ci-choice-btns');
+  box.innerHTML = ''; (recent ? [next, fb] : [fb, next]).forEach(function (b, i) { b.className = 'btn ' + (i === 0 ? 'btn-p' : 'btn-ghost'); box.appendChild(b); });   // arriving: next person first. Later on: feedback first
+  $('ci-choice').style.display = 'block'; ['ci-form', 'ci-go', 'ci-fresh', 'ci-optin-wrap'].forEach(function (id) { $(id).style.display = 'none'; });
+}
+function ciHideChoice() { $('ci-choice').style.display = 'none'; $('ci-form').style.display = ''; $('ci-go').style.display = ''; ciOptinShow(); }
+function ciOptinShow() { $('ci-optin-wrap').style.display = (CI && CI.questions.some(function (q) { return q.role === 'email'; })) ? '' : 'none'; }
 function ciMaxAge(opt) { var t = String(opt || ''); if (/prefer not/i.test(t)) return null; if (/\+/.test(t)) return Infinity; var n = t.match(/\d+/g); return n ? +n[n.length - 1] : null; }
 function ciQ(id) { for (var i = 0; i < CI.questions.length; i++) if (CI.questions[i].id === id) return CI.questions[i]; return null; }
 function ciVisible(q) { if (!q.showIf) return true; var a = CI_ANS[q.showIf.q], mx = ciMaxAge(a); return mx != null && mx <= q.showIf.maxAge; }
@@ -454,14 +500,17 @@ function ciSaveProfile() {
   try { localStorage.setItem('vl-ci-profile', JSON.stringify(p)); } catch (e) { /* private mode */ }
 }
 function ciReset(fresh) {
-  CI_ANS = {}; CI_PREFILLED = false;
+  CI_ANS = {}; CI_PREFILLED = false; CI_KIDS_NOTE = false;
   if (!fresh) { var p = ciLoadProfile(); CI.questions.forEach(function (q) { if (!q.perVisit && p[q.label] != null) { CI_ANS[q.id] = p[q.label]; CI_PREFILLED = true; } }); }
+  if (ciKidsCounted() > 0) { CI.questions.forEach(function (q) { if (q.role === 'extra_people') { CI_ANS[q.id] = 'N/A'; CI_KIDS_NOTE = true; } }); }   // the children are already counted on this phone today
+  $('ci-optin').checked = false; $('ci-optin-fields').style.display = 'none'; $('ci-optin-name').value = ''; $('ci-optin-email').value = '';
+  ciOptinShow();
   ciRender();
 }
 function ciRender() {
   var host = $('ci-form'); var html = '';
   CI.questions.forEach(function (q) {
-    if (!ciVisible(q)) return;
+    if (!ciVisible(q) || q.role === 'email') return;
     var val = CI_ANS[q.id], opts = q.options || [], isOther = typeof val === 'string' && /^Other: /.test(val);
     html += '<div class="ci-q" data-q="' + escapeText(q.id) + '"><div class="ci-l">' + escapeText(q.label) + (q.required ? ' <span class="ci-req">*</span>' : '') + '</div>' + (q.hint ? '<div class="ci-h">' + escapeText(q.hint) + '</div>' : '');
     if (q.kind === 'single' || q.kind === 'count' || q.kind === 'multi') {
@@ -476,6 +525,7 @@ function ciRender() {
     else if (q.kind === 'email') html += '<input type="email" inputmode="email" autocomplete="off" data-t="' + escapeText(q.id) + '" placeholder="Optional" value="' + escapeText(val == null ? '' : val) + '"/>';
     else if (q.kind === 'postcode') html += '<input data-t="' + escapeText(q.id) + '" maxlength="8" autocapitalize="characters" autocomplete="off" placeholder="e.g. PE2" style="text-transform:uppercase;max-width:140px" value="' + escapeText(val == null ? '' : val) + '"/>';
     else html += '<input data-t="' + escapeText(q.id) + '" maxlength="200" value="' + escapeText(val == null ? '' : val) + '"/>';
+    if (q.role === 'extra_people') html += '<div class="ci-note">If you came with another adult, only one of you add the children.</div>' + (CI_KIDS_NOTE ? '<div class="ci-kids">Children already counted on this phone today. Change this only if you brought different children.</div>' : '');
     html += '</div>';
   });
   host.innerHTML = html;
@@ -515,6 +565,10 @@ function setupCheckin(cfg) {
 }
 $('tab-ci').addEventListener('click', function () { openTab('ci'); });
 $('ci-fresh').addEventListener('click', function (e) { e.preventDefault(); ciReset(true); });
+$('ci-next').addEventListener('click', function () { ciHideChoice(); ciReset(true); window.scrollTo(0, 0); });
+$('ci-tofb').addEventListener('click', function () { openTab('fb'); window.scrollTo(0, 0); });
+$('ci-optin').addEventListener('change', function () { $('ci-optin-fields').style.display = this.checked ? 'block' : 'none'; });
+$('fb-optin').addEventListener('change', function () { $('fb-optin-fields').style.display = this.checked ? 'block' : 'none'; });
 $('ci-go').addEventListener('click', function () {
   var btn = $('ci-go'); clearMsg('ci-err');
   for (var i = 0; i < CI.questions.length; i++) {
@@ -523,10 +577,17 @@ $('ci-go').addEventListener('click', function () {
     if (empty) { msg('ci-err', 'Please answer: ' + q.label, 'err'); var el = document.querySelector('.ci-q[data-q="' + q.id + '"]'); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center' }); return; }
   }
   var out = {}; CI.questions.forEach(function (q) { if (!ciVisible(q)) return; var v = CI_ANS[q.id]; if (v == null || v === '' || (Array.isArray(v) && !v.length)) return; if (typeof v === 'string' && /^Other: ?$/.test(v)) return; out[q.id] = Array.isArray(v) ? v.filter(function (x) { return !/^Other: ?$/.test(x); }) : v; });
+  var optin = null;
+  if ($('ci-optin').checked) {
+    var oe = $('ci-optin-email').value.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(oe)) { msg('ci-err', 'Please add your email to get updates, or untick the box.', 'err'); return; }
+    optin = { name: $('ci-optin-name').value.trim(), email: oe };
+  }
+  var kids = 0; CI.questions.forEach(function (q) { if (q.role === 'extra_people') { var v = String(out[q.id] || ''), m = /\d+/.exec(v); kids = /n\/a/i.test(v) ? 0 : (m ? +m[0] : 0); } });
   busy(btn, true);
-  call('attend', { answers: out, hp: $('ci-hp').value })
+  call('attend', { answers: out, hp: $('ci-hp').value, optin: optin })
     .then(function () {
-      try { localStorage.setItem(ciFlagKey(), '1'); } catch (e) { /* private mode */ }
+      try { localStorage.setItem(ciFlagKey(), String(Date.now())); if (kids) localStorage.setItem(ciKidsKey(), String(ciKidsCounted() + kids)); } catch (e) { /* private mode */ }
       ciSaveProfile();
       ciDone();
     })
@@ -535,7 +596,7 @@ $('ci-go').addEventListener('click', function () {
 });
 function ciDone() {
   doneScreen('You\u2019re checked in', 'Enjoy the session. Scan the same code at the end to tell us how it went.', true);
-  $('done-again').textContent = 'Check in someone else'; $('done-vol').style.display = 'flex'; window.__ciDone = true;
+  $('done-again').textContent = 'Next person on this phone'; $('done-vol').style.display = 'flex'; window.__ciDone = true;
 }
 $('done-vol').addEventListener('click', function () { window.__ciDone = false; show('s-main'); openTab('vol'); var c = $('vi-card'); if (c && c.scrollIntoView) c.scrollIntoView({ block: 'start' }); });
 
@@ -569,6 +630,11 @@ $('fb-submit').addEventListener('click', function () {
     if (v) demo[k] = v;
   });
   payload.demographics = demo;
+  if ($('fb-optin').checked) {
+    var fe = $('fb-optin-email').value.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(fe)) { busy(btn, false); msg('fb-err', 'Please add your email to get updates, or untick the box.', 'err'); return; }
+    payload.optin = { name: $('fb-optin-name').value.trim(), email: fe };
+  }
   call('feedback', payload)
     .then(function () { doneScreen('Thank you', 'Your feedback has been sent. It genuinely helps.'); })
     .catch(function (e) { msg('fb-err', e.message, 'err'); })
