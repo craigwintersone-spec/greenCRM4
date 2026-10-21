@@ -241,9 +241,9 @@ tr:last-child td{border-bottom:none}
   <div class="page-sub">Plan tiers and revenue breakdown</div>
   <div class="plan-cards">
     <div class="plan-card"><div class="plan-card-name">Free trial</div><div class="plan-card-price">£0</div><div class="plan-card-desc">14 days · everything included</div><div style="margin-top:10px;font-size:18px;font-weight:700;color:var(--txt3)" id="plan-count-free">—</div><div style="font-size:11px;color:var(--txt3)">organisations</div></div>
-    <div class="plan-card"><div class="plan-card-name">Community</div><div class="plan-card-price">£490/yr</div><div class="plan-card-desc">£49 a month · 1 programme · 3 staff</div><div style="margin-top:10px;font-size:18px;font-weight:700;color:var(--blue)" id="plan-count-starter">—</div><div style="font-size:11px;color:var(--txt3)">organisations</div></div>
-    <div class="plan-card"><div class="plan-card-name">Standard</div><div class="plan-card-price">£1,490/yr</div><div class="plan-card-desc">£149 a month · all programmes · 15 staff</div><div style="margin-top:10px;font-size:18px;font-weight:700;color:var(--em)" id="plan-count-pro">—</div><div style="font-size:11px;color:var(--txt3)">organisations</div></div>
-    <div class="plan-card"><div class="plan-card-name">Provider</div><div class="plan-card-price">£3,490/yr</div><div class="plan-card-desc">£349 a month · unlimited staff · contracts</div><div style="margin-top:10px;font-size:18px;font-weight:700;color:var(--purple)" id="plan-count-network">—</div><div style="font-size:11px;color:var(--txt3)">organisations</div></div>
+    <div class="plan-card"><div class="plan-card-name">Community</div><div class="plan-card-price">£1,490/yr</div><div class="plan-card-desc">£149 a month · 2 funder contracts · 3 staff</div><div style="margin-top:10px;font-size:18px;font-weight:700;color:var(--blue)" id="plan-count-starter">—</div><div style="font-size:11px;color:var(--txt3)">organisations</div></div>
+    <div class="plan-card"><div class="plan-card-name">Standard</div><div class="plan-card-price">£2,900/yr</div><div class="plan-card-desc">£290 a month · unlimited contracts · 10 staff</div><div style="margin-top:10px;font-size:18px;font-weight:700;color:var(--em)" id="plan-count-pro">—</div><div style="font-size:11px;color:var(--txt3)">organisations</div></div>
+    <div class="plan-card"><div class="plan-card-name">Provider</div><div class="plan-card-price">£5,900/yr</div><div class="plan-card-desc">£590 a month · unlimited staff · contracts set up for you</div><div style="margin-top:10px;font-size:18px;font-weight:700;color:var(--purple)" id="plan-count-network">—</div><div style="font-size:11px;color:var(--txt3)">organisations</div></div>
   </div>
   <div class="card"><div class="card-title">Revenue by plan</div><div id="revenue-breakdown"></div></div>
 </div>
@@ -384,8 +384,8 @@ tr:last-child td{border-bottom:none}
   </div>
   <div class="form-grid-2">
     <div style="margin-bottom:12px"><label>Plan</label><select id="co-plan">
-      <option value="free">Free trial — 14 days</option><option value="starter">Community — £490/yr (£49/mo)</option>
-      <option value="pro">Standard — £1,490/yr (£149/mo)</option><option value="network">Provider — £3,490/yr (£349/mo)</option>
+      <option value="free">Free trial — 14 days</option><option value="starter">Community — £1,490/yr (£149/mo)</option>
+      <option value="pro">Standard — £2,900/yr (£290/mo)</option><option value="network">Provider — £5,900/yr (£590/mo)</option>
     </select></div>
     <div style="margin-bottom:12px"><label>Status</label><select id="co-status">
       <option value="active">Active</option><option value="trial">Trial</option><option value="suspended">Suspended</option>
@@ -427,8 +427,8 @@ tr:last-child td{border-bottom:none}
   </div>
   <div class="form-grid-2">
     <div style="margin-bottom:12px"><label>Plan</label><select id="eo-plan">
-      <option value="free">Free trial — 14 days</option><option value="starter">Community — £490/yr (£49/mo)</option>
-      <option value="pro">Standard — £1,490/yr (£149/mo)</option><option value="network">Provider — £3,490/yr (£349/mo)</option>
+      <option value="free">Free trial — 14 days</option><option value="starter">Community — £1,490/yr (£149/mo)</option>
+      <option value="pro">Standard — £2,900/yr (£290/mo)</option><option value="network">Provider — £5,900/yr (£590/mo)</option>
     </select></div>
     <div style="margin-bottom:12px"><label>Status</label><select id="eo-status">
       <option value="active">Active</option><option value="trial">Trial</option><option value="suspended">Suspended</option>
@@ -455,7 +455,7 @@ function initSupabase(){
 }
 initSupabase();
 
-const PRICES={free:0,starter:49,pro:149,network:349};   // monthly list prices; paying yearly is 10 months for 12
+const PRICES={free:0,starter:149,pro:290,network:590};   // monthly list prices; paying yearly is 10 months for 12
 const $=id=>document.getElementById(id);
 let allOrgs=[],editOrgId=null,currentUser=null;
 
@@ -682,7 +682,7 @@ function renderSubscriptions(){
   const counts={free:0,starter:0,pro:0,network:0};
   allOrgs.forEach(o=>counts[o.plan||'free']=(counts[o.plan||'free']||0)+1);
   ['free','starter','pro','network'].forEach(p=>{const el=$('plan-count-'+p);if(el)el.textContent=counts[p]||0;});
-  const breakdown=[{plan:'Provider',count:counts.network,price:349,color:'#6D28D9'},{plan:'Standard',count:counts.pro,price:149,color:'#1F6F6D'},{plan:'Community',count:counts.starter,price:49,color:'#1D4ED8'},{plan:'Free trial',count:counts.free,price:0,color:'#7A857F'}];
+  const breakdown=[{plan:'Provider',count:counts.network,price:590,color:'#6D28D9'},{plan:'Standard',count:counts.pro,price:290,color:'#1F6F6D'},{plan:'Community',count:counts.starter,price:149,color:'#1D4ED8'},{plan:'Free trial',count:counts.free,price:0,color:'#7A857F'}];
   $('revenue-breakdown').innerHTML=breakdown.map(b=>{
     const rev=b.count*b.price,max=Math.max(...breakdown.map(x=>x.count*x.price))||1,pct=Math.round(rev/max*100);
     return'<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:13px;color:var(--txt2);margin-bottom:4px"><span>'+b.plan+' ('+b.count+' orgs × £'+b.price+')</span><span style="font-weight:700;color:var(--txt)">£'+rev+'/mo</span></div><div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden"><div style="height:100%;border-radius:4px;background:'+b.color+';width:'+pct+'%;transition:width .4s"></div></div></div>';
