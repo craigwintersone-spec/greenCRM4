@@ -112,7 +112,7 @@ module.exports = async function handler(req, res) {
     'Focus: small charities (5-30 staff) in employability, youth, justice, circular economy, registered or funded recently.';
 
   const findPrompt =
-    'Vorlana CRM with built-in AI agents. From £490 a year (or £49 a month) for one programme, £1,490 a year for several funders, £3,490 a year for contract providers. ICP: small UK charities holding public funder contracts (MoJ, GLA, City Bridge, Lottery, Trust for London).';
+    'Vorlana CRM with built-in AI agents. From £1,490 a year (£149 a month) for one main funder, £2,900 a year (£290 a month) for several programmes and funders, £5,900 a year (£590 a month) for contract providers; partnerships for networks from £8,000 a year. ICP: small UK charities holding public funder contracts (MoJ, GLA, City Bridge, Lottery, Trust for London).';
 
   let candidates = [];
   let findCost = 0;
