@@ -9,7 +9,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 
-const ALLOWED_PLANS = ['starter', 'pro', 'network'];   // every paid plan has the AI
+const ALLOWED_PLANS = ['free', 'starter', 'pro', 'network'];   // every plan has the AI; a free trial for its first 14 days
 
 // ── Hardening knobs ─────────────────────────────────────────────
 // Only these exact origins may call from a browser. NO wildcard vercel.app.
@@ -33,7 +33,8 @@ const MAX_MESSAGES = 30;           // sane conversation length
 const MAX_BODY_CHARS = 200_000;    // ~50k tokens of input, generous
 const MAX_FILE_BODY_CHARS = 3_500_000; // one photo or PDF (Vercel's request limit is 4.5 MB)
 const DAILY_CALLS_PER_ORG = 300;   // default quota
-const DAILY_CALLS_BY_PLAN = { starter: 60, pro: 300, network: 600 };   // Community / Standard / Provider
+const DAILY_CALLS_BY_PLAN = { free: 30, starter: 60, pro: 300, network: 600 };   // Trial / Community / Standard / Provider
+const TRIAL_DAYS = 14;
 // ────────────────────────────────────────────────────────────────
 
 function setCors(req, res) {
@@ -70,7 +71,7 @@ async function getAuthUser(req) {
 // Now returns BOTH plan and org_id — we need the org for quota + logging.
 async function getUserOrg(userId) {
   const r = await fetch(
-    `${SUPABASE_URL}/rest/v1/memberships?user_id=eq.${userId}&status=eq.active&select=org_id,role,organisations(plan,status)`,
+    `${SUPABASE_URL}/rest/v1/memberships?user_id=eq.${userId}&status=eq.active&select=org_id,role,organisations(plan,status,created_at)`,
     { headers: svcHeaders() }
   );
   if (!r.ok) return null;
@@ -78,7 +79,7 @@ async function getUserOrg(userId) {
   if (!Array.isArray(rows) || rows.length === 0) return null;
   const live = rows.find(m => m.organisations && m.organisations.status !== 'suspended');
   if (!live) return null;
-  return { orgId: live.org_id, plan: live.organisations.plan || 'free' };
+  return { orgId: live.org_id, plan: live.organisations.plan || 'free', createdAt: live.organisations.created_at || null };
 }
 
 async function isSuperAdmin(userId) {
@@ -146,6 +147,9 @@ module.exports = async function handler(req, res) {
     if (!org) return res.status(403).json({ error: 'No active organisation found for this account.' });
     if (!ALLOWED_PLANS.includes(org.plan)) {
       return res.status(403).json({ error: 'AI features need a paid plan (Community, Standard or Provider).', code: 'AI_PLAN_GATE' });
+    }
+    if (org.plan === 'free' && org.createdAt && (Date.now() - new Date(org.createdAt).getTime()) > TRIAL_DAYS * 864e5) {
+      return res.status(403).json({ error: 'Your 14-day trial has ended. Choose a plan to keep using the AI features: everything you have recorded is kept.', code: 'AI_TRIAL_ENDED' });
     }
   }
   const orgId = org ? org.orgId : user.id; // admins with no org: quota against their own id
