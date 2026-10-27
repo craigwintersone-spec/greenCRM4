@@ -41,6 +41,23 @@ async function stripe(path, params, account, method) {
   if (!r.ok) throw new Error('Stripe: ' + ((j.error && j.error.message) || r.status));
   return j;
 }
+const STRIPE_V2_VERSION = process.env.STRIPE_API_VERSION || '2026-09-30.endive';
+async function stripeV2(path, body, method) {
+  if (!STRIPE_KEY) throw new Error('Payments are not set up yet (STRIPE_SECRET_KEY is missing).');
+  const r = await fetch('https://api.stripe.com/v2/' + path, {
+    method: method || (body ? 'POST' : 'GET'),
+    headers: { Authorization: 'Bearer ' + STRIPE_KEY, 'Content-Type': 'application/json', 'Stripe-Version': STRIPE_V2_VERSION },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error('Stripe: ' + ((j.error && j.error.message) || r.status));
+  return j;
+}
+// a connected account can take card payments once Stripe has switched card payments on for it
+function cardsActive(a) {
+  const st = a && a.configuration && a.configuration.merchant && a.configuration.merchant.capabilities && a.configuration.merchant.capabilities.card_payments && a.configuration.merchant.capabilities.card_payments.status;
+  return st === 'active';
+}
 const bad = (res, message, code, extra) => res.status(code || 400).json(Object.assign({ ok: false, error: message }, extra || {}));
 const trim = (s, n) => String(s == null ? '' : s).replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, n || 200);
 const okEmail = e => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
@@ -265,18 +282,32 @@ async function handler(req, res) {
       let acct = org.settings && org.settings.stripe_account;
       if (action === 'connect_status') {
         if (!acct) return res.status(200).json({ ok: true, connected: false, ready: false });
-        const a = await stripe('accounts/' + encodeURIComponent(acct));
-        if (!!a.charges_enabled !== !!(org.settings || {}).stripe_ready) await saveOrgSettings(orgId, { stripe_ready: !!a.charges_enabled });
-        return res.status(200).json({ ok: true, connected: true, ready: !!a.charges_enabled, details: !!a.details_submitted });
+        const a = await stripeV2('core/accounts/' + encodeURIComponent(acct) + '?include=configuration.merchant&include=requirements');
+        const ready = cardsActive(a);
+        if (ready !== !!(org.settings || {}).stripe_ready) await saveOrgSettings(orgId, { stripe_ready: ready });
+        return res.status(200).json({ ok: true, connected: true, ready });
       }
-      if (!acct) { const a = await stripe('accounts', { type: 'standard', country: 'GB', email: user.email || undefined, business_profile: { name: org.name } }); acct = a.id; await saveOrgSettings(orgId, { stripe_account: acct, stripe_ready: false }); }
-      const link = await stripe('account_links', { account: acct, type: 'account_onboarding', refresh_url: `${APP_URL}/app.html?stripe=again`, return_url: `${APP_URL}/app.html?stripe=done` });
+      if (!acct) {   // their own Stripe account: full Stripe dashboard, they collect payments directly, Stripe handles fees and losses
+        const a = await stripeV2('core/accounts', {
+          contact_email: user.email || undefined, display_name: org.name, dashboard: 'full',
+          identity: { country: 'gb' },
+          configuration: { merchant: { capabilities: { card_payments: { requested: true } } } },
+          defaults: { currency: 'gbp', locales: ['en-GB'], responsibilities: { fees_collector: 'stripe', losses_collector: 'stripe' } }
+        });
+        acct = a.id; await saveOrgSettings(orgId, { stripe_account: acct, stripe_ready: false });
+      }
+      const link = await stripeV2('core/account_links', { account: acct, use_case: { type: 'account_onboarding', account_onboarding: { configurations: ['merchant'], refresh_url: `${APP_URL}/app.html?stripe=again`, return_url: `${APP_URL}/app.html?stripe=done` } } });
       return res.status(200).json({ ok: true, url: link.url });
     }
     return bad(res, 'Unknown action');
   } catch (e) {
     console.error('[bookings]', action, e && e.message);
-    return bad(res, /Stripe/.test(e && e.message) ? e.message : 'Something went wrong. Please try again.', 500);
+    const m = (e && e.message) || '';
+    // set-up problems are shown as they are, so whoever is setting up knows what to fix
+    if (/STRIPE_SECRET_KEY|Payments are not set up/i.test(m)) return bad(res, 'Payments aren\u2019t switched on yet: the Stripe key is missing in Vercel. Add STRIPE_SECRET_KEY under Settings, Environment Variables, then redeploy.', 500);
+    if (/^Stripe:/.test(m)) return bad(res, m, 502);
+    if (/bookings|price_pence|bookable|start_time|claim_token|relation|column/i.test(m)) return bad(res, 'The database isn\u2019t ready for bookings yet: run bookings.sql in Supabase. (' + m.slice(0, 120) + ')', 500);
+    return bad(res, 'Something went wrong: ' + m.slice(0, 160), 500);
   }
 }
 module.exports = handler;
