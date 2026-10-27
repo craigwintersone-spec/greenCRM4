@@ -296,7 +296,7 @@ async function handler(req, res) {
         });
         acct = a.id; await saveOrgSettings(orgId, { stripe_account: acct, stripe_ready: false });
       }
-      const link = await stripeV2('core/account_links', { account: acct, use_case: { type: 'account_onboarding', account_onboarding: { configurations: ['merchant'], refresh_url: `${APP_URL}/app.html?stripe=again`, return_url: `${APP_URL}/app.html?stripe=done` } } });
+      const link = await stripeV2('core/account_links', { account: acct, use_case: { type: 'account_onboarding', account_onboarding: { refresh_url: `${APP_URL}/app.html?stripe=again`, return_url: `${APP_URL}/app.html?stripe=done` } } });
       return res.status(200).json({ ok: true, url: link.url });
     }
     return bad(res, 'Unknown action');
