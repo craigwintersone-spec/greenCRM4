@@ -277,6 +277,10 @@ module.exports = async function handler(req, res) {
   }
 
   const results = { briefing: null, churn: null, onboarding: null, insights: null, errors: [] };
+  const guard = require('./_lib/sentinel-guard.js');
+  let guardFound = [];
+  try { guardFound = await guard.runGuard(); }                      // first: it is quick, and it should run even if a later agent is slow
+  catch (e) { results.errors.push({ agent: 'Customer Success', error: e.message }); }
 
   try { results.briefing = await runChiefOfStaffBriefing(); }
   catch (e) { results.errors.push({ agent: 'briefing', error: e.message }); }
@@ -292,6 +296,15 @@ module.exports = async function handler(req, res) {
 
   try { results.insights = await runInsights(); }
   catch (e) { results.errors.push({ agent: 'insights', error: e.message }); }
+
+  // the day before an event, everyone booked gets a reminder
+  try { results.bookingReminders = await require('./_lib/booking-mail.js').runBookingReminders(); }
+  catch (e) { results.errors.push({ agent: 'booking-reminders', error: e.message }); }
+
+  // the guard's cards, plus a card for any agent that failed this morning; then what shipped this week
+  try { results.guard = await guard.syncDecisions(guardFound.concat(guard.agentFailures(results.errors))); }
+  catch (e) { results.errors.push({ agent: 'guard-sync', error: e.message }); }
+  try { results.shipped = await guard.shippedThisWeek(); } catch (e) { /* not essential */ }
 
   return res.status(200).json({ ok: true, ...results });
 };
