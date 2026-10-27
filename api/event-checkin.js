@@ -388,15 +388,50 @@ module.exports = async function handler(req, res) {
   try {
     // ── info ────────────────────────────────────────────────
     // ── participant check-in: attendance, with the organisation's own questions ──
+    // ── arriving on a booking: counted once, as an anonymous check-in; no name goes near the answers ──
+    if (action === 'arrive') {
+      if (body.hp) return res.status(200).json({ ok: true });
+      if (ctx.mode !== 'event') return bad(res, 'There is no session on today.');
+      const tok = trim(body.booking, 64), email = trim(body.email, 254).toLowerCase();
+      if (!tok && !email) return bad(res, 'Please enter the email you booked with.');
+      let rows = [];
+      try { rows = await sb(`bookings?event_id=eq.${encodeURIComponent(ctx.eventId)}&status=eq.booked&${tok ? 'token=eq.' + encodeURIComponent(tok) : 'email=eq.' + encodeURIComponent(email)}&select=id,name,adults,children,arrived_at&limit=5`); } catch (e) { rows = []; }
+      const b = Array.isArray(rows) && (rows.find(r => !r.arrived_at) || rows[0]);
+      if (!b) return bad(res, tok ? 'We couldn\u2019t find your booking for this session.' : 'We couldn\u2019t find a booking with that email for this session. You can still check in below.');
+      const first = String(b.name || '').split(' ')[0], people = (+b.adults || 0) + (+b.children || 0) || 1;
+      if (b.arrived_at) return res.status(200).json({ ok: true, already: true, first, people });
+      const claim = require('crypto').randomBytes(18).toString('base64url'), day = londonDay(new Date().toISOString());
+      await sb(`bookings?id=eq.${b.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ arrived_at: new Date().toISOString() }) });
+      await sb('checkins', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([{ org_id: String(ctx.orgId), event_id: String(ctx.eventId), form_id: 'booking', people, answers: {}, day, claim_token: claim }]) });
+      try {
+        const all = await sb(`checkins?event_id=eq.${encodeURIComponent(ctx.eventId)}&select=people&limit=5000`);
+        const total = (all || []).reduce((a, r) => a + (+r.people || 1), 0);
+        const evs = await sb(`events?id=eq.${encodeURIComponent(ctx.eventId)}&select=attendees&limit=1`);
+        if (total > (+(evs && evs[0] && evs[0].attendees) || 0)) await sb(`events?id=eq.${encodeURIComponent(ctx.eventId)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ attendees: total }) });
+      } catch (e) { /* the arrival is saved either way */ }
+      return res.status(200).json({ ok: true, first, people, claim });
+    }
+
     if (action === 'attend') {
       if (body.hp) return res.status(200).json({ ok: true });                   // a bot filled the hidden box
       if (ctx.mode !== 'event') return bad(res, 'Check-in is for a session. There is no session on today.');
       const cfg = await getCheckin(ctx);
       if (!cfg.enabled) return bad(res, 'Check-in is not switched on for this session.');
-      const v = ciValidate(cfg.form, body.answers || {});
+      // after arriving on a booking the head count is already known, so those questions are not asked again
+      const vForm = body.claim ? Object.assign({}, cfg.form, { questions: (cfg.form.questions || []).filter(q => q && q.role !== 'people' && q.role !== 'extra_people') }) : cfg.form;
+      const v = ciValidate(vForm, body.answers || {});
       if (v.error) return bad(res, v.error);
       const day = londonDay(new Date().toISOString());
-      await sb('checkins', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([{ org_id: String(ctx.orgId), event_id: String(ctx.eventId), form_id: String(cfg.form.id), people: v.people, answers: v.answers, day }]) });
+      const claim = trim(body.claim, 64);
+      let claimed = false;
+      if (claim) {   // they arrived on a booking: their answers join that booking's anonymous check-in (already counted), and the code is used up
+        try {
+          const upd = await sb(`checkins?claim_token=eq.${encodeURIComponent(claim)}&event_id=eq.${encodeURIComponent(ctx.eventId)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ answers: v.answers, form_id: String(cfg.form.id), claim_token: null }) });
+          claimed = Array.isArray(upd) && upd.length > 0;
+        } catch (e) { claimed = false; }
+      }
+      // a used or unknown code is a repeat send: they are already counted, so nothing is added
+      if (!claimed && !claim) await sb('checkins', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([{ org_id: String(ctx.orgId), event_id: String(ctx.eventId), form_id: String(cfg.form.id), people: v.people, answers: v.answers, day }]) });
       try { await saveOptin(ctx, body.optin); } catch (e) { /* the check-in still counts */ }
       if (v.email) { try { await sb('checkin_emails', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([{ org_id: String(ctx.orgId), day, email: v.email }]) }); } catch (e) { /* the check-in still counts */ } }
       // attendance fills itself: the session's count becomes everyone checked in, and never drops below what staff typed
@@ -438,7 +473,7 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({
         ok: true,
         mode: ctx.mode,
-        event: { name: ctx.name, date: ctx.date, location: ctx.location, org_name: orgName },
+        event: { id: ctx.mode === 'event' ? String(ctx.eventId) : null, name: ctx.name, date: ctx.date, location: ctx.location, org_name: orgName },
         site: (ctx.mode === 'event' && ctx.siteId) ? { name: ctx.siteName || 'Volunteer sign-in' } : null,   // on an event day the same code also offers general site volunteering
         questions,
         checkin: (ciCfg && ciCfg.enabled) ? { form: publicForm(ciCfg.form) } : null,   // the Check in tab, with this session's form
