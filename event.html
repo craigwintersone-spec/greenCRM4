@@ -132,6 +132,25 @@ textarea{min-height:88px;resize:vertical}
         <p class="sub">A few quick taps so we know who came today. We don’t ask for your name.</p>
         <div class="msg err" id="ci-err"></div>
         <div class="ci-fresh" id="ci-fresh" style="display:none">Using your answers from last time. <a href="#">Not you? Start fresh</a></div>
+        <div id="ci-bk" style="display:none;margin-bottom:14px">
+          <div id="ci-bk-known" style="display:none;background:#EEF7F5;border-radius:12px;padding:14px;margin-bottom:10px">
+            <div style="font-weight:600;font-size:16px;color:var(--txt)">Welcome back, <span id="ci-bk-name"></span></div>
+            <div class="ci-note" style="margin:2px 0 10px">You booked a place for this session.</div>
+            <button class="btn btn-p" id="ci-bk-go" type="button"><span class="spin"></span><span>I’m here</span></button>
+          </div>
+          <div id="ci-bk-ask">
+            <a href="#" id="ci-bk-link" style="font-size:15px;color:var(--em2);font-weight:600">Booked online? Check in with your email</a>
+            <div id="ci-bk-form" style="display:none;margin-top:10px">
+              <input id="ci-bk-email" type="email" inputmode="email" autocomplete="email" placeholder="The email you booked with"/>
+              <button class="btn btn-p" id="ci-bk-find" type="button" style="margin-top:8px"><span class="spin"></span><span>Find my booking</span></button>
+            </div>
+          </div>
+          <div class="msg err" id="ci-bk-err"></div>
+        </div>
+        <div id="ci-bk-done" style="display:none;background:#EEF7F5;border-radius:12px;padding:14px;margin-bottom:14px">
+          <div style="font-weight:600;font-size:16px;color:var(--txt)">✓ <span id="ci-bk-welcome"></span></div>
+          <div class="ci-note" style="margin:4px 0 0">If you have a moment, a few quick questions for our funders. <a href="#" id="ci-bk-skip">Skip</a></div>
+        </div>
         <div id="ci-choice" style="display:none">
           <p class="sub" style="margin-bottom:14px">Someone has already checked in on this phone today.</p>
           <div id="ci-choice-btns" style="display:flex;flex-direction:column;gap:10px">
@@ -453,7 +472,7 @@ function boot() {
         $('vol-title').textContent = 'Here to help today?';
       } else {
         renderFeedbackForm();
-        if (setupCheckin(j.checkin)) { openTab('ci'); if (ciCheckedInToday()) ciShowChoice(); }   // arriving: check in. Already checked in on this phone today: a choice
+        if (setupCheckin(j.checkin)) { openTab('ci'); bkSetup(j.event && j.event.id); if (ciCheckedInToday()) ciShowChoice(); }   // arriving: check in. Already checked in on this phone today: a choice
         $('fb-optin-wrap').style.display = orgCollectsContacts() ? '' : 'none';
       }
       try { var saved = localStorage.getItem('vorlana-who'); if (saved) $('vol-who').value = saved; } catch (e) {}
@@ -483,7 +502,7 @@ function ciCheckedInToday() { try { return !!localStorage.getItem(ciFlagKey()); 
 function ciLastAt() { try { return +localStorage.getItem(ciFlagKey()) || 0; } catch (e) { return 0; } }
 function ciKidsKey() { return ciFlagKey() + ':kids'; }
 function ciKidsCounted() { try { return +localStorage.getItem(ciKidsKey()) || 0; } catch (e) { return 0; } }
-var CI_KIDS_NOTE = false;
+var CI_KIDS_NOTE = false, CI_CLAIM = '', EV_ID = '';
 function ciShowChoice() {
   var recent = Date.now() - ciLastAt() < 30 * 60000, next = $('ci-next'), fb = $('ci-tofb'), box = $('ci-choice-btns');
   box.innerHTML = ''; (recent ? [next, fb] : [fb, next]).forEach(function (b, i) { b.className = 'btn ' + (i === 0 ? 'btn-p' : 'btn-ghost'); box.appendChild(b); });   // arriving: next person first. Later on: feedback first
@@ -501,6 +520,7 @@ function ciSaveProfile() {
 }
 function ciReset(fresh) {
   CI_ANS = {}; CI_PREFILLED = false; CI_KIDS_NOTE = false;
+  var goLabel = $('ci-go').querySelector('span:last-child'); if (goLabel && !CI_CLAIM) goLabel.textContent = 'Check in';
   if (!fresh) { var p = ciLoadProfile(); CI.questions.forEach(function (q) { if (!q.perVisit && p[q.label] != null) { CI_ANS[q.id] = p[q.label]; CI_PREFILLED = true; } }); }
   if (ciKidsCounted() > 0) { CI.questions.forEach(function (q) { if (q.role === 'extra_people') { CI_ANS[q.id] = 'N/A'; CI_KIDS_NOTE = true; } }); }   // the children are already counted on this phone today
   $('ci-optin').checked = false; $('ci-optin-fields').style.display = 'none'; $('ci-optin-name').value = ''; $('ci-optin-email').value = '';
@@ -511,6 +531,7 @@ function ciRender() {
   var host = $('ci-form'); var html = '';
   CI.questions.forEach(function (q) {
     if (!ciVisible(q) || q.role === 'email') return;
+    if (CI_CLAIM && (q.role === 'people' || q.role === 'extra_people')) return;   // already counted from the booking
     var val = CI_ANS[q.id], opts = q.options || [], isOther = typeof val === 'string' && /^Other: /.test(val);
     html += '<div class="ci-q" data-q="' + escapeText(q.id) + '"><div class="ci-l">' + escapeText(q.label) + (q.required ? ' <span class="ci-req">*</span>' : '') + '</div>' + (q.hint ? '<div class="ci-h">' + escapeText(q.hint) + '</div>' : '');
     if (q.kind === 'single' || q.kind === 'count' || q.kind === 'multi') {
@@ -556,6 +577,40 @@ function ciBind() {
     }
   });
 }
+// ── booked online: recognised by the phone that booked, or found by email; counted once ──
+function bkKey() { return 'vl-booking:' + EV_ID; }
+function bkSaved() { try { return JSON.parse(localStorage.getItem(bkKey()) || 'null'); } catch (e) { return null; } }
+function bkSetup(eventId) {
+  EV_ID = eventId || ''; if (!EV_ID || !CI) { $('ci-bk').style.display = 'none'; return; }
+  $('ci-bk').style.display = '';
+  var saved = bkSaved();
+  if (saved && saved.token && !saved.arrived) { $('ci-bk-known').style.display = ''; $('ci-bk-ask').style.display = 'none'; $('ci-bk-name').textContent = saved.first || 'there'; }
+  else { $('ci-bk-known').style.display = 'none'; $('ci-bk-ask').style.display = ''; }
+}
+function bkArrived(j) {
+  CI_CLAIM = j.claim || '';
+  try { var s0 = bkSaved() || {}; s0.arrived = true; localStorage.setItem(bkKey(), JSON.stringify(s0)); localStorage.setItem(ciFlagKey(), String(Date.now())); } catch (e) { /* private mode */ }
+  $('ci-bk').style.display = 'none'; ['ci-choice'].forEach(function (id) { $(id).style.display = 'none'; });
+  var n = +j.people || 1;
+  $('ci-bk-welcome').textContent = j.already ? 'You\u2019re already checked in' + (j.first ? ', ' + j.first : '') + '.' : 'Welcome' + (j.first ? ', ' + j.first : '') + '. ' + (n > 1 ? 'You and ' + (n - 1) + ' other' + (n > 2 ? 's are' : ' is') : 'You\u2019re') + ' checked in.';
+  if (j.already || !CI_CLAIM) { doneScreen('You\u2019re checked in', j.first ? 'Welcome, ' + j.first + '. Enjoy the session.' : 'Enjoy the session.', true); return; }
+  $('ci-bk-done').style.display = '';
+  CI_ANS = {}; CI.questions.forEach(function (q) { if (/book/i.test(q.label) && (q.options || []).indexOf('Yes') >= 0) CI_ANS[q.id] = 'Yes'; });   // "Did you book online?" answers itself
+  $('ci-form').style.display = ''; $('ci-go').style.display = ''; ciOptinShow(); ciRender();
+  $('ci-go').querySelector('span:last-child').textContent = 'Send my answers';
+}
+$('ci-bk-link').addEventListener('click', function (e) { e.preventDefault(); $('ci-bk-form').style.display = 'block'; $('ci-bk-email').focus(); });
+$('ci-bk-skip').addEventListener('click', function (e) { e.preventDefault(); CI_CLAIM = ''; $('ci-bk-done').style.display = 'none'; doneScreen('You\u2019re checked in', 'Enjoy the session.', true); });
+$('ci-bk-go').addEventListener('click', function () {
+  var btn = $('ci-bk-go'), saved = bkSaved(); clearMsg('ci-bk-err'); busy(btn, true);
+  call('arrive', { booking: saved && saved.token }).then(bkArrived).catch(function (e) { msg('ci-bk-err', e.message || 'That didn\u2019t work. Try your email instead.', 'err'); $('ci-bk-known').style.display = 'none'; $('ci-bk-ask').style.display = ''; }).finally(function () { busy(btn, false); });
+});
+$('ci-bk-find').addEventListener('click', function () {
+  var btn = $('ci-bk-find'), em = $('ci-bk-email').value.trim(); clearMsg('ci-bk-err');
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { msg('ci-bk-err', 'Please enter the email you booked with.', 'err'); return; }
+  busy(btn, true);
+  call('arrive', { email: em }).then(bkArrived).catch(function (e) { msg('ci-bk-err', e.message || 'That didn\u2019t work. Please check in below.', 'err'); }).finally(function () { busy(btn, false); });
+});
 function setupCheckin(cfg) {
   if (!cfg || !cfg.form || !(cfg.form.questions || []).length) { $('tab-ci').style.display = 'none'; CI = null; return false; }
   CI = cfg.form; $('tab-ci').style.display = '';
@@ -573,6 +628,7 @@ $('ci-go').addEventListener('click', function () {
   var btn = $('ci-go'); clearMsg('ci-err');
   for (var i = 0; i < CI.questions.length; i++) {
     var q = CI.questions[i]; if (!ciVisible(q) || !q.required) continue;
+    if (CI_CLAIM && (q.role === 'people' || q.role === 'extra_people')) continue;
     var v = CI_ANS[q.id], empty = v == null || v === '' || (Array.isArray(v) && !v.length) || (typeof v === 'string' && /^Other: ?$/.test(v)) || (Array.isArray(v) && v.length === 1 && /^Other: ?$/.test(v[0]));
     if (empty) { msg('ci-err', 'Please answer: ' + q.label, 'err'); var el = document.querySelector('.ci-q[data-q="' + q.id + '"]'); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center' }); return; }
   }
@@ -585,9 +641,10 @@ $('ci-go').addEventListener('click', function () {
   }
   var kids = 0; CI.questions.forEach(function (q) { if (q.role === 'extra_people') { var v = String(out[q.id] || ''), m = /\d+/.exec(v); kids = /n\/a/i.test(v) ? 0 : (m ? +m[0] : 0); } });
   busy(btn, true);
-  call('attend', { answers: out, hp: $('ci-hp').value, optin: optin })
+  call('attend', { answers: out, hp: $('ci-hp').value, optin: optin, claim: CI_CLAIM || undefined })
     .then(function () {
-      try { localStorage.setItem(ciFlagKey(), String(Date.now())); if (kids) localStorage.setItem(ciKidsKey(), String(ciKidsCounted() + kids)); } catch (e) { /* private mode */ }
+      try { localStorage.setItem(ciFlagKey(), String(Date.now())); if (kids && !CI_CLAIM) localStorage.setItem(ciKidsKey(), String(ciKidsCounted() + kids)); } catch (e) { /* private mode */ }
+      CI_CLAIM = ''; $('ci-bk-done').style.display = 'none';
       ciSaveProfile();
       ciDone();
     })
