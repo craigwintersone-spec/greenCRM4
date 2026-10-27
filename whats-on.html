@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>What's on</title>
+<meta name="robots" content="noindex"/>
+<style>
+:root{--brand:#1F6F6D;--txt:#1A1A1A;--txt2:#4A463F;--txt3:#7A756B;--bg:#F5F1EA;--card:#fff;--border:#E5E1D8;--err:#B3261E;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--txt:#F2EFE9;--txt2:#D6D1C7;--txt3:#A8A294;--bg:#1C1B19;--card:#262522;--border:#3A3833;--err:#F2B8B5;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+body{padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
+.wrap{max-width:620px;margin:0 auto;padding:18px 16px 40px}
+.head{display:flex;align-items:center;gap:12px;margin:4px 0 18px}
+.head img{width:44px;height:44px;border-radius:10px;object-fit:contain;background:#fff}
+.head h1{font-size:20px;margin:0;line-height:1.2}
+.head .sub{font-size:13px;color:var(--txt3)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px}
+.ev{display:block;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.ev:hover{border-color:var(--brand)}
+.ev h2{font-size:17px;margin:0 0 3px}
+.meta{font-size:14px;color:var(--txt2)}
+.tag{display:inline-block;font-size:12px;font-weight:600;border-radius:10px;padding:2px 9px;margin-top:8px;background:rgba(31,111,109,.12);color:var(--brand)}
+.tag.full{background:#FFF1D6;color:#8A5A00}.tag.closed{background:var(--bg);color:var(--txt3)}
+label{display:block;font-size:14px;font-weight:600;margin:12px 0 5px}
+input[type=text],input[type=email],input[type=tel]{width:100%;font:inherit;padding:11px 12px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--txt)}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
+.row:last-child{border-bottom:0}
+.step{display:flex;align-items:center;gap:12px}
+.step button{width:38px;height:38px;border-radius:50%;border:1px solid var(--border);background:var(--card);color:var(--txt);font-size:20px;line-height:1;cursor:pointer}
+.step span{min-width:18px;text-align:center;font-weight:600}
+.btn{display:block;width:100%;border:0;border-radius:12px;padding:14px;font-family:inherit;font-weight:600;font-size:16px;line-height:1.2;background:var(--brand);color:#fff;cursor:pointer;margin-top:16px}
+.btn.ghost{background:transparent;color:var(--brand);border:1px solid var(--border)}
+.btn:disabled{opacity:.6;cursor:default}
+.tick{display:flex;gap:10px;align-items:flex-start;font-size:14px;font-weight:400;margin-top:14px;cursor:pointer}
+.tick input{width:20px;height:20px;flex:none;margin:1px 0 0}
+.err{color:var(--err);font-size:14px;min-height:0;margin-top:10px}
+.note{font-size:13px;color:var(--txt3);margin-top:10px}
+.total{display:flex;justify-content:space-between;font-weight:600;margin-top:14px;font-size:17px}
+.back{background:none;border:0;color:var(--brand);font:inherit;font-size:15px;padding:0;margin:0 0 12px;cursor:pointer}
+.big{font-size:40px;line-height:1;color:var(--brand);margin:6px 0 10px}
+.hp{position:absolute;left:-9999px;opacity:0;height:0;width:0}
+.empty{text-align:center;color:var(--txt3);padding:30px 10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head" id="head"></div>
+  <div id="view"><div class="empty">Loading&hellip;</div></div>
+</div>
+<script>
+'use strict';
+var Q = new URLSearchParams(location.search), T = Q.get('t') || '', $ = function (id) { return document.getElementById(id); };
+var DATA = null, EV = null, PICK = { adults: 1, concessions: 0, children: 0 }, BUSY = false;
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function money(p) { return '\u00a3' + (p / 100).toFixed(p % 100 ? 2 : 0); }
+function longDate(d) { try { return new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/London' }); } catch (e) { return d; } }
+function when(e) { return longDate(e.date) + (e.time ? ', ' + e.time : '') + (e.location ? ' \u00b7 ' + e.location : ''); }
+function priceText(e) { return e.price ? money(e.price) + (e.concession ? ' (concessions ' + money(e.concession) + ')' : '') : 'Free'; }
+function api(body) {
+  return fetch('/api/bookings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(function (r) { return r.json().catch(function () { return { ok: false, error: 'Something went wrong. Please try again.' }; }); });
+}
+function save(eventId, token, first) { try { localStorage.setItem('vl-booking:' + eventId, JSON.stringify({ token: token, first: first })); } catch (e) { /* private mode */ } }
+function brand(org) {
+  if (org && /^#[0-9a-f]{3,8}$/i.test(org.colour || '')) document.documentElement.style.setProperty('--brand', org.colour);
+  document.title = "What's on \u00b7 " + (org ? org.name : '');
+  $('head').innerHTML = (org && org.logo ? '<img src="' + esc(org.logo) + '" alt=""/>' : '') + '<div><h1>' + esc(org ? org.name : '') + '</h1><div class="sub">What\u2019s on</div></div>';
+}
+function show(html) { $('view').innerHTML = html; window.scrollTo(0, 0); }
+function fail(text) { show('<div class="card empty">' + esc(text) + '</div>'); }
+
+// ── the list ──
+function list() {
+  if (!DATA.events.length) return show('<div class="card empty">No events to book at the moment. Please check back soon.</div>');
+  show(DATA.events.map(function (e) {
+    var tag = e.status === 'closed' ? '<span class="tag closed">Booking closed</span>' : e.status === 'full' ? '<span class="tag full">Full \u00b7 join the waiting list</span>' : '<span class="tag">' + esc(priceText(e)) + (e.left != null && e.left <= 10 ? ' \u00b7 ' + e.left + ' place' + (e.left === 1 ? '' : 's') + ' left' : '') + '</span>';
+    return '<button class="card ev" type="button" data-id="' + esc(e.id) + '"' + (e.status === 'closed' ? ' disabled' : '') + '><h2>' + esc(e.name) + '</h2><div class="meta">' + esc(when(e)) + '</div>' + tag + '</button>';
+  }).join(''));
+  [].slice.call(document.querySelectorAll('.ev')).forEach(function (b) { b.addEventListener('click', function () { open(b.getAttribute('data-id')); }); });
+}
+
+// ── one event: choose places and book ──
+function total() { return EV ? (PICK.adults - PICK.concessions) * EV.price + PICK.concessions * EV.concession : 0; }
+function stepper(key, label, min, max, hint) {
+  return '<div class="row"><div><div style="font-weight:600">' + label + '</div>' + (hint ? '<div class="note" style="margin:0">' + hint + '</div>' : '') + '</div><div class="step"><button type="button" data-k="' + key + '" data-d="-1" aria-label="Fewer">\u2212</button><span id="n-' + key + '">' + PICK[key] + '</span><button type="button" data-k="' + key + '" data-d="1" aria-label="More">+</button></div></div>';
+}
+function open(id) {
+  EV = DATA.events.filter(function (e) { return e.id === String(id); })[0]; if (!EV) return list();
+  PICK = { adults: 1, concessions: 0, children: 0 };
+  var full = EV.status === 'full';
+  show('<button class="back" type="button" id="back">\u2190 All events</button><div class="card"><h2 style="margin:0 0 4px;font-size:20px">' + esc(EV.name) + '</h2><div class="meta">' + esc(when(EV)) + '</div><div class="meta" style="margin-top:4px">' + esc(priceText(EV)) + (EV.left != null && !full ? ' \u00b7 ' + EV.left + ' place' + (EV.left === 1 ? '' : 's') + ' left' : '') + '</div>' +
+    (full ? '<div class="note" style="color:#8A5A00">This event is full. You can join the waiting list and we\u2019ll be in touch if a place comes up.</div>' : '') + '</div>' +
+    '<div class="card">' + stepper('adults', 'Adults', 1, 20, EV.concession ? money(EV.price) + ' each' : '') +
+      (EV.concession ? stepper('concessions', 'Of which concessions', 0, 20, money(EV.concession) + ' each') : '') + stepper('children', 'Children (under 16)', 0, 20, 'Free') + '</div>' +
+    '<div class="card"><label for="b-name">Your name</label><input type="text" id="b-name" autocomplete="name"/>' +
+      '<label for="b-email">Email</label><input type="email" id="b-email" inputmode="email" autocomplete="email" placeholder="For your confirmation"/>' +
+      '<label for="b-phone">Phone <span style="font-weight:400;color:var(--txt3)">(optional)</span></label><input type="tel" id="b-phone" autocomplete="tel"/>' +
+      '<label class="tick"><input type="checkbox" id="b-optin"/><span>Keep me updated about future events and news from ' + esc(DATA.org.name) + '</span></label>' +
+      '<input class="hp" id="b-hp" tabindex="-1" autocomplete="off" aria-hidden="true"/>' +
+      '<div class="total" id="b-total-row"' + (EV.price && !full ? '' : ' style="display:none"') + '><span>Total</span><span id="b-total">' + money(total()) + '</span></div>' +
+      '<button class="btn" type="button" id="b-go"></button><div class="err" id="b-err"></div>' +
+      '<div class="note">Your details are only used for this booking' + (EV.price ? '. Payment is taken securely by Stripe for ' + esc(DATA.org.name) : '') + '.</div></div>');
+  $('back').addEventListener('click', list);
+  [].slice.call(document.querySelectorAll('.step button')).forEach(function (b) { b.addEventListener('click', function () {
+    var k = b.getAttribute('data-k'), d = +b.getAttribute('data-d'), lo = k === 'adults' ? 1 : 0, hi = 20;
+    PICK[k] = Math.max(lo, Math.min(hi, PICK[k] + d)); if (PICK.concessions > PICK.adults) PICK.concessions = PICK.adults;
+    $('n-adults').textContent = PICK.adults; if ($('n-concessions')) $('n-concessions').textContent = PICK.concessions; $('n-children').textContent = PICK.children; label();
+  }); });
+  $('b-go').addEventListener('click', book); label();
+}
+function label() {
+  var t = total(), full = EV.status === 'full';
+  $('b-go').textContent = full ? 'Join the waiting list' : t ? 'Pay ' + money(t) + ' and book' : 'Book my place' + (PICK.adults + PICK.children > 1 ? 's' : '');
+  if ($('b-total')) $('b-total').textContent = money(t);
+}
+function book(waitlist) {
+  if (BUSY) return;
+  var name = $('b-name').value.trim(), email = $('b-email').value.trim(); $('b-err').textContent = '';
+  if (!name) { $('b-err').textContent = 'Please add your name.'; return; }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { $('b-err').textContent = 'Please add an email address so we can send your confirmation.'; return; }
+  BUSY = true; $('b-go').disabled = true;
+  api({ action: 'book', t: T, event_id: EV.id, adults: PICK.adults, concessions: PICK.concessions, children: PICK.children, name: name, email: email, phone: $('b-phone').value.trim(), optin: $('b-optin').checked, hp: $('b-hp').value, waitlist: waitlist === true || EV.status === 'full' })
+    .then(function (j) {
+      BUSY = false; $('b-go').disabled = false;
+      if (j.full) { $('b-err').innerHTML = esc(j.error) + ' <a href="#" id="b-wl">Join the waiting list instead</a>'; $('b-wl').addEventListener('click', function (e) { e.preventDefault(); book(true); }); return; }
+      if (!j.ok) { $('b-err').textContent = j.error || 'That didn\u2019t go through. Please try again.'; return; }
+      if (j.url) { save(EV.id, j.token, name.split(' ')[0]); location.href = j.url; return; }          // off to Stripe to pay
+      if (j.status === 'waitlist') return done('You\u2019re on the waiting list', 'We\u2019ll email you if a place comes up for ' + EV.name + '.', null);
+      save(EV.id, j.token, name.split(' ')[0]);
+      done('You\u2019re booked', 'Thanks ' + name.split(' ')[0] + '. We\u2019ve emailed your confirmation to ' + email + '.', EV);
+    }).catch(function () { BUSY = false; $('b-go').disabled = false; $('b-err').textContent = 'No connection. Please try again.'; });
+}
+function done(title, text, ev, calendar) {
+  show('<div class="card" style="text-align:center"><div class="big">\u2713</div><h2 style="margin:0 0 8px">' + esc(title) + '</h2><p class="meta" style="margin:0 0 6px">' + esc(text) + '</p>' +
+    (ev ? '<p class="meta" style="margin:0"><b>' + esc(ev.name) + '</b><br/>' + esc(when(ev)) + '</p>' +
+      '<p class="note">On the day, scan the QR code at the door. This phone will be recognised.</p>' +
+      (calendar ? '<a class="btn ghost" href="' + esc(calendar) + '" target="_blank" rel="noopener">Add to my calendar</a>' : '') : '') +
+    '<button class="btn ghost" type="button" id="d-more">See other events</button></div>');
+  $('d-more').addEventListener('click', function () { location.href = 'whats-on.html?t=' + encodeURIComponent(T); });
+}
+
+// ── coming back from Stripe, or cancelling from the email ──
+function afterPay(token, session) {
+  show('<div class="card empty">Confirming your payment&hellip;</div>');
+  var tries = 0;
+  (function check() {
+    api({ action: 'confirm', token: token, session: session }).then(function (j) {
+      var b = j.booking;
+      if (j.ok && b && b.status === 'booked') { if (b.event) save(b.event.id, token, b.first); return done('You\u2019re booked', 'Thanks ' + (b.first || '') + '. Your payment went through and your confirmation is on its way.', b.event, b.calendar); }
+      if (++tries < 6) return setTimeout(check, 1500);
+      fail('We\u2019re still waiting to hear from the payment provider. If you paid, your confirmation email will arrive shortly.');
+    }).catch(function () { fail('No connection. If you paid, your confirmation email will arrive shortly.'); });
+  })();
+}
+function cancelView(token) {
+  api({ action: 'mine', token: token }).then(function (j) {
+    if (!j.ok) return fail(j.error || 'We couldn\u2019t find that booking.');
+    var b = j.booking, ev = b.event || {};
+    if (b.status === 'cancelled') return show('<div class="card" style="text-align:center"><h2>Already cancelled</h2><p class="meta">This booking for ' + esc(ev.name || 'the event') + ' has been cancelled.</p></div>');
+    show('<div class="card"><h2 style="margin:0 0 6px">Cancel your place?</h2><p class="meta">' + esc(ev.name || '') + '<br/>' + esc(ev.date ? when(ev) : '') + '</p>' +
+      '<button class="btn" type="button" id="c-go">Yes, cancel my place</button><div class="err" id="c-err"></div>' + (b.paid ? '<div class="note">The organiser will be in touch about a refund.</div>' : '') + '</div>');
+    $('c-go').addEventListener('click', function () {
+      $('c-go').disabled = true;
+      api({ action: 'cancel', token: token }).then(function (r) {
+        if (!r.ok) { $('c-go').disabled = false; $('c-err').textContent = r.error || 'That didn\u2019t work.'; return; }
+        show('<div class="card" style="text-align:center"><div class="big">\u2713</div><h2>Cancelled</h2><p class="meta">Thanks for letting us know. Your place has gone to someone else.</p></div>');
+      });
+    });
+  }).catch(function () { fail('No connection. Please try again.'); });
+}
+
+// ── start ──
+(function start() {
+  var cancel = Q.get('cancel'), paid = Q.get('paid'), unpaid = Q.get('unpaid');
+  if (cancel) { brand(null); return cancelView(cancel); }
+  if (!T) { brand(null); return fail('This link isn\u2019t complete. Please use the link from the organiser.'); }
+  if (unpaid) api({ action: 'unpaid', token: unpaid }).catch(function () {});                       // left Stripe without paying: free the places
+  api({ action: 'list', t: T }).then(function (j) {
+    if (!j.ok) { brand(null); return fail(j.error || 'This link has expired.'); }
+    DATA = j; brand(j.org);
+    if (paid) return afterPay(paid, Q.get('session') || '');
+    if (Q.get('e')) return open(Q.get('e'));
+    list();
+  }).catch(function () { brand(null); fail('No connection. Please check your signal and try again.'); });
+})();
+</script>
+</body>
+</html>
