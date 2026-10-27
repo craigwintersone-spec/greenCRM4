@@ -155,6 +155,10 @@ const MAPPERS = {
     contract_ids: toArr(r.contract_ids),
     import_batch: r.import_batch || null,
     checkin_form: r.checkin_form || '',
+    bookable: r.bookable !== false,
+    price_pence: r.price_pence == null ? null : +r.price_pence,
+    concession_pence: r.concession_pence == null ? null : +r.concession_pence,
+    start_time: r.start_time || '',
     question_ids: Array.isArray(r.question_ids) ? r.question_ids.map(String) : null   // null = ask every active question
   }),
   feedback: r => ({
