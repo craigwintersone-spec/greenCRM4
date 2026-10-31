@@ -463,6 +463,9 @@ module.exports = async function handler(req, res) {
         if (!/column|schema cache|does not exist/i.test(e.message || '')) throw e;
         await sb('contacts', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([{ org_id: ctx.orgId, first_name: first, last_name: last, email, role: ('Volunteer interest: ' + notes).slice(0, 250), status: 'Prospect' }]) });
       }
+      // staff hear about it straight away, and the volunteer gets a thank-you (their sign-up is saved either way)
+      try { await require('./_lib/volunteer-mail.js').sendVolunteerEmails(ctx.orgId, { first, last, email, phone, where, note }); }
+      catch (e) { console.error('[volunteer-mail]', e && e.message); }
       return res.status(200).json({ ok: true });
     }
 
