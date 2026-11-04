@@ -212,7 +212,7 @@ textarea{min-height:88px;resize:vertical}
     <div class="pane" id="pane-vol">
       <div class="card">
         <h2 id="vol-title">Volunteer check-in</h2>
-        <p class="sub">Check in when you arrive, check out when you leave — your hours are worked out for you.</p>
+        <p class="sub">Check in when you arrive. Tell us how long you're staying and we'll check you out, or check out when you leave.</p>
         <div class="msg err" id="vol-err"></div>
         <div class="field">
           <label>Your full name or email</label>
@@ -240,6 +240,17 @@ textarea{min-height:88px;resize:vertical}
         </div>
 
         <div id="vol-actions">
+          <div class="note" id="vol-note" style="display:none;margin:0 0 14px;white-space:pre-line"></div>
+          <div class="field" id="vol-hours-wrap" style="display:none">
+            <label for="vol-hours">How long are you volunteering today? <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+            <select id="vol-hours">
+              <option value="">Not sure / I'll check out</option>
+              <option value="1">1 hour</option><option value="1.5">1½ hours</option><option value="2">2 hours</option><option value="2.5">2½ hours</option>
+              <option value="3">3 hours</option><option value="3.5">3½ hours</option><option value="4">4 hours</option><option value="5">5 hours</option>
+              <option value="6">6 hours</option><option value="7">7 hours</option><option value="8">8 hours</option>
+            </select>
+            <div class="note" style="margin:6px 0 0">We'll check you out automatically. Leaving earlier? Scan again and tap Check out.</div>
+          </div>
           <button class="btn btn-p" id="vol-in" type="button"><span class="spin"></span><span>Check in</span></button>
 
           <div class="divider"></div>
@@ -464,6 +475,7 @@ function boot() {
       document.title = (site ? 'Volunteer sign-in' : (ev.name || 'Event')) + ' — Vorlana';
 
       buildStars($('st-wb'), 'wb', FACES);
+      setupVolunteer(j.volunteer);
       if (site) {
         // Site QR — volunteers only, no feedback form
         $('tabs').style.display = 'none';
@@ -721,11 +733,19 @@ function resetVol() {
   $('vol-actions').style.display = 'block';
   $('vol-who').disabled = false;
 }
+function setupVolunteer(cfg) {   // the organisation's note, and the "how long" question
+  cfg = cfg || {};
+  $('vol-note').textContent = cfg.note || ''; $('vol-note').style.display = cfg.note ? '' : 'none';
+  $('vol-hours-wrap').style.display = cfg.ask_hours === false ? 'none' : '';
+}
+function volHours() { var w = $('vol-hours-wrap'); return w && w.style.display !== 'none' ? ($('vol-hours').value || undefined) : undefined; }
 function afterCheckin(j) {
   remember(who());
   resetVol();
+  $('vol-hours').value = '';
   var first = j.name ? ', ' + j.name.split(' ')[0] : '';
   var again = '. Scan again and tap \u201cCheck out\u201d when you leave.';
+  if (j.until && !j.already) { doneScreen(j.created ? 'Welcome' + first + '!' : 'Checked in' + first, 'Checked in at ' + j.at + '. We\u2019ll check you out at ' + j.until + '. Leaving earlier? Scan again and tap \u201cCheck out\u201d.', true); return; }
   if (j.already) doneScreen('Already checked in', 'You checked in at ' + j.at + first + (j.where ? ' (' + j.where + ')' : '') + again, true);
   else doneScreen(j.created ? 'Welcome' + first + '!' : 'Checked in' + first, 'Checked in at ' + j.at + (j.where && SITE ? ' for ' + j.where : '') + again, true);
 }
@@ -735,7 +755,7 @@ $('vol-in').addEventListener('click', function () {
   clearMsg('vol-err');
   if (who().length < 3) { msg('vol-err', 'Please enter your full name or email.', 'err'); return; }
   busy(btn, true);
-  call('checkin', { who: who(), place: PLACE })
+  call('checkin', { who: who(), place: PLACE, hours: volHours() })
     .then(afterCheckin)
     .catch(function (e) {
       if (e.unknown && who().indexOf('@') < 0) {
@@ -755,7 +775,7 @@ $('vol-new-go').addEventListener('click', function () {
   clearMsg('vol-err');
   if (who().indexOf(' ') < 0) { resetVol(); msg('vol-err', 'Please use your full name (first and last), then tap Check in again.', 'err'); return; }
   busy(btn, true);
-  call('checkin', { who: who(), newVolunteer: true, email: $('vol-new-email').value.trim(), place: PLACE })
+  call('checkin', { who: who(), newVolunteer: true, email: $('vol-new-email').value.trim(), place: PLACE, hours: volHours() })
     .then(afterCheckin)
     .catch(function (e) { msg('vol-err', e.message, 'err'); })
     .finally(function () { busy(btn, false); });
@@ -773,7 +793,8 @@ $('vol-out').addEventListener('click', function () {
       $('vol-activity').value = '';
       scores.wb = null;
       buildStars($('st-wb'), 'wb', FACES);
-      if (j.flagged) doneScreen('Checked out', 'You checked in on another day or a long time ago, so a member of staff will confirm your hours. Thank you!', true);
+      if (j.auto) doneScreen('All done', 'Your ' + j.hours + ' hour' + (j.hours === 1 ? '' : 's') + ' were logged automatically, at the time you gave. Thank you!', true);
+      else if (j.flagged) doneScreen('Checked out', 'You checked in on another day or a long time ago, so a member of staff will confirm your hours. Thank you!', true);
       else doneScreen('Thank you!', j.hours + ' hour' + (j.hours === 1 ? '' : 's') + ' logged. That makes a real difference.', true);
     })
     .catch(function (e) { msg('vol-err', e.message, 'err'); })
