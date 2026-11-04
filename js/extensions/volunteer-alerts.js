@@ -18,7 +18,7 @@
     var on = function (k) { return st[k] !== false ? 'checked' : ''; };
     var box = 'display:flex;align-items:flex-start;gap:10px;font-size:14px;color:var(--txt);margin:10px 0 6px;' + TXT;
     var tick = 'width:18px;height:18px;margin:1px 0 0;flex:none';
-    return '<div style="font-size:15px;font-weight:700;color:var(--txt);' + TXT + '">When someone signs up to volunteer</div>' +
+    return '<div style="font-size:15px;font-weight:700;color:var(--txt);' + TXT + '">Volunteers</div><div style="font-size:14px;font-weight:600;color:var(--txt);margin-top:8px;' + TXT + '">When someone signs up to volunteer</div>' +
       '<div style="font-size:13px;color:var(--txt3);margin:2px 0 8px;' + TXT + '">From the \u201cI\u2019d like to volunteer\u201d button on your QR codes. They\u2019re always saved in Contacts.</div>' +
       '<label style="' + box + '"><input type="checkbox" id="vla-alerts" ' + on('volunteer_alerts') + ' style="' + tick + '"/><span>Email us straight away</span></label>' +
       '<div style="margin:0 0 10px 28px"><input id="vla-to" placeholder="Leave blank to email your owners and managers" value="' + esc(st.volunteer_alert_to || '') + '" style="width:100%;max-width:440px;font-size:13px"/>' +
@@ -27,6 +27,11 @@
       '<div style="margin:0 0 6px 28px;font-size:13px;color:var(--txt2);' + TXT + '">It comes from \u201c' + esc((typeof currentOrg !== 'undefined' && currentOrg && currentOrg.name) || 'Your organisation') + ' via Vorlana\u201d. When they reply, it goes to:</div>' +
       '<div style="margin:0 0 8px 28px"><input id="vla-reply" placeholder="Your email for replies, e.g. hello@yourcharity.org" value="' + esc(st.volunteer_reply_to || '') + '" style="width:100%;max-width:440px;font-size:13px"/></div>' +
       '<div style="margin:0 0 10px 28px"><textarea id="vla-text" rows="3" placeholder="Anything to add? For example: our next volunteer induction is on the first Monday of the month." style="width:100%;max-width:440px;font-size:13px">' + esc(st.volunteer_thanks_text || '') + '</textarea></div>' +
+      '<div style="font-size:14px;font-weight:600;color:var(--txt);margin:18px 0 2px;' + TXT + '">When volunteers check in</div>' +
+      '<label style="' + box + '"><input type="checkbox" id="vla-askhours" ' + on('volunteer_ask_hours') + ' style="' + tick + '"/><span>Ask how long they\u2019re volunteering, and check them out automatically at that time</span></label>' +
+      '<div style="margin:0 0 6px 28px;font-size:12px;color:var(--txt3);' + TXT + '">It\u2019s optional for volunteers. Anyone who leaves earlier can still scan out, and their real time is recorded.</div>' +
+      '<div style="margin:8px 0 4px;font-size:13px;color:var(--txt2);' + TXT + '">A note shown at volunteer check-in (optional):</div>' +
+      '<div style="margin:0 0 12px"><textarea id="vla-note" rows="3" maxlength="400" placeholder="For example: if you\u2019ve booked in on the calendar, you don\u2019t need to choose your hours unless you leave early." style="width:100%;max-width:468px;font-size:13px">' + esc(st.volunteer_checkin_note || '') + '</textarea></div>' +
       '<div style="display:flex;align-items:center;gap:10px"><button class="btn btn-p btn-sm" type="button" onclick="vlaSave()">Save</button><span id="vla-msg" style="font-size:12px;' + TXT + '"></span></div>';
   }
   async function render() {
@@ -48,7 +53,7 @@
     say('Saving\u2026');
     try {
       var st = await freshSettings();   // merge into the latest settings so nothing else is overwritten
-      Object.assign(st, { volunteer_alerts: $('vla-alerts').checked, volunteer_alert_to: to, volunteer_thanks: $('vla-thanks').checked, volunteer_reply_to: reply, volunteer_thanks_text: $('vla-text').value.trim().slice(0, 1200) });
+      Object.assign(st, { volunteer_alerts: $('vla-alerts').checked, volunteer_alert_to: to, volunteer_thanks: $('vla-thanks').checked, volunteer_reply_to: reply, volunteer_thanks_text: $('vla-text').value.trim().slice(0, 1200), volunteer_ask_hours: $('vla-askhours').checked, volunteer_checkin_note: $('vla-note').value.trim().slice(0, 400) });
       var r = await sb.from('organisations').update({ settings: st }).eq('id', orgId);
       if (r.error) throw r.error;
       if (typeof currentOrg !== 'undefined' && currentOrg) currentOrg.settings = st;
