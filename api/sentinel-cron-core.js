@@ -297,6 +297,10 @@ module.exports = async function handler(req, res) {
   try { results.insights = await runInsights(); }
   catch (e) { results.errors.push({ agent: 'insights', error: e.message }); }
 
+  // volunteers who said how long they'd stay yesterday are checked out at that time, and their hours logged
+  try { results.volunteerAutoOut = (await require('./_lib/volunteer-autoout.js').closePlannedShifts()).length; }
+  catch (e) { results.errors.push({ agent: 'volunteer-auto-out', error: e.message }); }
+
   // the day before an event, everyone booked gets a reminder
   try { results.bookingReminders = await require('./_lib/booking-mail.js').runBookingReminders(); }
   catch (e) { results.errors.push({ agent: 'booking-reminders', error: e.message }); }
