@@ -341,6 +341,16 @@ function londonDay(iso) {
   return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/London' });   // YYYY-MM-DD
 }
 
+// The volunteer screen: whether to ask how long they're staying, and the organisation's own note
+async function getVolSettings(orgId) {
+  try {
+    const r = await sb(`organisations?id=eq.${orgId}&select=settings&limit=1`);
+    const st = (Array.isArray(r) && r[0] && r[0].settings) || {};
+    return { ask_hours: st.volunteer_ask_hours !== false, note: trim(st.volunteer_checkin_note, 400) };
+  } catch (e) { return { ask_hours: true, note: '' }; }
+}
+const autoOut = () => require('./_lib/volunteer-autoout.js');
+
 // Write hours; drop optional columns if the SQL hasn't been run yet.
 async function insertHours(row) {
   try {
@@ -480,7 +490,8 @@ module.exports = async function handler(req, res) {
         site: (ctx.mode === 'event' && ctx.siteId) ? { name: ctx.siteName || 'Volunteer sign-in' } : null,   // on an event day the same code also offers general site volunteering
         questions,
         checkin: (ciCfg && ciCfg.enabled) ? { form: publicForm(ciCfg.form) } : null,   // the Check in tab, with this session's form
-        choices: ctx.mode === 'choose' ? (ctx.choices || []) : undefined   // today's sessions to tap between
+        choices: ctx.mode === 'choose' ? (ctx.choices || []) : undefined,   // today's sessions to tap between
+        volunteer: await getVolSettings(ctx.orgId)
       });
     }
 
@@ -547,6 +558,7 @@ module.exports = async function handler(req, res) {
       const wantSite = body.place === 'site' && !!ctx.siteId;
       const target = wantSite ? { eventId: null, siteId: ctx.siteId, label: ctx.siteName || 'the site' }
                               : { eventId: ctx.eventId, siteId: ctx.eventId ? null : ctx.siteId, label: ctx.name };
+      try { await autoOut().closePlannedShifts({ orgId: ctx.orgId, volunteerId: v.id }); } catch (e) { /* the check-in goes ahead */ }
       const existing = await openSession(ctx, v.id);
       if (existing) {
         // Same day → already in. Earlier day → they forgot to check out: close it (0h, flagged) and start fresh.
@@ -558,8 +570,15 @@ module.exports = async function handler(req, res) {
 
       const row = { org_id: ctx.orgId, event_id: target.eventId, volunteer_id: String(v.id), checked_in_at: nowIso };
       if (target.siteId) row.site_id = target.siteId;
-      await sb('volunteer_checkins', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([row]) });
-      return res.status(200).json({ ok: true, at: hhmm(nowIso), name: v.name || '', created: !!r.created, where: target.label });
+      const planned = parseFloat(body.hours);
+      if (autoOut().HOUR_CHOICES.indexOf(planned) >= 0) row.planned_out_at = new Date(Date.parse(nowIso) + planned * 3600000).toISOString();
+      try { await sb('volunteer_checkins', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([row]) }); }
+      catch (e) {   // run volunteer-hours.sql to save the finish time; until then they check out as before
+        if (!row.planned_out_at || !/planned_out_at/i.test(e.message || '')) throw e;
+        delete row.planned_out_at;
+        await sb('volunteer_checkins', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([row]) });
+      }
+      return res.status(200).json({ ok: true, at: hhmm(nowIso), until: row.planned_out_at ? hhmm(row.planned_out_at) : null, name: v.name || '', created: !!r.created, where: target.label });
     }
 
     // ── volunteer check out ─────────────────────────────────
@@ -568,7 +587,10 @@ module.exports = async function handler(req, res) {
       if (r.error) return bad(res, r.error, r.code || 400);
       const v = r.v;
 
+      let autoClosed = [];
+      try { autoClosed = await autoOut().closePlannedShifts({ orgId: ctx.orgId, volunteerId: v.id }); } catch (e) { /* carry on */ }
       const open = await openSession(ctx, v.id);
+      if (!open && autoClosed.length) return res.status(200).json({ ok: true, auto: true, hours: autoClosed[0].hours, name: v.name || '' });
       if (!open) return bad(res, 'We don\u2019t have you checked in here today. Tap \u201cCheck in\u201d first, or ask a member of staff to log your hours.', 409);
 
       const outIso = new Date().toISOString();
