@@ -24,7 +24,7 @@
       '<div style="margin:0 0 10px 28px"><input id="vla-to" placeholder="Leave blank to email your owners and managers" value="' + esc(st.volunteer_alert_to || '') + '" style="width:100%;max-width:440px;font-size:13px"/>' +
         '<div style="font-size:12px;color:var(--txt3);margin-top:3px;' + TXT + '">You can add more than one address, separated by commas.</div></div>' +
       '<label style="' + box + '"><input type="checkbox" id="vla-thanks" ' + on('volunteer_thanks') + ' style="' + tick + '"/><span>Send them a thank-you email</span></label>' +
-      '<div style="margin:0 0 6px 28px;font-size:13px;color:var(--txt2);' + TXT + '">It comes from \u201c' + esc((typeof currentOrg !== 'undefined' && currentOrg && currentOrg.name) || 'Your organisation') + ' via Vorlana\u201d. When they reply, it goes to:</div>' +
+      '<div style="margin:0 0 6px 28px;font-size:13px;color:var(--txt2);' + TXT + '">It comes from \u201c' + esc((typeof currentOrg !== 'undefined' && currentOrg && currentOrg.name) || 'Your organisation') + ' via Vorlana\u201d. Replies to it, and to booking emails, go to:</div>' +
       '<div style="margin:0 0 8px 28px"><input id="vla-reply" placeholder="Your email for replies, e.g. hello@yourcharity.org" value="' + esc(st.volunteer_reply_to || '') + '" style="width:100%;max-width:440px;font-size:13px"/></div>' +
       '<div style="margin:0 0 10px 28px"><textarea id="vla-text" rows="3" placeholder="Anything to add? For example: our next volunteer induction is on the first Monday of the month." style="width:100%;max-width:440px;font-size:13px">' + esc(st.volunteer_thanks_text || '') + '</textarea></div>' +
       '<div style="font-size:14px;font-weight:600;color:var(--txt);margin:18px 0 2px;' + TXT + '">When volunteers check in</div>' +
