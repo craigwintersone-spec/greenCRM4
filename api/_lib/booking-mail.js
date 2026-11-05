@@ -39,23 +39,28 @@ function links(b, ev) {
   return `<p style="font-size:14px;margin:0 0 6px"><a href="${calendarLink(ev)}" style="color:#1F6F6D">Add it to your calendar</a></p>
 <p style="font-size:14px;margin:0">Can't come? <a href="${APP_URL}/whats-on.html?cancel=${encodeURIComponent(b.token)}" style="color:#1F6F6D">Cancel your place</a> so someone else can have it.</p>`;
 }
-async function sendMail(to, subject, html, orgName) {
+// Replies go to the organisation (Settings > Events > "replies go to"), never to Vorlana
+function replyFor(org) {
+  const st = (org && org.settings) || {};
+  return String(st.reply_to || st.volunteer_reply_to || '').split(/[,;\s]+/).map(e => e.trim()).filter(e => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)).slice(0, 3);
+}
+async function sendMail(to, subject, html, orgName, replyTo) {
   if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY not set');
   const from = (orgName ? orgName.replace(/[<>"]/g, '').slice(0, 60) + ' via Vorlana' : 'Vorlana') + ' <hello@vorlana.com>';
-  const r = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ from, to, subject, html }) });
+  const r = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ from, to, subject, html }, replyTo && replyTo.length ? { reply_to: replyTo } : {})) });
   if (!r.ok) throw new Error('Resend ' + r.status + ': ' + await r.text());
 }
 async function mailBooked(org, ev, b) {
   if (!b.email) return;
-  await sendMail(b.email, `You're booked: ${ev.name}`, shell(org, "You're booked", `<p style="font-size:14px">Thanks ${esc(String(b.name || '').split(' ')[0])}, your place is confirmed.</p>${details(ev, b)}<p style="font-size:14px">On the day, scan the QR code at the door. If you booked on this phone, you'll be recognised; otherwise tap "I booked" and enter this email address.</p>${links(b, ev)}`), org.name);
+  await sendMail(b.email, `You're booked: ${ev.name}`, shell(org, "You're booked", `<p style="font-size:14px">Thanks ${esc(String(b.name || '').split(' ')[0])}, your place is confirmed.</p>${details(ev, b)}<p style="font-size:14px">On the day, scan the QR code at the door. If you booked on this phone, you'll be recognised; otherwise tap "I booked" and enter this email address.</p>${links(b, ev)}`), org.name, replyFor(org));
 }
 async function mailWaitlist(org, ev, b) {
   if (!b.email) return;
-  await sendMail(b.email, `You're on the waiting list: ${ev.name}`, shell(org, "You're on the waiting list", `<p style="font-size:14px">${esc(ev.name)} is full at the moment. We'll be in touch if a place comes up.</p>${details(ev, Object.assign({}, b, { amount_pence: 0 }))}`), org.name);
+  await sendMail(b.email, `You're on the waiting list: ${ev.name}`, shell(org, "You're on the waiting list", `<p style="font-size:14px">${esc(ev.name)} is full at the moment. We'll be in touch if a place comes up.</p>${details(ev, Object.assign({}, b, { amount_pence: 0 }))}`), org.name, replyFor(org));
 }
 async function mailCancelled(org, ev, b) {
   if (!b.email) return;
-  await sendMail(b.email, `Cancelled: ${ev.name}`, shell(org, 'Your place is cancelled', `<p style="font-size:14px">Your booking for ${esc(ev.name)} on ${esc(longDate(ev.event_date))} has been cancelled.${b.paid ? ' ' + esc(org.name || 'The organiser') + ' will be in touch about a refund.' : ''}</p>`), org.name);
+  await sendMail(b.email, `Cancelled: ${ev.name}`, shell(org, 'Your place is cancelled', `<p style="font-size:14px">Your booking for ${esc(ev.name)} on ${esc(longDate(ev.event_date))} has been cancelled.${b.paid ? ' ' + esc(org.name || 'The organiser') + ' will be in touch about a refund.' : ''}</p>`), org.name, replyFor(org));
 }
 
 // The day before an event, a short reminder to everyone booked. Called by the daily Sentinel job.
@@ -69,11 +74,11 @@ async function runBookingReminders(now) {
     let rows = [];
     try { rows = await sb(`bookings?event_id=eq.${encodeURIComponent(ev.id)}&status=eq.booked&reminded_at=is.null&select=id,token,name,email,adults,children,amount_pence,paid&limit=1000`) || []; } catch (e) { out.errors.push(e.message); continue; }
     if (!rows.length) continue;
-    let org = { name: '' }; try { org = (await sb(`organisations?id=eq.${ev.org_id}&select=name,brand_color&limit=1`))[0] || org; } catch (e) { /* plain email */ }
+    let org = { name: '' }; try { org = (await sb(`organisations?id=eq.${ev.org_id}&select=name,brand_color,settings&limit=1`))[0] || org; } catch (e) { /* plain email */ }
     for (const b of rows) {
       if (!b.email) continue;
       try {
-        await sendMail(b.email, `See you tomorrow: ${ev.name}`, shell(org, 'See you tomorrow', `<p style="font-size:14px">A quick reminder about your booking.</p>${details(ev, Object.assign({}, b, { amount_pence: 0 }))}${links(b, ev)}`), org.name);
+        await sendMail(b.email, `See you tomorrow: ${ev.name}`, shell(org, 'See you tomorrow', `<p style="font-size:14px">A quick reminder about your booking.</p>${details(ev, Object.assign({}, b, { amount_pence: 0 }))}${links(b, ev)}`), org.name, replyFor(org));
         await sb(`bookings?id=eq.${b.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ reminded_at: new Date().toISOString() }) });
         out.sent++;
       } catch (e) { out.errors.push(e.message); }
