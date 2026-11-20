@@ -63,7 +63,7 @@
   async function runFromLink() {
     var q = fromLink(); if (!q || _running) return; _running = true;
     try {
-      history.replaceState(null, '', location.pathname);                                   // one run per link
+      history.replaceState(null, '', location.pathname + location.search);                 // one run per link (keeps ?org_id)
       if (typeof go === 'function') go('reports');
       await wait(function () { return $('civara-period-type') && (DB.contracts || []).length && typeof generateAIReport === 'function'; }, 15000);
       var c = (DB.contracts || []).find(function (x) { return String(x.id) === String(q.contract); });

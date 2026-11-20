@@ -76,8 +76,12 @@ async function loadUserAccess() {
     }
   }
 
-  // Decide which org we're working in
-  const urlOrg = new URLSearchParams(window.location.search).get('org_id');
+  // Decide which org we're working in: the address first, then the last one this person used, then a fixed order
+  userMemberships.sort((a, b) => String(a.org_name).localeCompare(String(b.org_name)));
+  const lastKey = 'vl-last-org:' + currentUser.id;
+  let lastOrg = null; try { lastOrg = localStorage.getItem(lastKey); } catch (e) { /* private mode */ }
+  const canOpen = id => !!id && (userMemberships.some(x => x.org_id === id) || (isSuperAdmin && (window._allOrgsForSuperAdmin || []).some(o => o.id === id)));
+  const urlOrg = new URLSearchParams(window.location.search).get('org_id') || (canOpen(lastOrg) ? lastOrg : null);
   if (urlOrg) {
     orgId = urlOrg;
     const m = userMemberships.find(x => x.org_id === orgId);
@@ -89,6 +93,14 @@ async function loadUserAccess() {
   } else if (isSuperAdmin && window._allOrgsForSuperAdmin && window._allOrgsForSuperAdmin.length) {
     orgId = window._allOrgsForSuperAdmin[0].id;
     currentRole = 'super_admin';
+  }
+  // remember it, and keep it in the address so a refresh opens the same organisation
+  if (orgId) {
+    try { localStorage.setItem(lastKey, orgId); } catch (e) { /* private mode */ }
+    try {
+      const u = new URL(window.location.href);
+      if (u.searchParams.get('org_id') !== orgId) { u.searchParams.set('org_id', orgId); history.replaceState(history.state, '', u.pathname + u.search + u.hash); }
+    } catch (e) { /* older browser: the remembered org still applies */ }
   }
 }
 
