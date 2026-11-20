@@ -1,314 +1,202 @@
-// /api/bookings.js — event bookings and payments
-// Public (no login): list an organisation's upcoming events, book a place, pay through Stripe, see or cancel a booking.
-// Staff (logged in): counts per event, who's coming, add a phone/cash booking, mark arrived, cancel, connect Stripe.
-// Money always goes to the organisation's own Stripe account (Stripe Connect, direct charges). Vorlana never holds it and takes no fee.
-// Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, STRIPE_SECRET_KEY (Vorlana's platform key), RESEND_API_KEY, APP_URL
-const crypto = require('crypto');
-const mail = require('./_lib/booking-mail.js');
+// js/extensions/bookings.js — bookings and payments, staff side
+// On the event: a price (blank = free), optional concession price and start time. Every upcoming event is bookable unless switched off.
+// On the Events page: a "Booked" column; click it for who's coming, mark arrivals, add a phone or cash booking, cancel.
+// In Settings > Events: connect Stripe once, and copy the "What's on" link for the organisation's website.
+// Talks to api/bookings.js. Depends on: modals.js (openAddEv/openEditEv/saveEv), render.js (renderEvents), settings.js (setModal)
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) { return (typeof escapeHTML === 'function') ? escapeHTML(String(s == null ? '' : s)) : String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  var TXT = 'text-transform:none;letter-spacing:0';
+  var money = function (p) { return '\u00a3' + ((+p || 0) / 100).toFixed((+p || 0) % 100 ? 2 : 0); };
+  var COUNTS = {}, PAY = { checked: false, connected: false, ready: false }, SITE_TOKEN = null;
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const STRIPE_KEY = process.env.STRIPE_SECRET_KEY;
-const APP_URL = (process.env.APP_URL || 'https://www.vorlana.com').replace(/\/$/, '');
-const PENDING_MINUTES = 30;                       // an unpaid checkout holds its places this long
-const RATE = { windowMs: 60 * 1000, max: 120, hits: new Map() };
-
-// ── helpers ──
-async function sb(path, opts = {}) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { ...opts, headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json', Accept: 'application/json', ...(opts.headers || {}) } });
-  const t = await r.text(); let b = null; try { b = t ? JSON.parse(t) : null; } catch (e) { b = t; }
-  if (!r.ok) throw new Error(`${path.split('?')[0]} ${r.status}: ${typeof b === 'string' ? b : (b && b.message) || ''}`);
-  return b;
-}
-async function sbTry(...paths) { let last; for (const p of paths) { try { return await sb(p); } catch (e) { last = e; } } throw last; }   // fuller column list first
-function flatten(obj, prefix, out) {
-  out = out || {};
-  Object.keys(obj).forEach(k => {
-    const v = obj[k], key = prefix ? `${prefix}[${k}]` : k;
-    if (v == null) return;
-    if (typeof v === 'object') flatten(v, key, out); else out[key] = String(v);
-  });
-  return out;
-}
-async function stripe(path, params, account, method) {
-  if (!STRIPE_KEY) throw new Error('Payments are not set up yet (STRIPE_SECRET_KEY is missing).');
-  const r = await fetch('https://api.stripe.com/v1/' + path, {
-    method: method || (params ? 'POST' : 'GET'),
-    headers: Object.assign({ Authorization: 'Bearer ' + STRIPE_KEY, 'Content-Type': 'application/x-www-form-urlencoded' }, account ? { 'Stripe-Account': account } : {}),
-    body: params ? new URLSearchParams(flatten(params)).toString() : undefined
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error('Stripe: ' + ((j.error && j.error.message) || r.status));
-  return j;
-}
-const STRIPE_V2_VERSION = process.env.STRIPE_API_VERSION || '2026-09-30.endive';
-async function stripeV2(path, body, method) {
-  if (!STRIPE_KEY) throw new Error('Payments are not set up yet (STRIPE_SECRET_KEY is missing).');
-  const r = await fetch('https://api.stripe.com/v2/' + path, {
-    method: method || (body ? 'POST' : 'GET'),
-    headers: { Authorization: 'Bearer ' + STRIPE_KEY, 'Content-Type': 'application/json', 'Stripe-Version': STRIPE_V2_VERSION },
-    body: body ? JSON.stringify(body) : undefined
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error('Stripe: ' + ((j.error && j.error.message) || r.status));
-  return j;
-}
-// a connected account can take card payments once Stripe has switched card payments on for it
-function cardsActive(a) {
-  const st = a && a.configuration && a.configuration.merchant && a.configuration.merchant.capabilities && a.configuration.merchant.capabilities.card_payments && a.configuration.merchant.capabilities.card_payments.status;
-  return st === 'active';
-}
-const bad = (res, message, code, extra) => res.status(code || 400).json(Object.assign({ ok: false, error: message }, extra || {}));
-const trim = (s, n) => String(s == null ? '' : s).replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, n || 200);
-const okEmail = e => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
-const int = (v, lo, hi) => { const n = parseInt(v, 10); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : lo; };
-const newToken = () => crypto.randomBytes(18).toString('base64url');
-function londonNow() {
-  const p = {}; new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date()).forEach(x => { p[x.type] = x.value; });
-  return { day: `${p.year}-${p.month}-${p.day}`, stamp: `${p.year}-${p.month}-${p.day} ${p.hour === '24' ? '00' : p.hour}:${p.minute}` };
-}
-function closesAt(ev) { return `${ev.event_date} ${/^\d{1,2}:\d{2}$/.test(ev.start_time || '') ? ev.start_time.padStart(5, '0') : '23:59'}`; }   // at the start time, or the end of the day
-function rateLimited(req) {
-  const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown', now = Date.now();
-  const h = (RATE.hits.get(ip) || []).filter(t => now - t < RATE.windowMs); h.push(now); RATE.hits.set(ip, h);
-  return h.length > RATE.max;
-}
-
-// ── who and what ──
-const EVENT_COLS = 'id,org_id,name,event_date,location,capacity,public_enabled,bookable,price_pence,concession_pence,start_time';
-const EVENT_BASE = 'id,org_id,name,event_date,location,capacity,public_enabled';
-async function orgFromToken(t) {
-  if (!t || String(t).length < 16) return null;
-  const s = await sb(`volunteer_sites?public_token=eq.${encodeURIComponent(t)}&select=org_id,public_enabled&limit=1`);
-  if (!Array.isArray(s) || !s[0] || s[0].public_enabled === false) return null;
-  const o = await sb(`organisations?id=eq.${s[0].org_id}&select=id,name,brand_color,logo_url,settings&limit=1`);
-  return (o && o[0]) || null;
-}
-async function eventById(id) {
-  const r = await sbTry(`events?id=eq.${encodeURIComponent(id)}&select=${EVENT_COLS}&limit=1`, `events?id=eq.${encodeURIComponent(id)}&select=${EVENT_BASE}&limit=1`);
-  return (r && r[0]) || null;
-}
-async function taken(eventIds) {
-  const out = {}; if (!eventIds.length) return out;
-  const cutoff = Date.now() - PENDING_MINUTES * 60000;
-  let rows = [];
-  try { rows = await sb(`bookings?event_id=in.(${eventIds.map(encodeURIComponent).join(',')})&status=in.(booked,pending)&select=event_id,adults,children,status,created_at&limit=10000`) || []; } catch (e) { rows = []; }
-  rows.forEach(b => { if (b.status === 'pending' && new Date(b.created_at).getTime() < cutoff) return; out[b.event_id] = (out[b.event_id] || 0) + (+b.adults || 0) + (+b.children || 0); });
-  return out;
-}
-function publicEvent(ev, used, now) {
-  const cap = +ev.capacity || 0, left = cap ? Math.max(0, cap - (used || 0)) : null;
-  const closed = closesAt(ev) <= now.stamp;
-  return { id: String(ev.id), name: ev.name, date: ev.event_date, time: ev.start_time || '', location: ev.location || '',
-    price: +ev.price_pence || 0, concession: +ev.concession_pence || 0, left, status: closed ? 'closed' : (left === 0 ? 'full' : 'open') };
-}
-const payReady = org => !!(org && org.settings && org.settings.stripe_account && org.settings.stripe_ready);
-async function staffUser(req) {
-  const tok = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  if (!tok) return null;
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: KEY, Authorization: `Bearer ${tok}` } });
-  if (!r.ok) return null;
-  const u = await r.json(); return u && u.id ? u : null;
-}
-async function canManage(user, orgId, managersOnly) {
-  try { const s = await sb(`super_admins?user_id=eq.${user.id}&select=user_id&limit=1`); if (Array.isArray(s) && s.length) return true; } catch (e) { /* not a super admin */ }
-  const m = await sb(`memberships?user_id=eq.${user.id}&org_id=eq.${orgId}&status=eq.active&select=role&limit=1`);
-  if (!Array.isArray(m) || !m.length) return false;
-  return managersOnly ? /^(owner|admin|manager)$/i.test(m[0].role || '') : true;
-}
-async function saveOrgSettings(orgId, patch) {
-  const cur = (await sb(`organisations?id=eq.${orgId}&select=settings&limit=1`))[0] || {};
-  const settings = Object.assign({}, cur.settings || {}, patch);
-  await sb(`organisations?id=eq.${orgId}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ settings }) });
-  return settings;
-}
-async function markArrived(b, ev) {   // the booking is counted, and an anonymous check-in is made for it
-  const claim = newToken(), day = londonNow().day;
-  await sb(`bookings?id=eq.${b.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ arrived_at: new Date().toISOString() }) });
-  const row = { org_id: String(ev.org_id), event_id: String(ev.id), form_id: 'booking', people: (+b.adults || 0) + (+b.children || 0) || 1, answers: {}, day, claim_token: claim };
-  try { await sb('checkins', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([row]) }); }
-  catch (e) { delete row.claim_token; await sb('checkins', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([row]) }); }
-  try {   // attendance never drops below what staff typed
-    const rows = await sb(`checkins?event_id=eq.${encodeURIComponent(ev.id)}&select=people&limit=5000`);
-    const total = (rows || []).reduce((a, r) => a + (+r.people || 1), 0);
-    const e2 = await sb(`events?id=eq.${encodeURIComponent(ev.id)}&select=attendees&limit=1`);
-    if (total > (+(e2 && e2[0] && e2[0].attendees) || 0)) await sb(`events?id=eq.${encodeURIComponent(ev.id)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ attendees: total }) });
-  } catch (e) { /* the arrival is saved either way */ }
-  return claim;
-}
-async function confirmPaid(b) {   // check with Stripe itself, so a payment can't be faked
-  if (b.status === 'booked' && b.paid) return true;
-  if (!b.stripe_session) return false;
-  const org = (await sb(`organisations?id=eq.${b.org_id}&select=id,name,brand_color,settings&limit=1`))[0] || {};
-  const s = await stripe('checkout/sessions/' + encodeURIComponent(b.stripe_session), null, org.settings && org.settings.stripe_account);
-  if (s.payment_status !== 'paid') return false;
-  await sb(`bookings?id=eq.${b.id}&status=neq.booked`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'booked', paid: true }) });
-  const ev = await eventById(b.event_id);
-  if (ev && b.status !== 'booked') { try { await mail.mailBooked(org, ev, Object.assign({}, b, { paid: true })); } catch (e) { /* the place is booked even if the email fails */ } }
-  return true;
-}
-
-// ── the handler ──
-async function handler(req, res) {
-  res.setHeader('Cache-Control', 'no-store');
-  if (req.method === 'OPTIONS') return res.status(204).end();
-  if (req.method !== 'POST' && req.method !== 'GET') return bad(res, 'Method not allowed', 405);
-  const q = req.query || {}, body = (req.body && typeof req.body === 'object') ? req.body : {};
-  const action = String(body.action || q.action || '');
-  if (action !== 'webhook' && rateLimited(req)) return bad(res, 'Too many requests. Please wait a moment and try again.', 429);
-  try {
-    // Stripe tells us a payment finished. We re-check it with Stripe before trusting it.
-    if (action === 'webhook') {
-      const obj = body && body.data && body.data.object;
-      if (body.type === 'checkout.session.completed' && obj && obj.id) {
-        const rows = await sb(`bookings?stripe_session=eq.${encodeURIComponent(obj.id)}&select=*&limit=1`);
-        if (Array.isArray(rows) && rows[0]) await confirmPaid(rows[0]);
-      }
-      return res.status(200).json({ received: true });
-    }
-
-    // ── public ──
-    if (action === 'list' || action === 'event') {
-      const org = await orgFromToken(body.t || q.t); if (!org) return bad(res, 'This link has expired or is not right.', 404);
-      const now = londonNow();
-      let evs = await sbTry(`events?org_id=eq.${org.id}&event_date=gte.${now.day}&select=${EVENT_COLS}&order=event_date.asc&limit=60`, `events?org_id=eq.${org.id}&event_date=gte.${now.day}&select=${EVENT_BASE}&order=event_date.asc&limit=60`);
-      evs = (evs || []).filter(e => e.public_enabled !== false && e.bookable !== false);
-      if (action === 'event') evs = evs.filter(e => String(e.id) === String(body.id || q.id));
-      const used = await taken(evs.map(e => String(e.id)));
-      return res.status(200).json({ ok: true, org: { name: org.name, colour: org.brand_color || '', logo: org.logo_url || '' }, payments: payReady(org),
-        events: evs.map(e => publicEvent(e, used[String(e.id)], now)) });
-    }
-    if (action === 'book') {
-      if (body.hp) return res.status(200).json({ ok: true, status: 'booked' });              // a bot filled the hidden box
-      const org = await orgFromToken(body.t); if (!org) return bad(res, 'This link has expired or is not right.', 404);
-      const ev = await eventById(body.event_id);
-      if (!ev || String(ev.org_id) !== String(org.id) || ev.public_enabled === false || ev.bookable === false) return bad(res, 'This event is not taking bookings.', 404);
-      const now = londonNow(); if (closesAt(ev) <= now.stamp) return bad(res, 'Booking for this event has closed.');
-      const adults = int(body.adults, 1, 20), children = int(body.children, 0, 20), conc = ev.concession_pence ? int(body.concessions, 0, adults) : 0;
-      const name = trim(body.name, 120), email = trim(body.email, 254).toLowerCase(), phone = trim(body.phone, 30);
-      if (!name) return bad(res, 'Please add your name.');
-      if (!okEmail(email)) return bad(res, 'Please add an email address so we can send your confirmation.');
-      const need = adults + children, used = (await taken([String(ev.id)]))[String(ev.id)] || 0, cap = +ev.capacity || 0;
-      const full = cap && used + need > cap;
-      const row = { org_id: String(org.id), event_id: String(ev.id), token: newToken(), name, email, phone: phone || null, adults, children, concessions: conc, optin: !!body.optin, method: 'online' };
-      if (full) {
-        if (!body.waitlist) return res.status(200).json({ ok: false, full: true, left: Math.max(0, cap - used), error: cap - used > 0 ? `Only ${cap - used} place${cap - used === 1 ? '' : 's'} left.` : 'This event is full.' });
-        await sb('bookings', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([Object.assign(row, { status: 'waitlist', amount_pence: 0 })]) });
-        try { await mail.mailWaitlist(org, ev, row); } catch (e) { /* still on the list */ }
-        return res.status(200).json({ ok: true, status: 'waitlist', token: row.token });
-      }
-      const amount = (adults - conc) * (+ev.price_pence || 0) + conc * (+ev.concession_pence || 0);
-      if (!amount) {
-        await sb('bookings', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([Object.assign(row, { status: 'booked', amount_pence: 0 })]) });
-        try { await mail.mailBooked(org, ev, row); } catch (e) { /* booked even if the email fails */ }
-        return res.status(200).json({ ok: true, status: 'booked', token: row.token, first: name.split(' ')[0], people: need });
-      }
-      if (!payReady(org)) return bad(res, 'This organisation can\u2019t take payments online yet. Please contact them to book.');
-      await sb('bookings', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([Object.assign(row, { status: 'pending', amount_pence: amount })]) });
-      const lines = [];
-      if (adults - conc > 0) lines.push({ price_data: { currency: 'gbp', unit_amount: +ev.price_pence, product_data: { name: ev.name + (conc ? ' (standard)' : '') } }, quantity: adults - conc });
-      if (conc > 0) lines.push({ price_data: { currency: 'gbp', unit_amount: +ev.concession_pence, product_data: { name: ev.name + ' (concession)' } }, quantity: conc });
-      const session = await stripe('checkout/sessions', {
-        mode: 'payment', customer_email: email, line_items: lines,
-        success_url: `${APP_URL}/whats-on.html?t=${encodeURIComponent(body.t)}&paid=${row.token}&session={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${APP_URL}/whats-on.html?t=${encodeURIComponent(body.t)}&e=${encodeURIComponent(ev.id)}&unpaid=${row.token}`,
-        expires_at: Math.floor(Date.now() / 1000) + PENDING_MINUTES * 60 + 60, metadata: { booking: row.token }
-      }, org.settings.stripe_account);
-      await sb(`bookings?token=eq.${row.token}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ stripe_session: session.id }) });
-      return res.status(200).json({ ok: true, status: 'pending', url: session.url, token: row.token });
-    }
-    if (action === 'mine' || action === 'confirm' || action === 'cancel' || action === 'unpaid') {
-      const tok = trim(body.token, 64); if (!tok) return bad(res, 'Missing booking.');
-      const rows = await sb(`bookings?token=eq.${encodeURIComponent(tok)}&select=*&limit=1`);
-      const b = Array.isArray(rows) && rows[0]; if (!b) return bad(res, 'We couldn\u2019t find that booking.', 404);
-      const ev = await eventById(b.event_id);
-      if (action === 'confirm' && b.status === 'pending') { await confirmPaid(b); }
-      if (action === 'unpaid' && b.status === 'pending') {   // they left Stripe without paying: free the places
-        await sb(`bookings?id=eq.${b.id}&status=eq.pending`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'cancelled' }) });
-      }
-      if (action === 'cancel' && b.status !== 'cancelled') {
-        if (ev && closesAt(ev) <= londonNow().stamp && b.status === 'booked') return bad(res, 'This event has already started, so the booking can\u2019t be cancelled here.');
-        await sb(`bookings?id=eq.${b.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'cancelled' }) });
-        try { const org = (await sb(`organisations?id=eq.${b.org_id}&select=name,brand_color,settings&limit=1`))[0] || {}; if (ev) await mail.mailCancelled(org, ev, b); } catch (e) { /* cancelled anyway */ }
-      }
-      const now = (await sb(`bookings?id=eq.${b.id}&select=status,paid,arrived_at&limit=1`))[0] || b;
-      return res.status(200).json({ ok: true, booking: { status: now.status, paid: !!now.paid, first: String(b.name || '').split(' ')[0], adults: b.adults, children: b.children, amount: b.amount_pence, event: ev ? { id: String(ev.id), name: ev.name, date: ev.event_date, time: ev.start_time || '', location: ev.location || '' } : null,
-        calendar: ev ? mail.calendarLink(ev) : '' } });
-    }
-
-    // ── staff ──
-    const user = await staffUser(req);
-    if (!user) return bad(res, 'Please sign in again.', 401);
-    if (action === 'staff_counts') {
-      const orgId = trim(body.org_id, 64); if (!(await canManage(user, orgId))) return bad(res, 'Not allowed.', 403);
-      const since = new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10);
-      const evs = await sb(`events?org_id=eq.${orgId}&event_date=gte.${since}&select=id,event_date&limit=2000`) || [];
-      const today = londonNow().day, ids = evs.map(e => String(e.id)), dates = {}; evs.forEach(e => { dates[String(e.id)] = e.event_date; });
-      const out = {}; if (!ids.length) return res.status(200).json({ ok: true, counts: out });
-      const rows = await sb(`bookings?event_id=in.(${ids.join(',')})&select=event_id,adults,children,status,paid,amount_pence,arrived_at&limit=20000`) || [];
-      rows.forEach(b => {
-        const k = b.event_id, c = out[k] = out[k] || { booked: 0, people: 0, money: 0, arrived: 0, waitlist: 0, noshow: 0 };
-        const n = (+b.adults || 0) + (+b.children || 0);
-        if (b.status === 'booked') { c.booked++; c.people += n; if (b.paid) c.money += +b.amount_pence || 0; if (b.arrived_at) c.arrived += n; else if (dates[k] < today) c.noshow += n; }
-        if (b.status === 'waitlist') c.waitlist += n;
-      });
-      return res.status(200).json({ ok: true, counts: out });
-    }
-    if (/^staff_(list|add|arrive|cancel)$/.test(action)) {
-      const ev = await eventById(body.event_id); if (!ev) return bad(res, 'Event not found.', 404);
-      if (!(await canManage(user, ev.org_id))) return bad(res, 'Not allowed.', 403);
-      if (action === 'staff_list') {
-        const rows = await sb(`bookings?event_id=eq.${encodeURIComponent(ev.id)}&status=neq.pending&select=id,name,email,phone,adults,children,concessions,amount_pence,paid,method,status,arrived_at,created_at&order=created_at.asc&limit=2000`) || [];
-        return res.status(200).json({ ok: true, event: publicEvent(ev, (await taken([String(ev.id)]))[String(ev.id)], londonNow()), bookings: rows });
-      }
-      if (action === 'staff_add') {
-        const name = trim(body.name, 120); if (!name) return bad(res, 'Add their name.');
-        const adults = int(body.adults, 1, 50), children = int(body.children, 0, 50), email = trim(body.email, 254).toLowerCase();
-        if (email && !okEmail(email)) return bad(res, 'That email doesn\u2019t look right.');
-        const row = { org_id: String(ev.org_id), event_id: String(ev.id), token: newToken(), name, email: email || null, phone: trim(body.phone, 30) || null, adults, children, concessions: 0,
-          amount_pence: Math.max(0, Math.round((+body.amount || 0) * 100)), paid: !!body.paid, method: body.method === 'cash' ? 'cash' : 'staff', status: 'booked' };
-        await sb('bookings', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([row]) });
-        if (email) { try { const org = (await sb(`organisations?id=eq.${ev.org_id}&select=name,brand_color,settings&limit=1`))[0] || {}; await mail.mailBooked(org, ev, row); } catch (e) { /* booked anyway */ } }
-        return res.status(200).json({ ok: true });
-      }
-      const rows = await sb(`bookings?id=eq.${int(body.id, 0, 1e12)}&event_id=eq.${encodeURIComponent(ev.id)}&select=*&limit=1`);
-      const b = Array.isArray(rows) && rows[0]; if (!b) return bad(res, 'Booking not found.', 404);
-      if (action === 'staff_arrive') { if (!b.arrived_at && b.status === 'booked') await markArrived(b, ev); return res.status(200).json({ ok: true }); }
-      if (action === 'staff_cancel') { await sb(`bookings?id=eq.${b.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'cancelled' }) }); return res.status(200).json({ ok: true, refund: !!b.paid }); }
-    }
-    if (action === 'connect' || action === 'connect_status') {
-      const orgId = trim(body.org_id, 64); if (!(await canManage(user, orgId, action === 'connect'))) return bad(res, 'Only a manager can set up payments.', 403);
-      const org = (await sb(`organisations?id=eq.${orgId}&select=id,name,settings&limit=1`))[0]; if (!org) return bad(res, 'Organisation not found.', 404);
-      let acct = org.settings && org.settings.stripe_account;
-      if (action === 'connect_status') {
-        if (!acct) return res.status(200).json({ ok: true, connected: false, ready: false });
-        const a = await stripeV2('core/accounts/' + encodeURIComponent(acct) + '?include=configuration.merchant&include=requirements');
-        const ready = cardsActive(a);
-        if (ready !== !!(org.settings || {}).stripe_ready) await saveOrgSettings(orgId, { stripe_ready: ready });
-        return res.status(200).json({ ok: true, connected: true, ready });
-      }
-      if (!acct) {   // their own Stripe account: full Stripe dashboard, they collect payments directly, Stripe handles fees and losses
-        const a = await stripeV2('core/accounts', {
-          contact_email: user.email || undefined, display_name: org.name, dashboard: 'full',
-          identity: { country: 'gb' },
-          configuration: { merchant: { capabilities: { card_payments: { requested: true } } } },
-          defaults: { currency: 'gbp', locales: ['en-GB'], responsibilities: { fees_collector: 'stripe', losses_collector: 'stripe' } }
-        });
-        acct = a.id; await saveOrgSettings(orgId, { stripe_account: acct, stripe_ready: false });
-      }
-      const link = await stripeV2('core/account_links', { account: acct, use_case: { type: 'account_onboarding', account_onboarding: { refresh_url: `${APP_URL}/app.html?stripe=again`, return_url: `${APP_URL}/app.html?stripe=done` } } });
-      return res.status(200).json({ ok: true, url: link.url });
-    }
-    return bad(res, 'Unknown action');
-  } catch (e) {
-    console.error('[bookings]', action, e && e.message);
-    const m = (e && e.message) || '';
-    // set-up problems are shown as they are, so whoever is setting up knows what to fix
-    if (/STRIPE_SECRET_KEY|Payments are not set up/i.test(m)) return bad(res, 'Payments aren\u2019t switched on yet: the Stripe key is missing in Vercel. Add STRIPE_SECRET_KEY under Settings, Environment Variables, then redeploy.', 500);
-    if (/^Stripe:/.test(m)) return bad(res, m, 502);
-    if (/bookings|price_pence|bookable|start_time|claim_token|relation|column/i.test(m)) return bad(res, 'The database isn\u2019t ready for bookings yet: run bookings.sql in Supabase. (' + m.slice(0, 120) + ')', 500);
-    return bad(res, 'Something went wrong: ' + m.slice(0, 160), 500);
+  async function api(body) {
+    var tok = '';
+    try { var s = await sb.auth.getSession(); tok = (s && s.data && s.data.session && s.data.session.access_token) || ''; } catch (e) { /* not signed in */ }
+    var r = await fetch('/api/bookings', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify(body) });
+    var j = await r.json().catch(function () { return { ok: false, error: 'Something went wrong.' }; });
+    if (!j.ok) throw new Error(j.error || 'Something went wrong.');
+    return j;
   }
-}
-module.exports = handler;
-module.exports._test = { publicEvent, closesAt, flatten, londonNow };
+  async function payStatus(force) {
+    if (PAY.checked && !force) return PAY;
+    try { var j = await api({ action: 'connect_status', org_id: String(orgId) }); PAY = { checked: true, connected: !!j.connected, ready: !!j.ready }; }
+    catch (e) { PAY = { checked: true, connected: false, ready: false, error: e.message }; }
+    return PAY;
+  }
+  async function siteToken() {
+    if (SITE_TOKEN) return SITE_TOKEN;
+    try { var r = await sb.from('volunteer_sites').select('public_token').eq('org_id', orgId).limit(1); SITE_TOKEN = r && r.data && r.data[0] && r.data[0].public_token; } catch (e) { SITE_TOKEN = null; }
+    return SITE_TOKEN;
+  }
+
+  // ══ the event screen: a price, and that's it ══
+  var CUR = null;
+  function evRow(ev) {
+    var p = ev && ev.price_pence ? (ev.price_pence / 100).toFixed(2).replace(/\.00$/, '') : '', c = ev && ev.concession_pence ? (ev.concession_pence / 100).toFixed(2).replace(/\.00$/, '') : '';
+    return '<label>Bookings</label>' +
+      '<div style="border:1px solid var(--border);background:#fff;border-radius:10px;padding:12px 14px">' +
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:14px;color:var(--txt);' + TXT + '"><input type="checkbox" id="vlbk-on" ' + (!ev || ev.bookable !== false ? 'checked' : '') + ' style="width:18px;height:18px;margin:0;flex:none"/><span>People can book this event on your What\u2019s on page</span></div>' +
+        '<div class="form-grid-2" id="vlbk-fields"><div class="form-row" style="margin:0"><label style="' + TXT + '">Price (\u00a3)</label><input id="vlbk-price" inputmode="decimal" placeholder="Free" value="' + esc(p) + '"/></div>' +
+          '<div class="form-row" style="margin:0"><label style="' + TXT + '">Start time</label><input id="vlbk-time" type="time" value="' + esc((ev && ev.start_time) || '') + '"/></div></div>' +
+        '<div style="margin-top:8px;font-size:13px;color:var(--txt2);' + TXT + '"><a href="#" id="vlbk-conc-link"' + (c ? ' style="display:none"' : '') + '>+ Add a concession price</a><span id="vlbk-conc-box"' + (c ? '' : ' style="display:none"') + '>Concessions \u00a3 <input id="vlbk-conc" inputmode="decimal" value="' + esc(c) + '" style="width:90px;display:inline-block;margin-left:4px"/></span></div>' +
+        '<div id="vlbk-warn" style="display:none;font-size:12px;color:#8A5A00;background:#FFF6E0;border-radius:8px;padding:7px 10px;margin-top:10px;' + TXT + '"></div>' +
+        '<div style="font-size:12px;color:var(--txt3);margin-top:8px;' + TXT + '">Capacity sets the places. When it\u2019s full, people join a waiting list. Booking closes at the start time.</div>' +
+      '</div>';
+  }
+  function readPence(id) { var v = String(($(id) || {}).value || '').replace(/[\u00a3,\s]/g, ''); if (!v) return null; var n = Math.round(parseFloat(v) * 100); return n > 0 ? n : null; }
+  function warn() {
+    var w = $('vlbk-warn'); if (!w) return;
+    var paid = !!readPence('vlbk-price') && $('vlbk-on').checked;
+    if (paid && PAY.checked && !PAY.ready) { w.style.display = ''; w.innerHTML = 'To take payments, connect Stripe in Settings, then Events. Until then, people can\u2019t book this event online.'; }
+    else w.style.display = 'none';
+  }
+  function injectEventRow(ev) {
+    var modal = $('modal-ev'); if (!modal) return;
+    var old = $('vlbk-wrap'); if (old) old.remove();
+    var wrap = document.createElement('div'); wrap.id = 'vlbk-wrap'; wrap.className = 'form-row'; wrap.innerHTML = evRow(ev);
+    var after = $('vlcie-wrap') || modal.querySelector('[data-ev-contracts]'), footer = modal.querySelector('.modal-footer');
+    if (after) after.insertAdjacentElement('afterend', wrap); else if (footer) footer.parentNode.insertBefore(wrap, footer); else return;
+    CUR = ev ? ev.id : null;
+    $('vlbk-conc-link').addEventListener('click', function (e) { e.preventDefault(); this.style.display = 'none'; $('vlbk-conc-box').style.display = ''; $('vlbk-conc').focus(); });
+    ['vlbk-price', 'vlbk-on'].forEach(function (id) { $(id).addEventListener('input', warn); $(id).addEventListener('change', warn); });
+    payStatus().then(warn);
+  }
+  function wireEventModal() {
+    var oa = window.openAddEv, oe = window.openEditEv, os = window.saveEv;
+    if (typeof oa === 'function' && !oa._bk) { window.openAddEv = function () { var r = oa.apply(this, arguments); setTimeout(function () { injectEventRow(null); }, 20); return r; }; window.openAddEv._bk = true; }
+    if (typeof oe === 'function' && !oe._bk) { window.openEditEv = function (id) { var r = oe.apply(this, arguments); setTimeout(function () { injectEventRow((DB.events || []).filter(function (e) { return String(e.id) === String(id); })[0] || null); }, 20); return r; }; window.openEditEv._bk = true; }
+    if (typeof os === 'function' && !os._bk) {
+      window.saveEv = function () {
+        var extra = $('vlbk-wrap') ? { bookable: !!$('vlbk-on').checked, price_pence: readPence('vlbk-price'), concession_pence: readPence('vlbk-conc'), start_time: (($('vlbk-time') || {}).value || '') || null } : null;
+        var oi = window.sbInsert, ou = window.sbUpdate, missing = false;
+        var wrapFn = function (fn) { return async function (table, payload, id) {
+          if (table !== 'events' || !extra) return fn.apply(null, arguments);
+          var p = Object.assign({}, payload, extra);
+          try { return await (id === undefined ? fn(table, p) : fn(table, p, id)); }
+          catch (e) { if (!/bookable|price_pence|concession_pence|start_time|column/i.test((e && e.message) || '')) throw e; missing = true; return id === undefined ? fn(table, payload) : fn(table, payload, id); }
+        }; };
+        window.sbInsert = wrapFn(oi); window.sbUpdate = wrapFn(ou);
+        var done = function () { window.sbInsert = oi; window.sbUpdate = ou; if (missing) alert('The event is saved, but its price and booking settings could not be. Run bookings.sql in Supabase first.'); };
+        var r; try { r = os.apply(this, arguments); } catch (e) { done(); throw e; }
+        if (r && typeof r.then === 'function') r.then(done, done); else setTimeout(done, 2500);
+        return r;
+      };
+      window.saveEv._bk = true;
+    }
+  }
+
+  // ══ the Events page: a Booked column ══
+  async function loadCounts() { try { var j = await api({ action: 'staff_counts', org_id: String(orgId) }); COUNTS = j.counts || {}; } catch (e) { COUNTS = {}; } }
+  function paintColumn() {
+    var tbl = document.querySelector('#ev-list table'); if (!tbl) return false;
+    var head = tbl.querySelector('thead tr'); if (!head) return false;
+    if (head.querySelector('.vlbk-th')) return true;
+    var ths = [].slice.call(head.querySelectorAll('th')), fbIdx = ths.findIndex(function (t) { return t.textContent.trim() === 'Feedback'; }), idx = fbIdx >= 0 ? fbIdx : 3;
+    var th = document.createElement('th'); th.className = 'vlbk-th'; th.textContent = 'Booked'; th.style.textAlign = 'center'; ths[idx].insertAdjacentElement('afterend', th);
+    tbl.querySelectorAll('tbody tr').forEach(function (tr) {
+      var edit = tr.querySelector('button[onclick^="openEditEv"]'), m = edit && /openEditEv\('([^']+)'\)/.exec(edit.getAttribute('onclick') || '');
+      var td = document.createElement('td'); td.style.textAlign = 'center';
+      var c = m && COUNTS[m[1]];
+      td.innerHTML = c && (c.booked || c.waitlist) ? '<a href="#" onclick="vlbkOpen(\'' + esc(m[1]) + '\');return false" style="font-weight:600" title="Who\u2019s coming">' + c.people + (c.money ? ' \u00b7 ' + money(c.money) : '') + '</a>' + (c.waitlist ? '<div style="font-size:11px;color:var(--txt3)">+' + c.waitlist + ' waiting</div>' : '')
+        : (m ? '<a href="#" onclick="vlbkOpen(\'' + esc(m[1]) + '\');return false" style="color:var(--txt3)">\u2014</a>' : '\u2014');
+      if (tr.children[idx]) tr.children[idx].insertAdjacentElement('afterend', td);
+    });
+    return true;
+  }
+  function paintSoon() { var t = 0; (function w() { var ok = document.querySelector('#ev-list th.civ-th') || t > 8; if (ok && paintColumn()) return; if (++t < 20) setTimeout(w, 150); })(); }
+
+  // ══ who's coming ══
+  var WHO = null;
+  function whoHTML() {
+    var ev = WHO.event, rows = WHO.bookings, past = ev.date < new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
+    var live = rows.filter(function (b) { return b.status === 'booked'; }), ppl = function (b) { return (+b.adults || 0) + (+b.children || 0); };
+    var booked = live.reduce(function (a, b) { return a + ppl(b); }, 0), arrived = live.filter(function (b) { return b.arrived_at; }).reduce(function (a, b) { return a + ppl(b); }, 0);
+    var takenMoney = live.filter(function (b) { return b.paid; }).reduce(function (a, b) { return a + (+b.amount_pence || 0); }, 0), waiting = rows.filter(function (b) { return b.status === 'waitlist'; });
+    var line = booked + ' booked' + (ev.left != null ? ' \u00b7 ' + ev.left + ' place' + (ev.left === 1 ? '' : 's') + ' left' : '') + (takenMoney ? ' \u00b7 ' + money(takenMoney) : '') + (arrived ? ' \u00b7 ' + arrived + ' arrived' : '') + (past && booked > arrived ? ' \u00b7 ' + (booked - arrived) + ' didn\u2019t come' : '') + (waiting.length ? ' \u00b7 ' + waiting.reduce(function (a, b) { return a + ppl(b); }, 0) + ' waiting' : '');
+    var status = function (b) {
+      if (b.status === 'cancelled') return '<span style="color:var(--txt3)">Cancelled' + (b.paid ? ' \u00b7 refund due' : '') + '</span>';
+      if (b.status === 'waitlist') return '<span style="color:#8A5A00">Waiting list</span>';
+      if (b.arrived_at) return '<span style="color:#065F46">Arrived</span>';
+      return '<span>' + (b.paid ? (b.method === 'cash' ? 'Paid cash' : 'Paid') : (+b.amount_pence ? 'Pay on the day' : 'Booked')) + '</span>';
+    };
+    return '<h2>' + esc(ev.name) + '</h2><div style="font-size:13px;color:var(--txt2);margin:-6px 0 12px;' + TXT + '">' + esc(line) + '</div>' +
+      '<div style="max-height:52vh;overflow:auto">' + (rows.length ? rows.map(function (b) {
+        var kids = +b.children || 0;
+        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--border);font-size:13px;' + TXT + '"><div style="flex:1;min-width:0"><div style="font-weight:600;color:var(--txt)">' + esc(b.name) + '</div><div style="color:var(--txt3);font-size:12px">' + (+b.adults || 0) + ' adult' + (+b.adults === 1 ? '' : 's') + (kids ? ', ' + kids + ' child' + (kids === 1 ? '' : 'ren') : '') + (b.phone ? ' \u00b7 ' + esc(b.phone) : '') + (b.email ? ' \u00b7 ' + esc(b.email) : '') + '</div></div>' +
+          '<div style="white-space:nowrap">' + status(b) + '</div>' +
+          (b.status === 'booked' && !b.arrived_at ? '<button class="btn btn-ghost btn-sm" onclick="vlbkArrive(' + b.id + ')">Arrived</button>' : '') +
+          (b.status === 'booked' || b.status === 'waitlist' ? '<button class="btn btn-ghost btn-sm" onclick="vlbkCancel(' + b.id + ')" title="Cancel this booking">&times;</button>' : '') + '</div>';
+      }).join('') : '<div style="font-size:13px;color:var(--txt3);padding:10px 0;' + TXT + '">No bookings yet.</div>') + '</div>' +
+      '<details style="margin-top:12px"><summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--em2);' + TXT + '">+ Add a booking (phone, walk-in or cash)</summary>' +
+        '<div class="form-grid-2" style="margin-top:8px"><div class="form-row"><label>Name</label><input id="vlbk-a-name"/></div><div class="form-row"><label>Phone or email</label><input id="vlbk-a-contact"/></div></div>' +
+        '<div class="form-grid-2"><div class="form-row"><label>Adults</label><input id="vlbk-a-ad" type="number" min="1" value="1"/></div><div class="form-row"><label>Children</label><input id="vlbk-a-ch" type="number" min="0" value="0"/></div></div>' +
+        (ev.price ? '<div style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:8px;' + TXT + '"><input type="checkbox" id="vlbk-a-paid" style="width:16px;height:16px;margin:0"/><span>Paid cash \u00a3</span><input id="vlbk-a-amt" inputmode="decimal" style="width:80px" value="' + (ev.price / 100) + '"/></div>' : '') +
+        '<div id="vlbk-a-err" style="font-size:12px;color:#B91C1C;min-height:14px"></div><button class="btn btn-p btn-sm" onclick="vlbkAdd()">Add booking</button></details>' +
+      '<div class="modal-footer"><button class="btn btn-p" onclick="setCloseModal()">Close</button></div>';
+  }
+  async function refreshWho() { var j = await api({ action: 'staff_list', event_id: WHO.id }); WHO.event = j.event; WHO.bookings = j.bookings || []; setModal(whoHTML(), 600); }
+  window.vlbkOpen = async function (eventId) {
+    var ev = (DB.events || []).filter(function (e) { return String(e.id) === String(eventId); })[0];
+    setModal('<h2>' + esc(ev ? ev.name : 'Event') + '</h2><div class="cxp-s">Loading bookings\u2026</div>');
+    try { WHO = { id: String(eventId) }; await refreshWho(); }
+    catch (e) { setModal('<h2>' + esc(ev ? ev.name : 'Event') + '</h2><div class="alert alert-warn">' + esc(e.message) + '</div><div class="modal-footer"><button class="btn btn-p" onclick="setCloseModal()">Close</button></div>'); }
+  };
+  window.vlbkArrive = async function (id) { try { await api({ action: 'staff_arrive', event_id: WHO.id, id: id }); await refreshWho(); afterChange(); } catch (e) { alert(e.message); } };
+  window.vlbkCancel = async function (id) {
+    if (!confirm('Cancel this booking? Their place goes back on sale.')) return;
+    try { var j = await api({ action: 'staff_cancel', event_id: WHO.id, id: id }); if (j.refund) alert('Cancelled. They paid online, so refund them from your Stripe dashboard.'); await refreshWho(); afterChange(); } catch (e) { alert(e.message); }
+  };
+  window.vlbkAdd = async function () {
+    var err = $('vlbk-a-err'), name = $('vlbk-a-name').value.trim(), contact = $('vlbk-a-contact').value.trim(); err.textContent = '';
+    if (!name) { err.textContent = 'Add their name.'; return; }
+    var isEmail = contact.indexOf('@') > 0, paidBox = $('vlbk-a-paid');
+    try {
+      await api({ action: 'staff_add', event_id: WHO.id, name: name, email: isEmail ? contact : '', phone: isEmail ? '' : contact, adults: +$('vlbk-a-ad').value || 1, children: +$('vlbk-a-ch').value || 0,
+        method: paidBox && paidBox.checked ? 'cash' : 'staff', paid: !!(paidBox && paidBox.checked), amount: paidBox && paidBox.checked ? parseFloat(String($('vlbk-a-amt').value).replace(/[\u00a3,]/g, '')) || 0 : 0 });
+      await refreshWho(); afterChange();
+    } catch (e) { err.textContent = e.message; }
+  };
+  function afterChange() { loadCounts().then(function () { var th = document.querySelector('#ev-list th.vlbk-th'); if (th && typeof renderEvents === 'function') renderEvents(); }); }
+
+  // ══ Settings > Events: connect Stripe once, copy the What's on link ══
+  async function settingsCard() {
+    var body = $('st-body'); if (!body || (typeof _setSection !== 'undefined' && _setSection !== 'feedback')) return;
+    var old = $('vlbk-card'); if (old) old.remove();
+    body.insertAdjacentHTML('afterbegin', '<div id="vlbk-card" style="margin:0 0 26px;padding-bottom:18px;border-bottom:2px solid var(--border)"><div style="font-size:15px;font-weight:700;color:var(--txt);' + TXT + '">Bookings and payments</div><div id="vlbk-card-body" style="font-size:13px;color:var(--txt3);' + TXT + '">Loading\u2026</div></div>');
+    var st = await payStatus(true), tok = await siteToken(), link = tok ? location.origin + '/whats-on.html?t=' + encodeURIComponent(tok) : '';
+    var pay = st.ready ? '<span style="color:#065F46;font-weight:600">\u2713 Stripe connected. Payments go straight to your bank.</span>'
+      : st.connected ? 'Stripe is connected but not finished. <button class="btn btn-p btn-sm" onclick="vlbkConnect()">Finish setting up Stripe</button>'
+      : 'Free events can be booked now. To take payments for paid events, connect your own Stripe account (about 5 minutes). <button class="btn btn-p btn-sm" onclick="vlbkConnect()">Connect Stripe</button>';
+    var b = $('vlbk-card-body'); if (!b) return;
+    b.innerHTML = '<div style="line-height:1.6;margin:4px 0 12px;color:var(--txt2)">' + pay + '</div>' +
+      (link ? '<div style="font-size:13px;color:var(--txt);font-weight:600;margin-bottom:4px">Your What\u2019s on page</div><div style="font-size:12px;color:var(--txt3);margin-bottom:6px">Every upcoming event appears here by itself. Put this on your website once.</div>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap"><input readonly value="' + esc(link) + '" style="flex:1;min-width:220px;font-size:12px" onclick="this.select()"/>' +
+        '<button class="btn btn-ghost btn-sm" onclick="vlbkCopy(\'link\')">Copy link</button><button class="btn btn-ghost btn-sm" onclick="vlbkCopy(\'button\')">Copy a Book now button</button><button class="btn btn-ghost btn-sm" onclick="vlbkCopy(\'embed\')">Copy the full list for your site</button>' +
+        '<a class="btn btn-ghost btn-sm" href="' + esc(link) + '" target="_blank" rel="noopener">Open</a></div>'
+        : '<div style="font-size:12px;color:var(--txt3)">Create your sign-in QR on the Events page first; your What\u2019s on page uses the same link.</div>');
+    b.dataset.link = link;
+  }
+  window.vlbkCopy = function (kind) {
+    var link = ($('vlbk-card-body') || {}).dataset ? $('vlbk-card-body').dataset.link : '';
+    var colour = (typeof currentOrg !== 'undefined' && currentOrg && currentOrg.brand_color) || '#1F6F6D';
+    var text = kind === 'button' ? '<a href="' + link + '" style="display:inline-block;background:' + colour + ';color:#fff;padding:12px 22px;border-radius:10px;font-weight:600;text-decoration:none;font-family:inherit">Book now</a>'
+      : kind === 'embed' ? '<iframe src="' + link + '" title="What\u2019s on" style="width:100%;min-height:900px;border:0" loading="lazy"></iframe>' : link;
+    (navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(text) : Promise.reject()).then(function () { alert('Copied. Paste it into your website.'); }, function () { prompt('Copy this:', text); });
+  };
+  window.vlbkConnect = async function () {
+    try { var j = await api({ action: 'connect', org_id: String(orgId) }); location.href = j.url; } catch (e) { alert('Couldn\u2019t start Stripe: ' + e.message); }
+  };
+
+  function ready(fn) { var t = 0; (function w() { if (typeof openAddEv === 'function' && typeof saveEv === 'function' && typeof renderEvents === 'function' && typeof renderFeedbackQuestionsCard === 'function' && typeof sb !== 'undefined') return fn(); if (++t < 100) setTimeout(w, 100); })(); }
+  ready(function () {
+    wireEventModal();
+    var re = window.renderEvents;
+    window.renderEvents = function () { var r = re.apply(this, arguments); loadCounts().then(paintSoon); return r; };
+    var rf = window.renderFeedbackQuestionsCard;
+    window.renderFeedbackQuestionsCard = function () { var r = rf.apply(this, arguments); try { settingsCard(); } catch (e) { console.warn('[bookings]', e); } return r; };
+    if (/[?&]stripe=(done|again)/.test(location.search)) payStatus(true).then(function (s) { alert(s.ready ? 'Stripe is connected. You can now take payments for events.' : 'Stripe isn\u2019t finished yet. You can carry on from Settings, then Events.'); });
+  });
+  if (window.__VORLANA_TEST) window.__bkTest = { settingsCard: settingsCard, readPence: readPence, whoHTML: function (w) { WHO = w; return whoHTML(); }, counts: function (c) { COUNTS = c; }, paintColumn: paintColumn };
+})();
