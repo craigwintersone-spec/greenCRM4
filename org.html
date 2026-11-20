@@ -182,9 +182,10 @@ tr:hover td{background:rgba(31,111,109,.02)}
         </select></div>
         <div class="form-row"><label>Plan</label><select id="f-plan">
           <option value="free">Free — £0/mo</option>
-          <option value="starter">Community — £1,490/yr (£149/mo)</option>
-          <option value="pro">Standard — £2,900/yr (£290/mo)</option>
-          <option value="network">Provider — £5,900/yr (£590/mo)</option>
+          <option value="group">Starter — £290/yr (£29/mo)</option>
+          <option value="starter">Community — £790/yr (£79/mo)</option>
+          <option value="pro">Standard — £1,490/yr (£149/mo)</option>
+          <option value="network">Provider — £3,490/yr (£349/mo)</option>
         </select></div>
         <div class="form-row"><label>Status</label><select id="f-status">
           <option value="active">Active</option>
@@ -271,7 +272,7 @@ const orgId=params.get('id');
 let orgData=null,currentInviteLink='',currentInviteEmail='';
 
 const $=id=>document.getElementById(id);
-const PRICES={free:0,starter:9,pro:29,network:79};
+const PRICES={free:0,group:29,starter:79,pro:149,network:349};   // monthly list prices
 
 function setStatus(msg,ok=true){
   $('status-msg').textContent=msg;
@@ -301,7 +302,7 @@ async function loadAll(){
   $('breadcrumb-name').textContent=data.name;
   $('org-meta').textContent=[data.sector,data.plan?'Plan: '+data.plan:'',data.status].filter(Boolean).join(' · ');
   // plan badges
-  const planCls={free:'b-free',starter:'b-starter',pro:'b-pro',network:'b-network'};
+  const planCls={free:'b-free',group:'b-starter',starter:'b-starter',pro:'b-pro',network:'b-network'};
   const statCls={active:'b-active',suspended:'b-suspended',trial:'b-trial'};
   $('plan-badges').innerHTML=`<span class="badge ${planCls[data.plan]||'b-free'}">${data.plan||'free'}</span> <span class="badge ${statCls[data.status]||'b-active'}">${data.status||'active'}</span>`;
   // plan strip

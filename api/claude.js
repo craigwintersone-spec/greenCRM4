@@ -9,7 +9,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 
-const ALLOWED_PLANS = ['free', 'starter', 'pro', 'network'];   // every plan has the AI; a free trial for its first 14 days
+const ALLOWED_PLANS = ['free', 'group', 'starter', 'pro', 'network'];   // every plan has the AI; a free trial for its first 14 days
 
 // ── Hardening knobs ─────────────────────────────────────────────
 // Only these exact origins may call from a browser. NO wildcard vercel.app.
@@ -33,7 +33,7 @@ const MAX_MESSAGES = 30;           // sane conversation length
 const MAX_BODY_CHARS = 200_000;    // ~50k tokens of input, generous
 const MAX_FILE_BODY_CHARS = 3_500_000; // one photo or PDF (Vercel's request limit is 4.5 MB)
 const DAILY_CALLS_PER_ORG = 300;   // default quota
-const DAILY_CALLS_BY_PLAN = { free: 30, starter: 60, pro: 300, network: 600 };   // Trial / Community / Standard / Provider
+const DAILY_CALLS_BY_PLAN = { free: 30, group: 30, starter: 60, pro: 300, network: 600 };   // Trial / Starter / Community / Standard / Provider
 const TRIAL_DAYS = 14;
 // ────────────────────────────────────────────────────────────────
 
@@ -146,7 +146,7 @@ module.exports = async function handler(req, res) {
   if (!admin) {
     if (!org) return res.status(403).json({ error: 'No active organisation found for this account.' });
     if (!ALLOWED_PLANS.includes(org.plan)) {
-      return res.status(403).json({ error: 'AI features need a paid plan (Community, Standard or Provider).', code: 'AI_PLAN_GATE' });
+      return res.status(403).json({ error: 'AI features need a paid plan (Starter, Community, Standard or Provider).', code: 'AI_PLAN_GATE' });
     }
     if (org.plan === 'free' && org.createdAt && (Date.now() - new Date(org.createdAt).getTime()) > TRIAL_DAYS * 864e5) {
       return res.status(403).json({ error: 'Your 14-day trial has ended. Choose a plan to keep using the AI features: everything you have recorded is kept.', code: 'AI_TRIAL_ENDED' });

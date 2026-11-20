@@ -53,13 +53,13 @@ export default async function handler(req, res) {
   if (!isSuper && !isMgr) return res.status(403).json({ error: 'Only a manager of this organisation can send invites.' });
   const org = (await q(`organisations?id=eq.${inv.org_id}&select=name,plan&limit=1`))[0] || {};
   // Staff logins included in each plan (Provider: no limit). Super admins can always add people while setting an organisation up.
-  const STAFF_LIMIT = { free: 3, starter: 3, pro: 10 };
+  const STAFF_LIMIT = { free: 3, group: 2, starter: 3, pro: 10 };
   const staffCap = STAFF_LIMIT[org.plan || 'free'];
   if (staffCap && !isSuper) {
     const active = (await q(`memberships?org_id=eq.${inv.org_id}&status=eq.active&select=user_id&limit=1000`)).length;
     if (active + 1 > staffCap) {
       await fetch(`${SUPABASE_URL}/rest/v1/invitations?token=eq.${encodeURIComponent(token)}`, { method: 'DELETE', headers: H }).catch(() => {});   // so it can't be used
-      const planName = { free: 'trial', starter: 'Community plan', pro: 'Standard plan' }[org.plan || 'free'];
+      const planName = { free: 'trial', group: 'Starter plan', starter: 'Community plan', pro: 'Standard plan' }[org.plan || 'free'];
       return res.status(403).json({ error: `Your ${planName} includes ${staffCap} staff logins and you have ${active}. Remove someone on the Team page, or ask us about upgrading.`, code: 'STAFF_LIMIT' });
     }
   }

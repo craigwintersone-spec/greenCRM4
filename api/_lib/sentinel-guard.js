@@ -9,8 +9,8 @@
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const APP_URL = (process.env.APP_URL || 'https://www.vorlana.com').replace(/\/$/, '');
-const PLAN_STAFF = { free: 3, starter: 3, pro: 10 };   // network: unlimited
-const PLAN_AI = { free: 30, starter: 60, pro: 300, network: 600 };
+const PLAN_STAFF = { free: 3, group: 2, starter: 3, pro: 10 };   // network: unlimited
+const PLAN_AI = { free: 30, group: 30, starter: 60, pro: 300, network: 600 };
 const DAY = 864e5;
 
 async function sb(path, opts = {}) {

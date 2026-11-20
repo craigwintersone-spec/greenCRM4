@@ -229,7 +229,7 @@ async function handler(req, res) {
       if (action === 'cancel' && b.status !== 'cancelled') {
         if (ev && closesAt(ev) <= londonNow().stamp && b.status === 'booked') return bad(res, 'This event has already started, so the booking can\u2019t be cancelled here.');
         await sb(`bookings?id=eq.${b.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'cancelled' }) });
-        try { const org = (await sb(`organisations?id=eq.${b.org_id}&select=name,brand_color&limit=1`))[0] || {}; if (ev) await mail.mailCancelled(org, ev, b); } catch (e) { /* cancelled anyway */ }
+        try { const org = (await sb(`organisations?id=eq.${b.org_id}&select=name,brand_color,settings&limit=1`))[0] || {}; if (ev) await mail.mailCancelled(org, ev, b); } catch (e) { /* cancelled anyway */ }
       }
       const now = (await sb(`bookings?id=eq.${b.id}&select=status,paid,arrived_at&limit=1`))[0] || b;
       return res.status(200).json({ ok: true, booking: { status: now.status, paid: !!now.paid, first: String(b.name || '').split(' ')[0], adults: b.adults, children: b.children, amount: b.amount_pence, event: ev ? { id: String(ev.id), name: ev.name, date: ev.event_date, time: ev.start_time || '', location: ev.location || '' } : null,
@@ -268,7 +268,7 @@ async function handler(req, res) {
         const row = { org_id: String(ev.org_id), event_id: String(ev.id), token: newToken(), name, email: email || null, phone: trim(body.phone, 30) || null, adults, children, concessions: 0,
           amount_pence: Math.max(0, Math.round((+body.amount || 0) * 100)), paid: !!body.paid, method: body.method === 'cash' ? 'cash' : 'staff', status: 'booked' };
         await sb('bookings', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([row]) });
-        if (email) { try { const org = (await sb(`organisations?id=eq.${ev.org_id}&select=name,brand_color&limit=1`))[0] || {}; await mail.mailBooked(org, ev, row); } catch (e) { /* booked anyway */ } }
+        if (email) { try { const org = (await sb(`organisations?id=eq.${ev.org_id}&select=name,brand_color,settings&limit=1`))[0] || {}; await mail.mailBooked(org, ev, row); } catch (e) { /* booked anyway */ } }
         return res.status(200).json({ ok: true });
       }
       const rows = await sb(`bookings?id=eq.${int(body.id, 0, 1e12)}&event_id=eq.${encodeURIComponent(ev.id)}&select=*&limit=1`);

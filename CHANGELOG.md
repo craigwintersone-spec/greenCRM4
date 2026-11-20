@@ -1,0 +1,61 @@
+# Vorlana changelog
+Newest first. The Sentinel reads this every morning and logs what shipped in the last 7 days.
+
+## 2026-11-20
+- New prices: Starter £29 a month (new, for volunteer-run groups: 1 funder contract, 2 staff logins), Community £79, Standard £149, Provider £349; annual plans two months free
+- Booking emails: replies go to the organisation's own address
+
+## 2026-11-03
+- Volunteers can say how long they're volunteering when they check in, and are checked out automatically at that time; leaving early still records their real time. Organisations can add their own note at volunteer check-in (Settings > Events)
+
+## 2026-10-31
+- Volunteer sign-ups from QR codes now email the organisation straight away, and send the volunteer a thank-you from "<Organisation> via Vorlana" with replies going to the organisation (Settings > Events)
+
+## 2026-10-25
+- Event bookings: every upcoming event can be booked from the organisation's What's on page (free, paid, concessions), with a waiting list when full and booking closing at the start time
+- Payments go straight to the organisation's own Stripe account; no booking fee
+- Confirmation, waiting-list, cancellation and day-before reminder emails; cancel in one tap
+- On the day, the phone that booked is recognised (or people enter their email), counted once as an anonymous check-in, then asked the funder's questions
+- Staff: price on the event, a Booked column, who's coming, mark arrivals, phone and cash bookings, no-shows
+- Sentinel's daily checks now actually run (the daily job calls them)
+
+## 2026-10-21
+- New prices: Community £149 a month (£1,490 a year), Standard £290 (£2,900), Provider £590 (£5,900), Partnership from £8,000 a year; on the website, super admin and the Sales agent
+- Plan limits are real: Community and trial up to 2 live funder contracts; staff logins 3 (Community, trial), 10 (Standard), unlimited (Provider), checked when an invite is sent
+- Free trials can use the AI for 14 days, 30 calls a day, so they see reports write themselves
+- Unlimited volunteers and participants on every plan
+
+## 2026-10-19
+- Check-in: a phone that has already checked in today offers "Next person on this phone" or "Give feedback", in the order that fits the time
+- Check-in: the next person on the same phone starts with children at N/A, with a note, so children are not counted twice
+- "Keep me updated" tick box on check-in and feedback: name and email go to Contacts as Mailing list, never into the answers, never twice
+- Feedback no longer asks where you attended, or for a name or email inside the answers
+- Feedback page: choose an event to see every question with its results
+
+## 2026-10-18
+- Session report shows only the questions a feedback form asked, with their results; "not asked" is never reported as nil
+- Feedback questions are matched to report figures automatically from their wording, shown as "counts as…", and a name or email box can never count
+- Events page shows a Feedback count per event that opens the responses
+- Feedback page lists newest first
+- Sentinel checks the whole platform every morning: people and safeguarding, referrals, evidence, intake, contracts and forms, events, feedback, check-ins, volunteers, circular, contacts, team access, plans, privacy (tables readable without login), and whether the site and its services answer
+
+## 2026-10-17
+- Session report includes check-ins: a Checked in tile, a Who came section and a table per question
+- Events page has a Checked in column with a per-event answer summary and CSV
+- Contacts: Edit works for every contact; phone and notes on the contact screen
+
+## 2026-10-15
+- Check in tab on every event QR, with funder-specific check-in forms, an editor, and a choice per event
+- Interested in volunteering: leads land on the Contacts tab
+- Word and pasted forms read correctly
+- An event always saves, even if its check-in choice cannot
+
+## 2026-10-14
+- Contracts: reporting requirements and the funder's start, outcome and reporting forms in the Add/Edit contract screen
+- Zero-touch funder reports: one email when a period ends; the link writes the report and fills the funder's Word return
+
+## 2026-10-13
+- Growing: harvest log, split between places, Harvested list, place a harvest later
+- Compost activity: compost in and out
+- One QR for event or site volunteering
+- Feedback forms dropped in per event; reports clean their own wording

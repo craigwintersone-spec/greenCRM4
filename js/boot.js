@@ -60,6 +60,7 @@ async function boot() {
       $('ob-plan').textContent = orgData.plan === 'pro' ? 'Standard'
                                : orgData.plan === 'network' ? 'Provider'
                                : orgData.plan === 'starter' ? 'Community'
+                               : orgData.plan === 'group' ? 'Starter'
                                : 'Trial';
       applyModules(orgData.modules || {});
     }
@@ -80,7 +81,7 @@ async function boot() {
   // 7. Upgrade prompt for non-Pro plans
   const plan = (currentOrg && currentOrg.plan) || 'free';
   const wrap = $('upgrade-btn-wrap');
-  if (wrap && !['starter', 'pro', 'network'].includes(plan)) {
+  if (wrap && !['group', 'starter', 'pro', 'network'].includes(plan)) {
     wrap.innerHTML =
       '<button class="btn btn-sm" style="width:100%;margin-bottom:8px;background:linear-gradient(135deg,#5E4CB8,#7C5BCB);color:#fff;border:none" ' +
       'onclick="window.open(\'/index.html#pricing\',\'_blank\')">✦ Choose a plan</button>';

@@ -125,7 +125,7 @@ async function runChiefOfStaffBriefing() {
   await Promise.all(orgs.slice(0, 30).map(async o => { byOrg[o.id] = await orgActivity(o); }));
 
   const totalOrgs = orgs.length;
-  const paidOrgs = orgs.filter(o => ['pro', 'network', 'starter'].includes(o.plan)).length;
+  const paidOrgs = orgs.filter(o => ['pro', 'network', 'starter', 'group'].includes(o.plan)).length;
   const trialOrgs = orgs.filter(o => o.plan === 'free' || o.status === 'trial').length;
   const newThisWeek = orgs.filter(o => Date.now() - new Date(o.created_at).getTime() < 7*24*60*60*1000).length;
 
@@ -232,7 +232,7 @@ async function runInsights() {
   await Promise.all(orgs.map(async o => { const a = await orgActivity(o); if (a.last) active[o.id] = a; }));
 
   const total = orgs.length;
-  const paying = orgs.filter(o => ['pro', 'network', 'starter'].includes(o.plan)).length;
+  const paying = orgs.filter(o => ['pro', 'network', 'starter', 'group'].includes(o.plan)).length;
   const free = orgs.filter(o => o.plan === 'free' || !o.plan).length;
   const empty = orgs.filter(o => !active[o.id]).length;
   const emptyPct = total ? Math.round((empty / total) * 100) : 0;
