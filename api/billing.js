@@ -125,8 +125,11 @@ async function handler(req, res) {
       if (password.length < 8) return bad(res, 'Your password needs at least 8 characters.');
       const u = await authAdmin('users', 'POST', { email, password, email_confirm: true, user_metadata: { full_name: name } });
       if (!u.ok) {
-        const m = JSON.stringify(u.body || '').toLowerCase();
-        if (u.status === 422 || /already|exists|registered/.test(m)) return bad(res, 'There’s already an account with that email. Sign in instead, or use a different email.', 409);
+        const m = JSON.stringify(u.body || '').toLowerCase(), code = String((u.body && (u.body.error_code || u.body.code)) || '').toLowerCase();
+        if (/email_exists|user_already_exists/.test(code) || /already (been )?registered|already exists/.test(m)) return bad(res, 'There’s already an account with that email. Sign in instead, or use a different email.', 409);
+        if (/weak_password/.test(code) || /pwned|weak|password should/.test(m)) return bad(res, /pwned/.test(m) ? 'That password has appeared in a data breach elsewhere, so it isn’t safe. Please choose a different one.' : 'Please choose a stronger password: at least 8 characters, mixing letters and numbers.');
+        if (/email_address_invalid|validation_failed/.test(code) || /invalid.*email|email.*invalid/.test(m)) return bad(res, 'That email address wasn’t accepted. Please check it, or try another.');
+        if (u.status === 422) return bad(res, 'We couldn’t create your login: ' + String((u.body && (u.body.msg || u.body.message)) || 'please check your details').slice(0, 160));
         throw new Error('auth ' + u.status + ': ' + m.slice(0, 160));
       }
       const userId = u.body.id || (u.body.user && u.body.user.id);
