@@ -372,7 +372,7 @@ function renderParticipants() {
     return '<tr>' +
       '<td><div style="font-weight:600">' + escapeHTML(p.first_name + ' ' + p.last_name) + '</div>' +
         '<div style="font-size:11px;color:var(--txt3)">' + escapeHTML(p.ref_source || '') + '</div></td>' +
-      '<td style="font-size:11px;color:var(--txt3)">' + escapeHTML(String(p.id).slice(0, 8)) + '</td>' +
+      '<td style="font-size:11px;color:var(--txt3)">' + escapeHTML(p._ref || String(p.id).slice(0, 8)) + '</td>' +
       '<td>' + stageBadge(p.stage) + '</td>' +
       '<td>' + escapeHTML(p.advisor || '—') + '</td>' +
       '<td style="text-align:center">' + contractCount + '</td>' +

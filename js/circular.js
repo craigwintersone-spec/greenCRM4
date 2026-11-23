@@ -161,7 +161,7 @@ function cxDemoSeed() {
   const int = (a, b) => a + Math.floor(R() * (b - a + 1));
   const ago = d => new Date(Date.now() - d * 864e5 - int(1, 8) * 36e5).toISOString();
   const tpl = k => JSON.parse(JSON.stringify(CIRC_TEMPLATES.find(t => t.key === k)));
-  const mk = (k, id, extra) => { const t = tpl(k); return Object.assign({ id, _demo: true, org_id: orgId, key: 'demo_' + k, template: k, name: t.name + ' (DEMO)', icon: t.icon, description: t.desc, stages: t.stages, outcomes: t.outcomes, item_types: t.item_types, fields: t.fields, links: t.links, active: true, contract_ids: [] }, extra || {}); };
+  const mk = (k, id, extra) => { const t = tpl(k); return Object.assign({ id, _demo: true, org_id: orgId, key: 'demo_' + k, template: k, name: t.name, icon: t.icon, description: t.desc, stages: t.stages, outcomes: t.outcomes, item_types: t.item_types, fields: t.fields, links: t.links, active: true, contract_ids: [] }, extra || {}); };
   const dev = mk('device_reuse', 'demo-a-dev', { sort: 1, contract_ids: ['demo-c-2'] });
   const rep = mk('repair_cafe', 'demo-a-rep', { sort: 2, contract_ids: ['demo-c-2'] });
   const gro = mk('growing', 'demo-a-gro', { sort: 3, contract_ids: ['demo-c-3'] });
@@ -187,7 +187,7 @@ function cxDemoSeed() {
   };
 
   // Collections → device reuse
-  const donors = [['business', 'Northgate Accountants (DEMO)', 'Robert Lane'], ['council', 'Riverside Council (DEMO)', 'Helen Price'], ['household', '', 'Mrs J. Wood'], ['business', 'Brightwave Media (DEMO)', 'Ali Shah'], ['household', '', 'Mr P. Ng'], ['site', 'Riverside Recycling Centre (DEMO)', 'Site team']];
+  const donors = [['business', 'Northgate Accountants', 'Robert Lane'], ['council', 'Riverside City Council', 'Tom Ellis'], ['household', '', 'Mrs J. Wood'], ['business', 'Brightwave Media', 'Ali Shah'], ['household', '', 'Mr P. Ng'], ['site', 'Riverside Recycling Centre', 'Site team']];
   const colStatus = ['booked_in', 'booked_in', 'booked_in', 'collected', 'scheduled', 'requested'];
   donors.forEach((d, i) => CXD.cols.push({ id: 'demo-col-' + (i + 1), _demo: true, org_id: orgId, activity_id: col.id, booking_ref: 'DEMO-B' + (i + 1), donor_type: d[0], donor_org: d[1] || null, donor_name: d[2], donor_email: null, donor_phone: '07700 900' + (200 + i),
     address: pick(['12 Mill Lane', 'Unit 4, Fengate', '3 Park Road', '88 Lincoln Road', 'Station Yard']), postcode: pick(['PE1 5QT', 'PE2 8LN', 'PE3 6DB']), items_summary: pick(['8 laptops, 2 monitors', 'Box of phones and tablets', '1 desktop PC', '5 laptops', 'Mixed small electricals']),
@@ -203,7 +203,7 @@ function cxDemoSeed() {
     const start = int(8, 170);
     const colId = i < 18 ? 'demo-col-' + (1 + (i % 3)) : null;
     const colRow = colId && CXD.cols.find(c => c.id === colId);
-    const it = item(dev, t, { brand: b[0], model: b[1], serial: b[0].slice(0, 2).toUpperCase() + String(100000 + int(0, 899999)), source: colRow ? (colRow.donor_org || colRow.donor_name) + ' · ' + colRow.booking_ref : pick(['Walk-in donation', 'Riverside Recycling Centre (DEMO)']),
+    const it = item(dev, t, { brand: b[0], model: b[1], serial: b[0].slice(0, 2).toUpperCase() + String(100000 + int(0, 899999)), source: colRow ? (colRow.donor_org || colRow.donor_name) + ' · ' + colRow.booking_ref : pick(['Walk-in donation', 'Riverside Recycling Centre']),
       collection_id: colId, weight_kg: t.weight_kg, created_at: ago(start), event_id: null });
     logEv(it, colId ? 'booked_in' : 'logged', null, S[0], ago(start));
     const reach = i < 16 ? S.length : int(1, S.length - 1);   // 16 fully processed, the rest part-way
@@ -222,7 +222,7 @@ function cxDemoSeed() {
       it.outcome = o.key; it.outcome_type = o.type; it.outcome_at = ago(at); it.status = o.label; it.stage = S[S.length - 1];
       if (o.key === 'donated') {
         if (i % 3 !== 2 && partPeople.length) { const p = partPeople[i % partPeople.length]; it.recipient_participant_id = p.id; data.recipient = p.first_name + ' ' + p.last_name; data.recipient_kind = 'person'; }
-        else { it.custom.recipient_org = pick(['Hope Food Bank (DEMO)', 'St Mark\'s School (DEMO)']); data.recipient = it.custom.recipient_org; data.recipient_kind = 'org'; }
+        else { it.custom.recipient_org = pick(['Hope Food Bank', 'St Mark\'s School']); data.recipient = it.custom.recipient_org; data.recipient_kind = 'org'; }
       }
       if (o.key === 'resold') { it.custom.sale_gbp = pick([65, 85, 95, 120, 140]); it.custom.sale_channel = pick(['eBay', 'Shop', 'Marketplace']); data.sale_gbp = it.custom.sale_gbp; data.sale_channel = it.custom.sale_channel; }
       logEv(it, 'finished', it.stage, o.key, it.outcome_at, data);

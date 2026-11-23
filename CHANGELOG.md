@@ -1,6 +1,11 @@
 # Vorlana changelog
 Newest first. The Sentinel reads this every morning and logs what shipped in the last 7 days.
 
+## 2026-11-23
+- Demo mode now shows a realistic community charity (garden, repair café, wellbeing walks, family cooking, warm space) with six months of sessions, feedback, volunteers and funders; no employment sample data and no "(DEMO)" labels
+- Demo accounts: an organisation with settings.demo_account = true always opens with the sample data, without affecting the person's other organisations
+- Homepage: first customer testimonial; ICO registration number ZC228828 on the privacy policy and footer
+
 ## 2026-11-20
 - New prices: Starter £29 a month (new, for volunteer-run groups: 1 funder contract, 2 staff logins), Community £79, Standard £149, Provider £349; annual plans two months free
 - Booking emails: replies go to the organisation's own address

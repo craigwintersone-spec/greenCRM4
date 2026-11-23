@@ -69,8 +69,10 @@ async function boot() {
   // 4. Pull data
   await syncAll();
 
-  // 5. Demo mode (restore from localStorage)
-  if (_demoMode) loadDemoData();
+  // 5. Demo mode: restored from localStorage, or always on for a demo account
+  //    (organisations.settings.demo_account = true, set in Supabase)
+  const demoAccount = !!(currentOrg && currentOrg.settings && currentOrg.settings.demo_account === true);
+  if (_demoMode || demoAccount) loadDemoData(!demoAccount);
   else applyDemoBanner();
 
   // 6. Render shell pieces
