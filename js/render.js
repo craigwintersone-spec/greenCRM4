@@ -245,9 +245,10 @@ function renderRAG() {
     const linkedOutcomes = linked.filter(p => p.outcomes && p.outcomes.length > 0).length;
     const startsPct = c.target_starts ? Math.round((linked.length / c.target_starts) * 100) : 0;
     const outcomesPct = c.target_outcomes ? Math.round((linkedOutcomes / c.target_outcomes) * 100) : 0;
-    const worst = Math.min(startsPct, outcomesPct);
-    const colour = worst >= 80 ? 'var(--em)' : worst >= 50 ? 'var(--amber)' : 'var(--red)';
-    const label = worst >= 80 ? 'GREEN' : worst >= 50 ? 'AMBER' : 'RED';
+    const noTargets = !c.target_starts && !c.target_outcomes;   // nothing to measure against: not red
+    const worst = Math.min(c.target_starts ? startsPct : 100, c.target_outcomes ? outcomesPct : 100);
+    const colour = noTargets ? 'var(--txt3)' : worst >= 80 ? 'var(--em)' : worst >= 50 ? 'var(--amber)' : 'var(--red)';
+    const label = noTargets ? 'NO TARGETS SET' : worst >= 80 ? 'GREEN' : worst >= 50 ? 'AMBER' : 'RED';
 
     return '<div class="card" style="border-left:4px solid ' + colour + '">' +
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px">' +

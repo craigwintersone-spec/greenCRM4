@@ -13,6 +13,7 @@
 <meta name="apple-mobile-web-app-title" content="Vorlana"/>
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>
 <link rel="stylesheet" href="css/app.css?v=2"/>
+<link rel="stylesheet" href="css/look.css?v=1"/>
 
 <!-- EOI form-reading libraries (Word + PDF) — added for the EOI form-fill feature -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
@@ -98,7 +99,7 @@
         <button class="btn btn-ai btn-sm" onclick="runMorningBriefing()">↻ Refresh</button>
       </div>
     </div>
-    <div id="mb-body"><div style="color:var(--txt3);font-size:13px">Your morning briefing covers the areas you work in — add some records to get started.</div></div>
+    <div id="mb-body"><div style="color:var(--txt3);font-size:13px">Tap <b>Refresh</b> for today's briefing: who to chase, what's coming up and what's going well.</div></div>
   </div>
   <div class="stats-grid" id="dash-stats"></div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
@@ -113,7 +114,7 @@
 
 <!-- RAG -->
 <div id="page-rag" class="page">
-  <div class="page-header"><div><div class="page-title">RAG Status Dashboard</div><div class="page-sub">Auto-calculated from participant data</div></div><button class="btn btn-ghost btn-sm" onclick="renderRAG()">↻ Refresh</button></div>
+  <div class="page-header"><div><div class="page-title">Funder health</div><div class="page-sub">Red, amber or green for each contract, worked out from your data</div></div><button class="btn btn-ghost btn-sm" onclick="renderRAG()">↻ Refresh</button></div>
   <div id="rag-list"></div>
 </div>
 
@@ -214,7 +215,7 @@
 
 <!-- PARTNER REFERRALS -->
 <div id="page-partnerrefs" class="page">
-  <div class="page-header"><div><div class="page-title">Partner Referrals</div><div class="page-sub">Submitted via Partner Portal</div></div></div>
+  <div class="page-header"><div><div class="page-title">From partners</div><div class="page-sub">Referrals sent through your partner portal</div></div></div>
   <div class="card" id="partner-portal-setup">
     <div class="card-title">🔗 Your partner portal link &amp; QR code</div>
     <div style="display:grid;grid-template-columns:1fr auto;gap:20px;align-items:start">
@@ -478,7 +479,7 @@
     .bd-pullnote{font-size:13px;line-height:1.55;padding:10px 12px;border-radius:10px;background:var(--bg);color:var(--txt2);margin-top:12px}
   </style>
 
-  <div class="page-header"><div><div class="page-title">💼 BD Manager</div><div class="page-sub">Find funding · we pull the funder's own form and fill it in</div></div></div>
+  <div class="page-header"><div><div class="page-title">Find funding</div><div class="page-sub">We pull the funder's own form and fill it in</div></div></div>
 
   <div class="bd-flow">
     <a id="bd-chip-1" class="on" onclick="bdGo(1)"><b>1</b> Find funding</a><i></i>
@@ -840,7 +841,7 @@ Accreditations and policies: e.g. Matrix, safeguarding, Cyber Essentials"></text
 <script src="js/branding.js?v=19"></script>
 
 <!-- UI logic -->
-<script src="js/render.js?v=64"></script>
+<script src="js/render.js?v=65"></script>
 <script src="js/settings.js?v=16"></script>
 <script src="js/circular.js?v=22"></script>
 <script src="js/modals.js?v=47"></script>
@@ -1251,6 +1252,8 @@ function applyModules(mods) {
 <script src="js/extensions/contract-forms.js?v=3"></script>
 <script src="js/extensions/historic-import.js?v=46"></script>
 <script src="js/extensions/feedback-funders.js?v=17"></script>
+<script src="js/extensions/nav.js?v=1"></script>
+<script src="js/extensions/dash-trends.js?v=1"></script>
 
 <!-- Participant handlers + paperwork persistence -->
 <script>
