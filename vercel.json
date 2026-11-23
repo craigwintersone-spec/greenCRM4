@@ -75,7 +75,7 @@
       "maxDuration": 60
     },
     "api/claude.js": {
-      "maxDuration": 60
+      "maxDuration": 120
     },
     "api/fetch-form.js": {
       "maxDuration": 60

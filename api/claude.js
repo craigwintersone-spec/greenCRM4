@@ -28,7 +28,7 @@ const ALLOWED_MODELS = new Set([
 ]);
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
 
-const MAX_TOKENS_CEILING = 2000;   // server-enforced output cap per call
+const MAX_TOKENS_CEILING = 4000;   // server-enforced output cap per call (long impact reports need room)
 const MAX_MESSAGES = 30;           // sane conversation length
 const MAX_BODY_CHARS = 200_000;    // ~50k tokens of input, generous
 const MAX_FILE_BODY_CHARS = 3_500_000; // one photo or PDF (Vercel's request limit is 4.5 MB)
