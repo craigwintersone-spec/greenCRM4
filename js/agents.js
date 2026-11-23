@@ -75,7 +75,7 @@ async function callClaude(sys, user, maxTok, webSearch, opts) {
   if (webSearch == null) webSearch = false;
   opts = opts || {};
   checkAIAccess();
-  const sysCap = opts.long ? 8000 : 3000, userCap = opts.long ? 16000 : 4000;
+  const sysCap = opts.long ? 8000 : 3000, userCap = opts.long ? 45000 : 4000;
   if (sys && sys.length > sysCap) sys = sys.slice(0, sysCap);
   if (user && user.length > userCap) user = user.slice(0, userCap);
   if (maxTok > 1200) maxTok = 1200;
@@ -2435,21 +2435,67 @@ async function _eoiChooseProject(res, funder, facts, evidence) {
 }
 
 // ── One plan for the whole bid: the key message for each answer and which evidence goes where, so nothing repeats ──
-async function _eoiMakePlan(funder, facts, evidence) {
-  const long = _eoiQuestions.filter(q => !_eoiIsShortField(q));
-  if (long.length < 2) return {};
+// Facts the organisation has given once (saved on the organisation), so the same gaps never come back
+const _EOI_FACT_KEYS = [
+  ['legal_name', /legal name|organisation name|name of (your )?organisation|governing document/i, 'Legal name'],
+  ['charity_number', /charity (registration )?number|registered charity number|charity no/i, 'Charity number'],
+  ['company_number', /company (registration )?number|company no/i, 'Company number'],
+  ['address', /registered address|organisation('s)? address|full address|venue (name and )?(street )?address|address and postcode|address of/i, 'Address'],
+  ['postcode', /postcode/i, 'Postcode'],
+  ['venue', /venue|building where|main location|room or hall/i, 'Main venue'],
+  ['year_end', /year end|accounting year|financial year end/i, 'Accounting year end'],
+  ['annual_income', /annual income|total income|turnover|income for the (last|most recent) year/i, 'Annual income'],
+  ['website', /website|web address/i, 'Website'],
+  ['contact', /lead contact|contact (name|person|details)|main contact/i, 'Main contact'],
+  ['area', /ward|neighbourhood|local authority|areas? (you )?serve/i, 'Area and wards served'],
+  ['signatories', /signator/i, 'Bank signatories'],
+  ['trustee_review', /trustee .*(review|report|meet)|finance review/i, 'How often trustees review finances']
+];
+function _eoiKnownFacts() {
+  const st = (currentOrg && currentOrg.settings) || {}, f = st.bid_facts || {};
+  const lines = _EOI_FACT_KEYS.filter(k => f[k[0]]).map(k => k[2] + ': ' + f[k[0]]);
+  return lines.length ? 'FACTS THE ORGANISATION HAS CONFIRMED (use exactly, never as a placeholder):\n' + lines.join('\n') : '';
+}
+
+// One plan for the whole bid: the type and length of every answer, one fact sheet, each quote used once, a suggested budget
+async function _eoiMakePlan(funder, facts, evidence, quotes) {
+  const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   try {
-    const raw = await callClaude('You are a senior UK bid writer planning a whole application before anyone writes. For each question, decide the single key message, the specific evidence to use (figures, quotes, examples from the records given — use each headline figure in at most two answers), and how it scores against the funder\'s criteria. ' +
-      'Make the answers build one argument: need, our project, why us, the difference it makes, how we will know. Reply with ONLY a JSON array, no other words: [{"n":1,"message":"","evidence":"","criteria":""}] where n is the question number.',
+    const raw = await callClaude('You are a senior UK bid writer planning a whole funding application before anyone writes. Today is ' + today + '. Reply with ONLY one JSON object, no other words:\n' +
+      '{"facts":{"name of fact":"value"}, "budget":[{"line":"","amount":0,"note":""}], "answers":[{"n":1,"type":"fact|choice|short|full","words":0,"message":"","use":"","quotes":[],"criteria":""}]}\n' +
+      'RULES: "facts" is ONE fact sheet every answer must use identically: project name, amount requested, duration, realistic start and end dates (allow for the funder\'s decision time from their guidance — assume 12 weeks if not stated — and never plan seasonal work that would start after its season), people reached, sessions, volunteers now and new, and any targets. Take every number from the records; never invent. ' +
+      'For EVERY question give "type": "fact" = a single value such as a name, number, date, postcode, amount or yes/no (words 0); "choice" = pick one of the options they list, optionally one short sentence (words 25); "short" = one or two sentences (words 50); "full" = a written answer (words = their limit, or 220). ' +
+      '"message" is the one point that answer makes; "use" names the figures and examples it uses — each headline figure in at most two answers; "quotes" lists quote numbers from QUOTES, each quote used in ONE answer only, at most one quote per answer and only where it strengthens it. ' +
+      'Answers must build one argument without repeating each other. If a question asks for a budget or cost breakdown, fill "budget" with realistic lines that add up exactly to the amount requested; otherwise leave it empty.',
       'FUNDER: ' + funder + '\n' + (_eoiFunderPriorities ? 'WHAT THE FUNDER WANTS:\n' + _eoiFunderPriorities.slice(0, 3000) + '\n' : '') + (_eoiProject ? '\nTHE PROJECT: ' + _eoiProject + '\n' : '') +
-      '\n' + facts.slice(0, 3500) + '\n\n' + evidence + '\n\nQUESTIONS:\n' + long.map(q => (_eoiQuestions.indexOf(q) + 1) + '. ' + q.question + (q.wordLimit ? ' (' + q.wordLimit + ' words)' : '')).join('\n'),
+      '\n' + facts.slice(0, 4500) + '\n\n' + evidence + '\n\nQUOTES:\n' + (quotes.length ? quotes.map((q, i) => (i + 1) + '. "' + q + '"').join('\n') : '(none)') +
+      '\n\nQUESTIONS:\n' + _eoiQuestions.map((q, i) => (i + 1) + '. ' + q.question + (q.wordLimit ? ' (' + q.wordLimit + ' words)' : '') + (q.guidance ? ' — guidance: ' + q.guidance.slice(0, 200) : '')).join('\n'),
       1200, false, { model: AI_MODELS.best, effort: 'medium', long: true, purpose: 'bid_plan' });
-    const t = String(raw || '').replace(/```json|```/gi, ''); const m = t.match(/\[[\s\S]*\]/);
-    const arr = m ? JSON.parse(m[0]) : [];
-    const plan = {};
-    (Array.isArray(arr) ? arr : []).forEach(x => { const q = _eoiQuestions[(+x.n || 0) - 1]; if (q) plan[q.id] = x; });
+    const t = String(raw || '').replace(/```json|```/gi, ''); const m = t.match(/\{[\s\S]*\}/);
+    const obj = m ? JSON.parse(m[0]) : {};
+    const plan = { facts: obj.facts || {}, budget: Array.isArray(obj.budget) ? obj.budget : [], byId: {} };
+    (Array.isArray(obj.answers) ? obj.answers : []).forEach(x => { const q = _eoiQuestions[(+x.n || 0) - 1]; if (q) plan.byId[q.id] = x; });
     return plan;
-  } catch (e) { if (e && e.message === 'AI_PLAN_GATE') throw e; return {}; }
+  } catch (e) { if (e && e.message === 'AI_PLAN_GATE') throw e; return { facts: {}, budget: [], byId: {} }; }
+}
+
+// Read the whole bid the way the funder's assessor would, then fix only what needs fixing
+async function _eoiAssess(funder, sheet, writeOne) {
+  const qa = _eoiQuestions.map((q, i) => 'Q' + (i + 1) + '. ' + q.question + (q.wordLimit ? ' (limit ' + q.wordLimit + ' words)' : '') + '\nANSWER: ' + (_eoiAnswers[q.id] || '')).join('\n\n');
+  let issues = [];
+  try {
+    const raw = await callClaude('You are the funder\'s assessor reading a whole application. List ONLY real problems that would cost marks: an answer that does not answer its own question; a one-line question answered with paragraphs (or the reverse); a number or fact that contradicts the FACT SHEET or another answer; a quote or statistic repeated across answers; a claim about the organisation that is not in the facts (for example governance, consultation or partnerships that were never stated — these must be [INSERT: ...] placeholders instead); dates that do not work; anything over its word limit. ' +
+      'Reply with ONLY a JSON array, no other words: [{"n":1,"problem":"","fix":"exactly what the rewritten answer must do"}]. If the bid is sound, reply [].',
+      'FUNDER: ' + funder + '\n' + (_eoiFunderPriorities ? 'WHAT THE FUNDER WANTS:\n' + _eoiFunderPriorities.slice(0, 2000) + '\n' : '') + '\nFACT SHEET:\n' + sheet + '\n\nAPPLICATION:\n' + qa,
+      1200, false, { model: AI_MODELS.best, effort: 'medium', long: true, purpose: 'bid_assess' });
+    const t = String(raw || '').replace(/```json|```/gi, ''); const m = t.match(/\[[\s\S]*\]/);
+    issues = m ? JSON.parse(m[0]) : [];
+  } catch (e) { if (e && e.message === 'AI_PLAN_GATE') throw e; return 0; }
+  const byQ = {};
+  (Array.isArray(issues) ? issues : []).forEach(x => { const q = _eoiQuestions[(+x.n || 0) - 1]; if (q && x.fix) (byQ[q.id] = byQ[q.id] || []).push(x.problem + ' → ' + x.fix); });
+  const ids = Object.keys(byQ).slice(0, 10);
+  await Promise.all(ids.map(id => writeOne(_eoiQuestions.find(q => q.id === id), byQ[id].join('\n'))));
+  return ids.length;
 }
 
 // Manual "Re-research funder" button — forces a fresh fetch and shows status.
@@ -2515,40 +2561,39 @@ async function runEOIFormFill() {
   const funder = funderRaw || 'the funder';
   const usps = ($('eoi-usps') && $('eoi-usps').value || '').trim();
   const profile = _eoiCleanProfile(getOrgProfile());
-  const evidence = buildEOIEvidence();
+  const evidenceAll = buildEOIEvidence();
+  const quotes = ((evidenceAll.split('\n').find(l => /^- Real quotes/.test(l)) || '').match(/"([^"]+)"/g) || []).map(q => q.slice(1, -1));
+  const evidence = evidenceAll.split('\n').filter(l => !/^- Real quotes/.test(l)).join('\n');   // quotes are handed out by the plan instead
   const out = $('eoi-output'); const res = $('eoi-result');
   out.style.display = 'block';
   const panel = (icon, title, sub) => '<div class="brain-panel"><div class="brain-header"><div class="brain-icon">' + icon + '</div><div><div class="brain-title">' + title + '</div><div class="brain-sub">' + sub + '</div></div></div></div>';
 
-  const applicant = _eoiApplicant(profile);
-  const facts = (applicant ? 'APPLICANT: ' + applicant + ' (the organisation named in the facts below; any other name is just an internal label — ignore it)\n\n' : '') + 'KNOWN ORGANISATION FACTS (provided by the applicant — treat as true):\n' +
+  const applicant = _eoiApplicant(profile) || (currentOrg && currentOrg.name) || '';
+  const known = _eoiKnownFacts();
+  const facts = (applicant ? 'APPLICANT: ' + applicant + ' (any other name is just an internal label — ignore it)\n\n' : '') + (known ? known + '\n\n' : '') +
+    'KNOWN ORGANISATION FACTS (provided by the applicant — treat as true):\n' +
     (profile ? profile.slice(0, 4000) : '(none provided — use [INSERT: ...] placeholders for organisation details such as legal name, charity/company number, address, website, contact)');
 
   try {
-    // 1. What the funder wants — from their own guidance where we have it
     if (funderRaw && !(_eoiFunderPriorities && _eoiPrioritiesFunder === funderRaw)) {
       res.innerHTML = panel('🔎', 'Reading ' + escapeHTML(funderRaw) + '\'s guidance', 'Their priorities, what assessors look for, eligibility and grant size');
       await _ensureFunderPriorities(funderRaw);
     }
-    // 2. The project (one tap)
-    if (funderRaw) await _eoiChooseProject(res, funder, facts, evidence);
-    // 3. One plan for the whole bid
-    res.innerHTML = panel('🧭', 'Planning your bid', 'One argument across every answer, the right evidence in the right place');
+    if (funderRaw) await _eoiChooseProject(res, funder, facts, evidenceAll);
+    res.innerHTML = panel('🧭', 'Planning your bid', 'One fact sheet, the right length for every question, each quote used once');
     if (typeof window._eoiOnProgress === 'function') { try { window._eoiOnProgress(-1, _eoiQuestions.length); } catch (e) { /* display only */ } }
-    const plan = await _eoiMakePlan(funder, facts, evidence);
+    const plan = await _eoiMakePlan(funder, facts, evidence, quotes);
+    const sheet = Object.keys(plan.facts).map(k => k + ': ' + plan.facts[k]).join('\n');
+    const budget = plan.budget.length ? plan.budget.map(b => '- ' + b.line + ': £' + Math.round(+b.amount || 0).toLocaleString('en-GB') + (b.note ? ' — ' + b.note : '')).join('\n') : '';
 
     const sys =
-      'You are an expert UK bid writer completing a funding application to WIN it. ' +
-      'Everything you write is pasted straight into the funder\'s form as the applicant\'s own words. RULES: ' +
-      '1) Never address the reader, never explain what you cannot do, never comment on data quality, never apologise, never give recommendations — write ONLY the answer. ' +
-      '2) Never add a title, heading or label above the answer; the question is the heading. ' +
-      '3) Ground claims in the KNOWN ORGANISATION FACTS and VERIFIED CRM DATA; never invent statistics, names, numbers, partners or accreditations. ' +
-      '4) Where a specific fact is missing, insert a placeholder like [INSERT: charity number] and keep going — do NOT lecture about the gap. ' +
-      '5) NEVER state or imply the organisation has no experience, no track record, or that figures are zero; rely on the organisation facts and use [INSERT: ...] for specifics. ' +
-      '6) If the question is a SHORT FACTUAL FIELD (name, number, address, postcode, website, email, link, date, title, contact, budget line), reply with ONLY the value or a single [INSERT: ...] placeholder — no prose, no sentences. ' +
-      '7) Otherwise write clear, warm, specific British English: answer exactly what is asked first, then evidence it. Be concrete (who, how many, how often, what changes), mirror the funder\'s own words and score against their criteria. ' +
-      '8) Write about THE PROJECT where one is given: what it is, who benefits, what will change and how you will measure it. Do not repeat points that belong to other answers. Respect the word limit strictly. ' + _EOI_NEVER_STOP;
-    const others = id => _eoiQuestions.filter(q => q.id !== id && plan[q.id] && plan[q.id].message).map(q => '- ' + plan[q.id].message).join('\n');
+      'You are an expert UK bid writer completing a funding application to WIN it. Everything you write is pasted straight into the funder\'s form as the applicant\'s own words. RULES: ' +
+      '1) Answer EXACTLY the question asked, at the length its TYPE says. A "fact" is the value alone (a name, number, date, postcode, amount, yes/no) — no sentences. A "choice" is the option itself, then at most one short sentence. A "short" answer is one or two sentences. ' +
+      '2) Never address the reader, explain what you cannot do, comment on data, apologise or add a heading — write ONLY the answer. ' +
+      '3) Use the FACT SHEET for every number, name and date, word for word, so the whole bid agrees with itself. Use only the evidence and quotes the PLAN gives this answer. ' +
+      '4) Never invent statistics, partners, consultation, governance, policies, accreditations or dates. Where a fact is missing, write one short placeholder like [INSERT: charity number] — and if the organisation has confirmed a fact, use it instead of a placeholder. ' +
+      '5) NEVER state or imply the organisation has no track record or that figures are zero. ' +
+      '6) Full answers: clear, warm, specific British English — lead with the direct answer, then the evidence; be concrete (who, how many, how often, what changes); use the funder\'s own words; stay under the word limit. ' + _EOI_NEVER_STOP;
 
     _eoiAnswers = {};
     const state = _eoiQuestions.map(() => '');
@@ -2557,50 +2602,58 @@ async function runEOIFormFill() {
       const done = state.filter(x => x === 'done').length;
       if (typeof window._eoiOnProgress === 'function') { try { window._eoiOnProgress(done, _eoiQuestions.length); } catch (e) { /* display only */ } }
     };
-    paint();
 
-    // 4. Every answer, written side by side (three at a time)
-    await Promise.all(_eoiQuestions.map(async (q, i) => {
-      const short = _eoiIsShortField(q);
-      const limitLine = short ? 'This is a SHORT FACTUAL FIELD — reply with ONLY the value or a single [INSERT: ...] placeholder. No prose, no explanation.'
-        : q.wordLimit ? ('Word limit: ' + q.wordLimit + ' words — stay under it.') : 'Aim for roughly 180-260 words.';
-      const p = plan[q.id];
+    const writeOne = async (q, fixNote) => {
+      const i = _eoiQuestions.indexOf(q), p = plan.byId[q.id] || {};
+      const type = p.type || (_eoiIsShortField(q) ? 'fact' : 'full');
+      const words = type === 'fact' ? 0 : type === 'choice' ? 25 : type === 'short' ? 50 : (q.wordLimit || +p.words || 220);
+      const myQuotes = (Array.isArray(p.quotes) ? p.quotes : []).map(n => quotes[(+n || 0) - 1]).filter(Boolean);
+      const isBudget = /budget|cost|break ?down|headings/i.test(q.question) && budget;
       const userPrompt = [
         'FUNDER: ' + funder,
         _eoiFunderPriorities ? ('WHAT THE FUNDER WANTS:\n' + _eoiFunderPriorities.slice(0, 2500)) : '',
         _eoiProject ? ('THE PROJECT THIS BID IS FOR: ' + _eoiProject) : '',
+        sheet ? ('FACT SHEET (use exactly):\n' + sheet) : '',
+        isBudget ? ('SUGGESTED BUDGET (use these lines and amounts; they add up to the amount requested):\n' + budget) : '',
         usps ? ('OUR STRENGTHS/USPs: ' + usps) : '',
         '', facts, '', evidence, '',
-        p ? ('PLAN FOR THIS ANSWER — key message: ' + (p.message || '') + (p.evidence ? ' | evidence to use: ' + p.evidence : '') + (p.criteria ? ' | criteria it scores against: ' + p.criteria : '')) : '',
-        !short && others(q.id) ? ('OTHER ANSWERS ALREADY COVER (do not repeat):\n' + others(q.id)) : '',
+        'TYPE: ' + type + (words ? ' — about ' + words + ' words at most' : ' — the value only'),
+        p.message ? ('PLAN FOR THIS ANSWER — the point it makes: ' + p.message + (p.use ? ' | evidence to use: ' + p.use : '') + (p.criteria ? ' | criteria: ' + p.criteria : '')) : '',
+        myQuotes.length ? ('QUOTE YOU MAY USE (word for word, no name attached): "' + myQuotes.join('" / "') + '"') : 'Use no quotes in this answer.',
         q.guidance ? ('THE FUNDER\'S GUIDANCE FOR THIS QUESTION: ' + q.guidance) : '',
-        'QUESTION TO ANSWER: ' + q.question,
-        limitLine
+        fixNote ? ('AN ASSESSOR FLAGGED THE LAST VERSION — fix this:\n' + fixNote + '\nLAST VERSION:\n' + (_eoiAnswers[q.id] || '')) : '',
+        'QUESTION TO ANSWER: ' + q.question
       ].filter(Boolean).join('\n');
-      state[i] = 'active'; paint();
+      if (i >= 0 && !fixNote) { state[i] = 'active'; paint(); }
       try {
-        const o = short ? { model: AI_MODELS.fast, purpose: 'bid_field' } : { model: AI_MODELS.best, effort: 'medium', long: true, purpose: 'bid_answer' };
-        let raw = await callClaude(sys, userPrompt, short ? 80 : 1200, false, o);
-        if (_eoiLooksLikeRefusal(raw)) raw = await callClaude(sys + 'Your previous reply asked for clarification instead of writing. That is not allowed. Write the complete answer now. ', userPrompt + '\n\n(Write the finished text now. No questions, no commentary. Use [INSERT: ...] for anything missing.)', short ? 80 : 1200, false, o);
-        let ans = _eoiLooksLikeRefusal(raw)
-          ? (short ? '[INSERT: ' + q.question.replace(/[:?]\s*$/, '').slice(0, 80) + ']' : '[INSERT: answer to this question — add more detail to your organisation profile and write it again]')
-          : _stripLeadingLabel(cleanReportText(raw));
-        // 5. Over the word limit: tighten it, keeping every fact
-        if (!short && q.wordLimit && _wordCount(ans) > q.wordLimit) {
+        const o = type === 'fact' ? { model: AI_MODELS.smart, long: true, purpose: 'bid_field' } : { model: AI_MODELS.best, effort: 'medium', long: true, purpose: fixNote ? 'bid_fix' : 'bid_answer' };
+        let raw = await callClaude(sys, userPrompt, 1200, false, o);
+        if (_eoiLooksLikeRefusal(raw)) raw = await callClaude(sys + 'Your previous reply asked for clarification instead of writing. That is not allowed. Write the answer now. ', userPrompt + '\n\n(Write the finished text now. Use [INSERT: ...] for anything missing.)', 1200, false, o);
+        let ans = _eoiLooksLikeRefusal(raw) ? (_eoiAnswers[q.id] || '[INSERT: ' + q.question.replace(/[:?]\s*$/, '').slice(0, 80) + ']') : _stripLeadingLabel(cleanReportText(raw));
+        const limit = q.wordLimit || (type === 'full' ? 0 : words);
+        if (limit && _wordCount(ans) > limit + (type === 'full' ? 0 : 10)) {
           try {
-            const cut = await callClaude('Shorten this funding application answer to at most ' + Math.floor(q.wordLimit * 0.95) + ' words. Keep every figure, name and [INSERT: ...] placeholder, keep the strongest points, keep the same voice. Reply with ONLY the shortened answer.',
+            const cut = await callClaude('Shorten this funding application answer to at most ' + Math.max(1, Math.floor(limit * 0.95)) + ' words. Keep every figure, name and [INSERT: ...] placeholder and the strongest points. Reply with ONLY the shortened answer.',
               ans, 1200, false, { model: AI_MODELS.smart, purpose: 'bid_trim' });
             const t = _stripLeadingLabel(cleanReportText(cut));
-            if (t && _wordCount(t) <= q.wordLimit && !_eoiLooksLikeRefusal(t)) ans = t;
-          } catch (e) { /* keep the longer one; the word count shows it */ }
+            if (t && !_eoiLooksLikeRefusal(t) && _wordCount(t) < _wordCount(ans)) ans = t;
+          } catch (e) { /* keep it; the word count shows it */ }
         }
         _eoiAnswers[q.id] = ans;
       } catch (e) {
         if (e.message === 'AI_PLAN_GATE') throw e;
-        _eoiAnswers[q.id] = '[Could not draft this answer: ' + e.message + ']';
+        if (!_eoiAnswers[q.id]) _eoiAnswers[q.id] = '[Could not draft this answer: ' + e.message + ']';
       }
-      state[i] = 'done'; paint();
-    }));
+      if (i >= 0 && !fixNote) { state[i] = 'done'; paint(); }
+    };
+
+    paint();
+    await Promise.all(_eoiQuestions.map(q => writeOne(q)));
+
+    // The assessor's read of the whole bid, then fixes
+    res.innerHTML = panel('🔍', 'Checking the whole bid like an assessor', 'Does every answer answer its question, agree with the rest and avoid repeating itself?');
+    const fixed = await _eoiAssess(funder, sheet, writeOne);
+    window._eoiAssessed = { fixed };
   } catch (e) {
     if (e && e.message === 'AI_PLAN_GATE') { res.innerHTML = ''; return; }
     throw e;
@@ -2677,10 +2730,64 @@ function renderFilledEOI() {
       '<button class="btn btn-ghost btn-sm" onclick="copyEOI()">📋 Copy all</button>' +
       '<button class="btn btn-ghost btn-sm" onclick="runEOIQualitySupervisor()">🔍 Run Quality Supervisor</button>' +
     '</div>' +
-    docNote + flagBar +
+    docNote + (window._eoiAssessed && window._eoiAssessed.fixed ? '<div style="font-size:12.5px;color:#166534;margin:0 0 10px">✓ Checked like an assessor · ' + window._eoiAssessed.fixed + ' answer' + (window._eoiAssessed.fixed === 1 ? '' : 's') + ' improved</div>' : '') +
+    '<div id="eoi-gaps"></div>' +
     '<div id="eoi-fill-body" style="font-family:Georgia,serif">' + parts.join('') + '</div>' +
     '<div id="eoi-qa-result"></div>' +
     '<div style="margin-top:20px;padding-top:12px;border-top:1px solid #eee;font-size:11px;color:#999">Drafted with Vorlana · verify all figures before submission</div>';
+  renderEOIGaps();
+}
+
+// Every [INSERT: …] gap in one short list: answer each once and it fills every answer.
+// Organisation facts (charity number, address, year end…) are remembered for the next bid. Bank details never are.
+function _eoiGapKey(label) {
+  return String(label || '').replace(/\s*\((e\.g\.|for example)[^)]*\)/gi, '').replace(/,?\s*(e\.g\.|for example|such as)[\s\S]*$/i, '').replace(/[\s.:;–-]+$/, '').trim().toLowerCase();
+}
+function renderEOIGaps() {
+  const box = $('eoi-gaps'); if (!box) return;
+  const gaps = {};
+  _eoiQuestions.forEach(q => { (String(_eoiAnswers[q.id] || '').match(/\[INSERT:[^\]]*\]/gi) || []).forEach(m => {
+    const label = m.replace(/^\[INSERT:\s*/i, '').replace(/\]$/, '').trim(), key = _eoiGapKey(label);
+    if (key) (gaps[key] = gaps[key] || { label, n: 0 }).n++;
+  }); });
+  const keys = Object.keys(gaps);
+  if (!keys.length) { box.innerHTML = '<div style="background:#F0FDF4;border:1px solid #BBF7D0;color:#166534;border-radius:10px;padding:10px 14px;font-size:13px;margin:0 0 16px">✓ No gaps left to fill.</div>'; return; }
+  const bank = k => /bank|sort code|account (number|name)|roll number|statement/i.test(k);
+  const saved = ((currentOrg && currentOrg.settings && currentOrg.settings.bid_facts) || {});
+  window._eoiGapKeys = keys;
+  box.innerHTML = '<div class="card" style="font-family:inherit;margin:0 0 18px;padding:16px 18px;background:#FFFBEB;border:1px solid #FDE68A;box-shadow:none">' +
+    '<div style="font-weight:700;font-size:15px;margin-bottom:2px">Fill the gaps (' + keys.length + ')</div>' +
+    '<div style="font-size:12.5px;color:#6B665C;margin-bottom:10px">Answer each once and it goes into every answer that needs it. Details about your organisation are remembered for your next bid.</div>' +
+    keys.map((k, i) => bank(k)
+      ? '<div style="font-size:12.5px;color:#6B665C;margin:8px 0">🔒 <b>' + escapeHTML(gaps[k].label) + '</b> — type bank details straight into the funder\'s form. Vorlana never stores them.</div>'
+      : '<label style="display:block;margin:8px 0 3px;font-size:12.5px;font-weight:600;color:#1D1D1F;text-transform:none;letter-spacing:0">' + escapeHTML(gaps[k].label) + (gaps[k].n > 1 ? ' <span style="font-weight:400;color:#8A857A">· in ' + gaps[k].n + ' answers</span>' : '') + '</label>' +
+        '<input id="eoi-gap-' + i + '" style="max-width:560px" value="' + escapeHTML(((_EOI_FACT_KEYS.find(f => f[1].test(k)) || [])[0] && saved[(_EOI_FACT_KEYS.find(f => f[1].test(k)) || [])[0]]) || '') + '"/>').join('') +
+    '<div style="margin-top:12px;display:flex;gap:10px;align-items:center"><button class="btn btn-p btn-sm" type="button" onclick="applyEOIGaps()">Put these into my answers</button><span id="eoi-gap-msg" style="font-size:12px"></span></div></div>';
+}
+async function applyEOIGaps() {
+  const keys = window._eoiGapKeys || [], vals = {};
+  keys.forEach((k, i) => { const el = $('eoi-gap-' + i); if (el && el.value.trim()) vals[k] = el.value.trim(); });
+  if (!Object.keys(vals).length) return;
+  _eoiQuestions.forEach(q => {
+    _eoiAnswers[q.id] = String(_eoiAnswers[q.id] || '').replace(/\[INSERT:[^\]]*\]/gi, m => {
+      const key = _eoiGapKey(m.replace(/^\[INSERT:\s*/i, '').replace(/\]$/, ''));
+      return vals[key] != null ? vals[key] : m;
+    });
+  });
+  // remember organisation facts for next time
+  const facts = {};
+  Object.keys(vals).forEach(k => { const f = _EOI_FACT_KEYS.find(x => x[1].test(k)); if (f && !/bank|sort code|account (number|name)|roll number/i.test(k)) facts[f[0]] = vals[k]; });
+  if (Object.keys(facts).length && typeof sb !== 'undefined' && sb && orgId) {
+    try {
+      const r = await sb.from('organisations').select('settings').eq('id', orgId).limit(1);
+      const st = (r.data && r.data[0] && r.data[0].settings) || {};
+      st.bid_facts = Object.assign({}, st.bid_facts || {}, facts);
+      const u = await sb.from('organisations').update({ settings: st }).eq('id', orgId);
+      if (!u.error && currentOrg) currentOrg.settings = st;
+    } catch (e) { /* the answers are still filled */ }
+  }
+  renderFilledEOI();
+  if (_eoiDoc && _eoiDoc.kind === 'docx') { try { const r = await _buildFilledForm(); _eoiDoc.filled = { n: r.filled, total: r.total }; } catch (e) { /* download still rebuilds it */ } }
 }
 
 // Quality Supervisor — optional review pass. Reviews FULL answers in batches

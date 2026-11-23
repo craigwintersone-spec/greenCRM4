@@ -2,6 +2,8 @@
 Newest first. The Sentinel reads this every morning and logs what shipped in the last 7 days.
 
 ## 2026-11-23
+- Bids: the plan now sets the right length for every question (one-line facts stay one line), keeps one fact sheet so numbers agree everywhere, hands out each quote once, times seasonal projects realistically and suggests a budget that adds up; an assessor-style check of the whole bid then rewrites any answer that misses its question, contradicts itself, repeats or overclaims
+- Fill the gaps: every [INSERT] in one short list, answered once and dropped into every answer; organisation facts are remembered for the next bid (bank details never are)
 - Find funding searches with Claude Opus 5.5, then checks every result on the funder's own page: does the link open, is it still open, the real deadline and grant size, and whether this organisation can apply. Closed or ineligible results are removed (and listed), checked ones are marked
 - Bids now use richer evidence: feedback headlines, real quotes, who the organisation reaches (black and ethnic minority, disabled, age), the six-month trend and a real anonymised story
 - Bid tracker with no admin: bids are saved when written and marked sent when downloaded or copied; "Your bids" shows the win rate and money raised; 8 weeks after sending, one email asks "Did you win?" with one-tap answers (needs bid-tracker.sql)
