@@ -423,7 +423,7 @@ async function vAI(system, content, maxTokens) {
   const send = async force => fetch('/api/claude', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (await vToken(force)) },
-    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: maxTokens || 800, system, messages: [{ role: 'user', content }] })
+    body: JSON.stringify({ model: AI_MODELS.smart, max_tokens: maxTokens || 800, system, messages: [{ role: 'user', content }] })
   });
   let res = await send(false);
   if (res.status === 401) res = await send(true);     // token had gone stale: refresh once and retry

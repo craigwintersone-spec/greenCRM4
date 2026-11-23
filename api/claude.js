@@ -22,11 +22,8 @@ const ALLOWED_ORIGINS = new Set([
 ]);
 
 // Only models YOU choose to pay for. The client cannot pick anything else.
-const ALLOWED_MODELS = new Set([
-  'claude-sonnet-4-6',
-  'claude-haiku-4-5-20251001',
-]);
-const DEFAULT_MODEL = 'claude-sonnet-4-6';
+const { anthropic, MODELS, ALLOWED: ALLOWED_MODELS, EFFORTS } = require('./_lib/anthropic');
+const DEFAULT_MODEL = MODELS.smart;
 
 const MAX_TOKENS_CEILING = 4000;   // server-enforced output cap per call (long impact reports need room)
 const MAX_MESSAGES = 30;           // sane conversation length
@@ -165,7 +162,7 @@ module.exports = async function handler(req, res) {
   }
 
   // 4. Sanitise the request — the SERVER decides model, caps and tools.
-  const { web_search, messages, system, temperature, model: requestedModel } = req.body || {};
+  const { web_search, messages, system, temperature, effort, model: requestedModel } = req.body || {};
 
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'messages[] is required.' });
@@ -178,45 +175,31 @@ module.exports = async function handler(req, res) {
 
   const body = {
     model,
-    max_tokens: MAX_TOKENS_CEILING,          // client cannot raise this
+    max_tokens: MAX_TOKENS_CEILING,          // client cannot raise this (thinking models get extra room to think)
     messages,
   };
   if (typeof system === 'string' && system.length) body.system = system;
   if (typeof temperature === 'number' && temperature >= 0 && temperature <= 1) {
-    body.temperature = temperature;
-  }
-  if (web_search) {
-    body.tools = [{ type: 'web_search_20250305', name: 'web_search' }];
+    body.temperature = temperature;           // dropped automatically for models that don't take it
   }
   // Note: we deliberately do NOT spread req.body — nothing else passes through.
 
-  // 5. Forward to Anthropic
+  // 5. Forward to Anthropic (steps down to an older model if this one isn't available)
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'web-search-2025-03-05',
-      },
-      body: JSON.stringify(body),
-    });
-
-    const data = await response.json();
+    const { status, data, model: used } = await anthropic(body, { webSearch: !!web_search, effort: EFFORTS.has(effort) ? effort : null });
 
     // 6. Log usage (never blocks the response)
     logUsage({
       org_id: orgId,
       user_id: user.id,
-      model,
-      status: response.status,
+      model: used,
+      status,
       input_tokens: data && data.usage ? data.usage.input_tokens : null,
       output_tokens: data && data.usage ? data.usage.output_tokens : null,
       purpose: typeof req.body.purpose === 'string' ? req.body.purpose.slice(0, 40) : null,
     });
 
-    return res.status(response.status).json(data);
+    return res.status(status).json(data);
   } catch (err) {
     console.error('Claude API error:', err);
     return res.status(500).json({ error: err.message || 'Upstream error' });

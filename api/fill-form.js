@@ -29,7 +29,8 @@
 
 const PizZip = require('pizzip');
 
-const MODEL = process.env.TAG_FORM_MODEL || 'claude-sonnet-4-6';
+const { anthropic, MODELS } = require('./_lib/anthropic');
+const MODEL = process.env.TAG_FORM_MODEL || MODELS.smart;
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const TICK_ON = '\u2612';   // ☒
@@ -235,17 +236,8 @@ module.exports = async (req, res) => {
 // Claude
 // ------------------------------------------------------------------
 async function callClaude(userContent) {
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({ model: MODEL, max_tokens: 8000, messages: [{ role: 'user', content: userContent }] }),
-  });
-  if (!r.ok) throw new Error(`Claude API error ${r.status}: ${(await r.text().catch(() => '')).slice(0, 300)}`);
-  const data = await r.json();
+  const { status, data } = await anthropic({ model: MODEL, max_tokens: 8000, messages: [{ role: 'user', content: userContent }] });
+  if (status >= 400) throw new Error(`Claude API error ${status}: ${JSON.stringify((data && data.error) || data || '').slice(0, 300)}`);
   return (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
 }
 

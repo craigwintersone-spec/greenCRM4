@@ -43,6 +43,9 @@ let _eoiQuestions = [];        // [{id, question, wordLimit, guidance}]
 let _eoiAnswers   = {};        // { id: answerText }
 let _eoiFunderPriorities = ''; // funder priorities, auto-fetched before drafting
 let _eoiPrioritiesFunder = ''; // which funder name the loaded priorities belong to
+let _eoiGuidanceText = '';     // the funder's own web page, read when we fetched their form
+let _eoiProject = '';          // the project this bid is for (chosen from Vorlana's suggestions)
+let _eoiProjectFor = '';       // which funder that project was chosen for
 let _bdOpps = {};              // found funding opportunities, keyed for the "Draft EOI" buttons
 
 // UK real Living Wage (Living Wage Foundation, 2025/26 — announced Oct 2025) — used to value volunteer time.
@@ -66,16 +69,19 @@ function checkAIAccess() {
 }
 
 // ── Claude API call (with queue + retries) ───────────────────
-async function callClaude(sys, user, maxTok, webSearch) {
+// opts: { model, effort: 'low'|'medium'|'high', long: true (bid work: room for the funder's guidance and the full evidence) }
+async function callClaude(sys, user, maxTok, webSearch, opts) {
   if (maxTok == null) maxTok = 600;
   if (webSearch == null) webSearch = false;
+  opts = opts || {};
   checkAIAccess();
-  if (sys && sys.length > 3000) sys = sys.slice(0, 3000);
-  if (user && user.length > 4000) user = user.slice(0, 4000);
+  const sysCap = opts.long ? 8000 : 3000, userCap = opts.long ? 16000 : 4000;
+  if (sys && sys.length > sysCap) sys = sys.slice(0, sysCap);
+  if (user && user.length > userCap) user = user.slice(0, userCap);
   if (maxTok > 1200) maxTok = 1200;
 
   return new Promise((resolve, reject) => {
-    _aiQueue.queue.push({ sys, user, maxTok, webSearch, resolve, reject });
+    _aiQueue.queue.push({ sys, user, maxTok, webSearch, opts, resolve, reject });
     _processAIQueue();
   });
 }
@@ -88,15 +94,16 @@ async function _processAIQueue() {
     _aiQueue.lastCallAt = at;                                    // book this start slot before waiting
     (async () => {
       if (at > now) await new Promise(r => setTimeout(r, at - now));
-      try { job.resolve(await _callClaudeOnce(job.sys, job.user, job.maxTok, job.webSearch)); }
+      try { job.resolve(await _callClaudeOnce(job.sys, job.user, job.maxTok, job.webSearch, 0, job.opts)); }
       catch (e) { job.reject(e); }
       finally { _aiQueue.active--; _processAIQueue(); }
     })();
   }
 }
 
-async function _callClaudeOnce(sys, user, maxTok, webSearch, attempt) {
+async function _callClaudeOnce(sys, user, maxTok, webSearch, attempt, opts) {
   if (attempt == null) attempt = 0;
+  opts = opts || {};
 
   const getToken = async force => {
     let { data: { session } } = await sb.auth.getSession();
@@ -110,7 +117,7 @@ async function _callClaudeOnce(sys, user, maxTok, webSearch, attempt) {
     return fetch('/api/claude', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': token ? 'Bearer ' + token : '' },
-      body: JSON.stringify({ model: CLAUDE_MODEL, max_tokens: maxTok, system: sys, messages: [{ role: 'user', content: user }], web_search: webSearch })
+      body: JSON.stringify({ model: opts.model || CLAUDE_MODEL, max_tokens: maxTok, system: sys, messages: [{ role: 'user', content: user }], web_search: webSearch, effort: opts.effort || undefined, purpose: opts.purpose || undefined })
     });
   };
   let res = await send(false);
@@ -129,7 +136,7 @@ async function _callClaudeOnce(sys, user, maxTok, webSearch, attempt) {
       ? retryAfter * 1000
       : Math.min(30000, 4000 * Math.pow(2, attempt));
     await new Promise(r => setTimeout(r, waitMs));
-    return _callClaudeOnce(sys, user, maxTok, webSearch, attempt + 1);
+    return _callClaudeOnce(sys, user, maxTok, webSearch, attempt + 1, opts);
   }
 
   if (!res.ok) {
@@ -258,7 +265,7 @@ async function runAgent(opts) {
 
   let raw;
   try {
-    raw = await callClaude(sys, prompt, maxTok, webSearch);
+    raw = await callClaude(sys, prompt, maxTok, webSearch, opts.ai);
   } catch (e) {
     if (e.message === 'AI_PLAN_GATE') { container.innerHTML = ''; return null; }
     if (e.code === 'RATE_LIMITED' || /rate.?limit/i.test(e.message || '') || /tokens per minute/i.test(e.message || '')) {
@@ -1792,8 +1799,9 @@ async function runBDResearch() {
   const lane = async (l, i) => {
     let out = '';
     try {
-      out = await callClaude(l[1] + rules + json, base, 1200, true);
-      if (refused(out)) out = await callClaude(l[1] + rules + ' Your last reply asked questions instead of searching. That is not allowed. Search now.' + json, baseCore, 1200, true);
+      const so = { model: AI_MODELS.smart, effort: 'medium', purpose: 'bd_search' };
+      out = await callClaude(l[1] + rules + json, base, 1200, true, so);
+      if (refused(out)) out = await callClaude(l[1] + rules + ' Your last reply asked questions instead of searching. That is not allowed. Search now.' + json, baseCore, 1200, true, so);
       let list = parse(out);
       if (!list && out && /https?:\/\//i.test(out)) {                 // prose came back: tidy just this search into the list
         const fix = await callClaude('Turn this funding research into ONE JSON array and nothing else. Each item: {"funder":"","programme":"","deadline":"","value":"","eligibility":"","fit":"","url":"","score":0}. "score" is 1–5 for fit to the organisation. Drop anything closed.', 'ORGANISATION: ' + base.slice(0, 500) + '\n\nRESEARCH:\n' + String(out).replace(/<\/?cite[^>]*>/gi, '').slice(0, 3400), 1200, false);
@@ -1869,7 +1877,7 @@ const _QS_SYS = 'You are parsing a UK funding Expression of Interest form. Extra
   'If a word limit is stated use it; if only a character limit is stated, set wordLimit to that number divided by 6 (rounded). ' +
   'If no limit is stated, wordLimit is null. Return at most 25 items. If the text contains no application questions at all, return [].';
 async function _parseQuestionsText(text) {
-  const raw = await callClaude(_QS_SYS, String(text).slice(0, 3900), 1100, false);
+  const raw = await callClaude(_QS_SYS, String(text).slice(0, 12000), 1100, false, { model: AI_MODELS.smart, long: true, purpose: 'bid_questions' });
   const m = String(raw || '').replace(/```json|```/gi, '').trim().match(/\[[\s\S]*\]/);
   if (!m) return [];
   const arr = JSON.parse(m[0]);
@@ -1968,7 +1976,7 @@ async function pullFunderForm(key) {
   let watchdog = null;
   try {
     if ($('eoi-funder')) $('eoi-funder').value = name;
-    _eoiDoc = null; _eoiQuestions = []; _eoiAnswers = {}; _eoiFunderPriorities = ''; _eoiPrioritiesFunder = '';
+    _eoiDoc = null; _eoiQuestions = []; _eoiAnswers = {}; _eoiFunderPriorities = ''; _eoiPrioritiesFunder = ''; _eoiGuidanceText = ''; _eoiProject = ''; _eoiProjectFor = '';
     if ($('eoi-output')) $('eoi-output').style.display = 'none';
     if ($('eoi-questions')) { $('eoi-questions').style.display = 'none'; $('eoi-questions').innerHTML = ''; }
     if ($('bd-manual')) $('bd-manual').open = false;
@@ -1979,9 +1987,10 @@ async function pullFunderForm(key) {
     show(0, 'Looking on their website…');
     // a gentle nudge if it's slow, so it never looks stuck
     watchdog = setTimeout(() => note('Still working — funder sites and the AI can be slow. You can wait, or <a href="#" onclick="bdManualStart();return false" style="color:var(--em);font-weight:600">upload their form instead</a>.'), 60000);
-    window._eoiOnProgress = (i, n) => { steps[2].meta = 'Question ' + (i + 1) + ' of ' + n; show(2, 'Writing every answer from your profile and records'); };
+    window._eoiOnProgress = (i, n) => { steps[2].meta = i < 0 ? 'Planning the bid' : (i + ' of ' + n + ' answers written'); show(2, 'Writing every answer from your project, records and their criteria'); };
 
     const found = await _findFunderForm(o, name);
+    _eoiGuidanceText = String(found.pageText || '').slice(0, 14000);
     steps[0].meta = found.base64 ? (found.filename || 'form found') : (found.kind === 'page' ? 'No file to download — reading their page' : 'No downloadable form found');
     show(1, 'Reading what they ask');
     await _readFormQuestions(found, o, name);
@@ -2268,15 +2277,88 @@ async function _ensureFunderPriorities(funder, force) {
   funder = (funder || '').trim();
   if (!funder) return;
   if (!force && _eoiFunderPriorities && _eoiPrioritiesFunder === funder) return;
-
-  const sys = 'You are a UK funding researcher. In 4-6 short bullet points, summarise this funder\'s current priorities, the outcomes they fund, and the language they use in guidance. Be factual and specific. No preamble.';
+  const shape = 'Use exactly these headings, each followed by short factual bullet points: PRIORITIES (what they want to fund and the change they want to see), ' +
+    'ASSESSMENT CRITERIA (what assessors score or look for, in their words), ELIGIBILITY (who can and cannot apply, income or size limits, area), ' +
+    'GRANT SIZE AND LENGTH (amounts and duration), THEIR LANGUAGE (key words and phrases they use). Say "not stated" where the information is not there. Never invent. No preamble.';
   try {
-    const raw = await callClaude(sys, 'Funder: ' + funder, 500, true);
+    let raw = '';
+    if (_eoiGuidanceText && _eoiGuidanceText.length > 400) {     // their own page: the most reliable source
+      raw = await callClaude('You read UK funders\' guidance for bid writers. From the funder page text below, pull out what an applicant needs. ' + shape,
+        'Funder / programme: ' + funder + '\n\nTHEIR PAGE:\n' + _eoiGuidanceText, 1200, false, { model: AI_MODELS.smart, effort: 'medium', long: true, purpose: 'bid_funder' });
+    }
+    if (!raw || raw.length < 120) {
+      raw = await callClaude('You are a UK funding researcher. Search for this funder\'s current guidance for applicants and summarise it. ' + shape,
+        'Funder / programme: ' + funder, 1200, true, { model: AI_MODELS.smart, effort: 'medium', purpose: 'bid_funder' });
+    }
     _eoiFunderPriorities = cleanReportText(raw);
     _eoiPrioritiesFunder = funder;
   } catch (e) {
-    // Leave any previous priorities in place; drafting continues without.
+    if (e && e.message === 'AI_PLAN_GATE') throw e;
+    // drafting continues without
   }
+}
+
+// ── The project the bid is for: Vorlana suggests three from what the organisation already does; one tap to choose ──
+function _eoiProgrammes() {
+  const names = {};
+  (DB.events || []).filter(e => !e._demo || (typeof _demoMode !== 'undefined' && _demoMode)).forEach(e => { if (e.name) names[e.name] = (names[e.name] || 0) + 1; });
+  const ev = Object.entries(names).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n, c]) => n + ' (' + c + ' sessions)');
+  const con = (DB.contracts || []).map(c => c.name + (c.funder ? ' — funded by ' + c.funder : '') + (c.value ? ', £' + num(c.value).toLocaleString() : '')).slice(0, 6);
+  return (ev.length ? 'Regular activities: ' + ev.join('; ') + '\n' : '') + (con.length ? 'Current funded work: ' + con.join('; ') : '');
+}
+async function _eoiChooseProject(res, funder, facts, evidence) {
+  if (_eoiProject && _eoiProjectFor === funder) return;
+  res.innerHTML = '<div class="brain-panel"><div class="brain-header"><div class="brain-icon">💡</div><div><div class="brain-title">Finding the best project to put to ' + escapeHTML(funder) + '</div><div class="brain-sub">Matching what you already do to what they fund</div></div></div></div>';
+  let ideas = [];
+  try {
+    const raw = await callClaude('You are a senior UK bid strategist. Suggest the 3 strongest projects this organisation could put to this funder: each must build on work the organisation ALREADY does (from the facts and records), match the funder\'s priorities and criteria, and ask for an amount inside the funder\'s grant range that is realistic for the organisation\'s size. ' +
+      'Reply with ONLY a JSON array of 3 items, no other words: [{"title":"","summary":"two sentences: what it is and the change it makes","who":"who benefits and roughly how many","amount":"£ amount","duration":"e.g. 12 months","outcomes":["2-3 measurable outcomes"]}]. Never invent partners or track record that are not in the facts.',
+      'FUNDER: ' + funder + '\n' + (_eoiFunderPriorities ? 'WHAT THE FUNDER WANTS:\n' + _eoiFunderPriorities.slice(0, 2500) + '\n' : '') + '\n' + facts.slice(0, 3000) + '\n\n' + _eoiProgrammes() + '\n\n' + evidence,
+      1200, false, { model: AI_MODELS.smart, effort: 'medium', long: true, purpose: 'bid_project' });
+    const t = String(raw || '').replace(/```json|```/gi, ''); const m = t.match(/\[[\s\S]*\]/);
+    if (m) ideas = JSON.parse(m[0]).filter(x => x && x.title).slice(0, 3);
+  } catch (e) { if (e && e.message === 'AI_PLAN_GATE') throw e; }
+  const asText = x => x.title + ': ' + (x.summary || '') + (x.who ? ' Who benefits: ' + x.who + '.' : '') + (x.amount ? ' Amount requested: ' + x.amount + '.' : '') + (x.duration ? ' Duration: ' + x.duration + '.' : '') +
+    (Array.isArray(x.outcomes) && x.outcomes.length ? ' Outcomes: ' + x.outcomes.join('; ') + '.' : '');
+  if (!ideas.length) { _eoiProject = ''; _eoiProjectFor = funder; return; }    // no suggestions: write from the organisation's work
+  return new Promise(resolve => {
+    window._eoiPick = function (i) {
+      const own = (($('eoi-own-project') || {}).value || '').trim();
+      _eoiProject = i === 'own' ? own : i === 'none' ? '' : asText(ideas[i]);
+      _eoiProjectFor = funder; window._eoiPick = null; resolve();
+    };
+    res.innerHTML = '<div style="font-size:18px;font-weight:700;letter-spacing:-.01em;margin-bottom:4px">Which project should this bid be for?</div>' +
+      '<div style="font-size:13px;color:var(--txt3);margin-bottom:14px">Built from what you already do and what ' + escapeHTML(funder) + ' funds. Tap one and we\'ll write the bid around it.</div>' +
+      ideas.map((x, i) => '<div class="card" style="margin-bottom:12px;padding:16px 18px"><div style="display:flex;gap:14px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap">' +
+        '<div style="flex:1;min-width:240px"><div style="font-weight:700;font-size:15px;color:var(--txt)">' + escapeHTML(x.title) + '</div>' +
+        '<div style="font-size:13.5px;color:var(--txt2);margin:4px 0 6px;line-height:1.5">' + escapeHTML(x.summary || '') + '</div>' +
+        '<div style="font-size:12.5px;color:var(--txt3)">' + [x.amount, x.duration, x.who].filter(Boolean).map(escapeHTML).join(' · ') + '</div>' +
+        (Array.isArray(x.outcomes) && x.outcomes.length ? '<ul style="margin:6px 0 0 18px;font-size:12.5px;color:var(--txt2)">' + x.outcomes.map(o => '<li>' + escapeHTML(o) + '</li>').join('') + '</ul>' : '') +
+        '</div><button class="btn btn-p" type="button" onclick="_eoiPick(' + i + ')">Use this</button></div></div>').join('') +
+      '<details style="margin-top:4px"><summary style="font-size:13px;color:var(--em);cursor:pointer;font-weight:600">Something else in mind?</summary>' +
+        '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><input id="eoi-own-project" placeholder="One line is enough, e.g. a weekly cook club for 30 older people, £8,000 over a year" style="flex:1;min-width:240px"/>' +
+        '<button class="btn btn-ghost" type="button" onclick="_eoiPick(\'own\')">Use mine</button></div>' +
+        '<a href="#" onclick="_eoiPick(\'none\');return false" style="display:inline-block;margin-top:8px;font-size:12.5px;color:var(--txt3)">Skip — write about our work in general</a></details>';
+    const pulled = $('bd-pull-steps'); if (pulled && pulled.scrollIntoView) res.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+
+// ── One plan for the whole bid: the key message for each answer and which evidence goes where, so nothing repeats ──
+async function _eoiMakePlan(funder, facts, evidence) {
+  const long = _eoiQuestions.filter(q => !_eoiIsShortField(q));
+  if (long.length < 2) return {};
+  try {
+    const raw = await callClaude('You are a senior UK bid writer planning a whole application before anyone writes. For each question, decide the single key message, the specific evidence to use (figures, quotes, examples from the records given — use each headline figure in at most two answers), and how it scores against the funder\'s criteria. ' +
+      'Make the answers build one argument: need, our project, why us, the difference it makes, how we will know. Reply with ONLY a JSON array, no other words: [{"n":1,"message":"","evidence":"","criteria":""}] where n is the question number.',
+      'FUNDER: ' + funder + '\n' + (_eoiFunderPriorities ? 'WHAT THE FUNDER WANTS:\n' + _eoiFunderPriorities.slice(0, 3000) + '\n' : '') + (_eoiProject ? '\nTHE PROJECT: ' + _eoiProject + '\n' : '') +
+      '\n' + facts.slice(0, 3500) + '\n\n' + evidence + '\n\nQUESTIONS:\n' + long.map(q => (_eoiQuestions.indexOf(q) + 1) + '. ' + q.question + (q.wordLimit ? ' (' + q.wordLimit + ' words)' : '')).join('\n'),
+      1200, false, { model: AI_MODELS.best, effort: 'medium', long: true, purpose: 'bid_plan' });
+    const t = String(raw || '').replace(/```json|```/gi, ''); const m = t.match(/\[[\s\S]*\]/);
+    const arr = m ? JSON.parse(m[0]) : [];
+    const plan = {};
+    (Array.isArray(arr) ? arr : []).forEach(x => { const q = _eoiQuestions[(+x.n || 0) - 1]; if (q) plan[q.id] = x; });
+    return plan;
+  } catch (e) { if (e && e.message === 'AI_PLAN_GATE') throw e; return {}; }
 }
 
 // Manual "Re-research funder" button — forces a fresh fetch and shows status.
@@ -2345,88 +2427,110 @@ async function runEOIFormFill() {
   const evidence = buildEOIEvidence();
   const out = $('eoi-output'); const res = $('eoi-result');
   out.style.display = 'block';
-
-  // Auto-research the funder's priorities first, so every answer speaks their
-  // language. Only runs if a funder name is set and we don't already have them.
-  if (funderRaw && !(_eoiFunderPriorities && _eoiPrioritiesFunder === funderRaw)) {
-    res.innerHTML = '<div class="brain-panel"><div class="brain-header">' +
-      '<div class="brain-icon">🔎</div><div>' +
-      '<div class="brain-title">Researching ' + escapeHTML(funderRaw) + '</div>' +
-      '<div class="brain-sub">Reading the funder\'s priorities so answers match their language</div>' +
-      '</div></div></div>';
-    await _ensureFunderPriorities(funderRaw);
-  }
-
-  const sys =
-    'You are an expert UK bid writer completing an Expression of Interest to WIN funding. ' +
-    'Everything you write is pasted straight into the funder\'s form as the applicant\'s own words. RULES: ' +
-    '1) Never address the reader, never explain what you cannot do, never comment on data quality, never apologise, never give recommendations — write ONLY the answer. ' +
-    '2) Never add a title, heading or label above the answer; the question is the heading. ' +
-    '3) Ground claims in the KNOWN ORGANISATION FACTS and VERIFIED CRM DATA; never invent statistics, names, numbers, partners or accreditations. ' +
-    '4) Where a specific fact is missing, insert a placeholder like [INSERT: charity number] and keep going — do NOT lecture about the gap. ' +
-    '5) NEVER state or imply the organisation has no experience, no track record, or that figures are zero; rely on the organisation facts and use [INSERT: ...] for specifics. ' +
-    '6) If the question is a SHORT FACTUAL FIELD (name, number, address, postcode, website, email, link, date, title, contact, budget line), reply with ONLY the value or a single [INSERT: ...] placeholder — no prose, no sentences. ' +
-    '7) Otherwise write clean formal British English prose, mirror the funder\'s language and priorities, and respect the word limit. ' + _EOI_NEVER_STOP;
+  const panel = (icon, title, sub) => '<div class="brain-panel"><div class="brain-header"><div class="brain-icon">' + icon + '</div><div><div class="brain-title">' + title + '</div><div class="brain-sub">' + sub + '</div></div></div></div>';
 
   const applicant = _eoiApplicant(profile);
   const facts = (applicant ? 'APPLICANT: ' + applicant + ' (the organisation named in the facts below; any other name is just an internal label — ignore it)\n\n' : '') + 'KNOWN ORGANISATION FACTS (provided by the applicant — treat as true):\n' +
-    (profile ? profile.slice(0, 1800) : '(none provided — use [INSERT: ...] placeholders for organisation details such as legal name, charity/company number, address, website, contact)');
+    (profile ? profile.slice(0, 4000) : '(none provided — use [INSERT: ...] placeholders for organisation details such as legal name, charity/company number, address, website, contact)');
 
-  _eoiAnswers = {};
-
-  for (let i = 0; i < _eoiQuestions.length; i++) {
-    const q = _eoiQuestions[i];
-    res.innerHTML = _fillProgressHTML(i);
-    if (typeof window._eoiOnProgress === 'function') { try { window._eoiOnProgress(i, _eoiQuestions.length); } catch (e) { /* display only */ } }
-    const short = _eoiIsShortField(q);
-    let limitLine, maxTok;
-    if (short) {
-      limitLine = 'This is a SHORT FACTUAL FIELD — reply with ONLY the value or a single [INSERT: ...] placeholder. No prose, no explanation.';
-      maxTok = 80;
-    } else {
-      limitLine = q.wordLimit ? ('Word limit: ' + q.wordLimit + ' words — do not exceed.') : 'Aim for roughly 180-260 words.';
-      maxTok = Math.min(1200, Math.round((q.wordLimit || 260) * 1.7) + 120);
+  try {
+    // 1. What the funder wants — from their own guidance where we have it
+    if (funderRaw && !(_eoiFunderPriorities && _eoiPrioritiesFunder === funderRaw)) {
+      res.innerHTML = panel('🔎', 'Reading ' + escapeHTML(funderRaw) + '\'s guidance', 'Their priorities, what assessors look for, eligibility and grant size');
+      await _ensureFunderPriorities(funderRaw);
     }
+    // 2. The project (one tap)
+    if (funderRaw) await _eoiChooseProject(res, funder, facts, evidence);
+    // 3. One plan for the whole bid
+    res.innerHTML = panel('🧭', 'Planning your bid', 'One argument across every answer, the right evidence in the right place');
+    if (typeof window._eoiOnProgress === 'function') { try { window._eoiOnProgress(-1, _eoiQuestions.length); } catch (e) { /* display only */ } }
+    const plan = await _eoiMakePlan(funder, facts, evidence);
 
-    const userPrompt = [
-      'FUNDER: ' + funder,
-      _eoiFunderPriorities ? ('FUNDER PRIORITIES:\n' + _eoiFunderPriorities.slice(0, 700)) : '',
-      usps ? ('OUR STRENGTHS/USPs: ' + usps) : '',
-      '',
-      facts,
-      '',
-      evidence,
-      '',
-      'QUESTION TO ANSWER: ' + q.question,
-      limitLine
-    ].filter(Boolean).join('\n');
+    const sys =
+      'You are an expert UK bid writer completing a funding application to WIN it. ' +
+      'Everything you write is pasted straight into the funder\'s form as the applicant\'s own words. RULES: ' +
+      '1) Never address the reader, never explain what you cannot do, never comment on data quality, never apologise, never give recommendations — write ONLY the answer. ' +
+      '2) Never add a title, heading or label above the answer; the question is the heading. ' +
+      '3) Ground claims in the KNOWN ORGANISATION FACTS and VERIFIED CRM DATA; never invent statistics, names, numbers, partners or accreditations. ' +
+      '4) Where a specific fact is missing, insert a placeholder like [INSERT: charity number] and keep going — do NOT lecture about the gap. ' +
+      '5) NEVER state or imply the organisation has no experience, no track record, or that figures are zero; rely on the organisation facts and use [INSERT: ...] for specifics. ' +
+      '6) If the question is a SHORT FACTUAL FIELD (name, number, address, postcode, website, email, link, date, title, contact, budget line), reply with ONLY the value or a single [INSERT: ...] placeholder — no prose, no sentences. ' +
+      '7) Otherwise write clear, warm, specific British English: answer exactly what is asked first, then evidence it. Be concrete (who, how many, how often, what changes), mirror the funder\'s own words and score against their criteria. ' +
+      '8) Write about THE PROJECT where one is given: what it is, who benefits, what will change and how you will measure it. Do not repeat points that belong to other answers. Respect the word limit strictly. ' + _EOI_NEVER_STOP;
+    const others = id => _eoiQuestions.filter(q => q.id !== id && plan[q.id] && plan[q.id].message).map(q => '- ' + plan[q.id].message).join('\n');
 
-    try {
-      const raw = await _eoiCallNoRefusal(sys, userPrompt, maxTok);
-      _eoiAnswers[q.id] = _eoiLooksLikeRefusal(raw)
-        ? (short ? '[INSERT: ' + q.question.replace(/[:?]\s*$/, '').slice(0, 80) + ']' : '[INSERT: answer to this question — add more detail to your organisation profile and write it again]')
-        : _stripLeadingLabel(cleanReportText(raw));
-    } catch (e) {
-      if (e.message === 'AI_PLAN_GATE') { res.innerHTML = ''; return; }
-      _eoiAnswers[q.id] = '[Could not draft this answer: ' + e.message + ']';
-    }
+    _eoiAnswers = {};
+    const state = _eoiQuestions.map(() => '');
+    const paint = () => {
+      res.innerHTML = _fillProgressHTML(state);
+      const done = state.filter(x => x === 'done').length;
+      if (typeof window._eoiOnProgress === 'function') { try { window._eoiOnProgress(done, _eoiQuestions.length); } catch (e) { /* display only */ } }
+    };
+    paint();
+
+    // 4. Every answer, written side by side (three at a time)
+    await Promise.all(_eoiQuestions.map(async (q, i) => {
+      const short = _eoiIsShortField(q);
+      const limitLine = short ? 'This is a SHORT FACTUAL FIELD — reply with ONLY the value or a single [INSERT: ...] placeholder. No prose, no explanation.'
+        : q.wordLimit ? ('Word limit: ' + q.wordLimit + ' words — stay under it.') : 'Aim for roughly 180-260 words.';
+      const p = plan[q.id];
+      const userPrompt = [
+        'FUNDER: ' + funder,
+        _eoiFunderPriorities ? ('WHAT THE FUNDER WANTS:\n' + _eoiFunderPriorities.slice(0, 2500)) : '',
+        _eoiProject ? ('THE PROJECT THIS BID IS FOR: ' + _eoiProject) : '',
+        usps ? ('OUR STRENGTHS/USPs: ' + usps) : '',
+        '', facts, '', evidence, '',
+        p ? ('PLAN FOR THIS ANSWER — key message: ' + (p.message || '') + (p.evidence ? ' | evidence to use: ' + p.evidence : '') + (p.criteria ? ' | criteria it scores against: ' + p.criteria : '')) : '',
+        !short && others(q.id) ? ('OTHER ANSWERS ALREADY COVER (do not repeat):\n' + others(q.id)) : '',
+        q.guidance ? ('THE FUNDER\'S GUIDANCE FOR THIS QUESTION: ' + q.guidance) : '',
+        'QUESTION TO ANSWER: ' + q.question,
+        limitLine
+      ].filter(Boolean).join('\n');
+      state[i] = 'active'; paint();
+      try {
+        const o = short ? { model: AI_MODELS.fast, purpose: 'bid_field' } : { model: AI_MODELS.best, effort: 'medium', long: true, purpose: 'bid_answer' };
+        let raw = await callClaude(sys, userPrompt, short ? 80 : 1200, false, o);
+        if (_eoiLooksLikeRefusal(raw)) raw = await callClaude(sys + 'Your previous reply asked for clarification instead of writing. That is not allowed. Write the complete answer now. ', userPrompt + '\n\n(Write the finished text now. No questions, no commentary. Use [INSERT: ...] for anything missing.)', short ? 80 : 1200, false, o);
+        let ans = _eoiLooksLikeRefusal(raw)
+          ? (short ? '[INSERT: ' + q.question.replace(/[:?]\s*$/, '').slice(0, 80) + ']' : '[INSERT: answer to this question — add more detail to your organisation profile and write it again]')
+          : _stripLeadingLabel(cleanReportText(raw));
+        // 5. Over the word limit: tighten it, keeping every fact
+        if (!short && q.wordLimit && _wordCount(ans) > q.wordLimit) {
+          try {
+            const cut = await callClaude('Shorten this funding application answer to at most ' + Math.floor(q.wordLimit * 0.95) + ' words. Keep every figure, name and [INSERT: ...] placeholder, keep the strongest points, keep the same voice. Reply with ONLY the shortened answer.',
+              ans, 1200, false, { model: AI_MODELS.smart, purpose: 'bid_trim' });
+            const t = _stripLeadingLabel(cleanReportText(cut));
+            if (t && _wordCount(t) <= q.wordLimit && !_eoiLooksLikeRefusal(t)) ans = t;
+          } catch (e) { /* keep the longer one; the word count shows it */ }
+        }
+        _eoiAnswers[q.id] = ans;
+      } catch (e) {
+        if (e.message === 'AI_PLAN_GATE') throw e;
+        _eoiAnswers[q.id] = '[Could not draft this answer: ' + e.message + ']';
+      }
+      state[i] = 'done'; paint();
+    }));
+  } catch (e) {
+    if (e && e.message === 'AI_PLAN_GATE') { res.innerHTML = ''; return; }
+    throw e;
   }
 
   renderFilledEOI();
 }
 
-function _fillProgressHTML(activeIdx) {
+function _fillProgressHTML(state) {
+  const done = state.filter(x => x === 'done').length;
   return '<div class="brain-panel"><div class="brain-header">' +
     '<div class="brain-icon">🧠</div><div>' +
-    '<div class="brain-title">EOI Engine — drafting from your data</div>' +
-    '<div class="brain-sub">Answering question ' + (activeIdx + 1) + ' of ' + _eoiQuestions.length + ', grounded in real outcomes</div>' +
+    '<div class="brain-title">Writing your bid</div>' +
+    '<div class="brain-sub">' + done + ' of ' + _eoiQuestions.length + ' answers written, from your project, records and the funder\'s criteria</div>' +
     '</div></div><div class="brain-steps">' +
     _eoiQuestions.map((q, i) => {
-      const state = i < activeIdx ? 'done' : i === activeIdx ? 'active' : '';
-      const icon = state === 'done' ? '<div class="bs-check">✓</div>'
-        : state === 'active' ? '<div class="bs-spinner"></div>'
+      const st = state[i];
+      const icon = st === 'done' ? '<div class="bs-check">✓</div>'
+        : st === 'active' ? '<div class="bs-spinner"></div>'
         : '<div class="bs-num">' + (i + 1) + '</div>';
-      return '<div class="brain-step ' + state + '"><div class="bs-icon-wrap">' + icon + '</div>' +
+      return '<div class="brain-step ' + st + '"><div class="bs-icon-wrap">' + icon + '</div>' +
         '<div class="bs-text"><div class="bs-label">' + escapeHTML(q.question.slice(0, 70)) + (q.question.length > 70 ? '…' : '') + '</div></div></div>';
     }).join('') + '</div></div>';
 }
@@ -2520,7 +2624,7 @@ async function runEOIQualitySupervisor() {
   for (let b = 0; b < batches.length; b++) {
     el.innerHTML = '<div class="alert alert-info" style="margin:16px 0 0">Quality Supervisor reviewing… (' + (b + 1) + ' of ' + batches.length + ')</div>';
     try {
-      const raw = await callClaude(sys, 'FUNDER: ' + funder + '\n\n' + batches[b], 600, false);
+      const raw = await callClaude(sys, 'FUNDER: ' + funder + (_eoiFunderPriorities ? '\nWHAT THE FUNDER WANTS:\n' + _eoiFunderPriorities.slice(0, 2000) : '') + '\n\n' + batches[b], 600, false, { model: AI_MODELS.smart, long: true, purpose: 'bid_review' });
       const clean = cleanReportText(raw).trim();
       if (clean && !/^ok\.?$/i.test(clean)) findings.push(clean);
     } catch (e) {
@@ -2575,10 +2679,10 @@ async function runEOIGenerator() {
     container: res,
     headerLabel: 'EOI Generator Agent',
     headerSub: 'Writing your application using verified outcomes',
-    steps, sys, prompt, maxTok: 1300
+    steps, sys, prompt, maxTok: 1300, ai: { model: AI_MODELS.best, effort: 'medium', long: true, purpose: 'bid_brief' }
   });
   if (raw && _eoiLooksLikeRefusal(raw)) {      // never hand the person a list of questions instead of a bid
-    try { raw = await callClaude(sys + 'Your previous reply asked for clarification instead of writing. That is not allowed. Write the complete Expression of Interest now. ', prompt + '\n\n(Write the finished text now. No questions, no commentary. Use [INSERT: ...] for anything missing.)', 1300, false); }
+    try { raw = await callClaude(sys + 'Your previous reply asked for clarification instead of writing. That is not allowed. Write the complete Expression of Interest now. ', prompt + '\n\n(Write the finished text now. No questions, no commentary. Use [INSERT: ...] for anything missing.)', 1300, false, { model: AI_MODELS.best, effort: 'medium', long: true, purpose: 'bid_brief' }); }
     catch (e) { raw = ''; }
     if (!raw || _eoiLooksLikeRefusal(raw)) {
       res.innerHTML = '<div class="alert alert-warn">We couldn\'t write this one automatically. Add a few lines about your organisation under <b>About your organisation</b> (who you are, what you\'ve achieved, who you work with), then press <b>Write my bid</b> again.</div>';

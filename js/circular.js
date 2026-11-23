@@ -2127,7 +2127,7 @@ async function cxPhoto(ev) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': session ? 'Bearer ' + session.access_token : '' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6', max_tokens: 400, purpose: 'circular_intake',
+        model: AI_MODELS.smart, max_tokens: 400, purpose: 'circular_intake',
         system: 'You identify donated items for a UK reuse charity from one photo. Reply with JSON only, no other text.',
         messages: [{ role: 'user', content: [
           { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },

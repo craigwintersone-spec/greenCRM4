@@ -4,7 +4,8 @@
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
+const { anthropic, MODELS } = require('./_lib/anthropic');
+const CLAUDE_MODEL = MODELS.fast;
 const CRON_SECRET = process.env.CRON_SECRET || null;
 const COST_PER_CALL_PENCE = 1;
 
@@ -46,24 +47,9 @@ async function logAction(agent, action, detail, orgId, costPence) {
 }
 
 async function callClaudeServer(system, prompt, maxTok = 600) {
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: CLAUDE_MODEL,
-      max_tokens: maxTok,
-      system,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-  const data = await r.json();
-  if (!r.ok || data.type === 'error') {
-    throw new Error(data.error?.message || `Claude ${r.status}`);
-  }
+  // Shared helper: current models, automatic step-down to an older one if needed
+  const { status, data } = await anthropic({ model: CLAUDE_MODEL, max_tokens: maxTok, system, messages: [{ role: 'user', content: prompt }] }, { webSearch: false });
+  if (status >= 400 || !data || data.type === 'error') throw new Error((data && data.error && data.error.message) || `Claude ${status}`);
   return (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
 }
 

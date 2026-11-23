@@ -2,6 +2,8 @@
 Newest first. The Sentinel reads this every morning and logs what shipped in the last 7 days.
 
 ## 2026-11-23
+- AI models upgraded: bids are written by Claude Fable 5.2, funding searches and form reading by Sonnet 5.5, everyday jobs by Haiku 5.5. If a model isn't available, Vorlana steps down to the next one automatically
+- Bids: Vorlana now reads the funder's own guidance (priorities, what assessors look for, eligibility, grant size), suggests three projects built from what the organisation already does (one tap to choose), plans the whole bid so answers build one argument without repeating, writes the answers side by side, and trims any answer that runs over the word limit
 - Find funding is much faster: the three searches now run side by side, results appear as each one finishes, and merging happens instantly in the browser (one fewer AI call per search)
 - AI calls can run up to three at a time instead of one after another
 - New look: cleaner type, soft cards, pill buttons, line icons instead of emoji

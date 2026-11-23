@@ -7,7 +7,9 @@ const SB_URL = 'https://nznfrxzgvcjhfsdaphyp.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bmZyeHpndmNqaGZzZGFwaHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjQzNzcsImV4cCI6MjA5MjQwMDM3N30.vDlv1aVF4MlXPJ_VCWvyWWYYqovwJxUvNnwwUgYXSyw';
 
 // ── Claude (AI) ───────────────────────────────────────────────
-const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
+// Which model does what. The server steps down to an older model automatically if one isn't available.
+const AI_MODELS = { best: 'claude-fable-5-2', smart: 'claude-sonnet-5-5', fast: 'claude-haiku-5-5' };
+const CLAUDE_MODEL = AI_MODELS.fast;   // everyday jobs
 const AI_PLANS = ['group', 'starter', 'pro', 'network'];   // every paid plan has the AI; plans differ by size
 const AI_MIN_GAP_MS = 1500;
 
