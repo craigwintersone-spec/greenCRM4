@@ -1,5 +1,5 @@
 // /api/billing.js — self-serve sign-up and Vorlana's own subscriptions (paid to Winters Ventures' Stripe account)
-// signup   (public)   → creates the login, the organisation (14-day free trial, no card), the owner membership and profile
+// signup   (public)   → creates the login, the organisation (14-day free trial, no card, owner_id = them), an admin membership and profile
 // checkout (manager)  → Stripe Checkout for Starter, Community or Standard, monthly or yearly
 // confirm  (member)   → after Stripe sends them back: checks the payment with Stripe, then switches the plan on
 // portal   (manager)  → Stripe's billing page: change card, see invoices, cancel
@@ -137,9 +137,9 @@ async function handler(req, res) {
       try {
         const modules = {}; ALL_MODULES.forEach(k => { modules[k] = true; });
         const trialEnds = new Date(Date.now() + TRIAL_DAYS * 864e5).toISOString();
-        org = (await sb('organisations', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify([{ name: orgName, sector, plan: 'free', status: 'trial', modules, settings: { self_serve: true, trial_ends: trialEnds, signed_up_by: email } }]) }))[0];
-        await sb('memberships', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([{ user_id: userId, org_id: org.id, role: 'owner', status: 'active' }]) });
-        try { await sb('profiles?on_conflict=id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify([{ id: userId, full_name: name, email, org_id: org.id, role: 'owner' }]) }); }
+        org = (await sb('organisations', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify([{ name: orgName, sector, plan: 'free', status: 'trial', owner_id: userId, modules, settings: { self_serve: true, trial_ends: trialEnds, signed_up_by: email } }]) }))[0];
+        await sb('memberships', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([{ user_id: userId, org_id: org.id, role: 'admin', status: 'active' }]) });
+        try { await sb('profiles?on_conflict=id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify([{ id: userId, full_name: name, email, org_id: org.id, role: 'admin' }]) }); }
         catch (e) { /* the profile is optional: the membership is what gives access */ }
       } catch (e) {   // undo, so they can simply try again
         if (org && org.id) { try { await sb(`organisations?id=eq.${org.id}`, { method: 'DELETE' }); } catch (x) { /* best effort */ } }
