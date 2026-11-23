@@ -2,6 +2,7 @@
 Newest first. The Sentinel reads this every morning and logs what shipped in the last 7 days.
 
 ## 2026-11-23
+- Bids: character limits are kept as characters (shown as 612/750 characters) and answers are cut to fit; when the funder's actual form can't be opened, the bid says the questions and limits came from their guidance so they can be checked; answers can no longer stop mid-sentence (the AI gets more room and retries if it runs out)
 - Bids leave far fewer gaps: the same gap asked in different words becomes one question, project ideas only use the organisation's existing venues and activities, and the writer and assessor drop unsupported claims or reason them out instead of leaving "confirm…" or "explain…" gaps
 - Bids: the plan now sets the right length for every question (one-line facts stay one line), keeps one fact sheet so numbers agree everywhere, hands out each quote once, times seasonal projects realistically and suggests a budget that adds up; an assessor-style check of the whole bid then rewrites any answer that misses its question, contradicts itself, repeats or overclaims
 - Fill the gaps: every [INSERT] in one short list, answered once and dropped into every answer; organisation facts are remembered for the next bid (bank details never are)

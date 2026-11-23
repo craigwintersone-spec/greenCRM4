@@ -1910,9 +1910,9 @@ async function _docxText(b64) {
 }
 const _QS_SYS = 'You are parsing a UK funding Expression of Interest form. Extract every question or field the applicant must complete, in order. ' +
   'Return ONLY a valid JSON array — no prose, no markdown, no code fences. ' +
-  'Each item: {"id":"q1","question":"<exact question text>","wordLimit":<number or null>,"guidance":"<any limit/guidance note, else empty string>"}. ' +
+  'Each item: {"id":"q1","question":"<exact question text, word for word>","wordLimit":<number or null>,"charLimit":<number or null>,"guidance":"<any limit/guidance note, else empty string>"}. ' +
   'Include short mandatory fields too (project title, amount requested, organisation name). ' +
-  'If a word limit is stated use it; if only a character limit is stated, set wordLimit to that number divided by 6 (rounded). ' +
+  'Copy limits exactly as the form states them: a word limit goes in wordLimit; a character limit goes in charLimit (and wordLimit is then that number divided by 6, rounded). Never turn characters into words in the question text. ' +
   'If no limit is stated, wordLimit is null. Return at most 25 items. If the text contains no application questions at all, return [].';
 async function _parseQuestionsText(text) {
   const raw = await callClaude(_QS_SYS, String(text).slice(0, 12000), 1100, false, { model: AI_MODELS.smart, long: true, purpose: 'bid_questions' });
@@ -1927,7 +1927,8 @@ async function _pdfQuestions(b64) {
 }
 function _toQuestions(arr) {
   return (arr || []).map((q, i) => ({ id: q.id || ('q' + (i + 1)), question: String(q.question || '').trim(),
-    wordLimit: (typeof q.wordLimit === 'number' && q.wordLimit > 0) ? Math.round(q.wordLimit) : null, guidance: String(q.guidance || '').trim() })).filter(q => q.question);
+    wordLimit: (typeof q.wordLimit === 'number' && q.wordLimit > 0) ? Math.round(q.wordLimit) : null,
+    charLimit: (typeof q.charLimit === 'number' && q.charLimit > 0) ? Math.round(q.charLimit) : null, guidance: String(q.guidance || '').trim() })).filter(q => q.question);
 }
 // 1. their form: the page's own link first, then ask the web where it lives
 async function _findFunderForm(o, name) {
@@ -1970,7 +1971,7 @@ async function _readFormQuestions(found, o, name) {
   const raw = await callClaude('You are a UK bid researcher. Find the actual Expression of Interest / application questions an applicant must answer for this specific funding programme. Return each question on its own line, with any stated word or character limit in brackets. If you cannot find the exact form, list the key questions or assessment criteria the application is known to require, one per line. No preamble, just the questions.',
     'Funder / programme: ' + name + (o && o.url ? '\nInfo page: ' + o.url : ''), 900, true);
   const arr = await _parseQuestionsText(cleanReportText(raw));
-  if (arr.length) { _eoiDoc = { kind: 'text', url: o && o.url }; _eoiQuestions = _toQuestions(arr); }
+  if (arr.length) { _eoiDoc = { kind: 'text', url: o && o.url, fromWeb: true }; _eoiQuestions = _toQuestions(arr); }
 }
 // 3. their form, with the answers written in
 async function _buildFilledForm() {
@@ -2481,7 +2482,7 @@ async function _eoiMakePlan(funder, facts, evidence, quotes) {
 
 // Read the whole bid the way the funder's assessor would, then fix only what needs fixing
 async function _eoiAssess(funder, sheet, writeOne) {
-  const qa = _eoiQuestions.map((q, i) => 'Q' + (i + 1) + '. ' + q.question + (q.wordLimit ? ' (limit ' + q.wordLimit + ' words)' : '') + '\nANSWER: ' + (_eoiAnswers[q.id] || '')).join('\n\n');
+  const qa = _eoiQuestions.map((q, i) => 'Q' + (i + 1) + '. ' + q.question + (q.charLimit ? ' (limit ' + q.charLimit + ' characters; this one has ' + String(_eoiAnswers[q.id] || '').length + ')' : q.wordLimit ? ' (limit ' + q.wordLimit + ' words)' : '') + '\nANSWER: ' + (_eoiAnswers[q.id] || '')).join('\n\n');
   let issues = [];
   try {
     const raw = await callClaude('You are the funder\'s assessor reading a whole application. List ONLY real problems that would cost marks: an answer that does not answer its own question; a one-line question answered with paragraphs (or the reverse); a number or fact that contradicts the FACT SHEET or another answer; a quote or statistic repeated across answers; a claim about the organisation that is not in the facts (for example governance, consultation or partnerships that were never stated — remove the claim and write around it; only use an [INSERT: ...] placeholder when the question itself cannot be answered without that fact); placeholders that ask the applicant to confirm or explain something (rewrite so they are not needed); dates that do not work; anything over its word limit. ' +
@@ -2606,7 +2607,7 @@ async function runEOIFormFill() {
     const writeOne = async (q, fixNote) => {
       const i = _eoiQuestions.indexOf(q), p = plan.byId[q.id] || {};
       const type = p.type || (_eoiIsShortField(q) ? 'fact' : 'full');
-      const words = type === 'fact' ? 0 : type === 'choice' ? 25 : type === 'short' ? 50 : (q.wordLimit || +p.words || 220);
+      const words = type === 'fact' ? 0 : type === 'choice' ? 25 : type === 'short' ? 50 : (q.charLimit ? Math.floor(q.charLimit / 6.3) : (q.wordLimit || +p.words || 220));
       const myQuotes = (Array.isArray(p.quotes) ? p.quotes : []).map(n => quotes[(+n || 0) - 1]).filter(Boolean);
       const isBudget = /budget|cost|break ?down|headings/i.test(q.question) && budget;
       const userPrompt = [
@@ -2617,7 +2618,7 @@ async function runEOIFormFill() {
         isBudget ? ('SUGGESTED BUDGET (use these lines and amounts; they add up to the amount requested):\n' + budget) : '',
         usps ? ('OUR STRENGTHS/USPs: ' + usps) : '',
         '', facts, '', evidence, '',
-        'TYPE: ' + type + (words ? ' — about ' + words + ' words at most' : ' — the value only'),
+        'TYPE: ' + type + (q.charLimit && type !== 'fact' ? ' — HARD LIMIT ' + q.charLimit + ' characters including spaces (about ' + words + ' words); stay well under it' : words ? ' — about ' + words + ' words at most' : ' — the value only'),
         p.message ? ('PLAN FOR THIS ANSWER — the point it makes: ' + p.message + (p.use ? ' | evidence to use: ' + p.use : '') + (p.criteria ? ' | criteria: ' + p.criteria : '')) : '',
         myQuotes.length ? ('QUOTE YOU MAY USE (word for word, no name attached): "' + myQuotes.join('" / "') + '"') : 'Use no quotes in this answer.',
         q.guidance ? ('THE FUNDER\'S GUIDANCE FOR THIS QUESTION: ' + q.guidance) : '',
@@ -2630,7 +2631,21 @@ async function runEOIFormFill() {
         let raw = await callClaude(sys, userPrompt, 1200, false, o);
         if (_eoiLooksLikeRefusal(raw)) raw = await callClaude(sys + 'Your previous reply asked for clarification instead of writing. That is not allowed. Write the answer now. ', userPrompt + '\n\n(Write the finished text now. Use [INSERT: ...] for anything missing.)', 1200, false, o);
         let ans = _eoiLooksLikeRefusal(raw) ? (_eoiAnswers[q.id] || '[INSERT: ' + q.question.replace(/[:?]\s*$/, '').slice(0, 80) + ']') : _stripLeadingLabel(cleanReportText(raw));
-        const limit = q.wordLimit || (type === 'full' ? 0 : words);
+        // Cut off part-way through a sentence: write it once more
+        if (type === 'full' && _wordCount(ans) > 40 && !/[.!?)"'’”\]]\s*$/.test(ans.trim())) {
+          try { const again = await callClaude(sys, userPrompt + '\n\n(Your last version stopped mid-sentence. Write the complete answer, ending with a full sentence.)', 1200, false, o); const t = _stripLeadingLabel(cleanReportText(again)); if (t && !_eoiLooksLikeRefusal(t)) ans = t; } catch (e) { /* keep it */ }
+        }
+        if (q.charLimit && ans.length > q.charLimit) {
+          for (let tries = 0; tries < 2 && ans.length > q.charLimit; tries++) {
+            try {
+              const cut = await callClaude('Shorten this funding application answer to at most ' + Math.floor(q.charLimit * 0.92) + ' characters including spaces (it is now ' + ans.length + '). Keep every figure, name and [INSERT: ...] placeholder and the strongest points. Reply with ONLY the shortened answer.',
+                ans, 1200, false, { model: AI_MODELS.smart, purpose: 'bid_trim' });
+              const t = _stripLeadingLabel(cleanReportText(cut));
+              if (t && !_eoiLooksLikeRefusal(t) && t.length < ans.length) ans = t;
+            } catch (e) { break; }
+          }
+        }
+        const limit = q.charLimit ? 0 : (q.wordLimit || (type === 'full' ? 0 : words));
         if (limit && _wordCount(ans) > limit + (type === 'full' ? 0 : 10)) {
           try {
             const cut = await callClaude('Shorten this funding application answer to at most ' + Math.max(1, Math.floor(limit * 0.95)) + ' words. Keep every figure, name and [INSERT: ...] placeholder and the strongest points. Reply with ONLY the shortened answer.',
@@ -2687,7 +2702,7 @@ function _eoiEditAnswer(id, el) {
   _eoiAnswers[id] = el.innerText.replace(/\u00a0/g, ' ').trim();
   const q = _eoiQuestions.find(x => x.id === id), wc = _wordCount(_eoiAnswers[id]);
   const m = $('eoi-wc-' + id);
-  if (m) { const over = q && q.wordLimit && wc > q.wordLimit; m.textContent = (q && q.wordLimit ? wc + '/' + q.wordLimit + ' words' : wc + ' words') + (over ? ' · OVER LIMIT' : ''); m.style.color = over ? '#b91c1c' : '#888'; }
+  if (m) { const len = _eoiAnswers[id].length, over = q && (q.charLimit ? len > q.charLimit : (q.wordLimit && wc > q.wordLimit)); m.textContent = (q && q.charLimit ? len + '/' + q.charLimit + ' characters' : q && q.wordLimit ? wc + '/' + q.wordLimit + ' words' : wc + ' words') + (over ? ' · OVER LIMIT' : ''); m.style.color = over ? '#b91c1c' : '#888'; }
 }
 function renderFilledEOI() {
   const res = $('eoi-result');
@@ -2696,9 +2711,9 @@ function renderFilledEOI() {
   const parts = _eoiQuestions.map((q, i) => {
     const ans = _eoiAnswers[q.id] || '';
     const wc = _wordCount(ans);
-    const over = q.wordLimit && wc > q.wordLimit;
+    const over = q.charLimit ? ans.length > q.charLimit : (q.wordLimit && wc > q.wordLimit);
     (ans.match(/\[INSERT:[^\]]*\]/gi) || []).forEach(() => placeholderCount++);
-    const meta = (q.wordLimit ? (wc + '/' + q.wordLimit + ' words') : (wc + ' words')) + (over ? ' · OVER LIMIT' : '');
+    const meta = (q.charLimit ? (ans.length + '/' + q.charLimit + ' characters') : q.wordLimit ? (wc + '/' + q.wordLimit + ' words') : (wc + ' words')) + (over ? ' · OVER LIMIT' : '');
     const html = boldify(escapeHTML(ans))
       .replace(/\[INSERT:([^\]]*)\]/gi, '<mark style="background:#ffe9a8">[INSERT:$1]</mark>')
       .replace(/\n/g, '<br/>');
@@ -2712,7 +2727,8 @@ function renderFilledEOI() {
   const docx = !!(_eoiDoc && _eoiDoc.kind === 'docx');
   const docNote = !_eoiDoc ? '' : docx
     ? '<div style="background:#F0FDF4;border:1px solid #BBF7D0;color:#166534;border-radius:10px;padding:10px 14px;font-size:13px;margin:0 0 16px">✓ Their own Word form is filled in' + (_eoiDoc.filled ? ' — ' + _eoiDoc.filled.n + ' of ' + _eoiDoc.filled.total + ' answer spaces' : '') + '. Click any answer below to edit it, then download.</div>'
-    : '<div class="alert alert-info" style="margin:0 0 16px">Their form is ' + (_eoiDoc.kind === 'pdf' ? 'a PDF' : 'online') + ', so we can\'t type into it. The answers are written out below — copy them across, or download them as a Word document.</div>';
+    : '<div class="alert alert-info" style="margin:0 0 16px">Their form is ' + (_eoiDoc.kind === 'pdf' ? 'a PDF' : 'online') + ', so we can\'t type into it. The answers are written out below — copy them across, or download them as a Word document.' +
+      (_eoiDoc.fromWeb ? '<br><b>We couldn\'t open their actual form</b>, so these questions and limits come from their published guidance. Check each limit against the real form (words or characters) — if they differ, paste their questions in and we\'ll rewrite to fit.' : '') + '</div>';
   const flagBar = placeholderCount
     ? '<div class="alert alert-warn" style="margin:0 0 16px">⚠ ' + placeholderCount + ' placeholder(s) need your real figures before you submit — highlighted below.</div>'
     : '';

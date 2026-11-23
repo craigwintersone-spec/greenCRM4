@@ -32,6 +32,11 @@ function wordLimitOf(text) {
   if (!n) return null;
   return /^char/i.test(m[2]) ? Math.max(5, Math.round(n / 6)) : n;
 }
+function charLimitOf(text) {         // a character limit, kept as characters (null for a word limit)
+  const m = LIMIT_RE.exec(String(text || ''));
+  if (!m || !/^char/i.test(m[2])) return null;
+  return parseInt(m[1].replace(/,/g, ''), 10) || null;
+}
 
 function looksLikeQuestion(t) {
   const x = String(t || '').trim();
@@ -114,7 +119,7 @@ function findItems(paragraphs) {
       // in a wide grid only a real question counts (a column heading does not)
       if (cols.length >= 3 && !(looksLikeQuestion(question) || question.length >= 40)) return;
       if (SKIP.test(question)) return;
-      items.push({ target, mode: 'fill', question: cleanQuestion(question), wordLimit: wordLimitOf(question) });
+      items.push({ target, mode: 'fill', question: cleanQuestion(question), wordLimit: wordLimitOf(question), charLimit: charLimitOf(question) });
       used.add(target.index);
       questionParas.forEach(q => used.add(q.index));
     }));
@@ -139,7 +144,7 @@ function findItems(paragraphs) {
     const wl = wordLimitOf(q.text + ' ' + hint);
     if (target) {
       if (used.has(target.index)) continue;
-      items.push({ target, mode: 'fill', question: cleanQuestion(q.text), wordLimit: wl });
+      items.push({ target, mode: 'fill', question: cleanQuestion(q.text), wordLimit: wl, charLimit: charLimitOf(q.text + ' ' + hint) });
       used.add(target.index);
     } else {
       items.push({ target: q, mode: 'insert', question: cleanQuestion(q.text), wordLimit: wl });

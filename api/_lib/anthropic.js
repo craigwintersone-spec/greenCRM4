@@ -25,7 +25,7 @@ function shape(body, model, opts) {
   const b = Object.assign({}, body, { model });
   if (isNew(model)) {
     delete b.temperature; delete b.top_p; delete b.top_k;
-    if (thinksAlways(model)) b.max_tokens = Math.max(b.max_tokens || 0, 12000);   // room to think, then write
+    b.max_tokens = Math.max(b.max_tokens || 0, thinksAlways(model) ? 16000 : 8000);   // newer models may think first: room to think, then write in full
     if (opts.effort && EFFORTS.has(opts.effort)) b.output_config = { effort: opts.effort };
     if (opts.webSearch) b.tools = [{ type: 'web_search_20260209', name: 'web_search' }];
   } else {
@@ -54,6 +54,8 @@ async function anthropic(body, opts) {
     const data = await r.json().catch(() => ({}));
     last = { status: r.status, data, model };
     const noText = r.ok && !hasText(data);            // e.g. thought until it ran out of room, or a refusal
+    const cutOff = r.ok && data.stop_reason === 'max_tokens' && !opts._retried;   // ran out of room part-way through: once more with less thinking
+    if (cutOff) { opts = Object.assign({}, opts, { effort: 'low', _retried: true }); body = Object.assign({}, body, { max_tokens: 24000 }); continue; }
     if ((modelProblem(r.status, data) || noText) && FALLBACK[model]) { model = FALLBACK[model]; continue; }
     return last;
   }
