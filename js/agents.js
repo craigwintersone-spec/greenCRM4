@@ -2403,7 +2403,7 @@ async function _eoiChooseProject(res, funder, facts, evidence) {
   let ideas = [];
   try {
     const raw = await callClaude('You are a senior UK bid strategist. Suggest the 3 strongest projects this organisation could put to this funder: each must build on work the organisation ALREADY does (from the facts and records), match the funder\'s priorities and criteria, and ask for an amount inside the funder\'s grant range that is realistic for the organisation\'s size. ' +
-      'Reply with ONLY a JSON array of 3 items, no other words: [{"title":"","summary":"two sentences: what it is and the change it makes","who":"who benefits and roughly how many","amount":"£ amount","duration":"e.g. 12 months","outcomes":["2-3 measurable outcomes"]}]. Never invent partners or track record that are not in the facts.',
+      'Reply with ONLY a JSON array of 3 items, no other words: [{"title":"","summary":"two sentences: what it is and the change it makes","who":"who benefits and roughly how many","amount":"£ amount","duration":"e.g. 12 months","outcomes":["2-3 measurable outcomes"]}]. Never invent partners or track record that are not in the facts. Use only the venues, activities, staff and partners the organisation already has — do not add a new venue, site, partner or paid post unless the facts show one.',
       'FUNDER: ' + funder + '\n' + (_eoiFunderPriorities ? 'WHAT THE FUNDER WANTS:\n' + _eoiFunderPriorities.slice(0, 2500) + '\n' : '') + '\n' + facts.slice(0, 3000) + '\n\n' + _eoiProgrammes() + '\n\n' + evidence,
       1200, false, { model: AI_MODELS.smart, effort: 'medium', long: true, purpose: 'bid_project' });
     const t = String(raw || '').replace(/```json|```/gi, ''); const m = t.match(/\[[\s\S]*\]/);
@@ -2441,8 +2441,8 @@ const _EOI_FACT_KEYS = [
   ['charity_number', /charity (registration )?number|registered charity number|charity no/i, 'Charity number'],
   ['company_number', /company (registration )?number|company no/i, 'Company number'],
   ['address', /registered address|organisation('s)? address|full address|venue (name and )?(street )?address|address and postcode|address of/i, 'Address'],
-  ['postcode', /postcode/i, 'Postcode'],
   ['venue', /venue|building where|main location|room or hall/i, 'Main venue'],
+  ['postcode', /postcode/i, 'Postcode'],
   ['year_end', /year end|accounting year|financial year end/i, 'Accounting year end'],
   ['annual_income', /annual income|total income|turnover|income for the (last|most recent) year/i, 'Annual income'],
   ['website', /website|web address/i, 'Website'],
@@ -2484,7 +2484,7 @@ async function _eoiAssess(funder, sheet, writeOne) {
   const qa = _eoiQuestions.map((q, i) => 'Q' + (i + 1) + '. ' + q.question + (q.wordLimit ? ' (limit ' + q.wordLimit + ' words)' : '') + '\nANSWER: ' + (_eoiAnswers[q.id] || '')).join('\n\n');
   let issues = [];
   try {
-    const raw = await callClaude('You are the funder\'s assessor reading a whole application. List ONLY real problems that would cost marks: an answer that does not answer its own question; a one-line question answered with paragraphs (or the reverse); a number or fact that contradicts the FACT SHEET or another answer; a quote or statistic repeated across answers; a claim about the organisation that is not in the facts (for example governance, consultation or partnerships that were never stated — these must be [INSERT: ...] placeholders instead); dates that do not work; anything over its word limit. ' +
+    const raw = await callClaude('You are the funder\'s assessor reading a whole application. List ONLY real problems that would cost marks: an answer that does not answer its own question; a one-line question answered with paragraphs (or the reverse); a number or fact that contradicts the FACT SHEET or another answer; a quote or statistic repeated across answers; a claim about the organisation that is not in the facts (for example governance, consultation or partnerships that were never stated — remove the claim and write around it; only use an [INSERT: ...] placeholder when the question itself cannot be answered without that fact); placeholders that ask the applicant to confirm or explain something (rewrite so they are not needed); dates that do not work; anything over its word limit. ' +
       'Reply with ONLY a JSON array, no other words: [{"n":1,"problem":"","fix":"exactly what the rewritten answer must do"}]. If the bid is sound, reply [].',
       'FUNDER: ' + funder + '\n' + (_eoiFunderPriorities ? 'WHAT THE FUNDER WANTS:\n' + _eoiFunderPriorities.slice(0, 2000) + '\n' : '') + '\nFACT SHEET:\n' + sheet + '\n\nAPPLICATION:\n' + qa,
       1200, false, { model: AI_MODELS.best, effort: 'medium', long: true, purpose: 'bid_assess' });
@@ -2591,7 +2591,7 @@ async function runEOIFormFill() {
       '1) Answer EXACTLY the question asked, at the length its TYPE says. A "fact" is the value alone (a name, number, date, postcode, amount, yes/no) — no sentences. A "choice" is the option itself, then at most one short sentence. A "short" answer is one or two sentences. ' +
       '2) Never address the reader, explain what you cannot do, comment on data, apologise or add a heading — write ONLY the answer. ' +
       '3) Use the FACT SHEET for every number, name and date, word for word, so the whole bid agrees with itself. Use only the evidence and quotes the PLAN gives this answer. ' +
-      '4) Never invent statistics, partners, consultation, governance, policies, accreditations or dates. Where a fact is missing, write one short placeholder like [INSERT: charity number] — and if the organisation has confirmed a fact, use it instead of a placeholder. ' +
+      '4) Never invent statistics, partners, consultation, governance, policies, accreditations or dates. Use a placeholder ONLY for a fact the question cannot be answered without and that only the organisation can know (an identifier, address, postcode, date, amount it holds) — write it short, like [INSERT: charity number]. Never write placeholders such as "confirm…", "explain why…" or "example of…": if a claim is not in the facts, leave it out and write around it; if something can be reasoned from the records (for example a target from a baseline), reason it yourself. At most one placeholder per written answer. If the organisation has confirmed a fact, use it. ' +
       '5) NEVER state or imply the organisation has no track record or that figures are zero. ' +
       '6) Full answers: clear, warm, specific British English — lead with the direct answer, then the evidence; be concrete (who, how many, how often, what changes); use the funder\'s own words; stay under the word limit. ' + _EOI_NEVER_STOP;
 
@@ -2752,21 +2752,47 @@ function renderEOIGaps() {
   }); });
   const keys = Object.keys(gaps);
   if (!keys.length) { box.innerHTML = '<div style="background:#F0FDF4;border:1px solid #BBF7D0;color:#166534;border-radius:10px;padding:10px 14px;font-size:13px;margin:0 0 16px">✓ No gaps left to fill.</div>'; return; }
+  // the same thing asked in different words becomes one question (e.g. four ways of asking for the venue postcode)
+  const sig = keys.slice().sort().join('|');
+  let groups = (window._eoiGapGroups && window._eoiGapGroups.sig === sig) ? window._eoiGapGroups.list : null;
+  if (!groups) {
+    groups = keys.map(k => ({ ask: gaps[k].label, covers: [k] }));
+    if (keys.length > 2 && !window._eoiGapGrouping) {
+      window._eoiGapGrouping = true;
+      callClaude('Group these gaps from a funding application so the applicant answers each real piece of information once. Gaps that need the same answer (for example several ways of asking for the venue name or postcode) go in one group. Write each group\'s "ask" as a short plain question. Reply with ONLY a JSON array: [{"ask":"","covers":[0,3]}] using the gap numbers.',
+        keys.map((k, i) => i + '. ' + gaps[k].label).join('\n'), 800, false, { model: AI_MODELS.smart, purpose: 'bid_gaps' })
+        .then(raw => {
+          const m = String(raw || '').replace(/```json|```/gi, '').match(/\[[\s\S]*\]/); const arr = m ? JSON.parse(m[0]) : [];
+          const used = new Set(), list = [];
+          (Array.isArray(arr) ? arr : []).forEach(g => { const cov = (g.covers || []).map(n => keys[+n]).filter(k => k && !used.has(k)); if (cov.length) { cov.forEach(k => used.add(k)); list.push({ ask: String(g.ask || gaps[cov[0]].label), covers: cov }); } });
+          keys.forEach(k => { if (!used.has(k)) list.push({ ask: gaps[k].label, covers: [k] }); });
+          window._eoiGapGroups = { sig, list };
+        }).catch(() => { window._eoiGapGroups = { sig, list: groups }; })
+        .finally(() => { window._eoiGapGrouping = false; renderEOIGaps(); });
+    }
+  }
   const bank = k => /bank|sort code|account (number|name)|roll number|statement/i.test(k);
   const saved = ((currentOrg && currentOrg.settings && currentOrg.settings.bid_facts) || {});
-  window._eoiGapKeys = keys;
+  const fact = t => (_EOI_FACT_KEYS.find(f => f[1].test(t)) || [])[0];
+  window._eoiGapList = groups;
+  const n = g => g.covers.reduce((a, k) => a + ((gaps[k] && gaps[k].n) || 0), 0);
   box.innerHTML = '<div class="card" style="font-family:inherit;margin:0 0 18px;padding:16px 18px;background:#FFFBEB;border:1px solid #FDE68A;box-shadow:none">' +
-    '<div style="font-weight:700;font-size:15px;margin-bottom:2px">Fill the gaps (' + keys.length + ')</div>' +
+    '<div style="font-weight:700;font-size:15px;margin-bottom:2px">Fill the gaps (' + groups.length + ')' + (window._eoiGapGrouping ? ' <span style="font-weight:400;font-size:12px;color:#8A857A">· tidying…</span>' : '') + '</div>' +
     '<div style="font-size:12.5px;color:#6B665C;margin-bottom:10px">Answer each once and it goes into every answer that needs it. Details about your organisation are remembered for your next bid.</div>' +
-    keys.map((k, i) => bank(k)
-      ? '<div style="font-size:12.5px;color:#6B665C;margin:8px 0">🔒 <b>' + escapeHTML(gaps[k].label) + '</b> — type bank details straight into the funder\'s form. Vorlana never stores them.</div>'
-      : '<label style="display:block;margin:8px 0 3px;font-size:12.5px;font-weight:600;color:#1D1D1F;text-transform:none;letter-spacing:0">' + escapeHTML(gaps[k].label) + (gaps[k].n > 1 ? ' <span style="font-weight:400;color:#8A857A">· in ' + gaps[k].n + ' answers</span>' : '') + '</label>' +
-        '<input id="eoi-gap-' + i + '" style="max-width:560px" value="' + escapeHTML(((_EOI_FACT_KEYS.find(f => f[1].test(k)) || [])[0] && saved[(_EOI_FACT_KEYS.find(f => f[1].test(k)) || [])[0]]) || '') + '"/>').join('') +
+    groups.map((g, i) => bank(g.ask + ' ' + g.covers.join(' '))
+      ? '<div style="font-size:12.5px;color:#6B665C;margin:8px 0">🔒 <b>' + escapeHTML(g.ask) + '</b> — type bank details straight into the funder\'s form. Vorlana never stores them.</div>'
+      : '<label style="display:block;margin:8px 0 3px;font-size:12.5px;font-weight:600;color:#1D1D1F;text-transform:none;letter-spacing:0">' + escapeHTML(g.ask) + (n(g) > 1 ? ' <span style="font-weight:400;color:#8A857A">· in ' + n(g) + ' places</span>' : '') + '</label>' +
+        '<input id="eoi-gap-' + i + '" style="max-width:560px" value="' + escapeHTML((fact(g.ask) && saved[fact(g.ask)]) || '') + '"/>').join('') +
     '<div style="margin-top:12px;display:flex;gap:10px;align-items:center"><button class="btn btn-p btn-sm" type="button" onclick="applyEOIGaps()">Put these into my answers</button><span id="eoi-gap-msg" style="font-size:12px"></span></div></div>';
 }
 async function applyEOIGaps() {
-  const keys = window._eoiGapKeys || [], vals = {};
-  keys.forEach((k, i) => { const el = $('eoi-gap-' + i); if (el && el.value.trim()) vals[k] = el.value.trim(); });
+  const groups = window._eoiGapList || [], vals = {}, facts = {};
+  groups.forEach((g, i) => {
+    const el = $('eoi-gap-' + i); const v = el && el.value.trim(); if (!v) return;
+    g.covers.forEach(k => { vals[k] = v; });
+    const f = (_EOI_FACT_KEYS.find(x => x[1].test(g.ask)) || _EOI_FACT_KEYS.find(x => g.covers.some(k => x[1].test(k))) || [])[0];
+    if (f && !/bank|sort code|account (number|name)|roll number/i.test(g.ask)) facts[f] = v;     // remembered for the next bid
+  });
   if (!Object.keys(vals).length) return;
   _eoiQuestions.forEach(q => {
     _eoiAnswers[q.id] = String(_eoiAnswers[q.id] || '').replace(/\[INSERT:[^\]]*\]/gi, m => {
@@ -2774,9 +2800,6 @@ async function applyEOIGaps() {
       return vals[key] != null ? vals[key] : m;
     });
   });
-  // remember organisation facts for next time
-  const facts = {};
-  Object.keys(vals).forEach(k => { const f = _EOI_FACT_KEYS.find(x => x[1].test(k)); if (f && !/bank|sort code|account (number|name)|roll number/i.test(k)) facts[f[0]] = vals[k]; });
   if (Object.keys(facts).length && typeof sb !== 'undefined' && sb && orgId) {
     try {
       const r = await sb.from('organisations').select('settings').eq('id', orgId).limit(1);
