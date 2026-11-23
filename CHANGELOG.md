@@ -2,6 +2,9 @@
 Newest first. The Sentinel reads this every morning and logs what shipped in the last 7 days.
 
 ## 2026-11-23
+- Find funding searches with Claude Opus 5.5, then checks every result on the funder's own page: does the link open, is it still open, the real deadline and grant size, and whether this organisation can apply. Closed or ineligible results are removed (and listed), checked ones are marked
+- Bids now use richer evidence: feedback headlines, real quotes, who the organisation reaches (black and ethnic minority, disabled, age), the six-month trend and a real anonymised story
+- Bid tracker with no admin: bids are saved when written and marked sent when downloaded or copied; "Your bids" shows the win rate and money raised; 8 weeks after sending, one email asks "Did you win?" with one-tap answers (needs bid-tracker.sql)
 - AI models upgraded: bids are written by Claude Fable 5.2, funding searches and form reading by Sonnet 5.5, everyday jobs by Haiku 5.5. If a model isn't available, Vorlana steps down to the next one automatically
 - Bids: Vorlana now reads the funder's own guidance (priorities, what assessors look for, eligibility, grant size), suggests three projects built from what the organisation already does (one tap to choose), plans the whole bid so answers build one argument without repeating, writes the answers side by side, and trims any answer that runs over the word limit
 - Find funding is much faster: the three searches now run side by side, results appear as each one finishes, and merging happens instantly in the browser (one fewer AI call per search)

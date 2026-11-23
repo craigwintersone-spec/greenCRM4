@@ -1,6 +1,7 @@
 // /api/fetch-form.js — go to a funder's page, find their Expression of Interest / application
 // form (Word or PDF), download it, and hand it back.
 // ─────────────────────────────────────────────────────────────
+// POST { action: 'check', urls: [...] } → { ok, pages: [{ url, ok, status, finalUrl, text }] }  (does each page open, and what it says)
 // POST { url }  → {
 //   ok, kind: 'docx' | 'pdf' | 'page' | 'none',
 //   filename, formUrl, base64,          // when a Word/PDF form was found (≤ 3 MB)
@@ -121,6 +122,21 @@ module.exports = async (req, res) => {
   try {
     if (!(await authed(req))) return res.status(401).json({ ok: false, error: 'Your sign-in has expired — refresh the page and try again.' });
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+    // Check a list of funding pages: does each open, and what does it say (so deadlines and eligibility can be confirmed)
+    if (body.action === 'check') {
+      const urls = (Array.isArray(body.urls) ? body.urls : []).map(u => String(u || '').trim()).filter(Boolean).slice(0, 20);
+      const pages = await Promise.all(urls.map(async u => {
+        const safe = safeUrl(u);
+        if (!safe) return { url: u, ok: false, status: 0 };
+        try {
+          const r = await get(safe.href, 9000, 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.5');
+          const ct = (r.headers.get('content-type') || '').toLowerCase();
+          const text = r.ok && /html|text\/plain/.test(ct) ? visibleText(await r.text()).slice(0, 4000) : '';
+          return { url: u, ok: r.ok, status: r.status, finalUrl: r.url || safe.href, text, file: !/html|text/.test(ct) };
+        } catch (e) { return { url: u, ok: false, status: 0 }; }
+      }));
+      return res.status(200).json({ ok: true, pages });
+    }
     const start = safeUrl(String(body.url || '').trim());
     if (!start) return res.status(400).json({ ok: false, error: 'That doesn\'t look like a web address.' });
 

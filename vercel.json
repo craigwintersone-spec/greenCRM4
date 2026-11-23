@@ -13,6 +13,10 @@
     {
       "path": "/api/sentinel-cron-bd",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/bid-asks",
+      "schedule": "15 9 * * *"
     }
   ],
   "headers": [
@@ -91,6 +95,9 @@
     },
     "api/billing.js": {
       "maxDuration": 30
+    },
+    "api/bid-asks.js": {
+      "maxDuration": 60
     }
   }
 }

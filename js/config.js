@@ -8,7 +8,7 @@ const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── Claude (AI) ───────────────────────────────────────────────
 // Which model does what. The server steps down to an older model automatically if one isn't available.
-const AI_MODELS = { best: 'claude-fable-5-2', smart: 'claude-sonnet-5-5', fast: 'claude-haiku-5-5' };
+const AI_MODELS = { best: 'claude-fable-5-2', research: 'claude-opus-5-5', smart: 'claude-sonnet-5-5', fast: 'claude-haiku-5-5' };
 const CLAUDE_MODEL = AI_MODELS.fast;   // everyday jobs
 const AI_PLANS = ['group', 'starter', 'pro', 'network'];   // every paid plan has the AI; plans differ by size
 const AI_MIN_GAP_MS = 1500;

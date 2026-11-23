@@ -1682,7 +1682,7 @@ function bdPaintWhat() {
   const setup = bdSetupGet();
   let saved = Array.isArray(setup.what) ? setup.what.slice() : [];
   const m = (currentOrg && currentOrg.modules) || {};
-  if (!saved.length) { if (m.participants !== false) saved.push('employability'); if (m.circular !== false) saved.push('circular'); saved.push('community'); }
+  if (!saved.length) { if (m.circular !== false) saved.push('circular'); saved.push('community'); }   // a starting guess; they tick what fits
   const paint = (b, on) => { b.classList.toggle('on', on); b.style.background = on ? 'var(--em)' : 'var(--surface)'; b.style.color = on ? '#fff' : 'var(--txt2)'; b.style.borderColor = on ? 'var(--em)' : 'var(--border)'; };
   box.innerHTML = BD_WHAT.map(([k, l]) => '<button type="button" data-k="' + k + '" style="border:1px solid var(--border);border-radius:16px;padding:5px 11px;font-size:12px;cursor:pointer">' + l + '</button>').join('');
   Array.from(box.children).forEach(b => paint(b, saved.includes(b.dataset.k)));
@@ -1742,6 +1742,8 @@ async function runBDResearch() {
   let items = [];
   _bdOpps = {};
   res.innerHTML = '<div id="bd-progress" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"></div><div id="bd-list"></div>';
+  let checking = '';                                       // '' | 'running' | 'done'
+  let removed = [];                                        // closed or not eligible, found when checking their pages
   const paintProgress = () => {
     const el = $('bd-progress'); if (!el) return;
     el.innerHTML = lanes.map((l, i) => {
@@ -1749,7 +1751,8 @@ async function runBDResearch() {
       const txt = st === 'searching' ? 'Searching…' : st === 'done' ? (n ? n + ' found' : 'none found') : 'didn\'t finish';
       return '<span class="badge" style="font-size:12px;padding:4px 10px;background:' + (st === 'searching' ? '#F0F0F2' : st === 'done' ? '#E7F6EC' : '#FDECEC') + ';color:var(--txt2)">' +
         (st === 'searching' ? '<span class="bd-spin"></span> ' : st === 'done' ? '✓ ' : '') + escapeHTML(laneShort[l[0]]) + ' · ' + txt + '</span>';
-    }).join('');
+    }).join('') + (checking ? '<span class="badge" style="font-size:12px;padding:4px 10px;background:' + (checking === 'running' ? '#F0F0F2' : '#E7F6EC') + ';color:var(--txt2)">' +
+      (checking === 'running' ? '<span class="bd-spin"></span> Checking each funder\'s page' : '✓ Checked: open, deadlines and who can apply' + (removed.length ? ' · ' + removed.length + ' removed' : '')) + '</span>' : '');
   };
   const norm = t => String(t || '').toLowerCase().replace(/&/g, 'and').replace(/\b(the|fund|foundation|trust|programme|program|grants?|scheme)\b/g, '').replace(/[^a-z0-9]+/g, '');
   const addItems = (list, laneName) => {
@@ -1779,13 +1782,16 @@ async function runBDResearch() {
         const url = /^https?:\/\//i.test(o.url || '') ? o.url : '';
         return '<div class="bd-row bd-opp" data-lane="' + escapeHTML(o.lane || '') + '"><div class="bd-row-main">' +
           '<span class="bd-pill ' + fit[0] + '">' + fit[1] + '</span><span class="bd-lane">' + escapeHTML(laneShort[o.lane] || '') + '</span>' +
+          (o.checked ? '<span class="bd-lane" style="color:#1E7B3C;margin-left:8px">✓ ' + escapeHTML(o.checked) + '</span>' : o.linkBroken ? '<span class="bd-lane" style="color:#B45309;margin-left:8px">Link didn\'t open — check</span>' : '') +
           '<div class="bd-row-title">' + escapeHTML(o.funder || o.programme || 'Opportunity') + (o.programme && o.funder ? ' — ' + escapeHTML(o.programme) : '') + '</div>' +
           (o.fit ? '<div class="bd-row-fit">' + escapeHTML(o.fit) + '</div>' : '') +
           (meta ? '<div class="bd-row-meta">' + meta + '</div>' : '') +
           (o.eligibility ? '<details style="margin-top:6px"><summary style="font-size:12px;color:var(--txt3);cursor:pointer">Who can apply</summary><div style="font-size:12.5px;color:var(--txt2);margin-top:4px;line-height:1.5">' + escapeHTML(o.eligibility) + '</div></details>' : '') +
           '</div><div class="bd-row-act"><button class="btn btn-ai" onclick="pullFunderForm(\'' + key + '\')">Pull their form ▸</button>' +
           (url ? '<a href="' + escapeHTML(url) + '" target="_blank" rel="noopener">Funder page ↗</a>' : '') + '</div></div>';
-      }).join('');
+      }).join('') +
+      (removed.length ? '<details style="margin-top:10px"><summary style="font-size:12.5px;color:var(--txt3);cursor:pointer">' + removed.length + ' removed after checking their pages</summary>' +
+        removed.map(o => '<div style="font-size:12.5px;color:var(--txt2);margin:6px 0 0 14px">' + escapeHTML(o.funder || o.programme || '') + (o.programme && o.funder ? ' — ' + escapeHTML(o.programme) : '') + ': ' + escapeHTML(o.removedWhy || '') + '</div>').join('') + '</details>' : '');
   };
   const parse = t => {                                            // the JSON array, even with a sentence before or after it
     const txt = String(t || '').replace(/<\/?cite[^>]*>/gi, '').replace(/```json|```/gi, '');
@@ -1799,7 +1805,7 @@ async function runBDResearch() {
   const lane = async (l, i) => {
     let out = '';
     try {
-      const so = { model: AI_MODELS.smart, effort: 'medium', purpose: 'bd_search' };
+      const so = { model: AI_MODELS.research, effort: 'medium', purpose: 'bd_search' };
       out = await callClaude(l[1] + rules + json, base, 1200, true, so);
       if (refused(out)) out = await callClaude(l[1] + rules + ' Your last reply asked questions instead of searching. That is not allowed. Search now.' + json, baseCore, 1200, true, so);
       let list = parse(out);
@@ -1818,6 +1824,38 @@ async function runBDResearch() {
   paintProgress();
   try { await Promise.all(lanes.map(lane)); } catch (e) { return; }
   paintProgress(); paintList();
+
+  // Check every result on the funder's own page: does it open, is it still open, can this organisation apply?
+  if (!items.length) return;
+  checking = 'running'; paintProgress();
+  try {
+    const top = items.slice(0, 15);
+    let pages = [];
+    try { const r = await _postJSON('/api/fetch-form', { action: 'check', urls: top.map(o => /^https?:\/\//i.test(o.url || '') ? o.url : '') }); pages = (r && r.pages) || []; } catch (e) { pages = []; }
+    top.forEach((o, i) => { const pg = pages[i]; if (pg && o.url && !pg.ok) o.linkBroken = true; });
+    const listing = top.map((o, i) => '#' + i + ' ' + (o.funder || '') + ' — ' + (o.programme || '') + ' | said deadline: ' + (o.deadline || '?') + ' | said value: ' + (o.value || '?') +
+      '\nTHEIR PAGE: ' + ((pages[i] && pages[i].text) ? pages[i].text.slice(0, 1400) : '(page did not open)')).join('\n\n');
+    const raw = await callClaude('You check UK funding opportunities for a grants adviser. Today is ' + today + '. For each numbered opportunity, use THEIR PAGE text (if it opened) to decide: ' +
+      'is it open now or on a rolling basis ("open"), closed or no longer running ("closed"), or not clear from the page ("unclear"); the real deadline and grant size if the page states them; and whether THIS organisation can apply ("yes", "no" or "unclear") with a few words of reason (area, organisation type, income, focus). ' +
+      'Only say "closed" or "no" when the page clearly shows it. Reply with ONLY a JSON array: [{"i":0,"status":"open","deadline":"","value":"","eligible":"yes","reason":""}]',
+      'ORGANISATION: ' + baseCore + '\n\nOPPORTUNITIES:\n' + listing, 1200, false, { model: AI_MODELS.smart, effort: 'medium', long: true, purpose: 'bd_check' });
+    const verdicts = parse(raw) || [];
+    verdicts.forEach(v => {
+      const o = top[+v.i]; if (!o) return;
+      const pageOk = pages[+v.i] && pages[+v.i].ok && pages[+v.i].text;
+      if (v.status === 'closed') { o.removedWhy = 'closed' + (v.reason ? ' (' + v.reason + ')' : ''); return; }
+      if (v.eligible === 'no') { o.removedWhy = 'not eligible' + (v.reason ? ': ' + v.reason : ''); return; }
+      if (pageOk && v.deadline) o.deadline = v.deadline;
+      if (pageOk && v.value) o.value = v.value;
+      if (pageOk && v.status === 'open') o.checked = v.eligible === 'yes' ? 'Open and you can apply' : 'Open — checked on their page';
+      if (v.eligible === 'unclear' && o.score > 3) o.score -= 1;
+    });
+    removed = items.filter(o => o.removedWhy);
+    items = items.filter(o => !o.removedWhy);
+    items.forEach(o => { if (o.linkBroken && o.score > 2) o.score -= 1; });
+    items.sort((a, b) => (b.score - a.score) || ((b.checked ? 1 : 0) - (a.checked ? 1 : 0)));
+  } catch (e) { if (e && e.message === 'AI_PLAN_GATE') return; }
+  checking = 'done'; paintProgress(); paintList();
 }
 function bdFilterLane(lane, btn) {
   document.querySelectorAll('#bd-opps-result .bd-seg button').forEach(b => b.classList.toggle('on', b === btn));
@@ -2105,6 +2143,59 @@ function buildEOIEvidence() {
   if (contractLines.length) lines.push('- Contract delivery vs target: ' + contractLines.join(' | '));
   if (costPerOutcome) lines.push('- Approx cost per outcome (funded contracts): £' + costPerOutcome.toLocaleString());
   if (caseStudy) lines.push('- Anonymised case-study facts: a participant ' + caseStudy);
+
+  // ── Richer evidence: what people say, who we reach, the trend, a real story ──
+  const day = d => String(d || '').slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10), back = n => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
+  const fbN = FB.filter(f => f.enjoyed != null || f.cb != null || f.learned != null);
+  if (fbN.length >= 10) {
+    const share = (arr, test) => arr.length ? Math.round(100 * arr.filter(test).length / arr.length) : null;
+    const en = fbN.filter(f => f.enjoyed != null && f.enjoyed !== ''), conf = fbN.filter(f => f.cb != null && f.ca != null && f.cb !== '' && f.ca !== '');
+    const yn = k => fbN.filter(f => typeof f[k] === 'boolean');
+    const bits = [];
+    if (en.length >= 10) bits.push(share(en, f => num(f.enjoyed) >= 4) + '% rated their session 4 or 5 out of 5');
+    if (conf.length >= 10) bits.push(share(conf, f => num(f.ca) > num(f.cb)) + '% felt more confident afterwards');
+    if (yn('learned').length >= 10) bits.push(share(yn('learned'), f => f.learned) + '% learned something new');
+    if (yn('connected').length >= 10) bits.push(share(yn('connected'), f => f.connected) + '% felt more connected to their community');
+    if (yn('friend').length >= 10) bits.push(share(yn('friend'), f => f.friend) + '% made a new friend or talked to new people');
+    if (bits.length) lines.push('- What people told us (' + fbN.length + ' feedback responses): ' + bits.join('; '));
+  }
+  const quotes = [], seenEv = {};
+  FB.slice().sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || ''))).forEach(f => {
+    const q = String(f.quote || '').trim(), ev = f.eventId || f.event_id || '';
+    if (quotes.length >= 5 || q.length < 25 || q.length > 220 || seenEv[ev] >= 2) return;
+    if (quotes.some(x => x.toLowerCase() === q.toLowerCase())) return;
+    seenEv[ev] = (seenEv[ev] || 0) + 1; quotes.push(q);
+  });
+  if (quotes.length) lines.push('- Real quotes from feedback (quote word for word or not at all, never attribute a name): ' + quotes.map(q => '"' + q.replace(/"/g, "'") + '"').join(' | '));
+  const eqRows = P.map(p => p.equality_data || {}).concat(FB.map(f => f.demographics || {})).filter(d => d && (d.ethnicity || d.age || d.disability));
+  if (eqRows.length >= 10) {
+    const eth = eqRows.filter(d => d.ethnicity && !/prefer not/i.test(d.ethnicity));
+    const bame = eth.filter(d => !/^white/i.test(d.ethnicity)).length;
+    const dis = eqRows.filter(d => /^(yes|no)$/i.test(d.disability || ''));
+    const ages = eqRows.filter(d => d.age);
+    const older = ages.filter(d => /65|55/.test(d.age)).length, young = ages.filter(d => /16|18|^under/i.test(d.age)).length;
+    const reach = [];
+    if (eth.length >= 10) reach.push(Math.round(100 * bame / eth.length) + '% black and ethnic minority');
+    if (dis.length >= 10) reach.push(Math.round(100 * dis.filter(d => /yes/i.test(d.disability)).length / dis.length) + '% disabled');
+    if (ages.length >= 10) { reach.push(Math.round(100 * older / ages.length) + '% aged 55 or over'); if (young) reach.push(Math.round(100 * young / ages.length) + '% aged 16–24'); }
+    if (reach.length) lines.push('- Who we reach (of people who told us, ' + eqRows.length + ' records): ' + reach.join(', '));
+  }
+  const past = E.filter(e => day(e.date) && day(e.date) <= today);
+  const inWin = (from, to) => past.filter(e => day(e.date) > from && day(e.date) <= to);
+  const last6 = inWin(back(182), today), prev6 = inWin(back(365), back(182));
+  if (last6.length >= 4) {
+    const att = arr => arr.reduce((a, e) => a + num(e.attendees), 0);
+    lines.push('- Last 6 months: ' + last6.length + ' sessions, ' + att(last6) + ' attendances' + (prev6.length >= 4 ? ' (the 6 months before: ' + prev6.length + ' sessions, ' + att(prev6) + ' attendances)' : ''));
+  }
+  const story = P.filter(p => (p.outcomes || []).length && Array.isArray(p.notes) && p.notes.length)
+    .sort((a, b) => (b.notes.length - a.notes.length))[0];
+  if (story) {
+    const sc = story.scores || {};
+    lines.push('- A real story to use as an anonymised case study (call them "one participant" or by first initial only, never by name): referred by ' + (story.ref_source || 'a partner') +
+      (story.barriers && story.barriers.length ? '; facing ' + story.barriers.join(', ').toLowerCase() : '') + '; ' + story.notes.slice(-3).map(n => n.t).join(' ') +
+      ' Outcome: ' + story.outcomes.join(', ').toLowerCase() + '.' + (sc.confidence ? ' Confidence score now ' + sc.confidence + '/10.' : ''));
+  }
   if (lines.length === 1) lines.push('- none recorded yet — rely on the KNOWN ORGANISATION FACTS above; do not state figures are zero.');
 
   return lines.join('\n');
