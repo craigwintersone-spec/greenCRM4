@@ -29,7 +29,7 @@
 try { console.info('Vorlana agents v10 loaded (social studio + briefing + impact report + EOI engine v8)'); } catch (e) {}
 
 // ── State ─────────────────────────────────────────────────────
-const _aiQueue = { running: false, queue: [], lastCallAt: 0 };
+const _aiQueue = { active: 0, max: 3, queue: [], lastCallAt: 0 };   // up to 3 AI calls at once; starts spaced by AI_MIN_GAP_MS
 
 let _aiNoteAccepted = '';
 let _originalNote   = '';
@@ -70,7 +70,7 @@ async function callClaude(sys, user, maxTok, webSearch) {
   if (maxTok == null) maxTok = 600;
   if (webSearch == null) webSearch = false;
   checkAIAccess();
-  if (sys && sys.length > 1500) sys = sys.slice(0, 1500);
+  if (sys && sys.length > 3000) sys = sys.slice(0, 3000);
   if (user && user.length > 4000) user = user.slice(0, 4000);
   if (maxTok > 1200) maxTok = 1200;
 
@@ -81,25 +81,18 @@ async function callClaude(sys, user, maxTok, webSearch) {
 }
 
 async function _processAIQueue() {
-  if (_aiQueue.running) return;
-  _aiQueue.running = true;
-  while (_aiQueue.queue.length) {
+  while (_aiQueue.queue.length && _aiQueue.active < _aiQueue.max) {
     const job = _aiQueue.queue.shift();
-    const since = Date.now() - _aiQueue.lastCallAt;
-    if (since < AI_MIN_GAP_MS) {
-      await new Promise(r => setTimeout(r, AI_MIN_GAP_MS - since));
-    }
-    try {
-      const text = await _callClaudeOnce(job.sys, job.user, job.maxTok, job.webSearch);
-      _aiQueue.lastCallAt = Date.now();
-      job.resolve(text);
-    } catch (e) {
-      // Don't penalise the rate-gap timer for a plan-gate rejection
-      if (e.message !== 'AI_PLAN_GATE') _aiQueue.lastCallAt = Date.now();
-      job.reject(e);
-    }
+    _aiQueue.active++;
+    const now = Date.now(), at = Math.max(now, _aiQueue.lastCallAt + AI_MIN_GAP_MS);
+    _aiQueue.lastCallAt = at;                                    // book this start slot before waiting
+    (async () => {
+      if (at > now) await new Promise(r => setTimeout(r, at - now));
+      try { job.resolve(await _callClaudeOnce(job.sys, job.user, job.maxTok, job.webSearch)); }
+      catch (e) { job.reject(e); }
+      finally { _aiQueue.active--; _processAIQueue(); }
+    })();
   }
-  _aiQueue.running = false;
 }
 
 async function _callClaudeOnce(sys, user, maxTok, webSearch, attempt) {
@@ -1734,63 +1727,89 @@ async function runBDResearch() {
     ['Trusts, foundations and the Lottery', 'You are a UK grants researcher. Search the National Lottery Community Fund (Awards for All, Reaching Communities, Partnerships), the community foundation covering ' + area + ', and trusts and foundations that fund ' + what + ' (for example Esmée Fairbairn, Garfield Weston, Tudor Trust, Henry Smith, Lloyds Bank Foundation, Power to Change, Postcode Lottery, Allen Lane, Paul Hamlyn, Trust for London where relevant).'],
     ['Corporate and environmental funders', 'You are a UK funding researcher. Search corporate and landfill/environmental funders that fit ' + what + ' in ' + area + ': Veolia Environmental Trust, Biffa Award, SUEZ Communities Trust, Enovert, FCC Communities Foundation, Tesco Stronger Starts, Co-op Local Community Fund, Greggs Foundation, Aviva Community Fund, National Grid, water company funds, Screwfix Foundation, B&Q Foundation, Asda Foundation, Morrisons Foundation, Benefact Trust, and energy or housing-association community funds.']
   ];
-  const steps = lanes.map(l => ({ label: 'Searching ' + l[0].toLowerCase(), meta: area })).concat([{ label: 'Merging and scoring fit', meta: '' }, { label: 'Ready', meta: '' }]);
-  res.innerHTML = '';
-  const shell = document.createElement('div'); res.appendChild(shell);
-  const header = runAgent({ container: shell, headerLabel: 'BD Manager Agent', headerSub: 'Three live searches · ' + area, steps, sys: 'Reply with the single word OK.', prompt: 'OK', maxTok: 5 });
-  const lane = async l => {
-    let out = '';
-    try { out = await callClaude(l[1] + rules, base, 1400, true); } catch (e) { return ''; }
-    const refused = t => !t || _eoiLooksLikeRefusal(t) || (!/https?:\/\//i.test(t) && /\b(please (clarify|confirm|provide)|could you|i need (you )?to|what i need)\b/i.test(t));
-    if (refused(out)) {                                           // retry once, on the bare details only
-      try { out = await callClaude(l[1] + rules + ' Your last reply asked questions instead of searching. That is not allowed. Search now.', baseCore, 1400, true); } catch (e) { return ''; }
-    }
-    return refused(out) ? '' : out;
-  };
-  const raws = await Promise.all(lanes.map(lane));
-  await header;
-  if (!raws.some(r => r && String(r).trim())) {          // every search came back empty or refused
-    res.innerHTML = '<div class="alert alert-warn" style="margin:0">We couldn\'t get funding matches this time. Try again, or type a funder you have in mind in the box above and search for that.</div>';
-    return;
-  }
-  const joined = lanes.map((l, i) => '### ' + l[0] + '\n' + String(raws[i] || '').replace(/<\/?cite[^>]*>/gi, '')).join('\n\n');
-
-  res.innerHTML = '<div class="alert alert-info" style="margin:0">Organising the results…</div>';
-  let items = [];
-  try {
-    const structSys = 'Convert the funding research below into ONE JSON array, de-duplicated (same funder+programme once). Return ONLY valid JSON — no prose, no code fences. ' +
-      'Each item: {"funder":"","programme":"","deadline":"","value":"","eligibility":"","fit":"","url":"","lane":"","score":0}. ' +
-      '"lane" is the ### heading it came from. "score" is 1–5 for how well it fits the organisation described (5 = made for them). Use "" for anything missing. Drop anything marked closed.';
-    const structRaw = await callClaude(structSys, 'ORGANISATION: ' + base.slice(0, 600) + '\n\nRESEARCH:\n' + joined.slice(0, 9000), 2500, false);
-    const m = (structRaw || '').replace(/```json|```/gi, '').trim().match(/\[[\s\S]*\]/);
-    if (m) items = JSON.parse(m[0]);
-  } catch (e) { items = []; }
-  items = Array.isArray(items) ? items.filter(o => o && (o.funder || o.programme)) : [];
-  if (!items.length) {
-    res.innerHTML = '<div class="alert alert-warn" style="margin:0">We couldn\'t get funding matches this time. Try again, or type a funder you have in mind in the box above and search for that.</div>';
-    return;
-  }
-  items.sort((a, b) => (+b.score || 0) - (+a.score || 0));
-
-  _bdOpps = {};
+  // Each search returns its own scored list; they run side by side and appear as each one finishes
+  const json = ' Reply with ONLY a JSON array, no other words and no code fences. Each item: {"funder":"","programme":"","deadline":"","value":"","eligibility":"","fit":"","url":"","score":0}. ' +
+    '"fit" is one sentence on why it suits this organisation. "score" is 1–5 for how well it fits (5 = made for them). Use "" for anything you are unsure of. If nothing fits, reply [].';
   const laneShort = { 'Government, UKSPF and councils': 'Councils & government', 'Trusts, foundations and the Lottery': 'Trusts & Lottery', 'Corporate and environmental funders': 'Companies' };
-  const laneNames = Object.keys(laneShort).filter(l => items.some(o => o.lane === l));
-  res.innerHTML = '<div style="font-size:13px;color:var(--txt3);margin-bottom:12px">' + items.length + ' matches, best first. Check dates and amounts on the funder\'s page before you apply.</div>' +
-    (laneNames.length > 1 ? '<div class="bd-seg"><button class="on" onclick="bdFilterLane(\'\', this)">All (' + items.length + ')</button>' + laneNames.map(l => '<button onclick="bdFilterLane(this.dataset.l, this)" data-l="' + escapeHTML(l) + '">' + escapeHTML(laneShort[l]) + ' (' + items.filter(o => o.lane === l).length + ')</button>').join('') + '</div>' : '') +
-    items.map((o, i) => {
-      const key = 'opp' + i; _bdOpps[key] = o;
-      const sc = Math.max(1, Math.min(5, +o.score || 3));
-      const fit = sc >= 5 ? ['bd-fit5', 'Great fit'] : sc === 4 ? ['bd-fit4', 'Good fit'] : ['bd-fit3', 'Possible fit'];
-      const meta = [o.deadline ? ('Closes: ' + escapeHTML(o.deadline)) : '', o.value ? escapeHTML(o.value) : ''].filter(Boolean).join(' &nbsp;·&nbsp; ');
-      return '<div class="bd-row bd-opp" data-lane="' + escapeHTML(o.lane || '') + '"><div class="bd-row-main">' +
-        '<span class="bd-pill ' + fit[0] + '">' + fit[1] + '</span><span class="bd-lane">' + escapeHTML(laneShort[o.lane] || '') + '</span>' +
-        '<div class="bd-row-title">' + escapeHTML(o.funder || o.programme || 'Opportunity') + (o.programme && o.funder ? ' — ' + escapeHTML(o.programme) : '') + '</div>' +
-        (o.fit ? '<div class="bd-row-fit">' + escapeHTML(o.fit) + '</div>' : '') +
-        (meta ? '<div class="bd-row-meta">' + meta + '</div>' : '') +
-        (o.eligibility ? '<details style="margin-top:6px"><summary style="font-size:12px;color:var(--txt3);cursor:pointer">Who can apply</summary><div style="font-size:12.5px;color:var(--txt2);margin-top:4px;line-height:1.5">' + escapeHTML(o.eligibility) + '</div></details>' : '') +
-        '</div><div class="bd-row-act"><button class="btn btn-ai" onclick="pullFunderForm(\'' + key + '\')">Pull their form ▸</button>' +
-        (o.url ? '<a href="' + escapeHTML(o.url) + '" target="_blank" rel="noopener">Funder page ↗</a>' : '') + '</div></div>';
+  const status = lanes.map(() => 'searching');
+  let items = [];
+  _bdOpps = {};
+  res.innerHTML = '<div id="bd-progress" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"></div><div id="bd-list"></div>';
+  const paintProgress = () => {
+    const el = $('bd-progress'); if (!el) return;
+    el.innerHTML = lanes.map((l, i) => {
+      const st = status[i], n = items.filter(o => o.lane === l[0]).length;
+      const txt = st === 'searching' ? 'Searching…' : st === 'done' ? (n ? n + ' found' : 'none found') : 'didn\'t finish';
+      return '<span class="badge" style="font-size:12px;padding:4px 10px;background:' + (st === 'searching' ? '#F0F0F2' : st === 'done' ? '#E7F6EC' : '#FDECEC') + ';color:var(--txt2)">' +
+        (st === 'searching' ? '<span class="bd-spin"></span> ' : st === 'done' ? '✓ ' : '') + escapeHTML(laneShort[l[0]]) + ' · ' + txt + '</span>';
     }).join('');
+  };
+  const norm = t => String(t || '').toLowerCase().replace(/&/g, 'and').replace(/\b(the|fund|foundation|trust|programme|program|grants?|scheme)\b/g, '').replace(/[^a-z0-9]+/g, '');
+  const addItems = (list, laneName) => {
+    (Array.isArray(list) ? list : []).forEach(o => {
+      if (!o || !(o.funder || o.programme)) return;
+      if (/\bclosed\b/i.test(String(o.deadline || ''))) return;
+      o.lane = laneName; o.score = Math.max(1, Math.min(5, Math.round(+o.score || 3)));
+      const key = norm(o.funder) + '|' + norm(o.programme);
+      const twin = items.find(x => norm(x.funder) + '|' + norm(x.programme) === key);
+      if (twin) { if (o.score > twin.score) Object.assign(twin, o, { lane: twin.lane }); return; }   // same opportunity from two searches: keep one
+      items.push(o);
+    });
+    items.sort((a, b) => b.score - a.score);
+  };
+  const paintList = () => {
+    const el = $('bd-list'); if (!el) return;
+    if (!items.length) { el.innerHTML = status.includes('searching') ? '' : '<div class="alert alert-warn" style="margin:0">We couldn\'t get funding matches this time. Try again, or type a funder you have in mind in the box above and search for that.</div>'; return; }
+    _bdOpps = {};
+    const laneNames = Object.keys(laneShort).filter(l => items.some(o => o.lane === l));
+    el.innerHTML = '<div style="font-size:13px;color:var(--txt3);margin-bottom:12px">' + items.length + ' matches, best first' + (status.includes('searching') ? ' — more coming' : '') + '. Check dates and amounts on the funder\'s page before you apply.</div>' +
+      (laneNames.length > 1 && !status.includes('searching') ? '<div class="bd-seg"><button class="on" onclick="bdFilterLane(\'\', this)">All (' + items.length + ')</button>' + laneNames.map(l => '<button onclick="bdFilterLane(this.dataset.l, this)" data-l="' + escapeHTML(l) + '">' + escapeHTML(laneShort[l]) + ' (' + items.filter(o => o.lane === l).length + ')</button>').join('') + '</div>' : '') +
+      items.map((o, i) => {
+        const key = 'opp' + i; _bdOpps[key] = o;
+        const sc = o.score;
+        const fit = sc >= 5 ? ['bd-fit5', 'Great fit'] : sc === 4 ? ['bd-fit4', 'Good fit'] : ['bd-fit3', 'Possible fit'];
+        const meta = [o.deadline ? ('Closes: ' + escapeHTML(o.deadline)) : '', o.value ? escapeHTML(o.value) : ''].filter(Boolean).join(' &nbsp;·&nbsp; ');
+        const url = /^https?:\/\//i.test(o.url || '') ? o.url : '';
+        return '<div class="bd-row bd-opp" data-lane="' + escapeHTML(o.lane || '') + '"><div class="bd-row-main">' +
+          '<span class="bd-pill ' + fit[0] + '">' + fit[1] + '</span><span class="bd-lane">' + escapeHTML(laneShort[o.lane] || '') + '</span>' +
+          '<div class="bd-row-title">' + escapeHTML(o.funder || o.programme || 'Opportunity') + (o.programme && o.funder ? ' — ' + escapeHTML(o.programme) : '') + '</div>' +
+          (o.fit ? '<div class="bd-row-fit">' + escapeHTML(o.fit) + '</div>' : '') +
+          (meta ? '<div class="bd-row-meta">' + meta + '</div>' : '') +
+          (o.eligibility ? '<details style="margin-top:6px"><summary style="font-size:12px;color:var(--txt3);cursor:pointer">Who can apply</summary><div style="font-size:12.5px;color:var(--txt2);margin-top:4px;line-height:1.5">' + escapeHTML(o.eligibility) + '</div></details>' : '') +
+          '</div><div class="bd-row-act"><button class="btn btn-ai" onclick="pullFunderForm(\'' + key + '\')">Pull their form ▸</button>' +
+          (url ? '<a href="' + escapeHTML(url) + '" target="_blank" rel="noopener">Funder page ↗</a>' : '') + '</div></div>';
+      }).join('');
+  };
+  const parse = t => {                                            // the JSON array, even with a sentence before or after it
+    const txt = String(t || '').replace(/<\/?cite[^>]*>/gi, '').replace(/```json|```/gi, '');
+    const endAt = txt.lastIndexOf(']');
+    for (let i = txt.indexOf('['), tries = 0; i >= 0 && i < endAt && tries < 30; i = txt.indexOf('[', i + 1), tries++) {
+      try { const v = JSON.parse(txt.slice(i, endAt + 1)); if (Array.isArray(v)) return v; } catch (e) { /* try the next [ */ }
+    }
+    return null;
+  };
+  const refused = t => !t || _eoiLooksLikeRefusal(t) || (!/https?:\/\/|\[/i.test(t) && /\b(please (clarify|confirm|provide)|could you|i need (you )?to|what i need)\b/i.test(t));
+  const lane = async (l, i) => {
+    let out = '';
+    try {
+      out = await callClaude(l[1] + rules + json, base, 1200, true);
+      if (refused(out)) out = await callClaude(l[1] + rules + ' Your last reply asked questions instead of searching. That is not allowed. Search now.' + json, baseCore, 1200, true);
+      let list = parse(out);
+      if (!list && out && /https?:\/\//i.test(out)) {                 // prose came back: tidy just this search into the list
+        const fix = await callClaude('Turn this funding research into ONE JSON array and nothing else. Each item: {"funder":"","programme":"","deadline":"","value":"","eligibility":"","fit":"","url":"","score":0}. "score" is 1–5 for fit to the organisation. Drop anything closed.', 'ORGANISATION: ' + base.slice(0, 500) + '\n\nRESEARCH:\n' + String(out).replace(/<\/?cite[^>]*>/gi, '').slice(0, 3400), 1200, false);
+        list = parse(fix);
+      }
+      addItems(list || [], l[0]);
+      status[i] = 'done';
+    } catch (e) {
+      status[i] = 'failed';
+      if (e && e.message === 'AI_PLAN_GATE') { res.innerHTML = ''; throw e; }
+    }
+    paintProgress(); paintList();
+  };
+  paintProgress();
+  try { await Promise.all(lanes.map(lane)); } catch (e) { return; }
+  paintProgress(); paintList();
 }
 function bdFilterLane(lane, btn) {
   document.querySelectorAll('#bd-opps-result .bd-seg button').forEach(b => b.classList.toggle('on', b === btn));

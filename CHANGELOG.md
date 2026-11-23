@@ -2,6 +2,8 @@
 Newest first. The Sentinel reads this every morning and logs what shipped in the last 7 days.
 
 ## 2026-11-23
+- Find funding is much faster: the three searches now run side by side, results appear as each one finishes, and merging happens instantly in the browser (one fewer AI call per search)
+- AI calls can run up to three at a time instead of one after another
 - New look: cleaner type, soft cards, pill buttons, line icons instead of emoji
 - Shorter sidebar: ten sections that open and close (People, Events, Impact, Funders, Contacts, Growth), with plainer names (Home, Funder health, Find funding, From partners)
 - Dashboard: "Last 30 days" with the change on the month before and six-month trend lines for sessions, attendance, volunteer hours and confidence
