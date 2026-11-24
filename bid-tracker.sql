@@ -36,3 +36,9 @@ create policy bids_member_all on public.bids for all
     or org_id in (select o.id from public.organisations o where o.owner_id = auth.uid())
     or public.auth_is_super_admin()
   );
+
+-- Past bids can be opened again: keep each bid's questions and answers (added 24 Nov 2026)
+alter table public.bids add column if not exists questions    jsonb;
+alter table public.bids add column if not exists answers      jsonb;
+alter table public.bids add column if not exists project_text text;
+alter table public.bids add column if not exists funder_full  text;

@@ -1,6 +1,9 @@
 # Vorlana changelog
 Newest first. The Sentinel reads this every morning and logs what shipped in the last 7 days.
 
+## 2026-11-24
+- Past bids open again: every bid's questions and answers are saved, kept up to date as you edit or fill gaps, and can be reopened from Your bids to edit, download or reuse (run the new lines in bid-tracker.sql)
+
 ## 2026-11-23
 - Bids: character limits are kept as characters (shown as 612/750 characters) and answers are cut to fit; when the funder's actual form can't be opened, the bid says the questions and limits came from their guidance so they can be checked; answers can no longer stop mid-sentence (the AI gets more room and retries if it runs out)
 - Bids leave far fewer gaps: the same gap asked in different words becomes one question, project ideas only use the organisation's existing venues and activities, and the writer and assessor drop unsupported claims or reason them out instead of leaving "confirm…" or "explain…" gaps
