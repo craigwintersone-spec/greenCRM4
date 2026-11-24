@@ -2015,7 +2015,7 @@ async function pullFunderForm(key) {
   let watchdog = null;
   try {
     if ($('eoi-funder')) $('eoi-funder').value = name;
-    _eoiDoc = null; _eoiQuestions = []; _eoiAnswers = {}; _eoiFunderPriorities = ''; _eoiPrioritiesFunder = ''; _eoiGuidanceText = ''; _eoiProject = ''; _eoiProjectFor = '';
+    _eoiDoc = null; _eoiQuestions = []; _eoiAnswers = {}; _eoiFunderPriorities = ''; _eoiPrioritiesFunder = ''; _eoiGuidanceText = ''; _eoiProject = ''; _eoiProjectFor = ''; _eoiBrief = null;
     if ($('eoi-output')) $('eoi-output').style.display = 'none';
     if ($('eoi-questions')) { $('eoi-questions').style.display = 'none'; $('eoi-questions').innerHTML = ''; }
     if ($('bd-manual')) $('bd-manual').open = false;
@@ -2365,29 +2365,50 @@ function _syncEOIQuestion(id) {
 // Fetch the funder's priorities via web search. Skips work if we already have
 // them for this exact funder. Returns quietly on failure (drafting proceeds
 // without priorities). `force` re-fetches even if cached.
+let _eoiBrief = null;   // { needsProposal, proposal: { maxPages, maxWords, sections: [{ title, asks }] }, rules: {...}, cannotApply: [], confirms: [] }
 async function _ensureFunderPriorities(funder, force) {
   funder = (funder || '').trim();
   if (!funder) return;
   if (!force && _eoiFunderPriorities && _eoiPrioritiesFunder === funder) return;
   const shape = 'Use exactly these headings, each followed by short factual bullet points: PRIORITIES (what they want to fund and the change they want to see), ' +
-    'ASSESSMENT CRITERIA (what assessors score or look for, in their words), ELIGIBILITY (who can and cannot apply, income or size limits, area), ' +
-    'GRANT SIZE AND LENGTH (amounts and duration), THEIR LANGUAGE (key words and phrases they use). Say "not stated" where the information is not there. Never invent. No preamble.';
+    'HOW THEY DECIDE (what assessors or trustees score or look for, in their words, and what makes an application stand out or fail), ' +
+    'WHAT YOU MUST SUBMIT (online form questions, any written proposal or application document with its sections and page or word limit, budget or financial tables, accounts and other documents), ' +
+    'FUNDING RULES (grant size, how much of a project or budget they will fund, match funding they expect to be secured, what they will and will not pay for, duration), ' +
+    'ELIGIBILITY (who can and cannot apply — legal forms, income, area), THEIR STYLE (how they like to be written to, key words and phrases they use). ' +
+    'Say "not stated" where the information is not there. Never invent. No preamble.';
   try {
     let raw = '';
     if (_eoiGuidanceText && _eoiGuidanceText.length > 400) {     // their own page: the most reliable source
-      raw = await callClaude('You read UK funders\' guidance for bid writers. From the funder page text below, pull out what an applicant needs. ' + shape,
-        'Funder / programme: ' + funder + '\n\nTHEIR PAGE:\n' + _eoiGuidanceText, 1200, false, { model: AI_MODELS.smart, effort: 'medium', long: true, purpose: 'bid_funder' });
+      raw = await callClaude('You read UK funders\' guidance for bid writers. From the funder page text below, pull out everything an applicant needs. If the page points to separate guidance (for example a PDF), search for it too. ' + shape,
+        'Funder / programme: ' + funder + '\n\nTHEIR PAGE:\n' + _eoiGuidanceText, 1200, true, { model: AI_MODELS.smart, effort: 'medium', long: true, purpose: 'bid_funder' });
     }
-    if (!raw || raw.length < 120) {
-      raw = await callClaude('You are a UK funding researcher. Search for this funder\'s current guidance for applicants and summarise it. ' + shape,
+    if (!raw || raw.length < 200) {
+      raw = await callClaude('You are a UK funding researcher. Search for this funder\'s current guidance for applicants (their how-to-apply page and any application guidelines document) and summarise it. ' + shape,
         'Funder / programme: ' + funder, 1200, true, { model: AI_MODELS.smart, effort: 'medium', purpose: 'bid_funder' });
     }
     _eoiFunderPriorities = cleanReportText(raw);
     _eoiPrioritiesFunder = funder;
+    _eoiBrief = null;
+    try {
+      const j = await callClaude('From this funder summary, reply with ONLY a JSON object, no other words: {"needsProposal":false,"proposal":{"maxPages":0,"maxWords":0,"sections":[{"title":"","asks":""}]},"rules":{"shareOfCost":"","matchFunding":"","minGrant":0,"maxGrant":0,"typical":""},"cannotApply":[""],"confirms":[""]}. ' +
+        '"needsProposal" is true only if they ask for a written proposal or application document beyond the online form questions; list its sections in their order with what each must cover. "rules" are the money rules in their words. "cannotApply" lists legal forms or groups they exclude (for example "CICs"). "confirms" lists things only the applicant can confirm or declare (policies, declarations, tax status, previous applications, accounts). Never invent.',
+        _eoiFunderPriorities.slice(0, 6000), 1200, false, { model: AI_MODELS.smart, long: true, purpose: 'bid_brief' });
+      const m = String(j || '').replace(/```json|```/gi, '').match(/\{[\s\S]*\}/);
+      if (m) _eoiBrief = JSON.parse(m[0]);
+    } catch (e) { if (e && e.message === 'AI_PLAN_GATE') throw e; }
   } catch (e) {
     if (e && e.message === 'AI_PLAN_GATE') throw e;
-    // drafting continues without
   }
+}
+// Questions only the organisation can answer: declarations, policies, tax status, previous applications, how they heard
+const _EOI_CONFIRM_RE = /declar|i confirm|please confirm|confirm (that|you)|authoris|safeguarding polic|polic(y|ies) in place|tax (resid|status)|vat regist|applied (to us|for a grant from|before)|previously applied|how did you (hear|find)|consent to|terms and conditions|data protection statement|signature/i;
+// Does the funder exclude this kind of organisation?
+function _eoiExcluded() {
+  const type = String((($('bd-type') && typeof bdSetupRead === 'function') ? bdSetupRead() : ((typeof bdSetupGet === 'function' && bdSetupGet()) || {})).type || '').toLowerCase();
+  const ex = (_eoiBrief && Array.isArray(_eoiBrief.cannotApply)) ? _eoiBrief.cannotApply.filter(Boolean) : [];
+  if (!type || !ex.length) return '';
+  const hit = ex.find(x => { const t = String(x).toLowerCase(); return (/cic|community interest/.test(t) && /cic/.test(type)) || (/compan|business/.test(t) && /^company/.test(type)) || (/unincorporated|community group/.test(t) && /unincorporated|community group/.test(type)) || (/social enterprise/.test(t) && /social enterprise/.test(type)); });
+  return hit ? String(hit) : '';
 }
 
 // ── The project the bid is for: Vorlana suggests three from what the organisation already does; one tap to choose ──
@@ -2404,13 +2425,14 @@ async function _eoiChooseProject(res, funder, facts, evidence) {
   let ideas = [];
   try {
     const raw = await callClaude('You are a senior UK bid strategist. Suggest the 3 strongest projects this organisation could put to this funder: each must build on work the organisation ALREADY does (from the facts and records), match the funder\'s priorities and criteria, and ask for an amount inside the funder\'s grant range that is realistic for the organisation\'s size. ' +
-      'Reply with ONLY a JSON array of 3 items, no other words: [{"title":"","summary":"two sentences: what it is and the change it makes","who":"who benefits and roughly how many","amount":"£ amount","duration":"e.g. 12 months","outcomes":["2-3 measurable outcomes"]}]. Never invent partners or track record that are not in the facts. Use only the venues, activities, staff and partners the organisation already has — do not add a new venue, site, partner or paid post unless the facts show one.',
+      'Follow the funder\'s FUNDING RULES exactly: if they fund only a share of the cost or expect match funding, set "total" to the full cost, "amount" to the share they would fund and "other" to the rest and where it would come from. Shape each idea around what THIS funder cares about most. ' +
+      'Reply with ONLY a JSON array of 3 items, no other words: [{"title":"","summary":"two sentences: what it is and the change it makes","who":"who benefits and roughly how many","amount":"£ amount to ask this funder for","total":"£ total cost","other":"other funding needed and from where, or empty","duration":"e.g. 12 months","outcomes":["2-3 measurable outcomes"]}]. Never invent partners or track record that are not in the facts. Use only the venues, activities, staff and partners the organisation already has — do not add a new venue, site, partner or paid post unless the facts show one.',
       'FUNDER: ' + funder + '\n' + (_eoiFunderPriorities ? 'WHAT THE FUNDER WANTS:\n' + _eoiFunderPriorities.slice(0, 2500) + '\n' : '') + '\n' + facts.slice(0, 3000) + '\n\n' + _eoiProgrammes() + '\n\n' + evidence,
       1200, false, { model: AI_MODELS.smart, effort: 'medium', long: true, purpose: 'bid_project' });
     const t = String(raw || '').replace(/```json|```/gi, ''); const m = t.match(/\[[\s\S]*\]/);
     if (m) ideas = JSON.parse(m[0]).filter(x => x && x.title).slice(0, 3);
   } catch (e) { if (e && e.message === 'AI_PLAN_GATE') throw e; }
-  const asText = x => x.title + ': ' + (x.summary || '') + (x.who ? ' Who benefits: ' + x.who + '.' : '') + (x.amount ? ' Amount requested: ' + x.amount + '.' : '') + (x.duration ? ' Duration: ' + x.duration + '.' : '') +
+  const asText = x => x.title + ': ' + (x.summary || '') + (x.who ? ' Who benefits: ' + x.who + '.' : '') + (x.amount ? ' Amount requested: ' + x.amount + '.' : '') + (x.total ? ' Total cost: ' + x.total + '.' : '') + (x.other ? ' Other funding: ' + x.other + '.' : '') + (x.duration ? ' Duration: ' + x.duration + '.' : '') +
     (Array.isArray(x.outcomes) && x.outcomes.length ? ' Outcomes: ' + x.outcomes.join('; ') + '.' : '');
   if (!ideas.length) { _eoiProject = ''; _eoiProjectFor = funder; return; }    // no suggestions: write from the organisation's work
   return new Promise(resolve => {
@@ -2419,12 +2441,15 @@ async function _eoiChooseProject(res, funder, facts, evidence) {
       _eoiProject = i === 'own' ? own : i === 'none' ? '' : asText(ideas[i]);
       _eoiProjectFor = funder; window._eoiPick = null; resolve();
     };
-    res.innerHTML = '<div style="font-size:18px;font-weight:700;letter-spacing:-.01em;margin-bottom:4px">Which project should this bid be for?</div>' +
+    const ex = _eoiExcluded();
+    res.innerHTML = (ex ? '<div class="alert alert-warn" style="margin:0 0 14px">⚠ ' + escapeHTML(funder) + '\'s guidance says they don\'t fund <b>' + escapeHTML(ex) + '</b>, and your profile says you are one. Check before you spend time on this — you can still write it.</div>' : '') +
+      '<div style="font-size:18px;font-weight:700;letter-spacing:-.01em;margin-bottom:4px">Which project should this bid be for?</div>' +
       '<div style="font-size:13px;color:var(--txt3);margin-bottom:14px">Built from what you already do and what ' + escapeHTML(funder) + ' funds. Tap one and we\'ll write the bid around it.</div>' +
       ideas.map((x, i) => '<div class="card" style="margin-bottom:12px;padding:16px 18px"><div style="display:flex;gap:14px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap">' +
         '<div style="flex:1;min-width:240px"><div style="font-weight:700;font-size:15px;color:var(--txt)">' + escapeHTML(x.title) + '</div>' +
         '<div style="font-size:13.5px;color:var(--txt2);margin:4px 0 6px;line-height:1.5">' + escapeHTML(x.summary || '') + '</div>' +
-        '<div style="font-size:12.5px;color:var(--txt3)">' + [x.amount, x.duration, x.who].filter(Boolean).map(escapeHTML).join(' · ') + '</div>' +
+        '<div style="font-size:12.5px;color:var(--txt3)">' + [x.amount ? 'Ask ' + x.amount : '', x.total && x.total !== x.amount ? 'of ' + x.total + ' total' : '', x.duration, x.who].filter(Boolean).map(escapeHTML).join(' · ') + '</div>' +
+        (x.other ? '<div style="font-size:12px;color:var(--txt3);margin-top:2px">Rest from: ' + escapeHTML(x.other) + '</div>' : '') +
         (Array.isArray(x.outcomes) && x.outcomes.length ? '<ul style="margin:6px 0 0 18px;font-size:12.5px;color:var(--txt2)">' + x.outcomes.map(o => '<li>' + escapeHTML(o) + '</li>').join('') + '</ul>' : '') +
         '</div><button class="btn btn-p" type="button" onclick="_eoiPick(' + i + ')">Use this</button></div></div>').join('') +
       '<details style="margin-top:4px"><summary style="font-size:13px;color:var(--em);cursor:pointer;font-weight:600">Something else in mind?</summary>' +
@@ -2465,7 +2490,8 @@ async function _eoiMakePlan(funder, facts, evidence, quotes) {
     const raw = await callClaude('You are a senior UK bid writer planning a whole funding application before anyone writes. Today is ' + today + '. Reply with ONLY one JSON object, no other words:\n' +
       '{"facts":{"name of fact":"value"}, "budget":[{"line":"","amount":0,"note":""}], "answers":[{"n":1,"type":"fact|choice|short|full","words":0,"message":"","use":"","quotes":[],"criteria":""}]}\n' +
       'RULES: "facts" is ONE fact sheet every answer must use identically: project name, amount requested, duration, realistic start and end dates (allow for the funder\'s decision time from their guidance — assume 12 weeks if not stated — and never plan seasonal work that would start after its season), people reached, sessions, volunteers now and new, and any targets. Take every number from the records; never invent. ' +
-      'For EVERY question give "type": "fact" = a single value such as a name, number, date, postcode, amount or yes/no (words 0); "choice" = pick one of the options they list, optionally one short sentence (words 25); "short" = one or two sentences (words 50); "full" = a written answer (words = their limit, or 220). ' +
+      'For EVERY question give "type": "confirm" = a declaration, policy, tax status, previous application, how they heard of the funder, consent or anything only the applicant can confirm (never answered for them); "fact" = a single value such as a name, number, date, postcode, amount (words 0); "choice" = pick one of the options they list, optionally one short sentence (words 25); "short" = one or two sentences (words 50); "full" = a written answer (words = their limit, or 220; for proposal sections use the word limit given). ' +
+      'PERSONALISE to this funder: "message" must say why the point matters to THIS funder (their priorities, how they decide, their funding rules and style), not just answer the question. Respect their money rules in the facts (total cost, amount asked, other funding, and a Plan B where they expect one). ' +
       '"message" is the one point that answer makes; "use" names the figures and examples it uses — each headline figure in at most two answers; "quotes" lists quote numbers from QUOTES, each quote used in ONE answer only, at most one quote per answer and only where it strengthens it. ' +
       'Answers must build one argument without repeating each other. If a question asks for a budget or cost breakdown, fill "budget" with realistic lines that add up exactly to the amount requested; otherwise leave it empty.',
       'FUNDER: ' + funder + '\n' + (_eoiFunderPriorities ? 'WHAT THE FUNDER WANTS:\n' + _eoiFunderPriorities.slice(0, 3000) + '\n' : '') + (_eoiProject ? '\nTHE PROJECT: ' + _eoiProject + '\n' : '') +
@@ -2485,7 +2511,7 @@ async function _eoiAssess(funder, sheet, writeOne) {
   const qa = _eoiQuestions.map((q, i) => 'Q' + (i + 1) + '. ' + q.question + (q.charLimit ? ' (limit ' + q.charLimit + ' characters; this one has ' + String(_eoiAnswers[q.id] || '').length + ')' : q.wordLimit ? ' (limit ' + q.wordLimit + ' words)' : '') + '\nANSWER: ' + (_eoiAnswers[q.id] || '')).join('\n\n');
   let issues = [];
   try {
-    const raw = await callClaude('You are the funder\'s assessor reading a whole application. List ONLY real problems that would cost marks: an answer that does not answer its own question; a one-line question answered with paragraphs (or the reverse); a number or fact that contradicts the FACT SHEET or another answer; a quote or statistic repeated across answers; a claim about the organisation that is not in the facts (for example governance, consultation or partnerships that were never stated — remove the claim and write around it; only use an [INSERT: ...] placeholder when the question itself cannot be answered without that fact); placeholders that ask the applicant to confirm or explain something (rewrite so they are not needed); dates that do not work; anything over its word limit. ' +
+    const raw = await callClaude('You are the funder\'s assessor reading a whole application. List ONLY real problems that would cost marks: an answer that does not answer its own question; a one-line question answered with paragraphs (or the reverse); a number or fact that contradicts the FACT SHEET or another answer; a quote or statistic repeated across answers; a claim about the organisation that is not in the facts (for example governance, consultation or partnerships that were never stated — remove the claim and write around it; only use an [INSERT: ...] placeholder when the question itself cannot be answered without that fact); placeholders that ask the applicant to confirm or explain something (rewrite so they are not needed); dates that do not work; anything over its word limit; an answer that is generic and does not speak to THIS funder\'s priorities, how they decide, their money rules or style (rewrite it for them); a request that breaks their funding rules (for example asking for more than the share of costs they fund). Never fill in [CONFIRM: …] items — leave them exactly as they are. ' +
       'Reply with ONLY a JSON array, no other words: [{"n":1,"problem":"","fix":"exactly what the rewritten answer must do"}]. If the bid is sound, reply [].',
       'FUNDER: ' + funder + '\n' + (_eoiFunderPriorities ? 'WHAT THE FUNDER WANTS:\n' + _eoiFunderPriorities.slice(0, 2000) + '\n' : '') + '\nFACT SHEET:\n' + sheet + '\n\nAPPLICATION:\n' + qa,
       1200, false, { model: AI_MODELS.best, effort: 'medium', long: true, purpose: 'bid_assess' });
@@ -2493,7 +2519,7 @@ async function _eoiAssess(funder, sheet, writeOne) {
     issues = m ? JSON.parse(m[0]) : [];
   } catch (e) { if (e && e.message === 'AI_PLAN_GATE') throw e; return 0; }
   const byQ = {};
-  (Array.isArray(issues) ? issues : []).forEach(x => { const q = _eoiQuestions[(+x.n || 0) - 1]; if (q && x.fix) (byQ[q.id] = byQ[q.id] || []).push(x.problem + ' → ' + x.fix); });
+  (Array.isArray(issues) ? issues : []).forEach(x => { const q = _eoiQuestions[(+x.n || 0) - 1]; if (q && x.fix && !/^\[CONFIRM:/.test(_eoiAnswers[q.id] || '')) (byQ[q.id] = byQ[q.id] || []).push(x.problem + ' → ' + x.fix); });
   const ids = Object.keys(byQ).slice(0, 10);
   await Promise.all(ids.map(id => writeOne(_eoiQuestions.find(q => q.id === id), byQ[id].join('\n'))));
   return ids.length;
@@ -2581,6 +2607,13 @@ async function runEOIFormFill() {
       await _ensureFunderPriorities(funderRaw);
     }
     if (funderRaw) await _eoiChooseProject(res, funder, facts, evidenceAll);
+    // Funders like Garfield Weston judge a written proposal, not the online form: write that too
+    const pr = _eoiBrief && _eoiBrief.needsProposal && _eoiBrief.proposal && Array.isArray(_eoiBrief.proposal.sections) ? _eoiBrief.proposal.sections.filter(x => x && x.title) : [];
+    if (pr.length && !_eoiQuestions.some(q => q.proposal)) {
+      const pages = +_eoiBrief.proposal.maxPages || 0, totalWords = +_eoiBrief.proposal.maxWords || (pages ? Math.round(pages * 430) : 0);
+      const each = totalWords ? Math.max(80, Math.floor(totalWords * 0.9 / pr.length)) : null;
+      pr.slice(0, 16).forEach((x, k) => _eoiQuestions.push({ id: 'p' + (k + 1), proposal: true, question: 'Proposal — ' + x.title + (x.asks ? ': ' + x.asks : ''), wordLimit: each, charLimit: null, guidance: x.asks || '' }));
+    }
     res.innerHTML = panel('🧭', 'Planning your bid', 'One fact sheet, the right length for every question, each quote used once');
     if (typeof window._eoiOnProgress === 'function') { try { window._eoiOnProgress(-1, _eoiQuestions.length); } catch (e) { /* display only */ } }
     const plan = await _eoiMakePlan(funder, facts, evidence, quotes);
@@ -2594,7 +2627,8 @@ async function runEOIFormFill() {
       '3) Use the FACT SHEET for every number, name and date, word for word, so the whole bid agrees with itself. Use only the evidence and quotes the PLAN gives this answer. ' +
       '4) Never invent statistics, partners, consultation, governance, policies, accreditations or dates. Use a placeholder ONLY for a fact the question cannot be answered without and that only the organisation can know (an identifier, address, postcode, date, amount it holds) — write it short, like [INSERT: charity number]. Never write placeholders such as "confirm…", "explain why…" or "example of…": if a claim is not in the facts, leave it out and write around it; if something can be reasoned from the records (for example a target from a baseline), reason it yourself. At most one placeholder per written answer. If the organisation has confirmed a fact, use it. ' +
       '5) NEVER state or imply the organisation has no track record or that figures are zero. ' +
-      '6) Full answers: clear, warm, specific British English — lead with the direct answer, then the evidence; be concrete (who, how many, how often, what changes); use the funder\'s own words; stay under the word limit. ' + _EOI_NEVER_STOP;
+      '6) Full answers: clear, warm, specific British English — lead with the direct answer, then the evidence; be concrete (who, how many, how often, what changes); stay under the limit. ' +
+      '7) Write for THIS funder, not any funder: show how the answer meets what they fund and how they decide, use their own words and style, and follow their money rules (share of cost, match funding, what they will not pay for). A generic answer that could go to any funder is a failed answer. ' + _EOI_NEVER_STOP;
 
     _eoiAnswers = {};
     const state = _eoiQuestions.map(() => '');
@@ -2606,7 +2640,12 @@ async function runEOIFormFill() {
 
     const writeOne = async (q, fixNote) => {
       const i = _eoiQuestions.indexOf(q), p = plan.byId[q.id] || {};
-      const type = p.type || (_eoiIsShortField(q) ? 'fact' : 'full');
+      const type = (!q.proposal && (p.type === 'confirm' || _EOI_CONFIRM_RE.test(q.question))) ? 'confirm' : (p.type === 'confirm' ? 'full' : (p.type || (_eoiIsShortField(q) ? 'fact' : 'full')));
+      if (type === 'confirm') {                    // only the organisation can confirm this: never answered for them
+        _eoiAnswers[q.id] = '[CONFIRM: ' + q.question.replace(/\s+/g, ' ').replace(/[:?.]\s*$/, '').slice(0, 90) + (q.question.length > 90 ? '…' : '') + ']';
+        if (i >= 0 && !fixNote) { state[i] = 'done'; paint(); }
+        return;
+      }
       const words = type === 'fact' ? 0 : type === 'choice' ? 25 : type === 'short' ? 50 : (q.charLimit ? Math.floor(q.charLimit / 6.3) : (q.wordLimit || +p.words || 220));
       const myQuotes = (Array.isArray(p.quotes) ? p.quotes : []).map(n => quotes[(+n || 0) - 1]).filter(Boolean);
       const isBudget = /budget|cost|break ?down|headings/i.test(q.question) && budget;
@@ -2715,10 +2754,14 @@ function renderFilledEOI() {
     (ans.match(/\[INSERT:[^\]]*\]/gi) || []).forEach(() => placeholderCount++);
     const meta = (q.charLimit ? (ans.length + '/' + q.charLimit + ' characters') : q.wordLimit ? (wc + '/' + q.wordLimit + ' words') : (wc + ' words')) + (over ? ' · OVER LIMIT' : '');
     const html = boldify(escapeHTML(ans))
+      .replace(/\[CONFIRM:([^\]]*)\]/gi, '<mark style="background:#DBEAFE;color:#1E3A8A">For you to confirm</mark>')
       .replace(/\[INSERT:([^\]]*)\]/gi, '<mark style="background:#ffe9a8">[INSERT:$1]</mark>')
       .replace(/\n/g, '<br/>');
-    return '<div style="margin-bottom:22px">' +
-      '<div style="font-weight:700;font-size:14px;margin-bottom:2px">Q' + (i + 1) + '. ' + escapeHTML(q.question) + '</div>' +
+    const firstProposal = q.proposal && !(_eoiQuestions[i - 1] || {}).proposal;
+    const qNum = q.proposal ? '' : 'Q' + (i + 1) + '. ';
+    return (firstProposal ? '<div style="font-family:inherit;margin:30px 0 16px;padding-top:18px;border-top:2px solid #E8E8ED"><div style="font-size:20px;font-weight:700">Written proposal</div><div style="font-size:13px;color:#6E6E73">What ' + escapeHTML((($('eoi-funder') || {}).value || 'the funder').split(' — ')[0]) + ' actually judges' + (_eoiBrief && _eoiBrief.proposal && _eoiBrief.proposal.maxPages ? ' · up to ' + _eoiBrief.proposal.maxPages + ' pages' : '') + '. Download it as a Word document and attach it.</div></div>' : '') +
+      '<div style="margin-bottom:22px">' +
+      '<div style="font-weight:700;font-size:14px;margin-bottom:2px">' + qNum + escapeHTML(q.proposal ? q.question.replace(/^Proposal — /, '').split(':')[0] : q.question) + '</div>' +
       '<div id="eoi-wc-' + escapeHTML(q.id) + '" style="font-size:11px;color:' + (over ? '#b91c1c' : '#888') + ';margin-bottom:6px">' + meta + '</div>' +
       '<div contenteditable="true" spellcheck="true" oninput="_eoiEditAnswer(\'' + escapeHTML(q.id) + '\',this)" onfocus="this.style.borderColor=\'var(--border)\'" onblur="this.style.borderColor=\'transparent\'" ' +
         'style="font-size:14px;line-height:1.7;border:1px solid transparent;border-radius:8px;padding:6px 8px;margin:-6px -8px;outline:none">' + html + '</div></div>';
@@ -2747,6 +2790,12 @@ function renderFilledEOI() {
       '<button class="btn btn-ghost btn-sm" onclick="runEOIQualitySupervisor()">🔍 Run Quality Supervisor</button>' +
     '</div>' +
     docNote + (window._eoiAssessed && window._eoiAssessed.fixed ? '<div style="font-size:12.5px;color:#166534;margin:0 0 10px">✓ Checked like an assessor · ' + window._eoiAssessed.fixed + ' answer' + (window._eoiAssessed.fixed === 1 ? '' : 's') + ' improved</div>' : '') +
+    (function () {
+      const conf = _eoiQuestions.filter(q => /^\[CONFIRM:/.test(_eoiAnswers[q.id] || ''));
+      return conf.length ? '<div style="font-family:inherit;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:12px;padding:14px 16px;margin:0 0 14px"><div style="font-weight:700;font-size:14px;color:#1E3A8A">Only you can confirm these (' + conf.length + ')</div>' +
+        '<div style="font-size:12.5px;color:#1E40AF;margin:2px 0 6px">Declarations, policies and anything about your history with this funder. Vorlana never answers these for you — tick or type them in the funder\'s own form.</div>' +
+        conf.map(q => '<div style="font-size:13px;color:#1E3A8A;margin:3px 0">• ' + escapeHTML(q.question.slice(0, 160)) + (q.question.length > 160 ? '…' : '') + '</div>').join('') + '</div>' : '';
+    })() +
     '<div id="eoi-gaps"></div>' +
     '<div id="eoi-fill-body" style="font-family:Georgia,serif">' + parts.join('') + '</div>' +
     '<div id="eoi-qa-result"></div>' +

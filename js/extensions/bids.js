@@ -55,7 +55,7 @@
   // What's on screen now, ready to save
   function content() {
     var qs = (typeof _eoiQuestions !== 'undefined' && _eoiQuestions) || [], ans = (typeof _eoiAnswers !== 'undefined' && _eoiAnswers) || {};
-    return { questions: qs.map(function (q) { return { id: q.id, question: q.question, wordLimit: q.wordLimit || null, charLimit: q.charLimit || null, guidance: q.guidance || '' }; }),
+    return { questions: qs.map(function (q) { return { id: q.id, question: q.question, wordLimit: q.wordLimit || null, charLimit: q.charLimit || null, guidance: q.guidance || '', proposal: !!q.proposal }; }),
       answers: ans, project_text: (typeof _eoiProject !== 'undefined' && _eoiProject) || null, funder_full: (($('eoi-funder') || {}).value || '').trim() || null };
   }
 
@@ -121,7 +121,7 @@
     var b = bids.find(function (x) { return x.id === id; });
     if (!b || !Array.isArray(b.questions) || !b.questions.length) { alert('This bid was saved before answers were kept, so there’s nothing to open.'); return; }
     if (typeof go === 'function' && !document.querySelector('#page-bd.active')) go('bd');
-    _eoiQuestions = b.questions.map(function (q) { return { id: q.id, question: q.question, wordLimit: q.wordLimit || null, charLimit: q.charLimit || null, guidance: q.guidance || '' }; });
+    _eoiQuestions = b.questions.map(function (q) { return { id: q.id, question: q.question, wordLimit: q.wordLimit || null, charLimit: q.charLimit || null, guidance: q.guidance || '', proposal: !!q.proposal }; });
     _eoiAnswers = Object.assign({}, b.answers || {});
     _eoiProject = b.project_text || '';
     if (typeof _eoiProjectFor !== 'undefined') _eoiProjectFor = b.funder_full || b.funder;

@@ -2,6 +2,10 @@
 Newest first. The Sentinel reads this every morning and logs what shipped in the last 7 days.
 
 ## 2026-11-24
+- Every bid is written for its funder: Vorlana reads how they decide, what they want submitted, their money rules and style; project ideas follow their rules (share of cost, match funding, total cost and where the rest comes from); the assessor check rewrites anything generic
+- Funders that judge a written proposal (such as Garfield Weston) now get one, section by section within their page limit, alongside the form answers
+- Declarations, policies, tax status and "applied before?" are never answered for you: they're listed under "Only you can confirm these"
+- A warning when the funder's guidance excludes your type of organisation (for example CICs)
 - Past bids open again: every bid's questions and answers are saved, kept up to date as you edit or fill gaps, and can be reopened from Your bids to edit, download or reuse (run the new lines in bid-tracker.sql)
 
 ## 2026-11-23
