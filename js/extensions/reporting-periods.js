@@ -224,7 +224,7 @@
       'Responses with demographic data: ' + demo.length + ' of ' + fbN,
       eth.length ? 'Black and ethnic minority: ' + Math.round(eth.filter(d => T.isBEM(d.ethnicity)).length / eth.length * 100) + '% (of ' + eth.length + ' who stated ethnicity)' : '',
       dis.length ? 'Disabled: ' + Math.round(dis.filter(d => T.isDisabled(d.disability)).length / dis.length * 100) + '% (of ' + dis.length + ' who answered)' : '',
-      Object.keys(ages).length ? 'Age groups: ' + Object.keys(ages).sort((a, b) => ages[b] - ages[a]).map(k => k + ' ' + ages[k]).join(', ') : ''
+      Object.keys(ages).length ? 'Most common age groups among those responses: ' + Object.keys(ages).sort((a, b) => ages[b] - ages[a]).slice(0, 3).map(k => k + ' (' + ages[k] + ')').join(', ') : ''
     ].filter(Boolean);
     const quotes = fbInPeriod
       .filter(f => f.quote && String(f.quote).trim().length > 15 && !HEALTH_QUOTE_RX.test(String(f.quote)))
@@ -292,13 +292,15 @@
         .map(x => x.replace(/\s*(,|and)\s*(what happens )?(next period|next steps|forward view)\s*$/i, ''));
     }
     const story = window.vlReportQA ? window.vlReportQA.caseStudy(linked, fbInPeriod) : '';
+    const worked = window.vlReportQA ? window.vlReportQA.whatWorked(eventsInPeriod, fbInPeriod) : [];
     const first = sections[0] || 'Summary';
 
     const sys = 'You are a senior UK charity impact writer. You are writing ' + prof.tone + ' Call the people "' + prof.people + '". Write in clean formal British English, in the language this funder uses. ' +
       (tpl ? 'This report answers the funder\'s own reporting form. Use these headings, exactly as written and in this order, each beginning with ##, and answer each question directly' + (Object.keys(limits).length ? ' within its word limit' : '') + ': ' + tpl.items.map((it, i) => (i + 1) + '. ' + it.q + (it.limit ? ' (max ' + it.limit + ' words)' : '')).join(' | ') + '. If the figures cannot answer a question, say plainly what is not recorded this period. '
            : 'Structure with these sections, in this order, each beginning with ## and exactly this title: ' + sections.join(', ') + '. ') +
-      'Open "' + first + '" with the three figures that matter most to this funder, then one sentence on what they mean' + (hasTargets ? ', then progress against targets' : '') + (quotes.length ? ', then the single quote that best shows the difference made' : '') + '. ' +
+      'Open "' + first + '" with the most important results for this funder as plain sentences — never write about "figures that matter" or what the figures "show" in general' + (hasTargets ? ', then progress against targets' : '') + (quotes.length ? ', then the single quote that best shows the difference made' : '') + '. ' +
       (hasTargets ? 'Give progress against targets as a plain sentence in your own words, using the figures and the verdict from the PROGRESS lines (for example "11 of the 30 starts so far (37%), ahead of the 29% of the contract period gone"); never copy a PROGRESS line as it is, never work out pace yourself and never contradict the verdict. Only if a verdict is "behind pace" explain it plainly from the figures. ' : 'No targets were entered: never say delivery is on track, ahead or behind. ') +
+      'Never add claims about what people did, felt or valued, or how volunteers or staff worked, unless they come from a quote or the figures. Give each figure once: within a section never twice, and after the opening section in one section only. Base any learning or challenges section on the WHAT WORKED lines (what drew people and what made the most difference) and anything behind pace; never on how data was collected. Mention that demographic answers were optional once, in a few words, in who was reached only; describe them as responses, never attendance. ' +
       'Show the difference made, not just activity: relate figures to the target, to before and after, or to each other where the figures allow. ' +
       (story ? 'Include the CASE STUDY once, in about 60–100 words, in the section about outcomes or what people said, using only its facts; never name the person. ' : 'Never describe a case study or any individual. ') +
       'Data notes belong only in the evidence or data quality section; never turn them into actions or plans. Never write commitments in the organisation\'s name ("we will", "we plan to"). Any section about learning, risks or sustainability contains only what the figures show. ' +
@@ -347,6 +349,7 @@
       connectedN ? 'Felt more connected: ' + connectedPct + '% (of ' + connectedN + ')' : '',
       reach.length ? '\nWHO WE REACHED (from optional anonymous answers)\n' + reach.join('\n') : '',
       quotes.length ? 'Participant quotes (use exactly as written):\n' + quotes.map(q => '- "' + q + '"').join('\n') : 'Participant quotes: none collected for this period',
+      worked.length ? '\nWHAT WORKED (from the records)\n' + worked.join('\n') : '',
       story,
       hasCirc ? cxReportLines(circ).join('\n') : '',
       hasCirc && cxReportGaps(circ).length ? 'Data notes (data quality only):\n' + cxReportGaps(circ).map(g => '- ' + g).join('\n') : ''

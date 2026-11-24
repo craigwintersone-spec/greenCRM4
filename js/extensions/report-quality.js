@@ -63,6 +63,12 @@ function locked(h) { return (CTX.locked || []).some(function (x) { return sameH(
 function isSummary(h, i) { return i === 0 || /summary|at a glance/i.test(h || ''); }
 function sentences(t) { return String(t || '').split(/(?<=[.!?])\s+|\n+/).filter(function (x) { return x.trim(); }); }
 // numbers a reader would notice, without dates and years
+function figuresAll(t) {
+  return (String(t || '').replace(/\b\d{1,2}(st|nd|rd|th)?\s+(January|February|March|April|May|June|July|August|September|October|November|December)\b(\s+\d{4})?/gi, ' ').replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ').replace(/\b(19|20)\d{2}\b/g, ' ').replace(/\b\d+(\.\d+)?\s*(\/|out of)\s*5\b/gi, ' ').replace(/\b\d{1,2}[–-]\d{1,2}\b/g, ' ')
+    .replace(/\([^)]*\)/g, ' ')   // breakdowns in brackets
+    .match(/£?\d[\d,]*(\.\d+)?%?/g) || []).filter(function (m) { return /[£%.]/.test(m) || +m.replace(/,/g, '') >= 20; })   // small whole numbers are too often different things
+    .map(function (m) { return m.replace(/[£,]/g, '').replace(/\.0+(%?)$/, '$1'); });
+}
 function figuresIn(t) {
   var s = String(t || '')
     .replace(/\b\d{1,2}(st|nd|rd|th)?\s+(January|February|March|April|May|June|July|August|September|October|November|December)\b(\s+\d{4})?/gi, ' ')
@@ -116,7 +122,7 @@ function problems(text) {
     [/\baccounts for (the )?(whole|all|entire)\b|\bnothing (\w+ )?(went|goes) to waste\b/i, 'a conclusion from a sum the report did itself'],
     [/\b(harder|hard|difficult) to (engage|reach)\b|\b(less|more) (likely|able) to\b|\bthis suggests\b/i, 'a reason the figures don\'t show'],
     [/\b(reported|given|set out|mentioned|shown) (above|earlier|in the summary|previously)\b/i, 'refers back instead of saying it'],
-    [/\bevidence base\b|\bwhere the evidence is strongest\b/i, 'filler']
+    [/\bevidence base\b|\bwhere the evidence is strongest\b|\bthe case study below\b|\breflects? the same themes\b|\b(figures|numbers) that matter( most)?\b|\bnot directly comparable\b|\breported separately\b/i, 'filler or an instruction showing']
   ], specs = [];
   secs.forEach(function (s) { if (locked(s.h)) return; sentences(s.body).forEach(function (x) { SPEC.forEach(function (L) { if (L[0].test(x)) specs.push({ h: s.h, x: x.trim(), why: L[1] }); }); }); });
   if (specs.length) {
@@ -124,13 +130,19 @@ function problems(text) {
     out.push({ k: 'spec', secs: Object.keys(sh), t: specs.length + ' sentence' + (specs.length === 1 ? '' : 's') + ' a funder could question: "' + specs[0].x.slice(0, 90) + (specs[0].x.length > 90 ? '…' : '') + '" (' + specs[0].why + ')', label: 'Fix ' + (specs.length === 1 ? 'it' : 'them'), fix: 'Remove or rewrite these so they state only what the figures show: ' + specs.map(function (l) { return '"' + l.x + '" (' + l.why + ')'; }).join('; ') + '.' });
   }
   // 4. the same figure again and again
-  var seen = {};
-  secs.forEach(function (s, i) { figuresIn(s.body).forEach(function (f) { (seen[f] = seen[f] || []).push({ h: s.h, i: i }); }); });
-  var rep = Object.keys(seen).filter(function (f) { return seen[f].length >= 3; });
+  // (twice in one section, or in two sections after the opening one; quotes don't count)
+  var seen = {}, twice = {};
+  secs.forEach(function (s, i) {
+    if (locked(s.h)) return;
+    var all = figuresAll(s.body.replace(/"[^"]*"|\u201c[^\u201d]*\u201d/g, ' ')), n = {};
+    all.forEach(function (f) { n[f] = (n[f] || 0) + 1; if (n[f] === 2) (twice[f] = twice[f] || []).push(s.h); });
+    Object.keys(n).forEach(function (f) { if (!isSummary(s.h, i)) (seen[f] = seen[f] || []).push(s.h); });
+  });
+  var rep = Object.keys(seen).filter(function (f) { return seen[f].length >= 2; }).concat(Object.keys(twice)).filter(function (f, i, a) { return a.indexOf(f) === i; });
   if (rep.length) {
     var rh = {};
-    rep.forEach(function (f) { seen[f].forEach(function (o) { if (!isSummary(o.h, o.i) && !locked(o.h)) rh[o.h] = 1; }); });
-    out.push({ k: 'repeat', secs: Object.keys(rh), t: (rep.length === 1 ? rep[0] + ' is' : rep.slice(0, 3).join(', ') + ' are') + ' given in three or more sections.', label: 'Say ' + (rep.length === 1 ? 'it' : 'each') + ' once', fix: 'These figures are repeated across sections: ' + rep.join(', ') + '. Keep each in the Summary or the one section it belongs to; elsewhere, add detail or meaning instead of repeating the figure.' });
+    rep.forEach(function (f) { (seen[f] && seen[f].length >= 2 ? seen[f].slice(1) : []).concat(twice[f] || []).forEach(function (h) { rh[h] = 1; }); });
+    out.push({ k: 'repeat', secs: Object.keys(rh), t: (rep.length === 1 ? rep[0] + ' is' : rep.slice(0, 3).join(', ') + ' are') + ' given more than once.', label: 'Say ' + (rep.length === 1 ? 'it' : 'each') + ' once', fix: 'These figures are given more than once: ' + rep.join(', ') + '. Give each once — in the opening section or the one section it belongs to — and elsewhere add detail or meaning instead. If the same number means two different things, keep both.' });
   }
   // 5. a pace verdict contradicted
   var V = { 'ahead of pace': /\bahead\b/i, 'on track': /\bon (track|target|profile|course)\b/i, 'behind pace': /\bbehind\b|\bbelow (target|profile)\b/i };
@@ -420,6 +432,27 @@ function caseStudy(participants, feedback) {
   return '';
 }
 
+// ── what worked, from the records, so a learning section has something real to say ─
+function whatWorked(events, feedback) {
+  var by = {}, name = function (e) { return String((e && e.name) || '').trim(); };
+  (events || []).forEach(function (e) { var k = name(e); if (!k) return; var r = by[k] || (by[k] = { n: 0, att: 0, fb: [] }); r.n++; r.att += +e.attendees || 0; });
+  var evName = {}; (events || []).forEach(function (e) { evName[String(e.id)] = name(e); });
+  (feedback || []).forEach(function (f) { var k = evName[String(f.eventId || f.event_id || '')]; if (k && by[k]) by[k].fb.push(f); });
+  var keys = Object.keys(by).filter(function (k) { return by[k].n >= 2; });
+  if (keys.length < 2) return [];
+  var r1 = function (v) { return Math.round(v * 10) / 10; }, out = [];
+  var att = keys.slice().sort(function (a, b) { return by[b].att / by[b].n - by[a].att / by[a].n; })[0];
+  out.push('Best attended: ' + att + ' — ' + r1(by[att].att / by[att].n) + ' attendances a session on average, over ' + by[att].n + ' sessions');
+  var gain = keys.map(function (k) { var p = by[k].fb.filter(function (f) { return +f.cb > 0 && +f.ca > 0; }); if (p.length < 5) return null;
+    var b = p.reduce(function (a, f) { return a + +f.cb; }, 0) / p.length, c = p.reduce(function (a, f) { return a + +f.ca; }, 0) / p.length; return { k: k, b: r1(b), a: r1(c), g: c - b, n: p.length }; })
+    .filter(Boolean).sort(function (x, y) { return y.g - x.g; });
+  if (gain.length >= 2) out.push('Biggest rise in confidence: ' + gain[0].k + ' — from ' + gain[0].b + ' to ' + gain[0].a + ' out of 5 (' + gain[0].n + ' responses)');
+  var enj = keys.map(function (k) { var v = by[k].fb.map(function (f) { return +f.enjoyed; }).filter(function (x) { return x > 0; }); return v.length >= 5 ? { k: k, v: r1(v.reduce(function (a, x) { return a + x; }, 0) / v.length), n: v.length } : null; })
+    .filter(Boolean).sort(function (x, y) { return y.v - x.v; });
+  if (enj.length >= 2 && enj[0].k !== (gain[0] && gain[0].k)) out.push('Most enjoyed: ' + enj[0].k + ' — ' + enj[0].v + ' out of 5 (' + enj[0].n + ' responses)');
+  return out;
+}
+
 // ── the funder's own reporting form, read once per contract ─
 var TPL = {};
 async function funderQuestions(contractId) {
@@ -452,6 +485,7 @@ window.vlReportQA = {
   problems: function (t) { return CTX ? problems(t == null ? CTX.text : t) : []; },
   sections: sections,
   caseStudy: caseStudy,
+  whatWorked: whatWorked,
   funderQuestions: funderQuestions
 };
 

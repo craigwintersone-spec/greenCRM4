@@ -727,11 +727,12 @@ function generateNow() {
   var sys = 'You are a senior UK charity impact writer. You are writing ' + prof.p.tone + ' ' +
     'Call the people "' + prof.p.people + '". Write clean formal British English, no jargon the funder would not use themselves. ' +
     'Structure with these sections, in this order, each beginning with ## and exactly this title: ' + sections.join(', ') + '. ' +
-    'Open the Summary with the three figures that matter most to this funder, then one sentence on what they mean' + (targets.length ? ', then progress against targets' : '') + ', then, if quotes are supplied, the single quote that best shows the difference made. ' +
+    'Open the Summary with the most important results for this funder as plain sentences — never write about "figures that matter" or what the figures "show" in general' + (targets.length ? ', then progress against targets' : '') + ', then, if quotes are supplied, the single quote that best shows the difference made. ' +
     'Never point out that two different figures are the same, and do not restate a percentage in words (for example "this is a majority of responses"). ' +
     (targets.length ? 'Give progress against targets as a plain sentence in your own words, using the figures and the verdict from the PROGRESS lines (for example "11 of the 30 starts so far (37%), ahead of the 29% of the contract period gone"); never copy a PROGRESS line as it is, never work out pace yourself and never contradict the verdict. Only if a verdict is behind pace explain it plainly from the figures. ' : '') +
     (prev ? 'Where a previous-period figure is supplied, say whether it is up or down and by how much, using only the supplied percentage. ' : '') +
     'Use participant quotes exactly as written where supplied. ' + (story ? 'Include the CASE STUDY once, in about 60–100 words, in the section about outcomes or what people said, using only its facts; never name the person. ' : 'Never describe a case study or any individual. ') +
+    'Never add claims about what people did, felt or valued, or how volunteers or staff worked, unless they come from a quote or the figures. Give each figure once: within a section never twice, and after the opening section in one section only. Base any learning or challenges section on the WHAT WORKED lines (what drew people and what made the most difference) and anything behind pace; never on how data was collected. Mention that demographic answers were optional once, in a few words, in who was reached only; describe them as responses, never attendance. ' +
     'Show the difference made, not just activity: relate figures to the target, the previous period or before and after where the figures allow. ' +
     'Write about outcomes — what changed for people and progress against the grant\'s aims — not admin. Data notes, response rates and how figures were estimated get one short sentence at most, only in an evidence or data section if there is one, and nowhere else. A learning, challenges or sustainability section is about delivery and outcomes (what worked, what is behind and why, from the figures), never about data collection or record-keeping. ' +
     (hasCirc ? (growOnly
@@ -793,10 +794,11 @@ function generateNow() {
     s.attDemo.bemPct != null ? 'Black and ethnic minority: ' + s.attDemo.bemPct + '% (of ' + s.attDemo.ethN + ' who stated ethnicity)' : '',
     s.attDemo.disabledPct != null ? 'Disabled: ' + s.attDemo.disabledPct + '% (of ' + s.attDemo.disN + ' who answered)' : '',
     s.attDemo.topPostcodes.length ? 'Main postcode areas: ' + s.attDemo.topPostcodes.join(', ') + (s.attDemo.topPostcodePct != null ? ' (' + s.attDemo.topPostcodePct + '% from ' + s.attDemo.topPostcodes.slice(0, 2).join(' and ') + ')' : '') : '',
-    Object.keys(s.attDemo.age).length ? 'Age groups: ' + Object.keys(s.attDemo.age).sort(function (a, b) { return s.attDemo.age[b] - s.attDemo.age[a]; }).map(function (k) { return k + ' ' + s.attDemo.age[k]; }).join(', ') : '',
+    Object.keys(s.attDemo.age).length ? 'Most common age groups among those responses: ' + Object.keys(s.attDemo.age).sort(function (a, b) { return s.attDemo.age[b] - s.attDemo.age[a]; }).slice(0, 3).map(function (k) { return k + ' (' + s.attDemo.age[k] + ')'; }).join(', ') : '',
     Object.keys(s.attDemo.gender).length ? 'Gender: ' + Object.keys(s.attDemo.gender).map(function (k) { return k + ' ' + s.attDemo.gender[k]; }).join(', ') : '',
     s.volDemo.count ? 'Volunteers with demographic data: ' + s.volDemo.count + (s.volDemo.bemPct != null ? ' · black and ethnic minority ' + s.volDemo.bemPct + '%' : '') + (s.volDemo.disabledPct != null ? ' · disabled ' + s.volDemo.disabledPct + '%' : '') : '',
     s.quotes.length ? 'Participant quotes you may use verbatim (do not alter):\n' + s.quotes.slice(0, 4).map(function (q) { return '- "' + q + '"'; }).join('\n') : '',
+    (function () { var w = window.vlReportQA ? window.vlReportQA.whatWorked(s.events, s.fbRows) : []; return w.length ? '\nWHAT WORKED (from the records)\n' + w.join('\n') : ''; })(),
     story,
     (typeof cxReportLines === 'function' ? cxReportLines(s.circ).join('\n') : ''),
     '',
