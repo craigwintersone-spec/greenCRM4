@@ -14,6 +14,7 @@
     ['For your bids', [
       ['contact', 'Main contact for funders', 'Name, role, email, phone'], ['venue', 'Main venue', 'Name and address where most sessions happen'],
       ['area', 'Area and wards you serve'], ['secured_income', 'Money secured for the next 12 months', 'e.g. 22,000 (0 if none)'], ['reserves', 'Unrestricted reserves', 'e.g. 9,000'],
+      ['people_per_year', 'People you support in a typical year', 'e.g. 350'],
       ['signatories', 'Bank signatories', 'e.g. 2 unrelated trustees'], ['trustee_review', 'How often trustees review finances', 'e.g. every quarter']]]
   ];
   function st() { return (typeof currentOrg !== 'undefined' && currentOrg && currentOrg.settings) || {}; }
