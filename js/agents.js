@@ -3235,6 +3235,7 @@ function _bdBudgetText(m) {
     '\nRequested from this funder: ' + _bdGBP(m.ask) + ((m.other || []).length ? '\nOther funding: ' + m.other.map(o => (o.from || 'other funding') + ' ' + _bdGBP(o.amount) + (o.secured ? ' (secured)' : ' (not yet secured)')).join('; ') : ''));
 }
 // What doesn't add up, worked out in code
+function _bdIsBudgetQ(q) { return /budget|spend (it|the money|the grant|this) on|what (would|will) you spend|what costs|cost(s)? break ?down|break ?down (of )?(your |the )?(project )?costs?|headings/i.test(q.question || ''); }
 function _bdMoneyIssues(m) {
   const out = [];
   if (!m) return out;
@@ -3250,6 +3251,27 @@ function _bdMoneyIssues(m) {
     const said = (re, want, what) => { let x; const r = new RegExp(re, 'gi'); while ((x = r.exec(a))) { const n = _bdNum(x[1]); if (n && Math.abs(n - want) > 1 && n > 99) { out.push({ t: 'Q' + (i + 1) + ' says the ' + what + ' is ' + _bdGBP(n) + ' — the sheet says ' + _bdGBP(want) + '.', sync: true }); return; } } };
     said('total (?:project )?(?:cost|budget)(?: is| of)?[^£.]{0,25}£\\s?([\\d.]+\\s?k?)', m.total, 'total cost');
     said('(?:asking|ask|request(?:ing)?)[^£.]{0,40}£\\s?([\\d.]+\\s?k?)', m.ask, 'amount asked');
+  });
+  const target = m.cover === 'grant' ? m.ask : m.total;
+  if (m.lines.length <= 1 && target >= 5000) out.push({ t: m.lines.length ? 'The budget is one lump of ' + _bdGBP(sum) + ' — funders expect it broken into costs.' : 'There\'s no budget yet — funders expect the ' + _bdGBP(target) + ' broken into costs.', fix: 'build', label: 'Break it down' });
+  // Costs written in a budget answer must add up to the budget
+  const known = new Set([m.ask, m.total, sum].concat((m.other || []).map(o => Math.round(+o.amount || 0))));
+  // A cost line reads like "coordinator at £78,000", "Training: £14,000", "£6,000 for venues"
+  const costs = x => { const t = String(x).replace(/,/g, ''), out2 = []; let r;
+    const re1 = /(?:\bat|:|–|—|\bcosting|\bcosts)\s*£\s?(\d+(?:\.\d+)?\s?k?)\b/gi, re2 = /£\s?(\d+(?:\.\d+)?\s?k?)\s+(?:for|on|towards)\s+(?!(?:\d|three|two|one|four|five|the next|36|24|12))/gi;
+    while ((r = re1.exec(t))) out2.push(Math.round(_bdNum(r[1])));
+    while ((r = re2.exec(t))) out2.push(Math.round(_bdNum(r[1])));
+    return out2; };
+  const lineAmts = m.lines.map(l => Math.round(+l.amount || 0));
+  _eoiQuestions.forEach((q, i) => {
+    if (!_bdIsBudgetQ(q)) return;
+    const items = costs(_eoiAnswers[q.id] || '').filter(n => n > 0 && (!known.has(n) || lineAmts.includes(n)));
+    if (items.length < 2) return;
+    const s2 = items.reduce((a, n) => a + n, 0);
+    const same = items.length === lineAmts.length && items.every(n => lineAmts.includes(n));
+    if (same || s2 === target && items.every(n => lineAmts.includes(n))) return;
+    if (m.lines.length >= 2 && sum === target) out.push({ t: 'Q' + (i + 1) + '\'s costs (' + _bdGBP(s2) + ') don\'t match the budget yet.', sync: true });   // the sheet is right; the answer needs the figures
+    else if (s2 !== target) out.push({ t: 'Q' + (i + 1) + ' lists costs adding up to ' + _bdGBP(s2) + ', but the budget is ' + _bdGBP(target) + '.', fix: 'build', label: 'Rebuild the budget' });
   });
   (m.other || []).filter(o => !o.secured && o.amount > 0).forEach(o => out.push({ t: _bdGBP(o.amount) + ' from ' + (o.from || 'other funding') + ' isn\'t secured yet — say when you\'ll know, and what happens if it doesn\'t come.', soft: true }));
   return out;
@@ -3272,6 +3294,8 @@ function bdRenderMoney() {
     '<div class="bd-mrow"><span>Total project cost</span>' + inp('total', _bdGBP(m.total), '110px') + '</div>' +
     (m.other || []).map((o, i) => '<div class="bd-mrow"><span>' + inp('other.' + i + '.from', o.from, '100%', 'Other funding from') + '<label class="bd-sec"><input type="checkbox" ' + (o.secured ? 'checked' : '') + ' onchange="bdMoneyOther(' + i + ',this.checked)"/> secured</label></span>' + inp('other.' + i + '.amount', _bdGBP(o.amount), '110px') + '</div>').join('') +
     '<a href="#" class="bd-madd" onclick="bdMoneyAdd(\'other\');return false">+ other funding</a>' +
+    (window._bdMoneyBuilding ? '<div style="font-size:12.5px;color:var(--txt3);margin-top:10px"><span class="bd-spin"></span> Breaking the budget into costs…</div>' : '') +
+    (m.lines.some(l => l.suggested) ? '<div style="font-size:11.5px;color:var(--txt3);margin-top:10px">Suggested costs — check each against your real costs.</div>' : '') +
     '<div class="bd-msub">Budget <select onchange="bdMoneySet(this)" data-m="cover"><option value="total"' + (m.cover === 'total' ? ' selected' : '') + '>whole project</option><option value="grant"' + (m.cover === 'grant' ? ' selected' : '') + '>this grant only</option></select></div>' +
     m.lines.map((l, i) => '<div class="bd-mrow">' + inp('lines.' + i + '.line', l.line, '100%', 'What it pays for') + inp('lines.' + i + '.amount', _bdGBP(l.amount), '96px') + '<button type="button" class="bd-mx" onclick="bdMoneyDel(' + i + ')" aria-label="Remove">✕</button></div>').join('') +
     '<div class="bd-mrow bd-mtot"><span><a href="#" class="bd-madd" style="margin:0" onclick="bdMoneyAdd(\'lines\');return false">+ budget line</a></span><b>' + _bdGBP(sum) + '</b></div>' +
@@ -3285,7 +3309,7 @@ function bdMoneySet(el) {
   const m = _eoiAnswers.__money; if (!m) return;
   const path = el.dataset.m.split('.'), v = el.value;
   const val = /amount$|^ask$|^total$/.test(path[path.length - 1]) ? Math.round(_bdNum(String(v).replace(/£/g, '')) || 0) : v.trim();
-  if (path.length === 1) m[path[0]] = val; else (m[path[0]][+path[1]] || {})[path[2]] = val;
+  if (path.length === 1) m[path[0]] = val; else { const row = m[path[0]][+path[1]] || {}; row[path[2]] = val; delete row.suggested; }
   _bdMoneySave();
 }
 function bdMoneyOther(i, on) { const m = _eoiAnswers.__money; if (m && m.other[i]) { m.other[i].secured = !!on; _bdMoneySave(); } }
@@ -3293,10 +3317,34 @@ function bdMoneyAdd(k) { const m = _eoiAnswers.__money; if (!m) return; m[k].pus
 function bdMoneyDel(i) { const m = _eoiAnswers.__money; if (!m) return; m.lines.splice(i, 1); _bdMoneySave(); }
 function bdMoneyFix(f) {
   const m = _eoiAnswers.__money; if (!m) return;
+  if (f === 'build') { bdMoneyBuild(); return; }
   const [k, v] = f.split('='), n = Math.round(+v);
   if (k === 'total') { m.total = n; const other = Math.max(0, n - m.ask); if (m.other.length === 1) m.other[0].amount = other; else if (!m.other.length && other) m.other.push({ from: 'Other funding', amount: other, secured: false }); }
   if (k === 'ask') { m.ask = n; m.total = n + m.other.reduce((a, o) => a + (+o.amount || 0), 0); }
   if (k === 'other') { if (n <= 0) { m.total = m.ask + m.other.reduce((a, o) => a + (+o.amount || 0), 0); } else if (m.other.length === 1) m.other[0].amount = n; else if (!m.other.length) m.other.push({ from: 'Other funding', amount: n, secured: false }); else m.total = m.ask + m.other.reduce((a, o) => a + (+o.amount || 0), 0); }
+  _bdMoneySave();
+}
+// Break the budget into costs that add up exactly: starts from costs already in the answers, fills the rest from the project
+async function bdMoneyBuild() {
+  const m = _eoiAnswers.__money; if (!m || window._bdMoneyBuilding) return;
+  const target = m.cover === 'grant' ? m.ask : m.total;
+  if (!target) return;
+  window._bdMoneyBuilding = true; bdRenderMoney();
+  try {
+    const raw = await callClaude('You are a UK charity finance lead building the budget for a funding application. Break ' + _bdGBP(target) + ' (' + (m.cover === 'grant' ? 'the amount asked from this funder' : 'the total project cost') + ') into 3 to 8 cost lines that add up EXACTLY to ' + target + '. ' +
+      'Start from the costs already stated in the answers and keep their amounts where they fit; add lines for what is missing (for example staff time, sessional workers, venue, travel, training, materials, evaluation, a fair share of overheads), sized realistically for this organisation and project length, and only for things the project actually does. Follow the funder\'s rules on what they will and will not pay for. ' +
+      'Reply with ONLY a JSON array: [{"line":"short name with the working, e.g. Walk coordinator (0.6 FTE, 36 months)","amount":0}]',
+      _bdMoneyText(m) + '\n\n' + (_eoiFunderPriorities ? 'FUNDER RULES:\n' + _eoiFunderPriorities.slice(0, 2000) + '\n\n' : '') + (_eoiProject ? 'THE PROJECT: ' + _eoiProject + '\n\n' : '') + 'THE BID:\n' + _bdQA(),
+      1200, false, { model: AI_MODELS.best, effort: 'medium', long: true, purpose: 'bid_budget' });
+    const mm = String(raw || '').replace(/```json|```/gi, '').match(/\[[\s\S]*\]/); const arr = mm ? JSON.parse(mm[0]) : [];
+    let lines = (Array.isArray(arr) ? arr : []).filter(l => l && l.line && +l.amount > 0).map(l => ({ line: String(l.line).slice(0, 90), amount: Math.round(+l.amount), suggested: true }));
+    if (lines.length >= 2) {
+      const diff = target - lines.reduce((a, l) => a + l.amount, 0);        // the code makes it add up, not the AI
+      if (diff) { const big = lines.reduce((a, l) => l.amount > a.amount ? l : a, lines[0]); if (big.amount + diff > 0 && Math.abs(diff) <= target * 0.1) big.amount += diff; else lines.push({ line: 'Not yet itemised — to confirm', amount: diff, suggested: true }); }
+      m.lines = lines.filter(l => l.amount !== 0);
+    }
+  } catch (e) { if (!(e && e.message === 'AI_PLAN_GATE')) alert('Couldn\'t build the budget: ' + (e.message || e)); }
+  window._bdMoneyBuilding = false;
   _bdMoneySave();
 }
 // For bids written before the money sheet: read the intended figures once
@@ -3305,6 +3353,7 @@ async function bdMoneyRead() {
   window._bdMoneyReading = true; bdRenderMoney();
   try {
     const raw = await callClaude('Read this funding application and pull out its money: the amount asked from this funder, the total project cost, other funding (who from, how much, whether secured) and the budget lines. Where answers disagree, use the budget question\'s lines and the figures used most often. Never invent. ' +
+      'Itemise the budget lines exactly as the answers list them (never one lump line for the whole amount). ' +
       'Reply with ONLY JSON: {"ask":0,"total":0,"other":[{"from":"","amount":0,"secured":false}],"lines":[{"line":"","amount":0}],"cover":"total or grant (does the budget cover the whole project or just this grant)"}',
       (_eoiProject ? 'THE PROJECT: ' + _eoiProject + '\n\n' : '') + _bdQA(), 1000, false, { model: AI_MODELS.smart, long: true, purpose: 'bid_money_read' });
     const mm = String(raw || '').replace(/```json|```/gi, '').match(/\{[\s\S]*\}/); const j = mm ? JSON.parse(mm[0]) : null;
@@ -3324,15 +3373,17 @@ async function bdMoneySync() {
   const m = _eoiAnswers.__money; if (!m || window._bdMoneySyncing) return;
   window._bdMoneySyncing = true; bdRenderMoney();
   const sheet = _bdMoneyText(m);
-  const isBudget = q => /budget|cost(s)? break ?down|break ?down (of )?(your )?(the )?(project )?cost|headings/i.test(q.question);
+  const isBudget = q => _bdIsBudgetQ(q);
   const before = Object.assign({}, _eoiAnswers);
   try {
     await Promise.all(_eoiQuestions.map(async q => {
       const a = String(_eoiAnswers[q.id] || '');
       if (!a || /^\[CONFIRM:/.test(a)) return;
-      if (isBudget(q) && m.lines.length && _wordCount(a) >= 6) { _eoiAnswers[q.id] = _bdBudgetText(m); return; }
+      if (isBudget(q) && m.lines.length && _wordCount(a) >= 6 && _wordCount(a) < 80) { _eoiAnswers[q.id] = _bdBudgetText(m); return; }   // a list-style budget answer: written by code
+
       if (!/£/.test(a)) return;
       const out = await callClaude('Correct ONLY the money in this funding application answer so it matches the MONEY SHEET exactly: the amount asked, total project cost, other funding (and whether it is secured) and budget figures. Change no other words. ' +
+        (isBudget(q) ? 'This answer explains the budget: list the MONEY SHEET budget lines and amounts, all of them, so they add up to the total shown. ' : '') +
         'Leave the organisation\'s own finances (annual income, spending, reserves, existing grants, volunteer value) exactly as they are. If a sentence states a project or budget figure that is not on the sheet, correct it to the sheet or remove that figure. Reply with ONLY the full answer.',
         sheet + '\n\nQUESTION: ' + q.question + '\n\nANSWER:\n' + a, 1400, false, { model: AI_MODELS.smart, long: true, purpose: 'bid_money_sync' });
       const t = _stripLeadingLabel(cleanReportText(out));
