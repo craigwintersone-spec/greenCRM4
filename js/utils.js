@@ -99,6 +99,9 @@ function vlAutoFix(text, o) {
   bump(/\bBlack (?:and|or from (?:an |other )?)ethnic minorit(?:y|ies)(?: background)?/gi, 'black and ethnic minority');
   bump(/(^|[.!?]\s+|\n)Significant(?:ly)?\s+(\w)/g, (m, pre, ch) => pre + ch.toUpperCase());
   bump(/\bsignificant(?:ly)?\s+/gi, '');
+  // a percentage restated in words ("This is a majority of responses.") adds nothing
+  bump(/(^|[ \t])This (?:is|represents) (?:a|the) (?:clear |large )?majority(?: of [a-z ]+)?\.[ \t]*/g, (m, pre) => pre);
+  bump(/,\s*(?:which|this) (?:is|represents) (?:a|the) (?:clear |large )?majority(?: of [a-z ]+)?(?=[.;])/gi, '');
   // "575 participants" when 575 counts attendances or feedback responses, not people
   const swaps = [];
   if (o.responses) swaps.push([o.responses, 'responses']);

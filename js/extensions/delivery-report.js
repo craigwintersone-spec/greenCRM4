@@ -212,7 +212,8 @@ function buildStats(p) {
                : FB.map(function (f) { return f.quote; }))
     .filter(function (q) { return q && String(q).trim().length > 15 && !/^(nothing|none|n\/?a|no|not really|all good)\b/i.test(String(q).trim()); })
     .map(function (q) { return String(q).trim(); })
-    .filter(function (q) { return !HEALTH_QUOTE_RX.test(q); });
+    .filter(function (q) { return !HEALTH_QUOTE_RX.test(q); })
+    .filter(function (q, i, a) { return a.indexOf(q) === i; });
 
   // The org's own questions (same figures as the Feedback page)
   var ownMeasures = [];
@@ -422,13 +423,15 @@ function targetLines(s, p) {
     out.push('Contract period: ' + c.start_date + ' to ' + c.end_date + ' (' + elapsed + '% of the contract period has elapsed)');
     s.elapsedPct = elapsed;
   }
-  if (n(c.target_starts)) out.push('Starts: ' + n(c.actual_starts) + ' of ' + n(c.target_starts) + ' target (' + pct(n(c.actual_starts), n(c.target_starts)) + '%)');
-  if (n(c.target_outcomes)) out.push('Outcomes: ' + n(c.actual_outcomes) + ' of ' + n(c.target_outcomes) + ' target (' + pct(n(c.actual_outcomes), n(c.target_outcomes)) + '%)');
-  if (n(c.value)) out.push('Contract value: ' + money(n(c.value)));
-  if (s.elapsedPct != null && n(c.target_outcomes)) {
-    var ahead = pct(n(c.actual_outcomes), n(c.target_outcomes)) - s.elapsedPct;
-    out.push('Outcomes are ' + (ahead >= 0 ? ahead + ' points ahead of' : Math.abs(ahead) + ' points behind') + ' the time elapsed');
+  // pace verdict worked out here: progress to date against the share of the contract period gone (within 5 points is on track)
+  function pace(label, done, target) {
+    var pc = pct(done, target), line = label + ' to date: ' + done + ' of ' + target + ' target (' + pc + '%)';
+    if (s.elapsedPct != null) { var d = pc - s.elapsedPct; line += ' against ' + s.elapsedPct + '% of the contract period elapsed: ' + (Math.abs(d) <= 5 ? 'on track' : d > 0 ? 'ahead of pace' : 'behind pace'); }
+    return line;
   }
+  if (n(c.target_starts)) out.push(pace('Starts', n(c.actual_starts), n(c.target_starts)));
+  if (n(c.target_outcomes)) out.push(pace('Outcomes', n(c.actual_outcomes), n(c.target_outcomes)));
+  if (n(c.value)) out.push('Contract value: ' + money(n(c.value)));
   return out;
 }
 // Arithmetic checks the reader would do — done first, so the report can say they pass
@@ -462,6 +465,7 @@ function unknownNumbers(narrative, pack) {
 
 // Shared with the contract report
 window.FUNDER_PROFILES = FUNDER_PROFILES; window.detectFunderProfile = detectProfile; window.unknownReportNumbers = unknownNumbers;
+window.reportLintFindings = function (text, s) { return lintFindings(text, s); };
 
 // ── UI ─────────────────────────────────────────────────────
 function yearOptions() {
@@ -700,7 +704,7 @@ function generateNow() {
   var steps = [
     { label: 'Calculating figures', meta: s.eventCount + ' events · ' + s.sessionCount + ' hour entries · ' + s.fbCount + ' feedback' },
     { label: 'Checking data completeness', meta: gaps.length ? gaps.length + ' gap(s) to declare' : 'complete' },
-    { label: 'Writing the narrative', meta: 'Org Brain composing from verified numbers' },
+    { label: 'Writing the narrative', meta: 'Writing around the verified numbers' },
     { label: 'Quality check', meta: 'Tone, claims and structure' },
     { label: 'Ready', meta: 'Review and download below' }
   ];
@@ -721,8 +725,9 @@ function generateNow() {
   var sys = 'You are a senior UK charity impact writer. You are writing ' + prof.p.tone + ' ' +
     'Call the people "' + prof.p.people + '". Write clean formal British English, no jargon the funder would not use themselves. ' +
     'Structure with these sections, in this order, each beginning with ## and exactly this title: ' + sections.join(', ') + '. ' +
-    'Open the Summary with the three figures that matter most to this funder, then one sentence on what they mean. ' +
-    (targets.length ? 'Where targets are supplied, state progress against them and relate it to the share of the contract period elapsed; explain variance without excuses. ' : '') +
+    'Open the Summary with the three figures that matter most to this funder, then one sentence on what they mean' + (targets.length ? ', then progress against targets' : '') + ', then, if quotes are supplied, the single quote that best shows the difference made. ' +
+    'Never point out that two different figures are the same, and do not restate a percentage in words (for example "this is a majority of responses"). ' +
+    (targets.length ? 'For progress against targets use the PROGRESS lines exactly as given, including the verdict (ahead of pace, on track or behind pace); never work out pace yourself. Only if a verdict is behind pace explain it plainly from the figures. ' : '') +
     (prev ? 'Where a previous-period figure is supplied, say whether it is up or down and by how much, using only the supplied percentage. ' : '') +
     'Use participant quotes verbatim where supplied. Never describe a "case study" or any individual unless a quote is supplied. ' +
     'In the learning / lessons section draw only on the data gaps and the figures (e.g. low attendance against capacity), never on assumptions. ' +
@@ -847,6 +852,8 @@ function lintRules(s, hasTargets) {
     { rx: /\b(universal(ly)?|everyone)\b/gi, why: 'Overclaims. Say how many answered and what they said.' },
     { rx: /\bwe (will|plan to|intend to|aim to|are going to|shall)\b/gi, why: 'A promise made in your name. Replace it with your own plan.' },
     { rx: /\b(several|many) (hundred|thousand)\b|\b(approximately|roughly)\b/gi, why: 'A guessed figure that is not in your records.' },
+    { rx: /\b(this|which) (is|represents|means) (a|the) (clear |large )?majority( of [a-z ]+)?\b/gi, why: 'Repeats the percentage in words. Give the figure once.' },
+    { rx: /\b(the )?same (figure|amount|number|total) as\b/gi, why: 'Links two figures that measure different things.' },
     { rx: /\bBAME\b|\bBlack or from (an |other )?ethnic minorit\w*( background)?/gi, why: 'Use "black and ethnic minority".' }
   ];
   if (numRx) rules.push({ rx: new RegExp('\\b(?:all\\s+)?(?:' + numRx + ')\\s+(participants|people)\\b', 'gi'), why: 'That number counts attendances or feedback responses, not people.' });
@@ -988,7 +995,7 @@ function renderDoc(raw, s, orgName, todayStr, funderName) {
     '<div class="report-doc">' +
       header +
       '<div class="report-body">' + headline + bodyHTML + appendix + '</div>' +
-      '<div class="report-footer">Generated by Vorlana · ' + esc(todayStr) + ' · Period: ' + esc(s.period.label) + '</div>' +
+      '<div class="report-footer">Generated with Vorlana · ' + esc(todayStr) + ' · Period: ' + esc(s.period.label) + '</div>' +
     '</div>' +
     '</td></tr></tbody><tfoot><tr><td><div class="pf-gap"></div></td></tr></tfoot></table>';
 

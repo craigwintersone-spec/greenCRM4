@@ -1336,7 +1336,7 @@ function cxReportStats(o) {
       return;
     }
     if (!i.outcome_type) { r.inProgress++; if (circMode(a) === 'tracked') r.inStock++; else r.undecided++; return; }
-    r.finished++; row.items += qty;
+    r.finished++; r.itemsDone = (r.itemsDone || 0) + qty; row.items += qty;
     const t = i.outcome_type;
     const o2 = (a.outcomes || []).find(x => x.key === i.outcome);
     const ol = (o2 ? o2.label : (i.status || t));
@@ -1372,9 +1372,8 @@ function cxReportLines(r) {
     'Harvested: ' + gr.kg + ' kg',
     gr.sharedKg ? 'Shared or sold: ' + gr.sharedKg + ' kg (about ' + gr.meals + ' meals at 420 g per meal, WRAP)' : '',
     gr.value ? 'Value of food shared or sold at shop prices (estimate): ' + m(gr.value) : '',
-    Object.keys(gr.byCrop).length ? 'Biggest crops by weight: ' + Object.keys(gr.byCrop).sort((a, b) => gr.byCrop[b] - gr.byCrop[a]).slice(0, 5).map(k => k + ' ' + (Math.round(gr.byCrop[k] * 10) / 10) + ' kg').join(', ') : '',
-    Object.keys(r.byBed).length ? 'Yield by bed or planter (kg): ' + Object.keys(r.byBed).sort((a, b) => r.byBed[b] - r.byBed[a]).slice(0, 5).map(k => k + ' ' + (Math.round(r.byBed[k] * 10) / 10)).join(', ') : '',
-    r.income ? 'Income from sales: ' + m(r.income) : ''
+    Object.keys(gr.byCrop).length ? 'Biggest crops by weight: ' + Object.keys(gr.byCrop).sort((a, b) => gr.byCrop[b] - gr.byCrop[a]).slice(0, 3).map(k => k + ' ' + (Math.round(gr.byCrop[k] * 10) / 10) + ' kg').join(', ') : '',
+    r.income && !r.itemsDone ? 'Income from sales: ' + m(r.income) : ''
   ].filter(Boolean) : [];
   const cp = r.compost;
   const compostLines = cp ? [
@@ -1382,25 +1381,24 @@ function cxReportLines(r) {
     'COMPOST (calculated from compost records; in and out are separate figures and never balance, because compost shrinks as it rots)',
     'Compost in, kept out of landfill: ' + cp.inKg + ' kg' + (cp.fromHarvest ? ' (of which ' + cp.fromHarvest + ' kg was our own harvest waste)' : ''),
     Object.keys(cp.byIn).length ? 'What went in: ' + Object.keys(cp.byIn).sort((a, b) => cp.byIn[b] - cp.byIn[a]).map(k => k + ' ' + (Math.round(cp.byIn[k] * 10) / 10) + ' kg').join(', ') : '',
-    'Finished compost out: ' + cp.outKg + ' kg' + (Object.keys(cp.byOut).length ? ' (' + Object.keys(cp.byOut).sort((a, b) => cp.byOut[b] - cp.byOut[a]).map(k => k + ' ' + (Math.round(cp.byOut[k] * 10) / 10) + ' kg').join(', ') + ')' : '')
+    !cp.outKg ? '' : 'Finished compost out: ' + cp.outKg + ' kg' + (Object.keys(cp.byOut).length ? ' (' + Object.keys(cp.byOut).sort((a, b) => cp.byOut[b] - cp.byOut[a]).map(k => k + ' ' + (Math.round(cp.byOut[k] * 10) / 10) + ' kg').join(', ') + ')' : '')
   ].filter(Boolean) : [];
-  if (gr && !r.finished) return growLines.concat(compostLines);     // growing only: nothing here was reused, repaired or recycled
-  if (cp && !r.finished) return growLines.concat(compostLines);
+  if (!r.itemsDone) return growLines.concat(compostLines);     // growing / compost only: nothing here was reused, repaired or recycled
   return growLines.concat(compostLines).concat([
     '',
     'CIRCULAR ECONOMY (calculated from item records)',
     'Activities: ' + r.activities.join(', '),
-    'Items and batches with a final outcome: ' + r.finished,
+    'Items with a final outcome (the outcomes below add up to this): ' + r.itemsDone,
     r.inStock ? 'Items currently being processed (in stock, not yet counted): ' + r.inStock : '',
     'Weight diverted from waste (reused, repaired, shared or recycled): ' + r.kg + ' kg' + (r.recycledKg ? ' (of which recycled: ' + r.recycledKg + ' kg)' : '') + (r.estKg ? ' — ' + r.estKg + ' kg of this was estimated from photos rather than weighed' : ''),
-    r.reused ? 'Items reused or repaired: ' + r.reused : '',
+    r.reused ? 'Of these, reused or repaired: ' + r.reused : '',
     r.co2 ? 'Estimated CO2e avoided: ' + r.co2 + ' kg (' + (Math.round(r.co2 / 100) / 10) + ' tonnes)' : '',
     r.value ? 'Estimated value to people receiving items: ' + m(r.value) : '',
     r.foodKg ? 'Food shared: ' + r.foodKg + ' kg (about ' + r.meals + ' meals at 420 g per meal, WRAP)' : '',
     r.fixRate != null ? 'Repair: ' + r.repairFixed + ' of ' + r.repairTried + ' items fixed (' + r.fixRate + '% fix rate)' : '',
-    r.income ? 'Income from resale: ' + m(r.income) : '',
+    r.income ? 'Income from sales' + (gr ? ' (produce and resale together)' : '') + ': ' + m(r.income) : '',
     'By outcome: ' + Object.keys(r.byOutcome).map(k => k + ' ' + r.byOutcome[k]).join(', '),
-    'Method: CO2e and value use per-item factors held in Vorlana' + (r.starter ? ', some of which are Vorlana starter estimates not yet set by the organisation' : ' set by the organisation') + '. State that these are estimates.'
+    'Method: CO2e and value are estimates from ' + (r.starter ? 'standard per-item average factors' : 'per-item factors set by the organisation') + '. State that these are estimates.'
   ]).filter(Boolean);
 }
 
@@ -1408,7 +1406,6 @@ function cxReportGaps(r) {
   const g = [];
   if (!r || !r.entries) return g;
   if (r.estKg) g.push(r.estKg + ' kg of the weight diverted was estimated from photos rather than weighed.');
-  if (r.starter) g.push('Some CO2e and value figures use Vorlana starter estimates rather than the organisation\'s own figures.');
   if (r.undecided) g.push(r.undecided + ' circular entr' + (r.undecided === 1 ? 'y has' : 'ies have') + ' no destination recorded yet, so ' + (r.undecided === 1 ? 'it is' : 'they are') + ' not counted in the impact figures.');
   return g;
 }
@@ -1437,7 +1434,7 @@ function cxReportDocHTML(r, title) {
   if (gr && !growOnly) figs.unshift(['Harvested', fmtNum(gr.kg) + ' kg']);
   const actRows = r.activities.map(k => { const a = r.byActivity[k]; return '<tr><td>' + esc(a.icon + ' ' + k) + '</td><td>' + a.items + '</td><td>' + fmtNum(a.kg) + '</td>' + (growOnly ? '' : '<td>' + fmtNum(a.co2) + '</td>') + '</tr>'; }).join('');
   const outKeys = Object.keys(r.byOutcome).sort((a, b) => r.byOutcome[b] - r.byOutcome[a]);
-  const bedKeys = Object.keys(r.byBed || {}).sort((a, b) => r.byBed[b] - r.byBed[a]);
+  const bedKeys = Object.keys(r.byBed || {}).sort((a, b) => r.byBed[b] - r.byBed[a]).slice(0, 5);
   return '<h3>' + esc(title || 'Circular economy') + '</h3>' +
     '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0 16px">' + figs.map(f =>
       '<div style="border:1px solid #ddd;border-radius:8px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:800;color:#1F6F6D">' + esc(String(f[1])) + '</div>' +
@@ -1447,7 +1444,7 @@ function cxReportDocHTML(r, title) {
       outKeys.map(k => '<tr><td>' + esc(k) + '</td><td>' + r.byOutcome[k] + '</td></tr>').join('') + '</tbody></table>' : '') +
     (bedKeys.length ? '<table class="dr-tbl" style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:10px"><thead><tr><th style="text-align:left">Yield by bed / planter</th><th style="text-align:left">kg</th></tr></thead><tbody>' +
       bedKeys.map(k => '<tr><td>' + esc(k) + '</td><td>' + (Math.round(r.byBed[k] * 10) / 10) + '</td></tr>').join('') + '</tbody></table>' : '') +
-    '<p style="font-size:11px;color:#777">' + (growOnly ? (gr.value ? 'Value is an estimate from per-item shop-price factors' + (r.starter ? ' (including Vorlana starter estimates)' : ' set by the organisation') + '. ' : '') + (gr.sharedKg ? 'Meals at 420 g per meal (WRAP).' : '') : 'CO₂e and value are estimates from per-item factors' + (r.starter ? ' (including Vorlana starter estimates)' : ' set by the organisation') + '. Meals at 420 g per meal (WRAP). Weight diverted includes items reused, repaired, shared or recycled.') + (r.estKg ? ' ' + r.estKg + ' kg of weight was estimated from photos rather than weighed.' : '') + '</p>';
+    '<p style="font-size:11px;color:#777">' + (growOnly ? (gr.value ? 'Value is an estimate from per-item shop-price factors' + (r.starter ? ' (standard averages)' : ' set by the organisation') + '. ' : '') + (gr.sharedKg ? 'Meals at 420 g per meal (WRAP).' : '') : 'CO₂e and value are estimates from per-item factors' + (r.starter ? ' (standard averages)' : ' set by the organisation') + '. Meals at 420 g per meal (WRAP). Weight diverted includes items reused, repaired, shared or recycled.') + (r.estKg ? ' ' + r.estKg + ' kg of weight was estimated from photos rather than weighed.' : '') + '</p>';
 }
 
 // Social Impact page card

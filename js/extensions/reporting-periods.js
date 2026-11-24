@@ -191,9 +191,15 @@
     const sustained = linkedInPeriod.filter(p => p.stage === 'Sustained').length;
 
     // ── events on this contract, in period ────────────────────
-    const eventsInPeriod = (DB.events || []).filter(e => linkedToContract(e, contractId) && inPeriod(e.date, period));
+    const evLinked = (DB.events || []).filter(e => linkedToContract(e, contractId) && inPeriod(e.date, period));
     const evIds = {};
-    eventsInPeriod.forEach(e => { evIds[String(e.id)] = 1; });
+    evLinked.forEach(e => { evIds[String(e.id)] = 1; });
+    // an event with nothing recorded against it was not delivered as far as the figures go (same rule as the delivery report)
+    const eventsInPeriod = evLinked.filter(e => num(e.attendees) > 0 ||
+      (DB.feedback || []).some(f => String(f.eventId || f.event_id || '') === String(e.id)) ||
+      (DB.volunteer_hours || []).some(h => String(h.event_id || '') === String(e.id)));
+    const sessionMix = {};
+    eventsInPeriod.forEach(e => { const k = String(e.name || 'Session').trim(); sessionMix[k] = (sessionMix[k] || 0) + 1; });
     const attendances = eventsInPeriod.reduce((a, e) => a + num(e.attendees), 0);
 
     // ── feedback on those events only ─────────────────────────
@@ -210,6 +216,7 @@
     const quotes = fbInPeriod
       .filter(f => f.quote && String(f.quote).trim().length > 15 && !HEALTH_QUOTE_RX.test(String(f.quote)))
       .map(f => String(f.quote).trim())
+      .filter((q, i, a) => a.indexOf(q) === i)
       .slice(0, 4);
 
     // ── volunteer hours on those events ───────────────────────
@@ -229,7 +236,7 @@
     const steps = [
       { label: 'Filtering to ' + periodLabel, meta: linkedInPeriod.length + ' participants · ' + eventsInPeriod.length + ' events' + (hasCirc ? ' · ' + circ.kg + ' kg circular' : '') + ' on this contract' },
       { label: 'Cross-checking funder requirements', meta: 'Mapping data against ' + ((funder && funder.name) || 'funder') + ' framework' },
-      { label: 'Writing the report', meta: 'Org Brain composing narrative with your live numbers' },
+      { label: 'Writing the report', meta: 'Writing the narrative around your live numbers' },
       { label: 'Quality Supervisor check', meta: 'Verifying tone, claims and structure' },
       { label: 'Ready', meta: 'Report delivered — review and download below' }
     ];
@@ -238,10 +245,30 @@
     const profKey = (window.detectFunderProfile ? window.detectFunderProfile((funder && funder.name) || '', contract) : 'generic');
     const prof = (window.FUNDER_PROFILES || {})[profKey] || { label: 'General', people: 'participants', tone: 'a professional UK funder report.' };
     const elapsed = (contract && contract.start_date && contract.end_date) ? Math.max(0, Math.min(100, Math.round((Math.min(Date.now(), new Date(contract.end_date)) - new Date(contract.start_date)) / (new Date(contract.end_date) - new Date(contract.start_date)) * 100))) : null;
+    // Pace is worked out here, not by the writer: contract-to-date progress against the share of the contract period gone
+    const startsToDate = num(contract && contract.actual_starts) || linked.length;
+    const outcomesToDate = num(contract && contract.actual_outcomes) || linked.filter(p => p.outcomes && p.outcomes.length > 0).length;
+    const paceLine = (label, done, target) => {
+      if (!target) return '';
+      const pc = Math.round(done / target * 100);
+      let line = label + ' to date: ' + done + ' of ' + target + ' target (' + pc + '%)';
+      if (elapsed != null) {
+        const d = pc - elapsed;
+        line += ' against ' + elapsed + '% of the contract period elapsed: ' + (Math.abs(d) <= 5 ? 'on track' : d > 0 ? 'ahead of pace' : 'behind pace');
+      }
+      return line;
+    };
+    const startsPace = paceLine('Starts', startsToDate, num(contract && contract.target_starts));
+    const outcomesPace = paceLine('Outcomes', outcomesToDate, num(contract && contract.target_outcomes));
+    const employment = profKey === 'dwp' || jobs > 0 || sustained > 0;
+    const plansText = ((currentOrg && currentOrg.settings && currentOrg.settings.report_plans) || '').toString().trim();
     const sys = 'You are a senior UK charity impact writer. You are writing ' + prof.tone + ' Call the people "' + prof.people + '". Write in clean formal British English, in the language this funder uses. ' +
       'Structure with these sections in order, each beginning with ## and the section title: Executive Summary, Delivery Overview, ' +
-      'Participant Outcomes, Distance Travelled and Wellbeing, ' + (hasCirc ? 'Circular Economy, ' : '') + 'Participant Voice, Evidence and Data Quality, Forward Plan. Use **bold** sparingly for key statistics. ' +
-      'Open the Executive Summary with the three figures that matter most to this funder. State progress against targets and relate it to the share of the contract period elapsed; explain variance plainly. ' +
+      'Participant Outcomes, Distance Travelled and Wellbeing, ' + (hasCirc ? 'Circular Economy, ' : '') + 'Participant Voice, Evidence and Data Quality. Use **bold** sparingly for key statistics. ' +
+      'Open the Executive Summary with the three figures that matter most to this funder. ' +
+      ((startsPace || outcomesPace) ? 'For progress against targets use the PROGRESS lines exactly as given, including the verdict (ahead of pace, on track or behind pace); never work out pace yourself and never contradict the verdict. Only if a verdict is "behind pace" explain it plainly from the figures. ' : 'No targets were entered: never say delivery is on track, ahead or behind. ') +
+      'Data notes belong only in Evidence and Data Quality; never turn them into actions or plans. Never write commitments in the organisation\'s name ("we will", "we plan to"). ' +
+      'Never point out that two different figures are the same, and do not restate a percentage in words (for example "this is a majority"). ' +
       (hasCirc ? 'In Circular Economy use only the circular figures supplied and say CO2e and value are estimates. ' : '') +
       '600-800 words. Use only data provided — never invent participants, outcomes, figures or quotes, and never recalculate a number. ' +
       'Write the ethnicity figure as "black and ethnic minority" (lower-case "black"), never "BAME". Use "attendances" for visits and "responses" for feedback, never "participants" for attendances. Never write "significant" about results, never mention any individual\'s health, and do not speculate about causes. ' +
@@ -258,20 +285,19 @@
       'Funder: ' + ((funder && funder.name) || 'Funder'),
       'Contract value: £' + num(contract && contract.value).toLocaleString(),
       elapsed != null ? 'Contract period: ' + contract.start_date + ' to ' + contract.end_date + ' (' + elapsed + '% of the contract period has elapsed)' : '',
-      (contract && num(contract.target_outcomes)) ? 'Progress on outcomes: ' + Math.round(num(contract.actual_outcomes) / num(contract.target_outcomes) * 100) + '% of target' + (elapsed != null ? ' against ' + elapsed + '% of time elapsed' : '') : '',
+      (startsPace || outcomesPace) ? '\nPROGRESS AGAINST CONTRACT TARGETS (contract to date)' : '',
+      startsPace, outcomesPace,
       '',
-      'PARTICIPANTS ON THIS CONTRACT',
-      'Target starts: ' + ((contract && contract.target_starts) || 0),
-      'Actual starts in period: ' + linkedInPeriod.length,
-      'Target outcomes: ' + ((contract && contract.target_outcomes) || 0),
-      'Actual outcomes in period: ' + linkedOutcomes,
-      'Employment outcomes in period: ' + jobs,
-      'Sustained outcomes in period: ' + sustained,
+      'PARTICIPANTS ON THIS CONTRACT' + (period.type === 'cumulative' ? '' : ' (this reporting period)'),
+      'Participants active: ' + linkedInPeriod.length,
+      'Participants with an outcome recorded: ' + linkedOutcomes,
+      employment ? 'Employment outcomes: ' + jobs : '',
+      employment ? 'Sustained outcomes: ' + sustained : '',
       '',
       'EVENTS DELIVERED UNDER THIS CONTRACT',
       'Events delivered in period: ' + eventsInPeriod.length,
       eventsInPeriod.length ? 'Total attendances: ' + attendances : '',
-      eventsInPeriod.length ? 'Sessions: ' + eventsInPeriod.map(e => e.name).join('; ') : '',
+      eventsInPeriod.length ? 'Sessions run: ' + Object.keys(sessionMix).sort((a, b) => sessionMix[b] - sessionMix[a]).slice(0, 8).map(k => k + ' (' + sessionMix[k] + ')').join('; ') : '',
       volHours ? 'Volunteers involved: ' + volCount + ' · volunteer hours: ' + volHours : '',
       '',
       'FEEDBACK FROM THESE EVENTS',
@@ -284,7 +310,7 @@
       fbN ? 'Felt more connected: ' + connectedPct + '%' : '',
       quotes.length ? 'Participant quotes (use verbatim, do not alter):\n' + quotes.map(q => '- "' + q + '"').join('\n') : 'Participant quotes: none collected for this period',
       hasCirc ? cxReportLines(circ).join('\n') : '',
-      hasCirc && cxReportGaps(circ).length ? 'Circular data notes:\n' + cxReportGaps(circ).map(g => '- ' + g).join('\n') : ''
+      hasCirc && cxReportGaps(circ).length ? 'Data notes (Evidence and Data Quality only):\n' + cxReportGaps(circ).map(g => '- ' + g).join('\n') : ''
     ].filter(Boolean).join('\n');
 
     if (typeof window.runAgent !== 'function') {
@@ -300,21 +326,24 @@
     if (!raw) return;
     // Verification: a number that isn't in the data pack gets one correction pass, then is highlighted
     let unverified = window.unknownReportNumbers ? window.unknownReportNumbers(raw, prompt) : [];
-    if (unverified.length) {
-      const raw2 = await window.runAgent({ container: progressEl, headerLabel: 'Org Brain — Funder Report', headerSub: 'Correcting ' + unverified.length + ' figure(s) not in the records',
-        steps: [{ label: 'Checking every number against the records', meta: unverified.length + ' to correct' }, { label: 'Ready', meta: '' }],
-        sys: sys + ' Your previous draft contained numbers that are NOT in the supplied data: ' + unverified.join(', ') + '. Rewrite the full report so every number appears in the supplied data; remove or reword any sentence that needs a number you were not given.',
+    const issues = window.reportLintFindings ? window.reportLintFindings(raw, { attendees: attendances, fbCount: fbN, hasTargets: !!(startsPace || outcomesPace) }) : [];
+    if (unverified.length || issues.length) {
+      const raw2 = await window.runAgent({ container: progressEl, headerLabel: 'Org Brain — Funder Report', headerSub: 'Checking the draft against your records',
+        steps: [{ label: 'Checking every number and claim against the records', meta: (unverified.length + issues.length) + ' to correct' }, { label: 'Ready', meta: '' }],
+        sys: sys + (unverified.length ? ' Your previous draft contained numbers that are NOT in the supplied data: ' + unverified.join(', ') + '. Rewrite the full report so every number appears in the supplied data; remove or reword any sentence that needs a number you were not given.' : '') +
+          (issues.length ? ' Your draft also contains wording that must not appear in a funder report: ' + issues.map(i => '"' + i.m + '" (' + i.why + ')').join('; ') + '. Rewrite those sentences so the problem is gone.' : '') + ' Keep everything else the same.',
         prompt: prompt + '\n\nPREVIOUS DRAFT:\n' + raw, maxTok: 1800 });
       if (raw2) raw = raw2;
       unverified = window.unknownReportNumbers(raw, prompt);
     }
 
-    if (typeof vlAutoFix === 'function') raw = vlAutoFix(raw, { hasTargets: undefined }).text;   // nothing for the author to edit
+    if (typeof vlAutoFix === 'function') raw = vlAutoFix(raw, { attendances: attendances, responses: fbN, hasTargets: !!(startsPace || outcomesPace) }).text;   // nothing for the author to edit
+    if (plansText) raw += '\n\n## Plans for the next period\n' + plansText;   // the organisation's own words, never written for them
     const cleaned = window.cleanReportText ? window.cleanReportText(raw) : raw;
     let bodyHTML = window.reportTextToHTML ? window.reportTextToHTML(cleaned, raw) : '<pre>' + escapeHTML(cleaned) + '</pre>';
     unverified.forEach(numStr => { bodyHTML = bodyHTML.replace(new RegExp('(£?)' + numStr.replace(/\./g, '\\.') + '(%?)(?![\\d])', 'g'), '<mark title="This number is not in your records — check it before sending" style="background:#FEF3C7">$1' + numStr + '$2</mark>'); });
-    bodyHTML = '<div style="border:1px solid ' + (unverified.length ? '#FDE68A' : '#BBF7D0') + ';background:' + (unverified.length ? '#FFFBEB' : '#F0FDF4') + ';border-radius:10px;padding:10px 14px;font-size:12.5px;margin:0 0 16px"><b>Verification</b> · written as ' + escapeHTML(prof.label) + ' · ' +
-      (unverified.length ? '<span style="color:#92400E">' + unverified.length + ' number(s) could not be matched to your records and are highlighted — check before sending.</span>' : 'every number in the narrative matches your records.') + '</div>' + bodyHTML;
+    const verifyHTML = '<div class="no-print" style="border:1px solid ' + (unverified.length ? '#FDE68A' : '#BBF7D0') + ';background:' + (unverified.length ? '#FFFBEB' : '#F0FDF4') + ';border-radius:10px;padding:10px 14px;font-size:12.5px;margin:0 0 16px"><b>Verification</b> · written as ' + escapeHTML(prof.label) + ' · ' +
+      (unverified.length ? '<span style="color:#92400E">' + unverified.length + ' number(s) could not be matched to your records and are highlighted — check before sending.</span>' : 'every number in the narrative matches your records.') + ' <span style="color:#777">(shown here only, not in the download)</span></div>';
     const reportTitle = ((contract && contract.name) || 'Programme Report') + ' — ' + orgName + ' (' + periodLabel + ')';
     window._lastReportText = cleaned;
     window._lastReport = { contractId: String(contractId), funder: (funder && funder.name) || (contract && contract.funder) || '', period, prompt, text: cleaned };   // for filling the funder's own form
@@ -339,12 +368,15 @@
         '<button class="btn btn-p" id="civara-rep-pdf">⬇ Download as PDF</button>' +
         '<button class="btn btn-ghost btn-sm" id="civara-rep-copy">📋 Copy text</button>' +
         '<button class="btn btn-ghost btn-sm" id="civara-rep-regen">↻ Regenerate</button>' +
-      '</div>' +
+      '</div>' + verifyHTML +
+      '<style>.pf{width:100%;border-collapse:collapse}.pf td{padding:0;border:0}.pf-gap{display:none}@media print{.pf-gap{display:block;height:14mm}.pf>tbody>tr>td{padding:0 14mm}}</style>' +
+      '<table class="pf"><thead><tr><td><div class="pf-gap"></div></td></tr></thead><tbody><tr><td>' +
       '<div class="report-doc">' +
         _headerHTML +
         '<div class="report-body">' + bodyHTML + (hasCirc ? cxReportDocHTML(circ, 'Circular economy under this contract') : '') + '</div>' +
-        '<div class="report-footer">Generated by Vorlana · Org Brain · ' + escapeHTML(todayStr) + ' · Period: ' + escapeHTML(periodLabel) + '</div>' +
-      '</div>';
+        '<div class="report-footer">Generated with Vorlana · ' + escapeHTML(todayStr) + ' · Period: ' + escapeHTML(periodLabel) + '</div>' +
+      '</div>' +
+      '</td></tr></tbody><tfoot><tr><td><div class="pf-gap"></div></td></tr></tfoot></table>';
 
     $('civara-rep-pdf').addEventListener('click', () => window.downloadReportPDF && window.downloadReportPDF());
     $('civara-rep-copy').addEventListener('click', () => window.copyReportText && window.copyReportText());
