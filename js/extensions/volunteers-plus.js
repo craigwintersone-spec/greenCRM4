@@ -75,35 +75,107 @@ function mapHours(r) {
 }
 
 // ── Outcomes at the top of the Volunteers page ───────────────
-// Last 12 months, so the figures read like a funder report.
+// A period picker: this week, last week, any week, last 4 weeks, 3 months or 12 months (the default,
+// so the figures read like a funder report), plus a week-by-week table. Weeks run Monday to Sunday.
+var VOL_PERIODS = [['week', 'A week'], ['4w', 'Last 4 weeks'], ['3m', 'Last 3 months'], ['12m', 'Last 12 months']];
+var volPeriod = (function () { try { return localStorage.getItem('vl_vol_period') || '12m'; } catch (e) { return '12m'; } })();
+var volWeek = null;   // the Monday of the week shown, as YYYY-MM-DD
+function pad2(x) { return (x < 10 ? '0' : '') + x; }
+function isoLocal(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+function mondayOf(d) { var x = new Date(d); x.setHours(12, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
+function addDays(isoStr, k) { var x = new Date(isoStr + 'T12:00:00'); x.setDate(x.getDate() + k); return isoLocal(x); }
+function dayLabel(isoStr, withYear) { return new Date(isoStr + 'T12:00:00').toLocaleDateString('en-GB', withYear ? { day: 'numeric', month: 'short', year: 'numeric' } : { day: 'numeric', month: 'short' }); }
+function volRange() {
+  var today = isoLocal(new Date()), thisMon = isoLocal(mondayOf(new Date()));
+  if (volPeriod === 'week') {
+    var mon = volWeek || thisMon, sun = addDays(mon, 6);
+    var lbl = mon === thisMon ? 'This week' : mon === addDays(thisMon, -7) ? 'Last week' : 'Week of ' + dayLabel(mon, true);
+    return { from: mon, to: sun, label: lbl + ' · ' + dayLabel(mon) + ' – ' + dayLabel(sun, true), week: true, mon: mon, isThis: mon === thisMon };
+  }
+  if (volPeriod === '4w') return { from: addDays(thisMon, -21), to: today, label: 'Last 4 weeks · from ' + dayLabel(addDays(thisMon, -21), true) };
+  if (volPeriod === '3m') return { from: addDays(today, -91), to: today, label: 'Last 3 months' };
+  return { from: addDays(today, -365), to: today, label: 'Last 12 months', year: true };
+}
+window.vlVolPeriod = function (v) {
+  volPeriod = v; if (v === 'week' && !volWeek) volWeek = isoLocal(mondayOf(new Date()));
+  try { localStorage.setItem('vl_vol_period', v); } catch (e) { /* remembered for this visit only */ }
+  try { renderVolunteers(); } catch (e) {}
+};
+window.vlVolWeek = function (mon) { volWeek = mon; window.vlVolPeriod('week'); };
+window.vlVolDay = function (d) { window.vlVolWeek(isoLocal(mondayOf(new Date(d + 'T12:00:00')))); };
+window.vlVolShift = function (k) { var r = volRange(); volWeek = addDays(r.mon || isoLocal(mondayOf(new Date())), 7 * k); window.vlVolPeriod('week'); };
+
 function volOutcomesHTML() {
   var V = DB.volunteers || [], H = DB.volunteer_hours || [];
-  var now = Date.now(), DAY = 864e5;
-  var iso = function (d) { return new Date(d).toISOString().slice(0, 10); };
-  var y1 = iso(now - 365 * DAY), d90 = iso(now - 90 * DAY), m6 = iso(now - 182 * DAY);
-  var yr = H.filter(function (h) { return h.date && h.date >= y1; });
-  var hrs = Math.round(yr.reduce(function (a, h) { return a + n(h.hours); }, 0) * 10) / 10;
+  var r = volRange();
+  var rows = H.filter(function (h) { return h.date && h.date.slice(0, 10) >= r.from && h.date.slice(0, 10) <= r.to; });
+  var hrs = Math.round(rows.reduce(function (a, h) { return a + n(h.hours); }, 0) * 10) / 10;
   var rate = (typeof VOL_HOUR_RATE !== 'undefined') ? VOL_HOUR_RATE : 13.45;
-  var people = {}; yr.forEach(function (h) { people[h.volunteer_id] = 1; });
-  var first = {}; H.forEach(function (h) { if (h.date && (!first[h.volunteer_id] || h.date < first[h.volunteer_id])) first[h.volunteer_id] = h.date; });
-  var newVols = Object.keys(first).filter(function (k) { return first[k] >= d90; }).length;
-  var months = {}; H.filter(function (h) { return h.date && h.date >= m6; }).forEach(function (h) { (months[h.volunteer_id] = months[h.volunteer_id] || {})[h.date.slice(0, 7)] = 1; });
+  var people = {}; rows.forEach(function (h) { people[h.volunteer_id] = (people[h.volunteer_id] || 0) + n(h.hours); });
+  var first = {}; H.forEach(function (h) { if (h.date && (!first[h.volunteer_id] || h.date < first[h.volunteer_id])) first[h.volunteer_id] = h.date.slice(0, 10); });
+  // new: first ever session in the period (over 12 months, as before: in the last 90 days)
+  var newFrom = r.year ? addDays(isoLocal(new Date()), -90) : r.from;
+  var newVols = Object.keys(first).filter(function (k) { return first[k] >= newFrom && first[k] <= r.to; }).length;
+  var m6 = addDays(isoLocal(new Date()), -182), months = {};
+  H.filter(function (h) { return h.date && h.date >= m6; }).forEach(function (h) { (months[h.volunteer_id] = months[h.volunteer_id] || {})[h.date.slice(0, 7)] = 1; });
   var regulars = Object.keys(months).filter(function (k) { return Object.keys(months[k]).length >= 3; }).length;
-  var wb = yr.filter(function (h) { return h.wellbeing; });
+  var wb = rows.filter(function (h) { return h.wellbeing; });
   var wbAvg = wb.length ? Math.round(wb.reduce(function (a, h) { return a + h.wellbeing; }, 0) / wb.length * 10) / 10 : null;
   var card = function (label, value, sub) {
     return (typeof statCard === 'function') ? statCard(label, value, sub)
       : '<div class="stat-card"><div class="stat-label">' + esc(label) + '</div><div class="stat-value">' + value + '</div><div class="stat-sub">' + esc(sub || '') + '</div></div>';
   };
-  return '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin:0 0 8px">Last 12 months</div>' +
-    '<div class="stats-grid" style="margin-bottom:18px">' +
-      card('Volunteers giving time', Object.keys(people).length, V.filter(function (v) { return v.status === 'Active'; }).length + ' active on your list') +
-      card('Hours given', hrs, yr.length + ' sessions' + (yr.length ? ' · avg ' + (Math.round(hrs / yr.length * 10) / 10) + 'h' : '')) +
+  var nameOf = {}; V.forEach(function (v) { nameOf[String(v.id)] = v.name || 'Volunteer'; });
+
+  var picker = '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px">' +
+    '<select id="vol-period" class="input" style="width:auto;padding:6px 10px;font-size:13px" onchange="vlVolPeriod(this.value)">' +
+      VOL_PERIODS.map(function (p) { return '<option value="' + p[0] + '"' + (p[0] === volPeriod ? ' selected' : '') + '>' + esc(p[1]) + '</option>'; }).join('') +
+    '</select>' +
+    (r.week ? '<button type="button" class="btn btn-ghost btn-sm" onclick="vlVolShift(-1)">‹ Previous week</button>' +
+      (r.isThis ? '' : '<button type="button" class="btn btn-ghost btn-sm" onclick="vlVolShift(1)">Next week ›</button>') +
+      '<input type="date" class="input" style="width:auto;padding:5px 8px;font-size:13px" value="' + r.mon + '" title="Pick any day in the week" onchange="if(this.value)vlVolDay(this.value)" />' : '') +
+    '<span style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">' + esc(r.label) + '</span></div>';
+
+  var who = '';
+  if (r.week) {
+    var ids = Object.keys(people).sort(function (a, b) { return people[b] - people[a]; });
+    who = '<div class="card" style="margin-bottom:14px"><div style="font-weight:700;font-size:13px;margin-bottom:8px">Who volunteered' + (r.isThis ? ' this week' : '') + '</div>' +
+      (ids.length ? '<div style="display:flex;flex-wrap:wrap;gap:6px">' + ids.map(function (id) {
+        var sess = rows.filter(function (h) { return String(h.volunteer_id) === id; }).length;
+        return '<span style="background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:12.5px">' + esc(nameOf[id] || 'Volunteer') + ' · ' + (Math.round(people[id] * 10) / 10) + 'h' + (sess > 1 ? ' (' + sess + ' sessions)' : '') + (first[id] >= r.from && first[id] <= r.to ? ' · <b style="color:var(--em)">new</b>' : '') + '</span>';
+      }).join('') + '</div>' : '<div style="font-size:13px;color:var(--txt3)">No volunteer hours logged this week.</div>') + '</div>';
+  }
+
+  // week by week: the last 12 weeks, newest first; tap a week to see it
+  var thisMon = isoLocal(mondayOf(new Date())), wk = [];
+  for (var k = 0; k < 12; k++) {
+    var mon = addDays(thisMon, -7 * k), sun = addDays(mon, 6);
+    var wr = H.filter(function (h) { return h.date && h.date.slice(0, 10) >= mon && h.date.slice(0, 10) <= sun; });
+    var wp = {}; wr.forEach(function (h) { wp[h.volunteer_id] = 1; });
+    var wn = Object.keys(first).filter(function (id) { return first[id] >= mon && first[id] <= sun; }).length;
+    wk.push({ mon: mon, sun: sun, vols: Object.keys(wp).length, hrs: Math.round(wr.reduce(function (a, h) { return a + n(h.hours); }, 0) * 10) / 10, sess: wr.length, nw: wn });
+  }
+  var maxH = Math.max.apply(null, wk.map(function (w) { return w.hrs; })) || 1;
+  var weekly = '<details class="card" style="margin-bottom:18px"' + (r.week || volPeriod === '4w' ? ' open' : '') + '><summary style="cursor:pointer;font-weight:700;font-size:13px">Week by week · last 12 weeks</summary>' +
+    '<div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Week</th><th>Volunteers</th><th>Hours</th><th style="width:30%"></th><th>Sessions</th><th>New</th></tr></thead><tbody>' +
+    wk.map(function (w) {
+      var on = r.week && r.mon === w.mon;
+      return '<tr style="cursor:pointer' + (on ? ';background:var(--em-l,#EEF6F4)' : '') + '" onclick="vlVolWeek(\'' + w.mon + '\')" title="See this week">' +
+        '<td style="white-space:nowrap;font-weight:' + (on ? '700' : '500') + '">' + (w.mon === thisMon ? 'This week' : esc(dayLabel(w.mon) + ' – ' + dayLabel(w.sun))) + '</td>' +
+        '<td>' + w.vols + '</td><td>' + w.hrs + '</td>' +
+        '<td><div style="height:8px;background:var(--bg);border-radius:4px"><div style="height:8px;width:' + Math.round(w.hrs / maxH * 100) + '%;background:var(--em);border-radius:4px"></div></div></td>' +
+        '<td>' + w.sess + '</td><td>' + (w.nw || '') + '</td></tr>';
+    }).join('') + '</tbody></table></div></details>';
+
+  return picker +
+    '<div class="stats-grid" style="margin-bottom:14px">' +
+      card('Volunteers giving time', Object.keys(people).length, r.year ? V.filter(function (v) { return v.status === 'Active'; }).length + ' active on your list' : 'in this period') +
+      card('Hours given', hrs, rows.length + ' sessions' + (rows.length ? ' · avg ' + (Math.round(hrs / rows.length * 10) / 10) + 'h' : '')) +
       card('Value of their time', '£' + Math.round(hrs * rate).toLocaleString(), 'at the real Living Wage (£' + rate.toFixed(2) + '/h)') +
-      card('New volunteers', newVols, 'first session in the last 90 days') +
-      card('Regulars', regulars, 'came in 3+ different months (last 6)') +
+      card('New volunteers', newVols, r.year ? 'first session in the last 90 days' : 'first ever session in this period') +
+      (r.week ? '' : card('Regulars', regulars, 'came in 3+ different months (last 6)')) +
       (wbAvg != null ? card('Wellbeing at check-in', wbAvg + ' / 5', wb.length + ' answers') : '') +
-    '</div>';
+    '</div>' + who + weekly;
 }
 
 // Loads the sessions. Resolves either way — never throws at the caller.
