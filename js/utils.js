@@ -96,7 +96,8 @@ function vlAutoFix(text, o) {
   const bump = (re, fn) => { text = text.replace(re, (...a) => { n++; return typeof fn === 'function' ? fn(...a) : fn; }); };
   // wording
   bump(/\bBAME\b/g, 'black and ethnic minority');
-  bump(/\bBlack (?:and|or from (?:an |other )?)ethnic minorit(?:y|ies)(?: background)?/gi, 'black and ethnic minority');
+  // lower-case "black" (capital only to start a sentence); the old pattern missed "Black and ethnic minority" because it had no space after "and"
+  bump(/\b(?:Black|BLACK|black) (?:and |or from (?:an |other )?)ethnic minorit(?:y|ies)(?: background)?/g, (m, ...a) => { const off = a[a.length - 2], before = a[a.length - 1].slice(0, off); return /(^|[.!?]\s+|\n\s*)$/.test(before) ? 'Black and ethnic minority' : 'black and ethnic minority'; });
   bump(/(^|[.!?]\s+|\n)Significant(?:ly)?\s+(\w)/g, (m, pre, ch) => pre + ch.toUpperCase());
   bump(/\bsignificant(?:ly)?\s+/gi, '');
   // a percentage restated in words ("This is a majority of responses.") adds nothing
