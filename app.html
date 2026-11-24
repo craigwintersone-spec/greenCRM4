@@ -543,6 +543,20 @@
     .bd-sugg{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:5px;font-size:11.5px;color:var(--txt3)}
     .bd-sugg button{border:1px dashed var(--em);background:rgba(31,111,109,.06);color:var(--em);border-radius:8px;padding:3px 8px;font-size:12px;font-weight:600;cursor:pointer;text-align:left;max-width:100%}
     .bd-gapw{display:none;margin-top:5px;font-size:12px;color:#B45309;line-height:1.4}
+    .bd-mrow{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:8px;font-size:13px;color:var(--txt2)}
+    .bd-mrow>span{flex:1;min-width:0}
+    .bd-mrow input{font-size:13px;padding:6px 8px;text-align:left}
+    .bd-mrow input[data-m$="amount"],.bd-mrow input[data-m="ask"],.bd-mrow input[data-m="total"]{text-align:right}
+    .bd-mtot{border-top:1px solid var(--border);padding-top:8px}
+    .bd-msub{margin-top:12px;font-size:12px;font-weight:600;color:var(--txt3);display:flex;gap:6px;align-items:center}
+    .bd-msub select{width:auto;font-size:12px;padding:3px 24px 3px 8px}
+    .bd-madd{display:inline-block;margin-top:6px;font-size:12px;color:var(--em);font-weight:600;text-decoration:none}
+    .bd-mx{border:none;background:none;color:var(--txt3);cursor:pointer;font-size:12px;padding:2px}
+    .bd-sec{display:inline-flex;gap:4px;align-items:center;font-size:11.5px;color:var(--txt3);text-transform:none;letter-spacing:0;font-weight:500;margin-top:3px}
+    .bd-sec input{width:auto;margin:0}
+    .bd-mwarn{margin-top:8px;font-size:12.5px;color:#B91C1C;line-height:1.45}
+    .bd-mwarn.soft{color:#B45309}
+    .bd-mwarn a{color:var(--em);font-weight:600;white-space:nowrap}
     .bd-score{font-size:30px;font-weight:700;letter-spacing:-.6px;color:var(--em);line-height:1.2;margin-top:4px}
     .bd-score small{font-size:15px;color:var(--txt3);font-weight:500}
     .bd-dl{display:flex;flex-direction:column;gap:8px}
@@ -905,7 +919,7 @@ Accreditations and policies: e.g. Matrix, safeguarding, Cyber Essentials"></text
 <script src="js/auth.js?v=21"></script>
 
 <!-- AI + branding -->
-<script src="js/agents.js?v=61"></script>
+<script src="js/agents.js?v=62"></script>
 <script src="js/branding.js?v=19"></script>
 
 <!-- UI logic -->

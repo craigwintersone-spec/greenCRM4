@@ -2912,6 +2912,7 @@ async function runEOIFormFill() {
       '7) Write for THIS funder, not any funder: show how the answer meets what they fund and how they decide, use their own words and style, and follow their money rules (share of cost, match funding, what they will not pay for). A generic answer that could go to any funder is a failed answer. ' + _EOI_NEVER_STOP;
 
     _eoiAnswers = {};
+    { const mm = _bdMoneyFromPlan(plan); if (mm) { mm.synced = _bdMoneySig(mm); _eoiAnswers.__money = mm; } }
     const state = _eoiQuestions.map(() => '');
     const paint = () => {
       res.innerHTML = _fillProgressHTML(state);
@@ -2935,6 +2936,7 @@ async function runEOIFormFill() {
         _eoiFunderPriorities ? ('WHAT THE FUNDER WANTS:\n' + _eoiFunderPriorities.slice(0, 2500)) : '',
         _eoiProject ? ('THE PROJECT THIS BID IS FOR: ' + _eoiProject) : '',
         sheet ? ('FACT SHEET (use exactly):\n' + sheet) : '',
+        _bdMoneyText(_eoiAnswers.__money),
         isBudget ? ('SUGGESTED BUDGET (use these lines and amounts; they add up to the amount requested):\n' + budget) : '',
         usps ? ('OUR STRENGTHS/USPs: ' + usps) : '',
         '', facts, '', evidence, '',
@@ -3125,14 +3127,14 @@ function bdRenderRail() {
   const el = $('bd-rail'); if (!el) return;
   const form = window._eoiLastKind === 'form' && _eoiQuestions.length;
   const docx = !!(_eoiDoc && _eoiDoc.kind === 'docx');
-  el.innerHTML = (form ? '<div class="bd-panel" id="bd-score"></div><div class="bd-panel" id="eoi-gaps"></div><div id="bd-attach"></div>' : '') +
+  el.innerHTML = (form ? '<div class="bd-panel" id="bd-score"></div><div class="bd-panel" id="bd-money"></div><div class="bd-panel" id="eoi-gaps"></div><div id="bd-attach"></div>' : '') +
     '<div class="bd-dl" id="bd-dl">' +
       (docx ? '<button class="btn btn-p" id="eoi-dl-form" type="button" onclick="downloadFilledForm()">Download their form, filled in</button>' : '') +
       (form ? '<button class="btn ' + (docx ? 'btn-ghost' : 'btn-p') + '" type="button" onclick="downloadAnswersDoc()">Download Word</button>' : '') +
       '<div style="display:flex;gap:8px"><button class="btn btn-ghost" style="flex:1" type="button" onclick="downloadEOIPDF()">PDF</button><button class="btn btn-ghost" style="flex:1" type="button" onclick="copyEOI();this.textContent=\'Copied\'">Copy all</button></div>' +
       '<a href="#" onclick="bdUseOtherForm();return false" style="font-size:12.5px;color:var(--txt3);text-align:center;margin-top:4px">Use a different form</a>' +
     '</div>';
-  if (form) { bdRenderScore(); renderEOIGaps(); bdRenderAttach(); }
+  if (form) { bdRenderScore(); bdRenderMoney(); renderEOIGaps(); bdRenderAttach(); }
   else bdWsSteps(4);
 }
 function bdUseOtherForm() {
@@ -3192,9 +3194,150 @@ function _bdQA() {
 // Everything the writer may use, so a rewrite never needs to invent
 function _bdFactsBundle() {
   const known = typeof _eoiKnownFacts === 'function' ? _eoiKnownFacts() : '';
-  return [_eoiProject ? 'THE PROJECT: ' + _eoiProject : '', known ? 'FACTS:\n' + known : '', 'ABOUT THE ORGANISATION:\n' + _eoiCleanProfile(getOrgProfile()).slice(0, 2500),
+  return [_bdMoneyText(_eoiAnswers.__money), _eoiProject ? 'THE PROJECT: ' + _eoiProject : '', known ? 'FACTS:\n' + known : '', 'ABOUT THE ORGANISATION:\n' + _eoiCleanProfile(getOrgProfile()).slice(0, 2500),
     typeof _eoiMoneyFacts === 'function' ? _eoiMoneyFacts() : '', 'RECORDS:\n' + buildEOIEvidence()].filter(Boolean).join('\n\n');
 }
+// ── The money: one sheet that every answer must match. The code does the adding up, never the AI. ──
+function _bdGBP(n) { return '£' + Math.round(+n || 0).toLocaleString('en-GB'); }
+function _bdMoneySig(m) { return m ? JSON.stringify([m.ask, m.total, m.cover, (m.other || []).map(o => [o.from, o.amount, o.secured]), (m.lines || []).map(l => [l.line, l.amount])]) : ''; }
+function _bdMoneyFromPlan(plan) {
+  const f = (plan && plan.facts) || {}, pick = re => { const k = Object.keys(f).find(x => re.test(x)); return k ? _bdNum(String(f[k]).replace(/£/g, '')) : null; };
+  const proj = String(_eoiProject || '');
+  const fromProj = re => { const m = re.exec(proj); return m ? _bdNum(m[1].replace(/£/g, '')) : null; };
+  const ask = pick(/amount (requested|asked)|request(ed)?\b|grant (requested|amount)|amount$/i) || fromProj(/Amount requested:\s*([^.]+)/i);
+  if (!ask) return null;
+  let total = pick(/total (project )?cost|project cost|total budget/i) || fromProj(/Total cost:\s*([^.]+)/i) || ask;
+  if (total < ask) total = ask;
+  const otherTxt = (/Other funding:\s*([^.]+)/i.exec(proj) || [])[1] || '';
+  const lines = (plan && Array.isArray(plan.budget) ? plan.budget : []).filter(b => b && b.line && +b.amount > 0).map(b => ({ line: String(b.line).slice(0, 80), amount: Math.round(+b.amount) }));
+  const sum = lines.reduce((a, l) => a + l.amount, 0);
+  return { ask: Math.round(ask), total: Math.round(total), cover: sum && Math.abs(sum - ask) <= Math.abs(sum - total) ? 'grant' : 'total',
+    other: total > ask ? [{ from: otherTxt.replace(/£\s*[\d,.]+\s*k?/gi, '').replace(/^\s*(from|of)\s+/i, '').trim().slice(0, 80) || 'Other funding', amount: Math.round(total - ask), secured: false }] : [], lines };
+}
+function _bdMoneyText(m) {
+  if (!m) return '';
+  const sum = (m.lines || []).reduce((a, l) => a + (+l.amount || 0), 0);
+  return 'MONEY SHEET (fixed — every answer must use these exact figures; never change them):\n- Amount requested from this funder: ' + _bdGBP(m.ask) + '\n- Total project cost: ' + _bdGBP(m.total) +
+    ((m.other || []).length ? '\n- Other funding: ' + m.other.map(o => (o.from || 'Other funding') + ' ' + _bdGBP(o.amount) + (o.secured ? ' (secured)' : ' (not yet secured)')).join('; ') : '') +
+    ((m.lines || []).length ? '\n- Budget (' + (m.cover === 'grant' ? 'what this grant pays for' : 'the whole project') + '): ' + m.lines.map(l => l.line + ' ' + _bdGBP(l.amount)).join('; ') + '; total ' + _bdGBP(sum) : '');
+}
+function _bdBudgetText(m) {
+  const sum = m.lines.reduce((a, l) => a + (+l.amount || 0), 0);
+  return m.lines.map(l => '- ' + l.line + ': ' + _bdGBP(l.amount)).join('\n') + '\n' + (m.cover === 'grant' ? 'Total requested: ' + _bdGBP(sum) : 'Total project cost: ' + _bdGBP(sum) +
+    '\nRequested from this funder: ' + _bdGBP(m.ask) + ((m.other || []).length ? '\nOther funding: ' + m.other.map(o => (o.from || 'other funding') + ' ' + _bdGBP(o.amount) + (o.secured ? ' (secured)' : ' (not yet secured)')).join('; ') : ''));
+}
+// What doesn't add up, worked out in code
+function _bdMoneyIssues(m) {
+  const out = [];
+  if (!m) return out;
+  const sum = (m.lines || []).reduce((a, l) => a + (+l.amount || 0), 0), other = (m.other || []).reduce((a, o) => a + (+o.amount || 0), 0);
+  if (m.lines.length && m.cover === 'total' && sum !== m.total) out.push({ t: 'The budget lines add up to ' + _bdGBP(sum) + ', but the total cost says ' + _bdGBP(m.total) + '.', fix: 'total=' + sum, label: 'Make the total ' + _bdGBP(sum) });
+  if (m.lines.length && m.cover === 'grant' && sum !== m.ask) out.push({ t: 'The budget lines add up to ' + _bdGBP(sum) + ', but you\'re asking for ' + _bdGBP(m.ask) + '.', fix: 'ask=' + sum, label: 'Ask for ' + _bdGBP(sum) });
+  if (m.ask + other !== m.total) out.push({ t: _bdGBP(m.ask) + ' asked + ' + _bdGBP(other) + ' other funding = ' + _bdGBP(m.ask + other) + ', not the ' + _bdGBP(m.total) + ' total.', fix: 'other=' + (m.total - m.ask), label: m.total - m.ask > 0 ? 'Other funding ' + _bdGBP(m.total - m.ask) : 'Total ' + _bdGBP(m.ask + other) });
+  const max = _eoiBrief && _eoiBrief.rules && +_eoiBrief.rules.maxGrant;
+  if (max && m.ask > max) out.push({ t: 'You\'re asking for more than their maximum of ' + _bdGBP(max) + '.' });
+  // Answers that state a different total or ask
+  _eoiQuestions.forEach((q, i) => {
+    const a = String(_eoiAnswers[q.id] || '').replace(/,/g, '');
+    const said = (re, want, what) => { let x; const r = new RegExp(re, 'gi'); while ((x = r.exec(a))) { const n = _bdNum(x[1]); if (n && Math.abs(n - want) > 1 && n > 99) { out.push({ t: 'Q' + (i + 1) + ' says the ' + what + ' is ' + _bdGBP(n) + ' — the sheet says ' + _bdGBP(want) + '.', sync: true }); return; } } };
+    said('total (?:project )?(?:cost|budget)(?: is| of)?[^£.]{0,25}£\\s?([\\d.]+\\s?k?)', m.total, 'total cost');
+    said('(?:asking|ask|request(?:ing)?)[^£.]{0,40}£\\s?([\\d.]+\\s?k?)', m.ask, 'amount asked');
+  });
+  (m.other || []).filter(o => !o.secured && o.amount > 0).forEach(o => out.push({ t: _bdGBP(o.amount) + ' from ' + (o.from || 'other funding') + ' isn\'t secured yet — say when you\'ll know, and what happens if it doesn\'t come.', soft: true }));
+  return out;
+}
+function bdRenderMoney() {
+  const el = $('bd-money'); if (!el) return;
+  const m = _eoiAnswers.__money;
+  const head = '<div class="bd-ph">The money <span>added up by Vorlana</span></div>';
+  if (!m) {
+    if (window._bdMoneyReading) { el.innerHTML = head + '<div style="font-size:13px;color:var(--txt3);margin-top:8px"><span class="bd-spin"></span> Reading the figures from your answers…</div>'; return; }
+    el.innerHTML = head + '<div style="font-size:13px;color:var(--txt3);margin:6px 0 8px">One set of figures every answer must match.</div><button class="btn btn-ghost btn-sm" type="button" onclick="bdMoneyRead()">Set up the money</button>';
+    if (window._bdMoneyTried !== bdWsFunder() && _eoiQuestions.some(q => /£/.test(_eoiAnswers[q.id] || ''))) { window._bdMoneyTried = bdWsFunder(); bdMoneyRead(); }
+    return;
+  }
+  const sum = m.lines.reduce((a, l) => a + (+l.amount || 0), 0);
+  const issues = _bdMoneyIssues(m), hard = issues.filter(x => !x.soft && !x.sync);
+  const inp = (path, v, w, ph) => '<input data-m="' + path + '" value="' + escapeHTML(v == null ? '' : String(v)) + '" placeholder="' + (ph || '') + '" onchange="bdMoneySet(this)" style="width:' + w + '"/>';
+  el.innerHTML = head +
+    '<div class="bd-mrow"><span>Asking for</span>' + inp('ask', _bdGBP(m.ask), '110px') + '</div>' +
+    '<div class="bd-mrow"><span>Total project cost</span>' + inp('total', _bdGBP(m.total), '110px') + '</div>' +
+    (m.other || []).map((o, i) => '<div class="bd-mrow"><span>' + inp('other.' + i + '.from', o.from, '100%', 'Other funding from') + '<label class="bd-sec"><input type="checkbox" ' + (o.secured ? 'checked' : '') + ' onchange="bdMoneyOther(' + i + ',this.checked)"/> secured</label></span>' + inp('other.' + i + '.amount', _bdGBP(o.amount), '110px') + '</div>').join('') +
+    '<a href="#" class="bd-madd" onclick="bdMoneyAdd(\'other\');return false">+ other funding</a>' +
+    '<div class="bd-msub">Budget <select onchange="bdMoneySet(this)" data-m="cover"><option value="total"' + (m.cover === 'total' ? ' selected' : '') + '>whole project</option><option value="grant"' + (m.cover === 'grant' ? ' selected' : '') + '>this grant only</option></select></div>' +
+    m.lines.map((l, i) => '<div class="bd-mrow">' + inp('lines.' + i + '.line', l.line, '100%', 'What it pays for') + inp('lines.' + i + '.amount', _bdGBP(l.amount), '96px') + '<button type="button" class="bd-mx" onclick="bdMoneyDel(' + i + ')" aria-label="Remove">✕</button></div>').join('') +
+    '<div class="bd-mrow bd-mtot"><span><a href="#" class="bd-madd" style="margin:0" onclick="bdMoneyAdd(\'lines\');return false">+ budget line</a></span><b>' + _bdGBP(sum) + '</b></div>' +
+    (issues.length ? issues.map(x => '<div class="bd-mwarn' + (x.soft ? ' soft' : '') + '">' + escapeHTML(x.t) + (x.fix ? ' <a href="#" onclick="bdMoneyFix(\'' + x.fix + '\');return false">' + escapeHTML(x.label) + '</a>' : '') + '</div>').join('')
+      : '<div style="font-size:12.5px;color:#166534;margin-top:8px">✓ Everything adds up.</div>') +
+    (m.synced !== _bdMoneySig(m) || issues.some(x => x.sync) ? '<button class="btn btn-p btn-sm" type="button" style="margin-top:10px" onclick="bdMoneySync()"' + (window._bdMoneySyncing ? ' disabled' : '') + '>' + (window._bdMoneySyncing ? '<span class="bd-spin"></span> Updating your answers…' : 'Put these figures in every answer') + '</button>' : '') +
+    (hard.length && m.synced !== _bdMoneySig(m) ? '<div style="font-size:11.5px;color:var(--txt3);margin-top:6px">Fix the red lines first so the answers get the right figures.</div>' : '');
+}
+function _bdMoneySave() { if (typeof window._vlBidSaveSoon === 'function') window._vlBidSaveSoon(); bdRenderMoney(); }
+function bdMoneySet(el) {
+  const m = _eoiAnswers.__money; if (!m) return;
+  const path = el.dataset.m.split('.'), v = el.value;
+  const val = /amount$|^ask$|^total$/.test(path[path.length - 1]) ? Math.round(_bdNum(String(v).replace(/£/g, '')) || 0) : v.trim();
+  if (path.length === 1) m[path[0]] = val; else (m[path[0]][+path[1]] || {})[path[2]] = val;
+  _bdMoneySave();
+}
+function bdMoneyOther(i, on) { const m = _eoiAnswers.__money; if (m && m.other[i]) { m.other[i].secured = !!on; _bdMoneySave(); } }
+function bdMoneyAdd(k) { const m = _eoiAnswers.__money; if (!m) return; m[k].push(k === 'lines' ? { line: '', amount: 0 } : { from: '', amount: 0, secured: false }); _bdMoneySave(); }
+function bdMoneyDel(i) { const m = _eoiAnswers.__money; if (!m) return; m.lines.splice(i, 1); _bdMoneySave(); }
+function bdMoneyFix(f) {
+  const m = _eoiAnswers.__money; if (!m) return;
+  const [k, v] = f.split('='), n = Math.round(+v);
+  if (k === 'total') { m.total = n; const other = Math.max(0, n - m.ask); if (m.other.length === 1) m.other[0].amount = other; else if (!m.other.length && other) m.other.push({ from: 'Other funding', amount: other, secured: false }); }
+  if (k === 'ask') { m.ask = n; m.total = n + m.other.reduce((a, o) => a + (+o.amount || 0), 0); }
+  if (k === 'other') { if (n <= 0) { m.total = m.ask + m.other.reduce((a, o) => a + (+o.amount || 0), 0); } else if (m.other.length === 1) m.other[0].amount = n; else if (!m.other.length) m.other.push({ from: 'Other funding', amount: n, secured: false }); else m.total = m.ask + m.other.reduce((a, o) => a + (+o.amount || 0), 0); }
+  _bdMoneySave();
+}
+// For bids written before the money sheet: read the intended figures once
+async function bdMoneyRead() {
+  if (window._bdMoneyReading) return;
+  window._bdMoneyReading = true; bdRenderMoney();
+  try {
+    const raw = await callClaude('Read this funding application and pull out its money: the amount asked from this funder, the total project cost, other funding (who from, how much, whether secured) and the budget lines. Where answers disagree, use the budget question\'s lines and the figures used most often. Never invent. ' +
+      'Reply with ONLY JSON: {"ask":0,"total":0,"other":[{"from":"","amount":0,"secured":false}],"lines":[{"line":"","amount":0}],"cover":"total or grant (does the budget cover the whole project or just this grant)"}',
+      (_eoiProject ? 'THE PROJECT: ' + _eoiProject + '\n\n' : '') + _bdQA(), 1000, false, { model: AI_MODELS.smart, long: true, purpose: 'bid_money_read' });
+    const mm = String(raw || '').replace(/```json|```/gi, '').match(/\{[\s\S]*\}/); const j = mm ? JSON.parse(mm[0]) : null;
+    if (j && +j.ask > 0) {
+      _eoiAnswers.__money = { ask: Math.round(+j.ask), total: Math.round(+j.total || +j.ask), cover: j.cover === 'grant' ? 'grant' : 'total',
+        other: (Array.isArray(j.other) ? j.other : []).filter(o => o && +o.amount > 0).map(o => ({ from: String(o.from || 'Other funding').slice(0, 80), amount: Math.round(+o.amount), secured: !!o.secured })),
+        lines: (Array.isArray(j.lines) ? j.lines : []).filter(l => l && l.line && +l.amount > 0).map(l => ({ line: String(l.line).slice(0, 80), amount: Math.round(+l.amount) })) };
+      if (typeof window._vlBidSaveSoon === 'function') window._vlBidSaveSoon();
+    }
+  } catch (e) { /* they can set it up by hand */ }
+  window._bdMoneyReading = false;
+  if (!_eoiAnswers.__money) _eoiAnswers.__money = { ask: 0, total: 0, cover: 'total', other: [], lines: [] };
+  bdRenderMoney();
+}
+// Put the sheet's figures into every answer: the budget answer is written by code, the rest only have their money sentences corrected
+async function bdMoneySync() {
+  const m = _eoiAnswers.__money; if (!m || window._bdMoneySyncing) return;
+  window._bdMoneySyncing = true; bdRenderMoney();
+  const sheet = _bdMoneyText(m);
+  const isBudget = q => /budget|cost(s)? break ?down|break ?down (of )?(your )?(the )?(project )?cost|headings/i.test(q.question);
+  const before = Object.assign({}, _eoiAnswers);
+  try {
+    await Promise.all(_eoiQuestions.map(async q => {
+      const a = String(_eoiAnswers[q.id] || '');
+      if (!a || /^\[CONFIRM:/.test(a)) return;
+      if (isBudget(q) && m.lines.length && _wordCount(a) >= 6) { _eoiAnswers[q.id] = _bdBudgetText(m); return; }
+      if (!/£/.test(a)) return;
+      const out = await callClaude('Correct ONLY the money in this funding application answer so it matches the MONEY SHEET exactly: the amount asked, total project cost, other funding (and whether it is secured) and budget figures. Change no other words. ' +
+        'Leave the organisation\'s own finances (annual income, spending, reserves, existing grants, volunteer value) exactly as they are. If a sentence states a project or budget figure that is not on the sheet, correct it to the sheet or remove that figure. Reply with ONLY the full answer.',
+        sheet + '\n\nQUESTION: ' + q.question + '\n\nANSWER:\n' + a, 1400, false, { model: AI_MODELS.smart, long: true, purpose: 'bid_money_sync' });
+      const t = _stripLeadingLabel(cleanReportText(out));
+      if (t && !_eoiLooksLikeRefusal(t) && _wordCount(t) >= _wordCount(a) * 0.8 && _wordCount(t) <= _wordCount(a) * 1.15 + 10) _eoiAnswers[q.id] = t;
+    }));
+    m.synced = _bdMoneySig(m);
+    window._bdMoneyUndo = before;
+  } catch (e) { if (!(e && e.message === 'AI_PLAN_GATE')) alert('Couldn\'t update every answer: ' + (e.message || e)); }
+  window._bdMoneySyncing = false;
+  if (typeof window._vlBidSaveSoon === 'function') window._vlBidSaveSoon();
+  renderFilledEOI();
+}
+
 // Rewrite one answer to score higher, optionally to an assessor's note
 async function _bdImprove(q, note) {
   const ans = String(_eoiAnswers[q.id] || ''); if (!ans || /^\[CONFIRM:/.test(ans)) return '';
@@ -3215,6 +3358,10 @@ async function _bdImprove(q, note) {
   const ph = x => (String(x).match(/\[INSERT:[^\]]*\]/gi) || []);
   const added = ph(t).filter(x => !ph(ans).includes(x));
   if (added.length > 1 || added.some(x => x.split(/\s+/).length > 9 || /\?|confirm|check |e\.g\.|for example|if recorded/i.test(x))) return '';
+  // Money is locked: no £ figure that isn't already in the answer, the money sheet or the records
+  const pounds = x => (String(x).replace(/,/g, '').match(/£\s?\d+(?:\.\d+)?\s?k?/gi) || []).map(v => Math.round(_bdNum(v.replace('£', ''))));
+  const allowed = new Set(pounds(ans + '\n' + _bdFactsBundle()));
+  if (pounds(t).some(n => !allowed.has(n))) return '';
   // Stay inside the limit
   const over = x => q.charLimit ? x.length > q.charLimit : q.wordLimit ? _wordCount(x) > q.wordLimit : false;
   for (let i = 0; i < 2 && over(t); i++) {
