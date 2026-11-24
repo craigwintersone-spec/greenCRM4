@@ -128,6 +128,7 @@
     finally { if (btn) btn.disabled = false; }
   }
   window.ztFillFunderForm = fillFunderForm;
+  window.ztAddButton = function () { return addButton(); };
 
   async function addButton() {
     var R = window._lastReport, out = $('report-output'); if (!R || !out || $('zt-ff')) return;

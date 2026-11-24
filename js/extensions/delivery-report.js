@@ -264,6 +264,7 @@ function buildStats(p) {
 
   return {
     circ: circ,
+    fbRows: FB,
     period: p,
     contract: con,
     funder: con ? funderFor(con) : null,
@@ -722,6 +723,7 @@ function generateNow() {
   var targets = targetLines(s, p);
   s.hasTargets = targets.length > 0;
   var checks = reconcile(s);
+  var story = window.vlReportQA ? window.vlReportQA.caseStudy(s.contract ? (DB.participants || []).filter(function (x) { return toArrSafe(x.contract_ids).map(String).indexOf(String(s.contract.id)) !== -1; }) : [], s.fbRows) : '';
   var sys = 'You are a senior UK charity impact writer. You are writing ' + prof.p.tone + ' ' +
     'Call the people "' + prof.p.people + '". Write clean formal British English, no jargon the funder would not use themselves. ' +
     'Structure with these sections, in this order, each beginning with ## and exactly this title: ' + sections.join(', ') + '. ' +
@@ -729,7 +731,8 @@ function generateNow() {
     'Never point out that two different figures are the same, and do not restate a percentage in words (for example "this is a majority of responses"). ' +
     (targets.length ? 'For progress against targets use the PROGRESS lines exactly as given, including the verdict (ahead of pace, on track or behind pace); never work out pace yourself. Only if a verdict is behind pace explain it plainly from the figures. ' : '') +
     (prev ? 'Where a previous-period figure is supplied, say whether it is up or down and by how much, using only the supplied percentage. ' : '') +
-    'Use participant quotes verbatim where supplied. Never describe a "case study" or any individual unless a quote is supplied. ' +
+    'Use participant quotes exactly as written where supplied. ' + (story ? 'Include the CASE STUDY once, in about 60–100 words, in the section about outcomes or what people said, using only its facts; never name the person. ' : 'Never describe a case study or any individual. ') +
+    'Show the difference made, not just activity: relate figures to the target, the previous period or before and after where the figures allow. ' +
     'In the learning / lessons section draw only on the data gaps and the figures (e.g. low attendance against capacity), never on assumptions. ' +
     (hasCirc ? (growOnly
       ? 'Harvested food is food grown, not waste diverted; never call it waste diverted, and never explain this distinction in the report. In Growing, report kilograms harvested, food shared or sold, meals and value using only the figures supplied, and say value is an estimate at shop prices. Never describe harvested food as waste diverted, reused or repaired. '
@@ -793,6 +796,7 @@ function generateNow() {
     Object.keys(s.attDemo.gender).length ? 'Gender: ' + Object.keys(s.attDemo.gender).map(function (k) { return k + ' ' + s.attDemo.gender[k]; }).join(', ') : '',
     s.volDemo.count ? 'Volunteers with demographic data: ' + s.volDemo.count + (s.volDemo.bemPct != null ? ' · black and ethnic minority ' + s.volDemo.bemPct + '%' : '') + (s.volDemo.disabledPct != null ? ' · disabled ' + s.volDemo.disabledPct + '%' : '') : '',
     s.quotes.length ? 'Participant quotes you may use verbatim (do not alter):\n' + s.quotes.slice(0, 4).map(function (q) { return '- "' + q + '"'; }).join('\n') : '',
+    story,
     (typeof cxReportLines === 'function' ? cxReportLines(s.circ).join('\n') : ''),
     '',
     'DATA QUALITY NOTES',
@@ -826,6 +830,14 @@ function generateNow() {
       s.autoFixes = fx.fixes;
       var out = fx.text + (plansText ? '\n\n## Plans for the next period\n' + plansText : '');
       renderDoc(out, s, orgName, todayStr, funderName);
+      // Report strength, checks in code and Raise the score — the same as bids get
+      if (window.vlReportQA) window.vlReportQA.attach({
+        key: 'delivery:' + Date.now(), text: out, pack: lines,
+        render: function (t) { s.unverified = unknownNumbers(t, lines); renderDoc(t, s, orgName, todayStr, funderName); },
+        funder: funderName || 'the funder', voice: 'Write as ' + prof.p.tone + ' Call the people "' + prof.p.people + '".',
+        asks: 'A report in the usual shape for ' + prof.p.label + ': ' + sections.join(', ') + '.',
+        lint: { attendees: s.attendees, fbCount: s.fbCount, hasTargets: !!s.hasTargets }, limits: {}, required: [], locked: plansText ? ['Plans for the next period'] : []
+      });
     };
     var issues = lintFindings(raw, s);
     if (!bad.length && !issues.length) { s.unverified = []; return finish(raw); }

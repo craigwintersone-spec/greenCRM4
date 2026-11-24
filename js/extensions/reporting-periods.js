@@ -205,14 +205,27 @@
     // ── feedback on those events only ─────────────────────────
     const fbInPeriod = (DB.feedback || []).filter(f => evIds[String(f.eventId || f.event_id || '')]);
     const fbN = fbInPeriod.length;
-    const avg = key => fbN ? (fbInPeriod.reduce((a, f) => a + num(f[key]), 0) / fbN).toFixed(1) : null;
-    const avgEnjoyed = avg('enjoyed');
-    const avgCB = avg('cb');
-    const avgCA = avg('ca');
-    const pctOf = test => fbN ? Math.round(fbInPeriod.filter(test).length / fbN * 100) : 0;
-    const improvedPct  = pctOf(f => num(f.ca) > num(f.cb));
-    const learnedPct   = pctOf(f => f.learned);
-    const connectedPct = pctOf(f => f.connected);
+    // averages and percentages are over the people who ANSWERED — a blank is not a zero
+    const avg = (rows, key) => { const v = rows.map(f => num(f[key])).filter(x => x > 0); return v.length ? (v.reduce((a, x) => a + x, 0) / v.length).toFixed(1) : null; };
+    const avgEnjoyed = avg(fbInPeriod, 'enjoyed');
+    const pairs = fbInPeriod.filter(f => num(f.cb) > 0 && num(f.ca) > 0), pairN = pairs.length;
+    const avgCB = avg(pairs, 'cb');
+    const avgCA = avg(pairs, 'ca');
+    const improvedPct = pairN ? Math.round(pairs.filter(f => num(f.ca) > num(f.cb)).length / pairN * 100) : 0;
+    const yn = key => { const a = fbInPeriod.filter(f => f[key] === true || f[key] === false); return [a.length, a.length ? Math.round(a.filter(f => f[key]).length / a.length * 100) : 0]; };
+    const [learnedN, learnedPct] = yn('learned');
+    const [connectedN, connectedPct] = yn('connected');
+    // who came: the same tidying as the Demographics page
+    const T = window.DemoTidy || { tidyRecord: d => d || {}, isBEM: e => !!e && !/^white/i.test(e), isDisabled: d => !!d && !/^(no|none|no disability)$/i.test(d) };
+    const demo = fbInPeriod.map(f => T.tidyRecord(f.demographics)).filter(d => d && Object.keys(d).length);
+    const eth = demo.filter(d => d.ethnicity), dis = demo.filter(d => d.disability), ages = {};
+    demo.forEach(d => { if (d.age) ages[d.age] = (ages[d.age] || 0) + 1; });
+    const reach = !demo.length ? [] : [
+      'Responses with demographic data: ' + demo.length + ' of ' + fbN,
+      eth.length ? 'Black and ethnic minority: ' + Math.round(eth.filter(d => T.isBEM(d.ethnicity)).length / eth.length * 100) + '% (of ' + eth.length + ' who stated ethnicity)' : '',
+      dis.length ? 'Disabled: ' + Math.round(dis.filter(d => T.isDisabled(d.disability)).length / dis.length * 100) + '% (of ' + dis.length + ' who answered)' : '',
+      Object.keys(ages).length ? 'Age groups: ' + Object.keys(ages).sort((a, b) => ages[b] - ages[a]).map(k => k + ' ' + ages[k]).join(', ') : ''
+    ].filter(Boolean);
     const quotes = fbInPeriod
       .filter(f => f.quote && String(f.quote).trim().length > 15 && !HEALTH_QUOTE_RX.test(String(f.quote)))
       .map(f => String(f.quote).trim())
@@ -235,15 +248,15 @@
 
     const steps = [
       { label: 'Filtering to ' + periodLabel, meta: linkedInPeriod.length + ' participants · ' + eventsInPeriod.length + ' events' + (hasCirc ? ' · ' + circ.kg + ' kg circular' : '') + ' on this contract' },
-      { label: 'Cross-checking funder requirements', meta: 'Mapping data against ' + ((funder && funder.name) || 'funder') + ' framework' },
+      { label: 'Reading what the funder asks for', meta: 'Their reporting form, or how ' + ((funder && funder.name) || 'this funder') + ' reports' },
       { label: 'Writing the report', meta: 'Writing the narrative around your live numbers' },
-      { label: 'Quality Supervisor check', meta: 'Verifying tone, claims and structure' },
+      { label: 'Checking every figure', meta: 'Against your records' },
       { label: 'Ready', meta: 'Report delivered — review and download below' }
     ];
 
     // Written in the funder's own language (profiles live in delivery-report.js)
     const profKey = (window.detectFunderProfile ? window.detectFunderProfile((funder && funder.name) || '', contract) : 'generic');
-    const prof = (window.FUNDER_PROFILES || {})[profKey] || { label: 'General', people: 'participants', tone: 'a professional UK funder report.' };
+    const prof = (window.FUNDER_PROFILES || {})[profKey] || { label: 'General', people: 'participants', tone: 'a professional UK funder report.', sections: ['Executive Summary', 'Delivery Overview', 'Who We Reached', 'Volunteer Contribution', '%CIRC%', 'Participant Experience', 'Data Quality'] };
     const elapsed = (contract && contract.start_date && contract.end_date) ? Math.max(0, Math.min(100, Math.round((Math.min(Date.now(), new Date(contract.end_date)) - new Date(contract.start_date)) / (new Date(contract.end_date) - new Date(contract.start_date)) * 100))) : null;
     // Pace is worked out here, not by the writer: contract-to-date progress against the share of the contract period gone
     const startsToDate = num(contract && contract.actual_starts) || linked.length;
@@ -260,24 +273,44 @@
     };
     const startsPace = paceLine('Starts', startsToDate, num(contract && contract.target_starts));
     const outcomesPace = paceLine('Outcomes', outcomesToDate, num(contract && contract.target_outcomes));
+    const hasTargets = !!(startsPace || outcomesPace);
     const employment = profKey === 'dwp' || jobs > 0 || sustained > 0;
     const plansText = ((currentOrg && currentOrg.settings && currentOrg.settings.report_plans) || '').toString().trim();
+    const PLANS_H = 'Plans for the next period';
+
+    // The funder's own reporting form decides the sections when it can be read; otherwise how this kind of funder reports
+    const tpl = window.vlReportQA ? await window.vlReportQA.funderQuestions(contractId) : null;
+    const growing = !!(circ && circ.growing), growOnly = growing && !circ.itemsDone;
+    const circTitle = growOnly ? 'Growing' : (growing ? 'Growing and Circular Economy' : 'Circular Economy');
+    let sections, limits = {};
+    if (tpl) {
+      sections = tpl.items.map(it => it.q);
+      tpl.items.forEach(it => { if (it.limit) limits[it.q] = it.limit; });
+    } else {
+      sections = (prof.sections || []).map(x => x === '%CIRC%' ? (hasCirc ? circTitle : '') : x).filter(Boolean)
+        .filter(x => !/^(what happens next|next steps|next period|forward view)$/i.test(x))     // plans are only ever the organisation's own words
+        .map(x => x.replace(/\s*(,|and)\s*(what happens )?(next period|next steps|forward view)\s*$/i, ''));
+    }
+    const story = window.vlReportQA ? window.vlReportQA.caseStudy(linked, fbInPeriod) : '';
+    const first = sections[0] || 'Summary';
+
     const sys = 'You are a senior UK charity impact writer. You are writing ' + prof.tone + ' Call the people "' + prof.people + '". Write in clean formal British English, in the language this funder uses. ' +
-      'Structure with these sections in order, each beginning with ## and the section title: Executive Summary, Delivery Overview, ' +
-      'Participant Outcomes, Distance Travelled and Wellbeing, ' + (hasCirc ? 'Circular Economy, ' : '') + 'Participant Voice, Evidence and Data Quality. Use **bold** sparingly for key statistics. ' +
-      'Open the Executive Summary with the three figures that matter most to this funder. ' +
-      ((startsPace || outcomesPace) ? 'For progress against targets use the PROGRESS lines exactly as given, including the verdict (ahead of pace, on track or behind pace); never work out pace yourself and never contradict the verdict. Only if a verdict is "behind pace" explain it plainly from the figures. ' : 'No targets were entered: never say delivery is on track, ahead or behind. ') +
-      'Data notes belong only in Evidence and Data Quality; never turn them into actions or plans. Never write commitments in the organisation\'s name ("we will", "we plan to"). ' +
+      (tpl ? 'This report answers the funder\'s own reporting form. Use these headings, exactly as written and in this order, each beginning with ##, and answer each question directly' + (Object.keys(limits).length ? ' within its word limit' : '') + ': ' + tpl.items.map((it, i) => (i + 1) + '. ' + it.q + (it.limit ? ' (max ' + it.limit + ' words)' : '')).join(' | ') + '. If the figures cannot answer a question, say plainly what is not recorded this period. '
+           : 'Structure with these sections, in this order, each beginning with ## and exactly this title: ' + sections.join(', ') + '. ') +
+      'Open "' + first + '" with the three figures that matter most to this funder, then one sentence on what they mean' + (hasTargets ? ', then progress against targets' : '') + (quotes.length ? ', then the single quote that best shows the difference made' : '') + '. ' +
+      (hasTargets ? 'For progress against targets use the PROGRESS lines exactly as given, including the verdict (ahead of pace, on track or behind pace); never work out pace yourself and never contradict the verdict. Only if a verdict is "behind pace" explain it plainly from the figures. ' : 'No targets were entered: never say delivery is on track, ahead or behind. ') +
+      'Show the difference made, not just activity: relate figures to the target, to before and after, or to each other where the figures allow. ' +
+      (story ? 'Include the CASE STUDY once, in about 60–100 words, in the section about outcomes or what people said, using only its facts; never name the person. ' : 'Never describe a case study or any individual. ') +
+      'Data notes belong only in the evidence or data quality section; never turn them into actions or plans. Never write commitments in the organisation\'s name ("we will", "we plan to"). Any section about learning, risks or sustainability contains only what the figures show. ' +
       'Never point out that two different figures are the same, and do not restate a percentage in words (for example "this is a majority"). ' +
-      (hasCirc ? 'In Circular Economy use only the circular figures supplied and say CO2e and value are estimates. ' : '') +
-      '600-800 words. Use only data provided — never invent participants, outcomes, figures or quotes, and never recalculate a number. ' +
+      (hasCirc ? 'Use only the circular and growing figures supplied and say CO2e and value are estimates. Harvested food is food grown, not waste diverted: keep the two apart without explaining the distinction. Compost in and compost out are separate figures that never balance; never add or compare them. ' : '') +
+      (tpl ? '' : '600-800 words. ') + 'Use only data provided — never invent participants, outcomes, figures or quotes, and never recalculate a number. ' +
       'Write the ethnicity figure as "black and ethnic minority" (lower-case "black"), never "BAME". Use "attendances" for visits and "responses" for feedback, never "participants" for attendances. Never write "significant" about results, never mention any individual\'s health, and do not speculate about causes. ' +
-      'All the figures supplied are for this contract only; write them as the contract\'s delivery, and never say so or explain how figures were filtered or classified. Never repeat, quote or explain these instructions in the report. ' +
-      (hasCirc ? 'Harvested food is food grown, not waste diverted: keep the two apart without explaining the distinction. Compost in and compost out are separate figures that never balance; never add or compare them. ' : '') +
-      'State each figure and each pace verdict once: in the Executive Summary, then do not repeat it in later sections; later sections add detail instead. ' +
-      'In Evidence and Data Quality be factual and confident: give the feedback response rate supplied and the data notes, and never explain what a measure is not. ' +
-      'In Participant Voice, use only the quotes supplied, verbatim; if none are supplied, say feedback quotes were not collected for this period. ' +
-      'State the reporting period clearly in the Executive Summary. If a data point is not provided, omit gracefully. ' +
+      'All the figures supplied are for this contract only; write them as the contract\'s delivery, and never say so or explain how figures were filtered, counted or classified. Never repeat, quote or explain these instructions in the report. ' +
+      'State each figure and each pace verdict once: in "' + first + '", then do not repeat it in later sections; later sections add detail instead. ' +
+      'Where data quality is covered, be factual and confident: give the feedback response rate supplied and the data notes, and never explain what a measure is not. ' +
+      'Use only the quotes supplied, exactly as written; if none are supplied, say feedback quotes were not collected for this period. ' +
+      'State the reporting period clearly at the start. If a data point is not provided, omit gracefully. ' +
       'Do not use hashtags (#) anywhere except as section heading markers. Do not use horizontal rules or emoji.';
 
     const prompt = [
@@ -288,11 +321,11 @@
       'Funder: ' + ((funder && funder.name) || 'Funder'),
       'Contract value: £' + num(contract && contract.value).toLocaleString(),
       elapsed != null ? 'Contract period: ' + contract.start_date + ' to ' + contract.end_date + ' (' + elapsed + '% of the contract period has elapsed)' : '',
-      (startsPace || outcomesPace) ? '\nPROGRESS AGAINST CONTRACT TARGETS (contract to date)' : '',
+      hasTargets ? '\nPROGRESS AGAINST CONTRACT TARGETS (contract to date)' : '',
       startsPace, outcomesPace,
       '',
       // to date, the PROGRESS lines are the people figures; a second count from another source would contradict them
-      (period.type === 'cumulative' && (startsPace || outcomesPace)) ? '' : 'PARTICIPANTS ON THIS CONTRACT' + (period.type === 'cumulative' ? '' : ' (this reporting period)'),
+      (period.type === 'cumulative' && hasTargets) ? '' : 'PARTICIPANTS ON THIS CONTRACT' + (period.type === 'cumulative' ? '' : ' (this reporting period)'),
       (period.type === 'cumulative' && startsPace) ? '' : 'Participants active: ' + linkedInPeriod.length,
       (period.type === 'cumulative' && outcomesPace) ? '' : 'Participants with an outcome recorded: ' + linkedOutcomes,
       employment ? 'Employment outcomes: ' + jobs : '',
@@ -307,14 +340,15 @@
       'FEEDBACK FROM THESE EVENTS',
       'Feedback responses: ' + fbN + (attendances && fbN ? ' from ' + attendances + ' attendances (response rate ' + Math.round(fbN / attendances * 100) + '%)' : ''),
       avgEnjoyed ? 'Average enjoyment: ' + avgEnjoyed + ' / 5' : '',
-      avgCB ? 'Average confidence before: ' + avgCB + ' / 5' : '',
-      avgCA ? 'Average confidence after: ' + avgCA + ' / 5' : '',
-      fbN ? 'Reported increased confidence: ' + improvedPct + '%' : '',
-      fbN ? 'Learned something new: ' + learnedPct + '%' : '',
-      fbN ? 'Felt more connected: ' + connectedPct + '%' : '',
-      quotes.length ? 'Participant quotes (use verbatim, do not alter):\n' + quotes.map(q => '- "' + q + '"').join('\n') : 'Participant quotes: none collected for this period',
+      avgCB && avgCA ? 'Average confidence: ' + avgCB + ' / 5 before, ' + avgCA + ' / 5 after (' + pairN + ' responses answered both)' : '',
+      pairN ? 'Reported increased confidence: ' + improvedPct + '% (of ' + pairN + ')' : '',
+      learnedN ? 'Learned something new: ' + learnedPct + '% (of ' + learnedN + ')' : '',
+      connectedN ? 'Felt more connected: ' + connectedPct + '% (of ' + connectedN + ')' : '',
+      reach.length ? '\nWHO WE REACHED (from optional anonymous answers)\n' + reach.join('\n') : '',
+      quotes.length ? 'Participant quotes (use exactly as written):\n' + quotes.map(q => '- "' + q + '"').join('\n') : 'Participant quotes: none collected for this period',
+      story,
       hasCirc ? cxReportLines(circ).join('\n') : '',
-      hasCirc && cxReportGaps(circ).length ? 'Data notes (Evidence and Data Quality only):\n' + cxReportGaps(circ).map(g => '- ' + g).join('\n') : ''
+      hasCirc && cxReportGaps(circ).length ? 'Data notes (data quality only):\n' + cxReportGaps(circ).map(g => '- ' + g).join('\n') : ''
     ].filter(Boolean).join('\n');
 
     if (typeof window.runAgent !== 'function') {
@@ -324,35 +358,26 @@
     let raw = await window.runAgent({
       container: progressEl,
       headerLabel: 'Org Brain — Funder Report',
-      headerSub:   'Written as ' + prof.label + ' · every figure from your records',
+      headerSub:   (tpl ? 'Answering ' + ((funder && funder.name) || 'the funder') + '\'s reporting form' : 'Written as ' + prof.label) + ' · every figure from your records',
       steps, sys, prompt, maxTok: 1800
     });
     if (!raw) return;
-    // Verification: a number that isn't in the data pack gets one correction pass, then is highlighted
-    let unverified = window.unknownReportNumbers ? window.unknownReportNumbers(raw, prompt) : [];
-    const issues = window.reportLintFindings ? window.reportLintFindings(raw, { attendees: attendances, fbCount: fbN, hasTargets: !!(startsPace || outcomesPace) }) : [];
-    if (unverified.length || issues.length) {
+    // Verification: a number that isn't in the data pack, or wording a funder would pick at, gets one correction pass
+    const lintCtx = { attendees: attendances, fbCount: fbN, hasTargets };
+    const unverified0 = window.unknownReportNumbers ? window.unknownReportNumbers(raw, prompt) : [];
+    const issues = window.reportLintFindings ? window.reportLintFindings(raw, lintCtx) : [];
+    if (unverified0.length || issues.length) {
       const raw2 = await window.runAgent({ container: progressEl, headerLabel: 'Org Brain — Funder Report', headerSub: 'Checking the draft against your records',
-        steps: [{ label: 'Checking every number and claim against the records', meta: (unverified.length + issues.length) + ' to correct' }, { label: 'Ready', meta: '' }],
-        sys: sys + (unverified.length ? ' Your previous draft contained numbers that are NOT in the supplied data: ' + unverified.join(', ') + '. Rewrite the full report so every number appears in the supplied data; remove or reword any sentence that needs a number you were not given.' : '') +
+        steps: [{ label: 'Checking every number and claim against the records', meta: (unverified0.length + issues.length) + ' to correct' }, { label: 'Ready', meta: '' }],
+        sys: sys + (unverified0.length ? ' Your previous draft contained numbers that are NOT in the supplied data: ' + unverified0.join(', ') + '. Rewrite the full report so every number appears in the supplied data; remove or reword any sentence that needs a number you were not given.' : '') +
           (issues.length ? ' Your draft also contains wording that must not appear in a funder report: ' + issues.map(i => '"' + i.m + '" (' + i.why + ')').join('; ') + '. Rewrite those sentences so the problem is gone.' : '') + ' Keep everything else the same.',
         prompt: prompt + '\n\nPREVIOUS DRAFT:\n' + raw, maxTok: 1800 });
       if (raw2) raw = raw2;
-      unverified = window.unknownReportNumbers(raw, prompt);
     }
+    if (typeof vlAutoFix === 'function') raw = vlAutoFix(raw, { attendances: attendances, responses: fbN, hasTargets }).text;   // nothing for the author to edit
+    if (plansText) raw += '\n\n## ' + PLANS_H + '\n' + plansText;   // the organisation's own words, never written for them
 
-    if (typeof vlAutoFix === 'function') raw = vlAutoFix(raw, { attendances: attendances, responses: fbN, hasTargets: !!(startsPace || outcomesPace) }).text;   // nothing for the author to edit
-    if (plansText) raw += '\n\n## Plans for the next period\n' + plansText;   // the organisation's own words, never written for them
-    const cleaned = window.cleanReportText ? window.cleanReportText(raw) : raw;
-    let bodyHTML = window.reportTextToHTML ? window.reportTextToHTML(cleaned, raw) : '<pre>' + escapeHTML(cleaned) + '</pre>';
-    unverified.forEach(numStr => { bodyHTML = bodyHTML.replace(new RegExp('(£?)' + numStr.replace(/\./g, '\\.') + '(%?)(?![\\d])', 'g'), '<mark title="This number is not in your records — check it before sending" style="background:#FEF3C7">$1' + numStr + '$2</mark>'); });
-    const verifyHTML = '<div class="no-print" style="border:1px solid ' + (unverified.length ? '#FDE68A' : '#BBF7D0') + ';background:' + (unverified.length ? '#FFFBEB' : '#F0FDF4') + ';border-radius:10px;padding:10px 14px;font-size:12.5px;margin:0 0 16px"><b>Verification</b> · written as ' + escapeHTML(prof.label) + ' · ' +
-      (unverified.length ? '<span style="color:#92400E">' + unverified.length + ' number(s) could not be matched to your records and are highlighted — check before sending.</span>' : 'every number in the narrative matches your records.') + ' <span style="color:#777">(shown here only, not in the download)</span></div>';
     const reportTitle = ((contract && contract.name) || 'Programme Report') + ' — ' + orgName + ' (' + periodLabel + ')';
-    window._lastReportText = cleaned;
-    window._lastReport = { contractId: String(contractId), funder: (funder && funder.name) || (contract && contract.funder) || '', period, prompt, text: cleaned };   // for filling the funder's own form
-    window._lastReportTitle = reportTitle;
-
     const _logoUrl = window.getOrgLogoUrl ? window.getOrgLogoUrl(currentOrg) : '';
     const _headerHTML = _logoUrl
       ? '<div class="report-header-flex"><div class="report-header-text">' +
@@ -367,24 +392,45 @@
           '<div class="report-subtitle">' + escapeHTML(orgName) + ' · ' + escapeHTML(todayStr) + '</div>' +
         '</div>';
 
-    reportEl.innerHTML =
-      '<div class="report-actions">' +
-        '<button class="btn btn-p" id="civara-rep-pdf">⬇ Download as PDF</button>' +
-        '<button class="btn btn-ghost btn-sm" id="civara-rep-copy">📋 Copy text</button>' +
-        '<button class="btn btn-ghost btn-sm" id="civara-rep-regen">↻ Regenerate</button>' +
-      '</div>' + verifyHTML +
-      '<style>.pf{width:100%;border-collapse:collapse}.pf td{padding:0;border:0}.pf-gap{display:none}@media print{.pf-gap{display:block;height:14mm}.pf>tbody>tr>td{padding:0 14mm}}</style>' +
-      '<table class="pf"><thead><tr><td><div class="pf-gap"></div></td></tr></thead><tbody><tr><td>' +
-      '<div class="report-doc">' +
-        _headerHTML +
-        '<div class="report-body">' + bodyHTML + (hasCirc ? cxReportDocHTML(circ, 'Circular economy: detail', { noFigs: true }) : '') + '</div>' +
-        '<div class="report-footer">Generated with Vorlana · ' + escapeHTML(todayStr) + ' · Period: ' + escapeHTML(periodLabel) + '</div>' +
-      '</div>' +
-      '</td></tr></tbody><tfoot><tr><td><div class="pf-gap"></div></td></tr></tfoot></table>';
+    // Draws the report from its text — again after every fix or rewrite
+    const draw = (text) => {
+      const unverified = window.unknownReportNumbers ? window.unknownReportNumbers(text, prompt) : [];
+      const cleaned = window.cleanReportText ? window.cleanReportText(text) : text;
+      let bodyHTML = window.reportTextToHTML ? window.reportTextToHTML(cleaned, text) : '<pre>' + escapeHTML(cleaned) + '</pre>';
+      unverified.forEach(numStr => { bodyHTML = bodyHTML.replace(new RegExp('(£?)' + numStr.replace(/\./g, '\\.') + '(%?)(?![\\d])', 'g'), '<mark title="This number is not in your records — check it before sending" style="background:#FEF3C7">$1' + numStr + '$2</mark>'); });
+      const verifyHTML = '<div class="no-print" style="border:1px solid ' + (unverified.length ? '#FDE68A' : '#BBF7D0') + ';background:' + (unverified.length ? '#FFFBEB' : '#F0FDF4') + ';border-radius:10px;padding:10px 14px;font-size:12.5px;margin:0 0 16px"><b>Verification</b> · ' + (tpl ? 'answers ' + escapeHTML(tpl.name) : 'written as ' + escapeHTML(prof.label)) + ' · ' +
+        (unverified.length ? '<span style="color:#92400E">' + unverified.length + ' number(s) could not be matched to your records and are highlighted — check before sending.</span>' : 'every number in the narrative matches your records.') + ' <span style="color:#777">(shown here only, not in the download)</span></div>';
+      window._lastReportText = cleaned;
+      window._lastReport = { contractId: String(contractId), funder: (funder && funder.name) || (contract && contract.funder) || '', period, prompt, text: cleaned };   // for filling the funder's own form
+      window._lastReportTitle = reportTitle;
+      reportEl.innerHTML =
+        '<div class="report-actions">' +
+          '<button class="btn btn-p" id="civara-rep-pdf">⬇ Download as PDF</button>' +
+          '<button class="btn btn-ghost btn-sm" id="civara-rep-copy">📋 Copy text</button>' +
+          '<button class="btn btn-ghost btn-sm" id="civara-rep-regen">↻ Regenerate</button>' +
+        '</div>' + verifyHTML +
+        '<style>.pf{width:100%;border-collapse:collapse}.pf td{padding:0;border:0}.pf-gap{display:none}@media print{.pf-gap{display:block;height:14mm}.pf>tbody>tr>td{padding:0 14mm}}</style>' +
+        '<table class="pf"><thead><tr><td><div class="pf-gap"></div></td></tr></thead><tbody><tr><td>' +
+        '<div class="report-doc">' +
+          _headerHTML +
+          '<div class="report-body">' + bodyHTML + (hasCirc && !tpl ? cxReportDocHTML(circ, 'Circular economy: detail', { noFigs: true }) : '') + '</div>' +
+          '<div class="report-footer">Generated with Vorlana · ' + escapeHTML(todayStr) + ' · Period: ' + escapeHTML(periodLabel) + '</div>' +
+        '</div>' +
+        '</td></tr></tbody><tfoot><tr><td><div class="pf-gap"></div></td></tr></tfoot></table>';
+      $('civara-rep-pdf').addEventListener('click', () => window.downloadReportPDF && window.downloadReportPDF());
+      $('civara-rep-copy').addEventListener('click', () => window.copyReportText && window.copyReportText());
+      $('civara-rep-regen').addEventListener('click', () => window.generateAIReport(type, contractId));
+    };
+    draw(raw);
 
-    $('civara-rep-pdf').addEventListener('click', () => window.downloadReportPDF && window.downloadReportPDF());
-    $('civara-rep-copy').addEventListener('click', () => window.copyReportText && window.copyReportText());
-    $('civara-rep-regen').addEventListener('click', () => window.generateAIReport(type, contractId));
+    // Report strength, checks in code and Raise the score — the same as bids get
+    if (window.vlReportQA) window.vlReportQA.attach({
+      key: 'contract:' + contractId + ':' + Date.now(), text: raw, pack: prompt, render: draw,
+      funder: (funder && funder.name) || 'the funder',
+      voice: 'Write as ' + prof.tone + ' Call the people "' + prof.people + '".',
+      asks: tpl ? 'Their reporting form asks: ' + tpl.items.map(it => it.q + (it.limit ? ' (max ' + it.limit + ' words)' : '')).join(' | ') : 'A report in the usual shape for ' + prof.label + ': ' + sections.join(', ') + '.',
+      lint: lintCtx, limits: limits, required: tpl ? sections : [], locked: plansText ? [PLANS_H] : []
+    });
 
     reportEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
