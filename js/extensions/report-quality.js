@@ -443,14 +443,24 @@ function paint() {
 // participants: people on the contract; feedback: responses on its events. Returns '' when there is nothing real to use.
 function caseStudy(participants, feedback) {
   var H = (typeof HEALTH_QUOTE_RX !== 'undefined') ? HEALTH_QUOTE_RX : /\b(health|ill|sick|hospital|doctor|mental|therapy)\b/i;
+  // sensitive notes are left out one by one, so one note never costs the whole story
+  var SENS = /\b(unwell|bereave\w*|grief|safeguard\w*|police|debt|evict\w*|temporary housing|homeless\w*|benefit sanction\w*|risk)\b/i;
+  var noteText = function (n) { return String((n && (n.t || n.text)) || n || '').replace(/\s+/g, ' ').trim(); };
   var P = (participants || []).filter(function (p) { return (p.outcomes || []).length && Array.isArray(p.notes) && p.notes.length; })
-    .sort(function (a, b) { return b.notes.length - a.notes.length; });
-  for (var i = 0; i < P.length; i++) {
-    var p = P[i], notes = p.notes.slice(-3).map(function (n) { return String((n && (n.t || n.text)) || n || '').trim(); }).filter(Boolean).join(' ');
-    if (!notes || H.test(notes)) continue;
-    var how = /self/i.test(p.ref_source || '') ? 'came to us on their own' : 'referred by ' + (p.ref_source || 'a partner');
-    return 'CASE STUDY (one real participant, anonymised — call them "one participant", never by name; use only these facts, add nothing): ' + how +
-      (p.barriers && p.barriers.length ? '; facing ' + p.barriers.join(', ').toLowerCase() : '') + '. ' + notes + ' Outcome: ' + p.outcomes.join(', ').toLowerCase() + '.';
+    .map(function (p) { return { p: p, notes: p.notes.filter(function (n) { var t = noteText(n); return t && !H.test(t) && !SENS.test(t); }) }; })
+    .filter(function (x) { return x.notes.length; })
+    .sort(function (a, b) { return b.notes.length - a.notes.length || b.p.outcomes.length - a.p.outcomes.length; });
+  if (P[0]) {
+    var p = P[0].p, notes = P[0].notes.slice().sort(function (a, b) { return String(a.d || a.date || '').localeCompare(String(b.d || b.date || '')); }).slice(-8);
+    var when = function (n) { var d = n.d || n.date; return d ? new Date(d).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }) + ': ' : ''; };
+    var first = notes[0] && (notes[0].d || notes[0].date), months = first ? Math.max(1, Math.round((Date.now() - new Date(first)) / (30.4 * 864e5))) : 0;
+    var how = /self/i.test(p.ref_source || '') ? 'came to us on their own' : 'was referred by ' + String(p.ref_source || 'a partner').toLowerCase();
+    var bars = (p.barriers || []).filter(function (b) { return !H.test(b); });
+    return 'CASE STUDY (one real participant, anonymised — call them "one participant", never by name or with any name from the notes, including staff; use only these facts, add nothing):\n' +
+      '- Starting point: ' + how + (bars.length ? ', facing barriers around ' + bars.join(' and ').toLowerCase() : '') + '\n' +
+      (months ? '- With us for about ' + months + ' month' + (months === 1 ? '' : 's') + '\n' : '') +
+      '- What happened, in order:\n' + notes.map(function (n) { return '  ' + when(n) + noteText(n); }).join('\n') + '\n' +
+      '- Outcomes recorded: ' + p.outcomes.join(', ').toLowerCase() + (p.stage ? ' (now at the "' + p.stage + '" stage)' : '');
   }
   var F = (feedback || []).filter(function (f) { var q = String(f.quote || '').trim(); return q.length > 40 && !H.test(q) && +f.cb > 0 && +f.ca > +f.cb; })
     .sort(function (a, b) { return (b.ca - b.cb) - (a.ca - a.cb) || String(b.quote).length - String(a.quote).length; });

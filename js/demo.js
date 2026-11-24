@@ -103,7 +103,8 @@ function buildDemoData() {
     const lead = cid === 'demo-c-3' ? (chance(0.7) ? staff[0] : staff[2]) : (chance(0.7) ? staff[1] : staff[2]);
     const notes = [];
     if (started) notes.push({ t: noteBank[cid][0], d: _dIso(int(90, 170)), s: lead });
-    if (started && st !== 'Engaged') notes.push({ t: pick(noteBank[cid].slice(1)), d: _dIso(int(30, 89)), s: lead });
+    if (done) noteBank[cid].slice(1).forEach((t, k, all) => notes.push({ t, d: _dIso(89 - Math.round(k * 55 / all.length)), s: lead }));   // a full journey for people who reached an outcome
+    else if (started && st !== 'Engaged') notes.push({ t: pick(noteBank[cid].slice(1)), d: _dIso(int(30, 89)), s: lead });
     notes.push({ t: keyNote, d: _dIso(int(2, 28)), s: lead });
     D.participants.push({
       id: 'demo-p-' + (i + 1), _demo: true, _ref: (0x3a7c1e20 + i * 0x9e3779b).toString(16).slice(-8), first_name: fn, last_name: ln, ref_source: src, stage: st, advisor: lead,
