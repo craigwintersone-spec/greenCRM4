@@ -3217,10 +3217,16 @@ function _bdCutOff(t) {
   const last = x.split('\n').filter(l => l.trim()).pop() || '';
   return !/[.!?…:;)"'”’\]]\s*$/.test(x) && !/^\s*([-•*]|\d+[.)])\s/.test(last);
 }
+const _BD_PEOPLE_RE = () => /\b(at least )(\d[\d,]*)( (?:more |extra )?(?:referred |new |local )?(?:people|participants|walkers|residents|families|children|young people|adults)\b)(?!\s+(?:will be|to be|who will be|are)\s+trained)(?![^.]{0,40}\bvolunteer)/gi;
 function _bdPeopleSaid(t) {
-  const out = []; let r; const re = /\bat least (\d[\d,]*) (?:more |extra )?(?:referred |new |local )?(?:people|participants|walkers|residents|families|children|young people|adults)\b(?!\s+(?:will be|to be|who will be|are)\s+trained)(?![^.]{0,40}\bvolunteer)/gi;
-  while ((r = re.exec(String(t || '')))) out.push(+r[1].replace(/,/g, ''));
+  const out = []; let r; const re = _BD_PEOPLE_RE();
+  while ((r = re.exec(String(t || '')))) out.push(+r[2].replace(/,/g, ''));
   return out;
+}
+// Put the people target into an answer: a plain swap of the number, done in code
+function _bdPeopleFix(t, people) {
+  if (!people) return t;
+  return String(t || '').replace(_BD_PEOPLE_RE(), (all, a, n, rest) => { const v = +n.replace(/,/g, ''); return v !== people && v >= people * 0.2 ? a + people.toLocaleString('en-GB') + rest : all; });
 }
 function _bdCheck(q, t, base) {
   if (!t) return 'empty';
@@ -3263,12 +3269,10 @@ async function bdFixQ(id, k) {
   try {
     let t = '';
     if (k === 'over') t = await _bdFit(q, a);
-    else {
-      const m = _eoiAnswers.__money;
-      const note = k === 'cut' ? 'The answer stops mid-sentence. Finish it properly within the limit; change nothing else.' : 'The number of people who will benefit must be ' + (m && m.people) + ' everywhere; change only the wrong number.';
-      t = await _bdImprove(q, note, true);
-    }
+    else if (k === 'people') t = _bdPeopleFix(a, (_eoiAnswers.__money || {}).people);
+    else t = await _bdImprove(q, 'The answer stops mid-sentence. Finish it properly within the limit; change nothing else.', true);
     if (t && t !== a && !(_bdOver(q, t) || _bdCutOff(t))) { window._bdPrev = window._bdPrev || {}; window._bdPrev[id] = a; _eoiAnswers[id] = t; if (typeof window._vlBidSaveSoon === 'function') window._vlBidSaveSoon(); }
+    else alert('Vorlana couldn\'t fix that one automatically — press Edit on that answer and change it by hand.');
   } catch (e) { if (!(e && e.message === 'AI_PLAN_GATE')) alert('Couldn\'t fix that answer: ' + (e.message || e)); }
   window._bdFixing = null; renderFilledEOI();
 }
@@ -3505,9 +3509,11 @@ async function bdMoneySync() {
         sheet + '\n\nQUESTION: ' + q.question + '\n\nANSWER:\n' + a, 1400, false, { model: AI_MODELS.smart, long: true, purpose: 'bid_money_sync' });
       let t = _stripLeadingLabel(cleanReportText(out));
       if (!t || _eoiLooksLikeRefusal(t) || _wordCount(t) < _wordCount(a) * 0.8 || _wordCount(t) > _wordCount(a) * 1.15 + 10) return;
-      t = await _bdFit(q, t);
+      t = _bdPeopleFix(await _bdFit(q, t), m.people);
       if (!(_bdOver(q, t) && !_bdOver(q, a)) && !(_bdCutOff(t) && !_bdCutOff(a))) _eoiAnswers[q.id] = t;
     }));
+    // any answer the AI pass skipped still gets the right target
+    if (m.people) _eoiQuestions.forEach(q => { const a = String(_eoiAnswers[q.id] || ''); if (a && !/^\[CONFIRM:/.test(a)) _eoiAnswers[q.id] = _bdPeopleFix(a, m.people); });
     m.synced = _bdMoneySig(m); m.syncedPeople = m.people || null; if (m.peopleOk) m.explained = true;
     window._bdMoneyUndo = before;
   } catch (e) { if (!(e && e.message === 'AI_PLAN_GATE')) alert('Couldn\'t update every answer: ' + (e.message || e)); }
