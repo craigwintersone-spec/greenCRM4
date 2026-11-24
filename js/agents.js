@@ -2459,6 +2459,7 @@ function _eoiMoneyFacts() {
   const lines = [];
   if (f.annual_spend) lines.push('Total spending in the last full year: ' + gbp(f.annual_spend));
   if (f.annual_income) lines.push('Total income in the last full year: ' + (gbp(f.annual_income) || f.annual_income));
+  if (f.income_previous) lines.push('Total income the year before: ' + f.income_previous);
   if (f.secured_income) lines.push('Income already secured for the next 12 months: ' + gbp(f.secured_income));
   if (f.reserves) lines.push('Unrestricted reserves: ' + gbp(f.reserves));
   const con = (DB.contracts || []).filter(c => !c._demo || (typeof _demoMode !== 'undefined' && _demoMode)).filter(c => c.value);
@@ -2470,7 +2471,8 @@ function _eoiMoneyFacts() {
 async function _eoiMoneyCheck(res, funder) {
   if (!_eoiNeedsMoney()) return;
   const f = ((currentOrg && currentOrg.settings && currentOrg.settings.bid_facts) || {});
-  if ((f.annual_spend && f.secured_income != null && f.secured_income !== '') || window._eoiMoneyAskedFor === funder) return;   // asked once; change them any time in the gaps
+  if ((f.annual_spend && f.secured_income != null && f.secured_income !== '') || window._eoiMoneyAskedFor === funder) return;   // asked once; change them any time in Settings > Organisation
+  const needSpend = !f.annual_spend;
   return new Promise(resolve => {
     window._eoiMoneyDone = async function (skip) {
       if (!skip) {
@@ -2492,12 +2494,12 @@ async function _eoiMoneyCheck(res, funder) {
     const r = (_eoiBrief && _eoiBrief.rules) || {};
     const rule = [r.shareOfCost, r.matchFunding, r.typical].filter(Boolean).join(' · ');
     const v = k => escapeHTML(f[k] || '');
-    res.innerHTML = '<div style="font-size:18px;font-weight:700;letter-spacing:-.01em;margin-bottom:4px">Three numbers, so the money is right</div>' +
+    res.innerHTML = '<div style="font-size:18px;font-weight:700;letter-spacing:-.01em;margin-bottom:4px">' + (needSpend ? 'A few numbers, so the money is right' : 'One number, so the money is right') + '</div>' +
       '<div style="font-size:13px;color:var(--txt3);margin-bottom:12px">' + escapeHTML(funder) + (rule ? ' — ' + escapeHTML(rule) : ' looks at your finances') + '. Vorlana uses these to set the right amount and build the budget tables, and never makes figures up. Remembered for your next bid.</div>' +
       '<div class="card" style="padding:16px 18px;margin-bottom:10px">' +
-        '<label style="text-transform:none;letter-spacing:0;font-size:13px;font-weight:600;color:var(--txt)">Total spending in your last full year (from your accounts)</label><input id="eoi-m-spend" inputmode="decimal" placeholder="e.g. 48,000" value="' + v('annual_spend') + '" style="max-width:240px;margin-bottom:10px"/>' +
+        (needSpend ? '<label style="text-transform:none;letter-spacing:0;font-size:13px;font-weight:600;color:var(--txt)">Total spending in your last full year (from your accounts)</label><input id="eoi-m-spend" inputmode="decimal" placeholder="e.g. 48,000" value="' + v('annual_spend') + '" style="max-width:240px;margin-bottom:10px"/>' : '<div style="font-size:12.5px;color:var(--txt3);margin-bottom:10px">Spending last year: £' + escapeHTML(String(f.annual_spend).replace(/^£/, '')) + ' (from your details — change it in Settings › Organisation).</div>') +
         '<label style="text-transform:none;letter-spacing:0;font-size:13px;font-weight:600;color:var(--txt)">Money already secured for the next 12 months</label><input id="eoi-m-secured" inputmode="decimal" placeholder="e.g. 22,000 (0 if none)" value="' + v('secured_income') + '" style="max-width:240px;margin-bottom:10px"/>' +
-        '<label style="text-transform:none;letter-spacing:0;font-size:13px;font-weight:600;color:var(--txt)">Unrestricted reserves (optional)</label><input id="eoi-m-res" inputmode="decimal" placeholder="e.g. 9,000" value="' + v('reserves') + '" style="max-width:240px"/>' +
+        (needSpend ? '<label style="text-transform:none;letter-spacing:0;font-size:13px;font-weight:600;color:var(--txt)">Unrestricted reserves (optional)</label><input id="eoi-m-res" inputmode="decimal" placeholder="e.g. 9,000" value="' + v('reserves') + '" style="max-width:240px"/>' : '') +
         ((DB.contracts || []).length ? '<div style="font-size:12px;color:var(--txt3);margin-top:10px">Your current funders and contract values come from Funders → Contracts.</div>' : '') +
       '</div><div style="display:flex;gap:10px;align-items:center"><button class="btn btn-p" type="button" onclick="_eoiMoneyDone(false)">Continue</button><a href="#" onclick="_eoiMoneyDone(true);return false" style="font-size:12.5px;color:var(--txt3)">Skip — leave money as gaps</a></div>';
   });
@@ -2554,7 +2556,12 @@ const _EOI_FACT_KEYS = [
   ['venue', /venue|building where|main location|room or hall/i, 'Main venue'],
   ['postcode', /postcode/i, 'Postcode'],
   ['year_end', /year end|accounting year|financial year end/i, 'Accounting year end'],
-  ['annual_income', /annual income|total income|turnover|income for the (last|most recent) year/i, 'Annual income'],
+  ['annual_income', /annual income|total income|turnover|income for the (last|most recent) year|income bracket|size of (your )?organisation/i, 'Income, latest year (turnover)'],
+  ['annual_spend', /annual (spend|expenditure)|total (spend|expenditure)|running costs/i, 'Spending, latest year'],
+  ['income_previous', /previous year|year before|last two years/i, 'Income, the year before'],
+  ['staff_count', /how many (paid )?(staff|employees)|number of (paid )?(staff|employees)/i, 'Paid staff'],
+  ['volunteer_count', /how many volunteers|number of volunteers/i, 'Volunteers'],
+  ['trustee_count', /how many trustees|number of trustees|board members/i, 'Trustees'],
   ['website', /website|web address/i, 'Website'],
   ['contact', /lead contact|contact (name|person|details)|main contact/i, 'Main contact'],
   ['area', /ward|neighbourhood|local authority|areas? (you )?serve/i, 'Area and wards served'],
@@ -2562,8 +2569,21 @@ const _EOI_FACT_KEYS = [
   ['trustee_review', /trustee .*(review|report|meet)|finance review/i, 'How often trustees review finances']
 ];
 function _eoiKnownFacts() {
-  const st = (currentOrg && currentOrg.settings) || {}, f = st.bid_facts || {};
+  const st = (currentOrg && currentOrg.settings) || {}, f = Object.assign({}, st.bid_facts || {});
+  // what Vorlana already knows fills anything not given
+  if (!f.contact && typeof currentUser !== 'undefined' && currentUser) {
+    const md = currentUser.user_metadata || {};
+    f.contact = [md.full_name || md.name, currentUser.email].filter(Boolean).join(', ');
+  }
+  if (!f.venue) {
+    const n = {}; (DB.events || []).forEach(e => { if (e.location) n[e.location] = (n[e.location] || 0) + 1; });
+    const top = Object.entries(n).sort((a, b) => b[1] - a[1])[0]; if (top && top[1] >= 3) f.venue = top[0] + ' (where most sessions are held)';
+  }
   const lines = _EOI_FACT_KEYS.filter(k => f[k[0]]).map(k => k[2] + ': ' + f[k[0]]);
+  if (f.secured_income) lines.push('Money secured for the next 12 months: ' + f.secured_income);
+  if (f.register_year) lines.push('(Register figures are for the ' + f.register_year + '.)');
+  const vActive = (DB.volunteers || []).filter(v => v.status !== 'Inactive').length, people = (typeof orgPeople === 'function' ? orgPeople() : (DB.participants || [])).length;
+  if (vActive || people) lines.push('Recorded in Vorlana now: ' + [people ? people + ' participants on the caseload' : '', vActive ? vActive + ' active volunteers' : ''].filter(Boolean).join(', ') + ' (use these for current numbers; register figures are from the last accounts)');
   return lines.length ? 'FACTS THE ORGANISATION HAS CONFIRMED (use exactly, never as a placeholder):\n' + lines.join('\n') : '';
 }
 

@@ -2,6 +2,7 @@
 Newest first. The Sentinel reads this every morning and logs what shipped in the last 7 days.
 
 ## 2026-11-24
+- New organisations are looked up on the public register (Find that Charity) when they sign up: charity/company number, address, turnover this year and last, spending, staff, volunteers and trustees go straight into every bid. Existing organisations get a one-tap "Find us" on Find funding. All of it can be checked and corrected in Settings › Organisation › Details for bids; the money check now only asks for what's missing
 - Find funding shows who each funder has actually given to (360Giving open data): groups like you nearby, typical grant size, last award and examples; funders who back similar local groups rank higher. A fourth search looks for funders by what they've already funded
 - Bids never invent money: a one-off "three numbers" check (last year's spending, money secured, reserves) feeds the amount, budget and finance sections; the assessor checks the request against the funder's rules and their typical grant
 - Only real declarations go to "Only you can confirm"; facts become remembered gaps, narratives are written, and "If you selected Yes…" follow-ups are answered from the question before

@@ -10,6 +10,7 @@ const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const STRIPE_KEY = process.env.STRIPE_SECRET_KEY;
 const APP_URL = (process.env.APP_URL || 'https://www.vorlana.com').replace(/\/$/, '');
 const TRIAL_DAYS = 14;
+const lookup = require('./_lib/org-lookup');
 
 // What can be bought online. Provider and Partnership stay "talk to us".
 const PLANS = {
@@ -146,6 +147,13 @@ async function handler(req, res) {
         try { await authAdmin('users/' + userId, 'DELETE'); } catch (x) { /* best effort */ }
         throw e;
       }
+      // Look the organisation up on the public registers now, so its bids start with its facts (never holds up sign-up)
+      try {
+        const d = await Promise.race([lookup.confident(orgName), new Promise(r => setTimeout(() => r(null), 7000))]);
+        const st = Object.assign({}, org.settings || {}, d ? { bid_facts: Object.assign({}, d.facts, { contact: name + ' (' + email + ')' }), register: { id: d.id, name: d.name, checked_at: new Date().toISOString(), auto: true } }
+          : { bid_facts: { contact: name + ' (' + email + ')' } });
+        await sb(`organisations?id=eq.${org.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ settings: st }) });
+      } catch (e) { /* they'll be asked "Is this you?" later */ }
       return res.status(200).json({ ok: true, org_id: org.id });
     }
 
