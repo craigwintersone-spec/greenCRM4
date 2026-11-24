@@ -23,6 +23,8 @@ const thinksAlways = m => /^claude-(fable|opus)-5/.test(m);
 
 function shape(body, model, opts) {
   const b = Object.assign({}, body, { model });
+  // Prompt caching: the instructions are reused across many requests, so mark them to be cached (ignored if too short to cache)
+  if (typeof b.system === 'string' && b.system.length > 2000) b.system = [{ type: 'text', text: b.system, cache_control: { type: 'ephemeral' } }];
   if (isNew(model)) {
     delete b.temperature; delete b.top_p; delete b.top_k;
     b.max_tokens = Math.max(b.max_tokens || 0, thinksAlways(model) ? 16000 : 8000);   // newer models may think first: room to think, then write in full

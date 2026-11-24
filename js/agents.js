@@ -78,6 +78,7 @@ async function callClaude(sys, user, maxTok, webSearch, opts) {
   const sysCap = opts.long ? 8000 : 3000, userCap = opts.long ? 45000 : 4000;
   if (sys && sys.length > sysCap) sys = sys.slice(0, sysCap);
   if (user && user.length > userCap) user = user.slice(0, userCap);
+  if (opts.context && opts.context.length > 40000) opts = Object.assign({}, opts, { context: opts.context.slice(0, 40000) });
   if (maxTok > 1200) maxTok = 1200;
 
   return new Promise((resolve, reject) => {
@@ -117,7 +118,10 @@ async function _callClaudeOnce(sys, user, maxTok, webSearch, attempt, opts) {
     return fetch('/api/claude', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': token ? 'Bearer ' + token : '' },
-      body: JSON.stringify({ model: opts.model || CLAUDE_MODEL, max_tokens: maxTok, system: sys, messages: [{ role: 'user', content: user }], web_search: webSearch, effort: opts.effort || undefined, purpose: opts.purpose || undefined })
+      // opts.context: the part shared by many requests (funder, facts, records) — sent first and cached, so it's paid for once
+      body: JSON.stringify({ model: opts.model || CLAUDE_MODEL, max_tokens: maxTok, system: sys,
+        messages: [{ role: 'user', content: opts.context ? [{ type: 'text', text: opts.context, cache_control: { type: 'ephemeral' } }, { type: 'text', text: user }] : user }],
+        web_search: webSearch, effort: opts.effort || undefined, purpose: opts.purpose || undefined })
     });
   };
   let res = await send(false);
@@ -2933,15 +2937,17 @@ async function runEOIFormFill() {
       const words = type === 'fact' ? 0 : type === 'choice' ? 25 : type === 'short' ? 50 : (q.charLimit ? Math.floor(q.charLimit / 6.3) : (q.wordLimit || +p.words || 220));
       const myQuotes = (Array.isArray(p.quotes) ? p.quotes : []).map(n => quotes[(+n || 0) - 1]).filter(Boolean);
       const isBudget = /budget|cost|break ?down|headings/i.test(q.question) && budget;
-      const userPrompt = [
+      const shared = [
         'FUNDER: ' + funder,
         _eoiFunderPriorities ? ('WHAT THE FUNDER WANTS:\n' + _eoiFunderPriorities.slice(0, 2500)) : '',
         _eoiProject ? ('THE PROJECT THIS BID IS FOR: ' + _eoiProject) : '',
         sheet ? ('FACT SHEET (use exactly):\n' + sheet) : '',
         _bdMoneyText(_eoiAnswers.__money),
-        isBudget ? ('SUGGESTED BUDGET (use these lines and amounts; they add up to the amount requested):\n' + budget) : '',
         usps ? ('OUR STRENGTHS/USPs: ' + usps) : '',
-        '', facts, '', evidence, '',
+        '', facts, '', evidence
+      ].filter(Boolean).join('\n');
+      const userPrompt = [
+        isBudget ? ('SUGGESTED BUDGET (use these lines and amounts; they add up to the amount requested):\n' + budget) : '',
         'TYPE: ' + type + (q.charLimit && type !== 'fact' ? ' — HARD LIMIT ' + q.charLimit + ' characters including spaces (about ' + words + ' words); stay well under it' : words ? ' — about ' + words + ' words at most' : ' — the value only'),
         p.message ? ('PLAN FOR THIS ANSWER — the point it makes: ' + p.message + (p.use ? ' | evidence to use: ' + p.use : '') + (p.criteria ? ' | criteria: ' + p.criteria : '')) : '',
         myQuotes.length ? ('QUOTE YOU MAY USE (word for word, no name attached): "' + myQuotes.join('" / "') + '"') : 'Use no quotes in this answer.',
@@ -2956,7 +2962,7 @@ async function runEOIFormFill() {
       ].filter(Boolean).join('\n');
       if (i >= 0 && !fixNote) { state[i] = 'active'; paint(); }
       try {
-        const o = type === 'fact' ? { model: AI_MODELS.smart, long: true, purpose: 'bid_field' } : { model: AI_MODELS.best, effort: 'medium', long: true, purpose: fixNote ? 'bid_fix' : 'bid_answer' };
+        const o = type === 'fact' ? { model: AI_MODELS.smart, long: true, context: shared, purpose: 'bid_field' } : { model: AI_MODELS.best, effort: 'medium', long: true, context: shared, purpose: fixNote ? 'bid_fix' : 'bid_answer' };
         let raw = await callClaude(sys, userPrompt, 1200, false, o);
         if (_eoiLooksLikeRefusal(raw)) raw = await callClaude(sys + 'Your previous reply asked for clarification instead of writing. That is not allowed. Write the answer now. ', userPrompt + '\n\n(Write the finished text now. Use [INSERT: ...] for anything missing.)', 1200, false, o);
         let ans = _eoiLooksLikeRefusal(raw) ? (_eoiAnswers[q.id] || '[INSERT: ' + q.question.replace(/[:?]\s*$/, '').slice(0, 80) + ']') : _stripLeadingLabel(cleanReportText(raw));
@@ -3351,9 +3357,9 @@ async function _bdImprove(q, note) {
     'If a figure or phrase in the answer looks wrong, garbled or makes no sense (for example reserves far bigger than income, a place that contradicts the rest, a fragment like "through Hubs and once"), do not guess: remove it and write around it. ' +
     'Gaps are a last resort: write around anything missing. Add at most ONE new [INSERT: …] placeholder, and only for a fact the funder cannot do without and only the applicant knows (for example the names of the neighbourhoods, or unrestricted reserves). A placeholder is 2–6 words naming the fact, like [INSERT: unrestricted reserves] — never a question, an instruction or a comment. Never write notes to the applicant in the answer. Keep every existing [INSERT: …] and [CONFIRM: …] placeholder. ' +
     'Length: ' + limitTxt + ' — this is a hard limit. Never comment or add a heading. Reply with ONLY the improved answer.',
-    ['FUNDER: ' + (bdWsFunder() || 'the funder'), _eoiFunderPriorities ? 'WHAT THE FUNDER WANTS:\n' + _eoiFunderPriorities.slice(0, 2500) : '', _bdFactsBundle(),
-      'QUESTION: ' + q.question + (q.guidance ? '\nTHEIR GUIDANCE: ' + q.guidance : ''), note ? 'THE ASSESSOR SAID — fix this:\n' + note : '', 'CURRENT ANSWER:\n' + ans].filter(Boolean).join('\n\n'),
-    1400, false, { model: AI_MODELS.best, effort: 'medium', long: true, purpose: note ? 'bid_raise' : 'bid_improve' });
+    ['QUESTION: ' + q.question + (q.guidance ? '\nTHEIR GUIDANCE: ' + q.guidance : ''), note ? 'THE ASSESSOR SAID — fix this:\n' + note : '', 'CURRENT ANSWER:\n' + ans].filter(Boolean).join('\n\n'),
+    1400, false, { model: AI_MODELS.best, effort: 'medium', long: true, purpose: note ? 'bid_raise' : 'bid_improve',
+      context: ['FUNDER: ' + (bdWsFunder() || 'the funder'), _eoiFunderPriorities ? 'WHAT THE FUNDER WANTS:\n' + _eoiFunderPriorities.slice(0, 2500) : '', _bdFactsBundle()].filter(Boolean).join('\n\n') });
   let t = _stripLeadingLabel(cleanReportText(out));
   if (!t || _eoiLooksLikeRefusal(t)) return '';
   // Never more than one new gap, and gaps are short names — not questions or notes
