@@ -3346,6 +3346,8 @@ function bdConfirm(qid) {
 }
 function renderEOIGaps() {
   const box = $('eoi-gaps'); if (!box) return;
+  const typed = {};                // keep anything already typed when the list redraws
+  (window._eoiGapList || []).forEach((g, i) => { const el = $('eoi-gap-' + i); if (el && el.value.trim()) typed[g.ask] = el.value; });
   const gaps = {};
   _eoiQuestions.forEach(q => { (String(_eoiAnswers[q.id] || '').match(/\[INSERT:[^\]]*\]/gi) || []).forEach(m => {
     const label = m.replace(/^\[INSERT:\s*/i, '').replace(/\]$/, '').trim(), key = _eoiGapKey(label);
@@ -3381,6 +3383,14 @@ function renderEOIGaps() {
   const done = filled.length + conf.filter(q => confirmed[q.id]).length;
   const where = g => { const qs = [...new Set(g.covers.flatMap(k => (gaps[k] && gaps[k].qs) || []))].sort((a, b) => a - b); return qs.length ? ' · Q' + qs.join(', Q') : ''; };
   const open = groups.filter(g => !bank(g.ask + ' ' + g.covers.join(' ')));
+  // Suggested answers, worked out once per set of gaps
+  const ssig = sig + '#' + groups.map(g => g.ask).join('|');
+  const sugg = (window._eoiGapSugg && window._eoiGapSugg.sig === ssig) ? window._eoiGapSugg.list : null;
+  if (!sugg && open.length && !window._eoiGapSuggesting && !window._eoiGapGrouping) {
+    window._eoiGapSuggesting = true;
+    _bdSuggestGaps(groups).then(list => { window._eoiGapSugg = { sig: ssig, list }; }).catch(() => { window._eoiGapSugg = { sig: ssig, list: [] }; })
+      .finally(() => { window._eoiGapSuggesting = false; renderEOIGaps(); });
+  }
   bdWsSteps(done < total ? 3 : 4);
   if (!total) { box.innerHTML = '<div class="bd-ph">To finish</div><div style="font-size:13px;color:#166534;margin-top:8px">✓ Nothing left to fill in.</div>'; return; }
   box.innerHTML = '<div class="bd-ph">To finish <span>' + done + ' of ' + total + ' done' + (window._eoiGapGrouping ? ' · tidying…' : '') + '</span></div>' +
@@ -3388,12 +3398,76 @@ function renderEOIGaps() {
     filled.map(f => '<div class="bd-gi"><span class="bd-ck y">✓</span><div class="tx"><s>' + escapeHTML(f) + '</s></div></div>').join('') +
     groups.map((g, i) => bank(g.ask + ' ' + g.covers.join(' '))
       ? '<div class="bd-gi"><span class="bd-ck" style="cursor:default">🔒</span><div class="tx">' + escapeHTML(g.ask) + '<br><small>Type bank details straight into the funder\'s form. Vorlana never stores them.</small></div></div>'
-      : '<div class="bd-gi"><span class="bd-ck" style="cursor:default"></span><div class="tx">' + escapeHTML(g.ask) + '<small>' + where(g) + '</small><input id="eoi-gap-' + i + '" value="' + escapeHTML((fact(g.ask) && saved[fact(g.ask)]) || '') + '" onkeydown="if(event.key===\'Enter\')applyEOIGaps()"/></div></div>').join('') +
+      : (function () {
+          const sg = sugg && sugg[i], kept = typed[g.ask] || (fact(g.ask) && saved[fact(g.ask)]) || '';
+          return '<div class="bd-gi"><span class="bd-ck" style="cursor:default"></span><div class="tx">' + escapeHTML(g.ask) + '<small>' + where(g) + '</small>' +
+            '<input id="eoi-gap-' + i + '" value="' + escapeHTML(kept) + '" placeholder="' + escapeHTML(sg && sg.suggest ? 'e.g. ' + sg.suggest : '') + '" oninput="bdGapCheck(' + i + ')" onkeydown="if(event.key===\'Enter\')applyEOIGaps()"/>' +
+            (sg && sg.suggest ? '<div class="bd-sugg"><button type="button" onclick="bdUseSugg(' + i + ')">' + escapeHTML(sg.suggest) + '</button><span>' + (sg.source === 'records' ? 'from your records' : 'typical — check it') + (sg.why ? ' · ' + escapeHTML(sg.why) : '') + '</span></div>'
+              : window._eoiGapSuggesting ? '<div class="bd-sugg"><span><span class="bd-spin"></span> Working out a suggestion…</span></div>' : '') +
+            '<div class="bd-gapw" id="eoi-gap-w-' + i + '"></div></div></div>';
+        })()).join('') +
     conf.map(q => '<div class="bd-gi"><button type="button" class="bd-ck' + (confirmed[q.id] ? ' y' : '') + '" onclick="bdConfirm(\'' + escapeHTML(q.id) + '\')" aria-label="Done">' + (confirmed[q.id] ? '✓' : '') + '</button><div class="tx">' + (confirmed[q.id] ? '<s>' : '') + 'Only you can confirm: ' + escapeHTML(q.question.slice(0, 120)) + (q.question.length > 120 ? '…' : '') + (confirmed[q.id] ? '</s>' : '') + '<small> · Q' + (_eoiQuestions.indexOf(q) + 1) + '</small></div></div>').join('') +
-    (open.length ? '<div style="margin-top:10px;display:flex;gap:10px;align-items:center"><button class="btn btn-p btn-sm" type="button" onclick="applyEOIGaps()">Put these into my answers</button><span id="eoi-gap-msg" style="font-size:12px"></span></div>' : '');
+    (open.length ? '<div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn btn-p btn-sm" type="button" onclick="applyEOIGaps()">Put these into my answers</button>' +
+      (sugg && sugg.some(x => x && x.suggest) ? '<a href="#" onclick="bdUseSugg(-1);return false" style="font-size:12.5px;color:var(--em);font-weight:600">Use all suggestions</a>' : '') + '<span id="eoi-gap-msg" style="font-size:12px"></span></div>' : '');
+  groups.forEach((g, i) => bdGapCheck(i));
+}
+// A likely answer for each gap: from the records where they give it, otherwise what's typical for an organisation this size and this funder
+async function _bdSuggestGaps(groups) {
+  const list = groups.map((g, i) => i + '. ' + g.ask).join('\n');
+  const raw = await callClaude('You help a UK charity finish a funding application. For each numbered gap, suggest the most likely correct answer, in line with this funder\'s requirements and rules. ' +
+    'Use the FACTS and RECORDS where they give the answer (source "records"). Where only the applicant can know it, suggest a realistic, typical value for an organisation of THIS size and income that fits the funder\'s rules (source "typical") — for example reserves of 3 to 6 months\' spending, a match-funding share the funder accepts, a number of sessions that fits the targets already in the bid. Never suggest anything that contradicts the FACTS or the rest of the bid. ' +
+    'Keep each suggestion short — the value itself, ready to drop into a sentence. For number answers also give a plausible range. Skip bank details. ' +
+    'Reply with ONLY a JSON array: [{"i":0,"suggest":"","source":"records","why":"under 10 words","min":null,"max":null}]',
+    'FUNDER: ' + (bdWsFunder() || 'the funder') + '\n' + (_eoiFunderPriorities ? 'WHAT THE FUNDER WANTS AND THEIR RULES:\n' + _eoiFunderPriorities.slice(0, 2500) + '\n' : '') +
+    '\n' + _bdFactsBundle().slice(0, 6000) + '\n\nTHE BID SO FAR (short):\n' + _eoiQuestions.map((q, i) => 'Q' + (i + 1) + ' ' + q.question + ': ' + String(_eoiAnswers[q.id] || '').slice(0, 500)).join('\n') + '\n\nGAPS:\n' + list,
+    1200, false, { model: AI_MODELS.smart, long: true, purpose: 'bid_gap_suggest' });
+  const m = String(raw || '').replace(/```json|```/gi, '').match(/\[[\s\S]*\]/);
+  const arr = m ? JSON.parse(m[0]) : [];
+  const out = [];
+  (Array.isArray(arr) ? arr : []).forEach(x => { const i = +x.i; if (i >= 0 && i < groups.length && x.suggest) out[i] = { suggest: String(x.suggest).slice(0, 140), source: x.source === 'records' ? 'records' : 'typical', why: String(x.why || '').slice(0, 90), min: isFinite(+x.min) && x.min !== null ? +x.min : null, max: isFinite(+x.max) && x.max !== null ? +x.max : null }; });
+  return out;
+}
+function bdUseSugg(i) {
+  const s = (window._eoiGapSugg && window._eoiGapSugg.list) || [];
+  (i < 0 ? s.map((x, k) => k) : [i]).forEach(k => { const el = $('eoi-gap-' + k), x = s[k]; if (el && x && x.suggest && (i >= 0 || !el.value.trim())) { el.value = x.suggest; bdGapCheck(k); } });
+}
+// Catch numbers that can't be right before they go into the bid
+function _bdNum(v) {
+  const t = String(v || '').replace(/,/g, '').trim(); const m = t.match(/(-?\d+(?:\.\d+)?)\s*(k|m|million|thousand)?/i); if (!m) return null;
+  const n = parseFloat(m[1]); const u = (m[2] || '').toLowerCase();
+  return u === 'k' || u === 'thousand' ? n * 1e3 : u === 'm' || u === 'million' ? n * 1e6 : n;
+}
+function _bdGapProblem(i) {
+  const g = (window._eoiGapList || [])[i], el = $('eoi-gap-' + i); if (!g || !el) return '';
+  const v = el.value.trim(); if (!v) return '';
+  const ask = (g.ask + ' ' + g.covers.join(' ')).toLowerCase(), n = _bdNum(v);
+  const facts = (currentOrg && currentOrg.settings && currentOrg.settings.bid_facts) || {};
+  const income = _bdNum(facts.annual_income) || 0;
+  const s = ((window._eoiGapSugg && window._eoiGapSugg.list) || [])[i];
+  const money = /reserve|secured|match|fund|income|turnover|spend|cost|budget|amount|£|saving/.test(ask);
+  if (/percent|%|proportion|share/.test(ask) && n != null && n > 100 && !/£/.test(v)) return 'A percentage can\'t be over 100.';
+  if (money && n == null && v.length < 40) return 'This needs an amount, for example £25,000.';
+  if (money && n != null && income && /reserve|secured|match/.test(ask) && n > income * 2) return 'That\'s more than twice your yearly income (£' + Math.round(income).toLocaleString('en-GB') + '). Check it.';
+  if (s && n != null && s.min != null && s.max != null && s.max > 0 && (n < s.min / 3 || n > s.max * 3)) return 'That looks unusual — about ' + (money ? '£' : '') + Math.round(s.min).toLocaleString('en-GB') + '–' + (money ? '£' : '') + Math.round(s.max).toLocaleString('en-GB') + ' would be typical. Check it.';
+  if (!/\d/.test(v) && /how many|number of|how much|amount|figure/.test(ask) && !/^(none|0|nil|n\/a)$/i.test(v)) return 'This needs a number.';
+  if (v.split(/\s+/).length <= 3 && /and once|^and |^or |^the$/i.test(v)) return 'That doesn\'t look like a full answer.';
+  return '';
+}
+function bdGapCheck(i) {
+  const w = $('eoi-gap-w-' + i); if (!w) return;
+  const p = _bdGapProblem(i);
+  w.textContent = p; w.style.display = p ? 'block' : 'none';
+  const el = $('eoi-gap-' + i); if (el) el.style.borderColor = p ? '#D97706' : '';
 }
 async function applyEOIGaps() {
   const groups = window._eoiGapList || [], vals = {}, facts = {}, labels = [];
+  const flagged = groups.map((g, i) => { bdGapCheck(i); return _bdGapProblem(i) ? i + '=' + (($('eoi-gap-' + i) || {}).value || '') : ''; }).filter(Boolean).join('|');
+  if (flagged && window._eoiGapOverride !== flagged) {
+    window._eoiGapOverride = flagged;
+    const msg = $('eoi-gap-msg'); if (msg) { msg.style.color = '#B45309'; msg.textContent = 'Some answers look wrong — check the amber ones, or press again to use them anyway.'; }
+    return;
+  }
+  window._eoiGapOverride = '';
   groups.forEach((g, i) => {
     const el = $('eoi-gap-' + i); const v = el && el.value.trim(); if (!v) return;
     g.covers.forEach(k => { vals[k] = v; });
