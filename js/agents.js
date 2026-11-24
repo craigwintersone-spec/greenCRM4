@@ -3203,13 +3203,30 @@ async function _bdImprove(q, note) {
   const limitTxt = q.charLimit ? 'at most ' + Math.floor(q.charLimit * 0.95) + ' characters including spaces' : q.wordLimit ? 'at most ' + Math.floor(q.wordLimit * 0.97) + ' words' : short ? 'as short as it is now — this is a short field' : 'about ' + Math.round(wc * 1.1) + ' words at most';
   const out = await callClaude('You are an expert UK bid writer improving ONE answer in a funding application so it scores higher with THIS funder. Make it more specific, more evidenced and more clearly about what this funder wants and how they decide; lead with the direct answer; use their words; make every sentence read naturally. ' +
     'Use ONLY facts already in the answer or in the FACTS and RECORDS given — never invent numbers, partners, consultation, policies, places or quotes. Keep the answer consistent with the rest of the application. ' +
-    'If a figure or phrase in the answer looks wrong, garbled or makes no sense (for example reserves far bigger than income, a place that contradicts the rest, a fragment like "through Hubs and once"), do not guess: remove it and write around it, or replace it with one short [INSERT: …] placeholder saying exactly what is needed. Keep every [CONFIRM: …] placeholder. ' +
-    'Length: ' + limitTxt + '. Never comment or add a heading. Reply with ONLY the improved answer.',
+    'If a figure or phrase in the answer looks wrong, garbled or makes no sense (for example reserves far bigger than income, a place that contradicts the rest, a fragment like "through Hubs and once"), do not guess: remove it and write around it. ' +
+    'Gaps are a last resort: write around anything missing. Add at most ONE new [INSERT: …] placeholder, and only for a fact the funder cannot do without and only the applicant knows (for example the names of the neighbourhoods, or unrestricted reserves). A placeholder is 2–6 words naming the fact, like [INSERT: unrestricted reserves] — never a question, an instruction or a comment. Never write notes to the applicant in the answer. Keep every existing [INSERT: …] and [CONFIRM: …] placeholder. ' +
+    'Length: ' + limitTxt + ' — this is a hard limit. Never comment or add a heading. Reply with ONLY the improved answer.',
     ['FUNDER: ' + (bdWsFunder() || 'the funder'), _eoiFunderPriorities ? 'WHAT THE FUNDER WANTS:\n' + _eoiFunderPriorities.slice(0, 2500) : '', _bdFactsBundle(),
       'QUESTION: ' + q.question + (q.guidance ? '\nTHEIR GUIDANCE: ' + q.guidance : ''), note ? 'THE ASSESSOR SAID — fix this:\n' + note : '', 'CURRENT ANSWER:\n' + ans].filter(Boolean).join('\n\n'),
     1400, false, { model: AI_MODELS.best, effort: 'medium', long: true, purpose: note ? 'bid_raise' : 'bid_improve' });
-  const t = _stripLeadingLabel(cleanReportText(out));
-  return t && !_eoiLooksLikeRefusal(t) ? t : '';
+  let t = _stripLeadingLabel(cleanReportText(out));
+  if (!t || _eoiLooksLikeRefusal(t)) return '';
+  // Never more than one new gap, and gaps are short names — not questions or notes
+  const ph = x => (String(x).match(/\[INSERT:[^\]]*\]/gi) || []);
+  const added = ph(t).filter(x => !ph(ans).includes(x));
+  if (added.length > 1 || added.some(x => x.split(/\s+/).length > 9 || /\?|confirm|check |e\.g\.|for example|if recorded/i.test(x))) return '';
+  // Stay inside the limit
+  const over = x => q.charLimit ? x.length > q.charLimit : q.wordLimit ? _wordCount(x) > q.wordLimit : false;
+  for (let i = 0; i < 2 && over(t); i++) {
+    try {
+      const cut = await callClaude('Shorten this funding application answer to at most ' + (q.charLimit ? Math.floor(q.charLimit * 0.92) + ' characters including spaces' : Math.floor(q.wordLimit * 0.93) + ' words') + '. Keep every figure, name and [INSERT: ...] placeholder and the strongest points. Reply with ONLY the shortened answer.',
+        t, 1400, false, { model: AI_MODELS.smart, purpose: 'bid_trim' });
+      const c = _stripLeadingLabel(cleanReportText(cut));
+      if (c && !_eoiLooksLikeRefusal(c) && c.length < t.length) t = c; else break;
+    } catch (e) { break; }
+  }
+  if (over(t)) return over(ans) ? t : '';          // never swap an answer that fits for one that doesn't
+  return t;
 }
 // "Raise the score": the assessor lists what costs marks, the weak answers are rewritten to fix it, then it's scored again (two rounds at most)
 async function bdRaise() {
@@ -3223,7 +3240,7 @@ async function bdRaise() {
     for (let round = 1; round <= 2; round++) {
       say(round === 1 ? 'Reading it like their assessor and listing what costs marks…' : 'Checking again for anything still costing marks…');
       const raw = await callClaude('You are the funder\'s assessor. List the specific problems in this application that cost marks, worst first: answers that miss what the question or this funder wants; vague claims without evidence that the FACTS could support; weak links to their priorities and how they decide; value for money not shown; things that contradict each other or the FACTS; figures that look wrong or garbled phrases; repetition between answers; over-length answers. ' +
-        'For each, say exactly what the rewritten answer must do, using only the FACTS given. If something can only be fixed by information the applicant must supply, say the answer should ask for it with one short [INSERT: …] placeholder. Never touch [CONFIRM: …] items. ' +
+        'For each, say exactly what the rewritten answer must do, using only the FACTS given — prefer fixes that need no new information (cut, clarify, reorder, link to their priorities, use the records). Only if the funder truly cannot score the answer without it, say the answer should ask for ONE named fact (2–6 words). Each answer must stay within its word or character limit. Never touch [CONFIRM: …] items. ' +
         'Reply with ONLY a JSON array, at most 8 items: [{"n":1,"problem":"","fix":""}]. If nothing would raise the score, reply [].',
         'FUNDER: ' + funder + '\n' + (_eoiFunderPriorities ? 'WHAT THE FUNDER WANTS:\n' + _eoiFunderPriorities.slice(0, 2500) + '\n' : '') + '\n' + _bdFactsBundle().slice(0, 7000) + '\n\nAPPLICATION:\n' + _bdQA(),
         1500, false, { model: AI_MODELS.best, effort: 'medium', long: true, purpose: 'bid_raise_review' });
@@ -3238,7 +3255,8 @@ async function bdRaise() {
         const q = _eoiQuestions.find(x => x.id === id);
         try {
           const t = await _bdImprove(q, byQ[id].join('\n'));
-          if (t && t !== _eoiAnswers[id]) { gapsBack += Math.max(0, (t.match(/\[INSERT:/g) || []).length - (String(_eoiAnswers[id]).match(/\[INSERT:/g) || []).length); _eoiAnswers[id] = t; changed++; }
+          const add = t ? Math.max(0, (t.match(/\[INSERT:/g) || []).length - (String(_eoiAnswers[id]).match(/\[INSERT:/g) || []).length) : 0;
+          if (t && t !== _eoiAnswers[id] && gapsBack + add <= 3) { gapsBack += add; _eoiAnswers[id] = t; changed++; }     // three new questions at most for the whole bid
         } catch (e) { if (e && e.message === 'AI_PLAN_GATE') throw e; }
       }));
       renderFilledEOI();
@@ -3401,7 +3419,7 @@ async function applyEOIGaps() {
     await Promise.all(touched.map(async x => {
       try {
         const out = await callClaude('The applicant has just typed values into gaps in this funding application answer. Rewrite ONLY the sentences that contain those values so they read naturally and correctly in British English; leave every other word exactly as it is. ' +
-          'If a value does not actually answer what its gap asked, or is clearly wrong against the FACTS (for example reserves larger than the whole annual income, a fragment that is not a real answer), take it out and put back one short [INSERT: …] placeholder that asks more clearly. Never invent anything. Reply with ONLY the full answer.',
+          'If a value does not actually answer what its gap asked, or is clearly wrong against the FACTS (for example reserves larger than the whole annual income, a fragment that is not a real answer), take it out and put back one [INSERT: …] placeholder of 2–6 words naming the fact (never a question or a note). Never invent anything. Reply with ONLY the full answer.',
           'GAPS FILLED (what was asked → what they typed):\n' + x.used.join('\n') + '\n\n' + sheet + '\n\nQUESTION: ' + x.q.question + '\n\nANSWER:\n' + _eoiAnswers[x.q.id], 1400, false, { model: AI_MODELS.smart, long: true, purpose: 'bid_gap_blend' });
         const t = _stripLeadingLabel(cleanReportText(out));
         if (t && !_eoiLooksLikeRefusal(t) && _wordCount(t) > _wordCount(_eoiAnswers[x.q.id]) * 0.7) _eoiAnswers[x.q.id] = t;
