@@ -3168,34 +3168,109 @@ function bdRenderScore() {
   }
   const stale = sc.sig && sc.sig !== _bdAnswersSig();
   const r = window._bdRaised;
+  const probs = _bdStructural();
   el.innerHTML = head +
     '<div class="bd-score">' + Math.round(sc.score) + '<small> / 100</small>' + (r && r.from != null && r.from !== Math.round(sc.score) ? ' <small style="font-size:13px;color:' + (sc.score > r.from ? '#166534' : 'var(--txt3)') + '">from ' + r.from + '</small>' : '') + '</div>' +
     (sc.summary ? '<div style="font-size:12.5px;color:var(--txt2);margin-top:4px;line-height:1.5">' + escapeHTML(sc.summary) + (sc.next ? ' <b style="font-weight:600">To lift it:</b> ' + escapeHTML(sc.next) : '') + '</div>' : '') +
     (fixed && !r ? '<div style="font-size:12px;color:#166534;margin-top:6px">✓ ' + fixed + ' answer' + (fixed === 1 ? '' : 's') + ' already improved by the assessor check</div>' : '') +
     (r && r.note ? '<div style="font-size:12px;color:var(--txt2);margin-top:6px;line-height:1.45">' + escapeHTML(r.note) + '</div>' : '') +
+    (sc.parts ? '<div style="display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:11.5px;color:var(--txt3);margin-top:8px">' + _BD_RUBRIC.map(x => '<span>' + escapeHTML(x[1].split(',')[0]) + '</span><span>' + sc.parts[x[0]] + '/20</span>').join('') + '</div>' : '') +
+    probs.map(p => '<div class="bd-mwarn">' + escapeHTML(p.t) + ' ' + (window._bdFixing === p.id ? '<span class="bd-spin"></span>' : '<a href="#" onclick="bdFixQ(\'' + escapeHTML(p.id) + '\',\'' + p.k + '\');return false">' + p.label + '</a>') + '</div>').join('') +
     '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">' +
-      (sc.score < 88 && !stale ? '<button class="btn btn-p btn-sm" type="button" onclick="bdRaise()">Raise the score</button>' : '') +
+      (sc.score < 88 && !stale && !probs.length ? '<button class="btn btn-p btn-sm" type="button" onclick="bdRaise()">Raise the score</button>' : '') +
       (stale ? '<button class="btn btn-ghost btn-sm" type="button" onclick="bdScore()">Answers changed — check again</button>' : '') +
       (r && r.undo ? '<a href="#" onclick="bdRaiseUndo();return false" style="font-size:12.5px;color:var(--txt3);font-weight:600">Undo the changes</a>' : '') + '</div>';
 }
-async function bdScore() {
+// Scored on a fixed rubric (five parts, 20 marks each) so the same bid gets the same score; identical answers are never scored twice
+const _BD_RUBRIC = [['fit', 'Fit with what this funder wants and its priorities'], ['evidence', 'Specific, evidenced claims and clear outcomes'], ['voice', 'Community involvement and the people who benefit, as this funder asks'], ['money', 'Value for money, a budget that adds up, and money rules met'], ['clarity', 'Answers the questions, consistent, complete and within limits']];
+async function bdScore(force) {
   if (window._bdScoring || !_eoiQuestions.length) return;
+  const sig = _bdAnswersSig();
+  window._bdScoreCache = window._bdScoreCache || {};
+  if (!force && _eoiAnswers.__score && _eoiAnswers.__score.sig === sig) { bdRenderScore(); return _eoiAnswers.__score.score; }
+  if (window._bdScoreCache[sig]) { _eoiAnswers.__score = window._bdScoreCache[sig]; bdRenderScore(); return _eoiAnswers.__score.score; }
   window._bdScoring = true; bdRenderScore();
   const funder = bdWsFunder() || 'the funder';
   try {
-    const raw = await callClaude('You are the funder\'s assessor. Score this application out of 100 for how likely it is to be funded, judged on what this funder wants and how they decide: does each answer answer its question, is it specific and evidenced, does it fit their priorities and money rules, is it within limits, does it read well and agree with itself. ' +
-      'Do not mark down [CONFIRM: …] items — the applicant completes those. A few short [INSERT: …] gaps cost a little. Be honest and consistent: 85+ is a strong, fundable bid; 70–84 is good with fixes; below 60 is unlikely to be funded. ' +
-      'Reply with ONLY a JSON object: {"score":0,"summary":"its main strength, under 20 words","next":"the single change that would lift the score most, naming the question number, under 30 words"}',
-      'FUNDER: ' + funder + '\n' + (_eoiFunderPriorities ? 'WHAT THE FUNDER WANTS:\n' + _eoiFunderPriorities.slice(0, 2500) + '\n' : '') + '\nAPPLICATION:\n' + _bdQA(), 600, false, { model: AI_MODELS.smart, long: true, purpose: 'bid_score' });
+    const raw = await callClaude('You are the funder\'s assessor. Mark this application on five parts, each out of 20, using the whole range consistently: 18–20 excellent, 14–17 good, 10–13 adequate, under 10 weak. ' + _BD_RUBRIC.map(r => r[0] + ' = ' + r[1]).join('; ') + '. ' +
+      'Do not mark down [CONFIRM: …] items — the applicant completes those. A few short [INSERT: …] gaps cost a mark or two. An answer over its limit or cut off mid-sentence loses marks under clarity. ' +
+      'Reply with ONLY a JSON object: {"fit":0,"evidence":0,"voice":0,"money":0,"clarity":0,"summary":"its main strength, under 20 words","next":"the single change that would lift the score most, naming the question number, under 30 words"}',
+      'FUNDER: ' + funder + '\n' + (_eoiFunderPriorities ? 'WHAT THE FUNDER WANTS:\n' + _eoiFunderPriorities.slice(0, 2500) + '\n' : '') + _bdMoneyText(_eoiAnswers.__money) + '\n\nAPPLICATION:\n' + _bdQA(), 700, false, { model: AI_MODELS.smart, long: true, purpose: 'bid_score' });
     const m = String(raw || '').replace(/```json|```/gi, '').match(/\{[\s\S]*\}/);
     const j = m ? JSON.parse(m[0]) : null;
-    if (j && isFinite(+j.score)) {
+    if (j && _BD_RUBRIC.every(r => isFinite(+j[r[0]]))) {
       const cut = (t, n) => { t = String(t || '').trim(); if (t.length <= n) return t; const s = t.slice(0, n); const k = Math.max(s.lastIndexOf('. '), s.lastIndexOf('; ')); return (k > n * 0.5 ? s.slice(0, k + 1) : s.replace(/\s+\S*$/, '') + '…'); };
-      _eoiAnswers.__score = { score: Math.max(0, Math.min(100, +j.score)), summary: cut(j.summary, 200), next: cut(j.next, 260), sig: _bdAnswersSig(), at: new Date().toISOString() };
+      const parts = {}; _BD_RUBRIC.forEach(r => { parts[r[0]] = Math.max(0, Math.min(20, Math.round(+j[r[0]]))); });
+      const score = _BD_RUBRIC.reduce((a, r) => a + parts[r[0]], 0);
+      _eoiAnswers.__score = { score, parts, summary: cut(j.summary, 200), next: cut(j.next, 260), sig, at: new Date().toISOString() };
+      window._bdScoreCache[sig] = _eoiAnswers.__score;
       if (typeof window._vlBidSaveSoon === 'function') window._vlBidSaveSoon();
     }
   } catch (e) { /* the bid is fine without a score */ }
   window._bdScoring = false; bdRenderScore();
+  return _eoiAnswers.__score ? _eoiAnswers.__score.score : null;
+}
+// What's wrong with an answer, checked in code: over the limit, cut off, a changed people target or a new £ figure
+function _bdOver(q, t) { return q.charLimit ? String(t).length > q.charLimit : q.wordLimit ? _wordCount(t) > q.wordLimit : false; }
+function _bdCutOff(t) {
+  const x = String(t || '').trim(); if (_wordCount(x) < 25) return false;
+  const last = x.split('\n').filter(l => l.trim()).pop() || '';
+  return !/[.!?…:;)"'”’\]]\s*$/.test(x) && !/^\s*([-•*]|\d+[.)])\s/.test(last);
+}
+function _bdPeopleSaid(t) {
+  const out = []; let r; const re = /\bat least (\d[\d,]*) (?:more |extra )?(?:referred |new |local )?(?:people|participants|walkers|residents|families|children|young people|adults)\b(?!\s+(?:will be|to be|who will be|are)\s+trained)(?![^.]{0,40}\bvolunteer)/gi;
+  while ((r = re.exec(String(t || '')))) out.push(+r[1].replace(/,/g, ''));
+  return out;
+}
+function _bdCheck(q, t, base) {
+  if (!t) return 'empty';
+  if (_bdOver(q, t) && !_bdOver(q, base || '')) return 'over the limit';
+  if (_bdCutOff(t) && !_bdCutOff(base || '')) return 'cut off';
+  const m = _eoiAnswers.__money;
+  if (m && m.people) { const had = new Set(_bdPeopleSaid(base)); if (_bdPeopleSaid(t).some(n => n !== m.people && n >= m.people * 0.2 && !had.has(n))) return 'changes the people target'; }
+  const pounds = x => (String(x).replace(/,/g, '').match(/£\s?\d+(?:\.\d+)?\s?k?/gi) || []).map(v => Math.round(_bdNum(v.replace('£', ''))));
+  const allowed = new Set(pounds((base || '') + '\n' + _bdFactsBundle()));
+  if (pounds(t).some(n => !allowed.has(n))) return 'new money figure';
+  return '';
+}
+// Bring an answer inside its limit (never longer than the limit, never cut off)
+async function _bdFit(q, t) {
+  for (let i = 0; i < 2 && _bdOver(q, t); i++) {
+    try {
+      const cut = await callClaude('Shorten this funding application answer to at most ' + (q.charLimit ? Math.floor(q.charLimit * 0.92) + ' characters including spaces' : Math.floor(q.wordLimit * 0.93) + ' words') + '. Keep every figure, name and [INSERT: ...] placeholder and the strongest points. End with a complete sentence. Reply with ONLY the shortened answer.',
+        t, 1400, false, { model: AI_MODELS.smart, purpose: 'bid_trim' });
+      const c = _stripLeadingLabel(cleanReportText(cut));
+      if (c && !_eoiLooksLikeRefusal(c) && c.length < t.length) t = c; else break;
+    } catch (e) { break; }
+  }
+  return t;
+}
+// Every problem in the bid that the code can see for itself
+function _bdStructural() {
+  const out = [], m = _eoiAnswers.__money;
+  _eoiQuestions.forEach((q, i) => {
+    const a = String(_eoiAnswers[q.id] || ''); if (!a || /^\[CONFIRM:/.test(a)) return;
+    if (_bdOver(q, a)) out.push({ id: q.id, k: 'over', t: 'Q' + (i + 1) + ' is over the limit (' + (q.charLimit ? a.length + ' / ' + q.charLimit + ' characters' : _wordCount(a) + ' / ' + q.wordLimit + ' words') + ').', label: 'Trim it' });
+    if (_bdCutOff(a)) out.push({ id: q.id, k: 'cut', t: 'Q' + (i + 1) + ' stops mid-sentence.', label: 'Finish it' });
+    if (m && m.people) { const bad = _bdPeopleSaid(a).filter(n => n !== m.people && n >= m.people * 0.2); if (bad.length) out.push({ id: q.id, k: 'people', t: 'Q' + (i + 1) + ' says ' + bad[0] + ' people — the target is ' + m.people + '.', label: 'Fix it' }); }
+  });
+  return out;
+}
+async function bdFixQ(id, k) {
+  const q = _eoiQuestions.find(x => x.id === id); if (!q) return;
+  const a = String(_eoiAnswers[id] || '');
+  window._bdFixing = id; bdRenderScore();
+  try {
+    let t = '';
+    if (k === 'over') t = await _bdFit(q, a);
+    else {
+      const m = _eoiAnswers.__money;
+      const note = k === 'cut' ? 'The answer stops mid-sentence. Finish it properly within the limit; change nothing else.' : 'The number of people who will benefit must be ' + (m && m.people) + ' everywhere; change only the wrong number.';
+      t = await _bdImprove(q, note, true);
+    }
+    if (t && t !== a && !(_bdOver(q, t) || _bdCutOff(t))) { window._bdPrev = window._bdPrev || {}; window._bdPrev[id] = a; _eoiAnswers[id] = t; if (typeof window._vlBidSaveSoon === 'function') window._vlBidSaveSoon(); }
+  } catch (e) { if (!(e && e.message === 'AI_PLAN_GATE')) alert('Couldn\'t fix that answer: ' + (e.message || e)); }
+  window._bdFixing = null; renderFilledEOI();
 }
 function _bdQA() {
   return _eoiQuestions.map((q, i) => 'Q' + (i + 1) + '. ' + q.question + (q.charLimit ? ' (limit ' + q.charLimit + ' characters; now ' + String(_eoiAnswers[q.id] || '').length + ')' : q.wordLimit ? ' (limit ' + q.wordLimit + ' words; now ' + _wordCount(_eoiAnswers[q.id] || '') + ')' : '') + '\nANSWER: ' + (_eoiAnswers[q.id] || '')).join('\n\n');
@@ -3418,17 +3493,20 @@ async function bdMoneySync() {
       if (!a || /^\[CONFIRM:/.test(a)) return;
       if (isBudget(q) && m.lines.length && _wordCount(a) >= 6 && _wordCount(a) < 80) { _eoiAnswers[q.id] = _bdBudgetText(m); return; }   // a list-style budget answer: written by code
 
-      const peopleChanged = m.people && m.syncedPeople && m.syncedPeople !== m.people && new RegExp('\\b' + m.syncedPeople + '\\b').test(a);
+      const wrongPeople = m.people ? _bdPeopleSaid(a).filter(n => n !== m.people && n >= m.people * 0.2) : [];
+      const peopleChanged = m.people && (wrongPeople.length || (m.syncedPeople && m.syncedPeople !== m.people && new RegExp('\\b' + m.syncedPeople + '\\b').test(a)));
       const explain = m.peopleOk && !m.explained && /value|cost|budget|money|spend|right organisation|benefit/i.test(q.question);
       if (!/£/.test(a) && !peopleChanged && !explain) return;
       const out = await callClaude('Correct ONLY the money in this funding application answer so it matches the MONEY SHEET exactly: the amount asked, total project cost, other funding (and whether it is secured) and budget figures. Change no other words. ' +
-        (peopleChanged ? 'The number of people who will directly benefit is now ' + m.people + ' (it was ' + m.syncedPeople + '): change that target everywhere it appears, and any count worked out from it; leave percentages, volunteer numbers and current figures alone. ' : '') +
+        (peopleChanged ? 'The number of people who will directly benefit is now ' + m.people + ' (it was ' + ([m.syncedPeople].concat(wrongPeople).filter(Boolean).filter((v, i, x) => x.indexOf(v) === i).join(' or ') || 'different') + '): change that target everywhere it appears, and any count worked out from it; leave percentages, volunteer numbers and current figures alone. ' : '') +
         (explain ? 'Where it fits, add one or two sentences explaining why the cost per person (' + _bdGBP(m.ask / m.people) + ') is what it is, using only the records and the budget (for example intensive or one-to-one support, or lasting change). ' : '') +
         (isBudget(q) ? 'This answer explains the budget: list the MONEY SHEET budget lines and amounts, all of them, so they add up to the total shown. ' : '') +
         'Leave the organisation\'s own finances (annual income, spending, reserves, existing grants, volunteer value) exactly as they are. If a sentence states a project or budget figure that is not on the sheet, correct it to the sheet or remove that figure. Reply with ONLY the full answer.',
         sheet + '\n\nQUESTION: ' + q.question + '\n\nANSWER:\n' + a, 1400, false, { model: AI_MODELS.smart, long: true, purpose: 'bid_money_sync' });
-      const t = _stripLeadingLabel(cleanReportText(out));
-      if (t && !_eoiLooksLikeRefusal(t) && _wordCount(t) >= _wordCount(a) * 0.8 && _wordCount(t) <= _wordCount(a) * 1.15 + 10) _eoiAnswers[q.id] = t;
+      let t = _stripLeadingLabel(cleanReportText(out));
+      if (!t || _eoiLooksLikeRefusal(t) || _wordCount(t) < _wordCount(a) * 0.8 || _wordCount(t) > _wordCount(a) * 1.15 + 10) return;
+      t = await _bdFit(q, t);
+      if (!(_bdOver(q, t) && !_bdOver(q, a)) && !(_bdCutOff(t) && !_bdCutOff(a))) _eoiAnswers[q.id] = t;
     }));
     m.synced = _bdMoneySig(m); m.syncedPeople = m.people || null; if (m.peopleOk) m.explained = true;
     window._bdMoneyUndo = before;
@@ -3439,7 +3517,7 @@ async function bdMoneySync() {
 }
 
 // Rewrite one answer to score higher, optionally to an assessor's note
-async function _bdImprove(q, note) {
+async function _bdImprove(q, note, allowPeople) {
   const ans = String(_eoiAnswers[q.id] || ''); if (!ans || /^\[CONFIRM:/.test(ans)) return '';
   const wc = _wordCount(ans);
   const short = !q.proposal && wc < 25;
@@ -3458,33 +3536,26 @@ async function _bdImprove(q, note) {
   const ph = x => (String(x).match(/\[INSERT:[^\]]*\]/gi) || []);
   const added = ph(t).filter(x => !ph(ans).includes(x));
   if (added.length > 1 || added.some(x => x.split(/\s+/).length > 9 || /\?|confirm|check |e\.g\.|for example|if recorded/i.test(x))) return '';
-  // Money is locked: no £ figure that isn't already in the answer, the money sheet or the records
-  const pounds = x => (String(x).replace(/,/g, '').match(/£\s?\d+(?:\.\d+)?\s?k?/gi) || []).map(v => Math.round(_bdNum(v.replace('£', ''))));
-  const allowed = new Set(pounds(ans + '\n' + _bdFactsBundle()));
-  if (pounds(t).some(n => !allowed.has(n))) return '';
-  // Stay inside the limit
-  const over = x => q.charLimit ? x.length > q.charLimit : q.wordLimit ? _wordCount(x) > q.wordLimit : false;
-  for (let i = 0; i < 2 && over(t); i++) {
-    try {
-      const cut = await callClaude('Shorten this funding application answer to at most ' + (q.charLimit ? Math.floor(q.charLimit * 0.92) + ' characters including spaces' : Math.floor(q.wordLimit * 0.93) + ' words') + '. Keep every figure, name and [INSERT: ...] placeholder and the strongest points. Reply with ONLY the shortened answer.',
-        t, 1400, false, { model: AI_MODELS.smart, purpose: 'bid_trim' });
-      const c = _stripLeadingLabel(cleanReportText(cut));
-      if (c && !_eoiLooksLikeRefusal(c) && c.length < t.length) t = c; else break;
-    } catch (e) { break; }
-  }
-  if (over(t)) return over(ans) ? t : '';          // never swap an answer that fits for one that doesn't
+  // Inside the limit, not cut off, money and the people target unchanged — otherwise the old answer stays
+  t = await _bdFit(q, t);
+  const problem = _bdCheck(q, t, ans);
+  if (problem && !(allowPeople && problem === 'changes the people target')) return '';
   return t;
 }
 // "Raise the score": the assessor lists what costs marks, the weak answers are rewritten to fix it, then it's scored again (two rounds at most)
 async function bdRaise() {
   if (window._bdRaising || window._bdScoring || !_eoiQuestions.length) return;
+  const say = t => { window._bdRaising = t; bdRenderScore(); };
+  // Start from a score of exactly these answers
+  if (!_eoiAnswers.__score || _eoiAnswers.__score.sig !== _bdAnswersSig()) { say('Scoring your current version first…'); window._bdRaising = ''; await bdScore(); }
   const before = Object.assign({}, _eoiAnswers);
   const from = _eoiAnswers.__score ? Math.round(_eoiAnswers.__score.score) : null;
+  let best = from, kept = 0, tried = 0;
   const funder = bdWsFunder() || 'the funder';
   let changed = 0, gapsBack = 0;
-  const say = t => { window._bdRaising = t; bdRenderScore(); };
   try {
     for (let round = 1; round <= 2; round++) {
+      const roundStart = Object.assign({}, _eoiAnswers), roundGaps = gapsBack, roundChanged = changed;
       say(round === 1 ? 'Reading it like their assessor and listing what costs marks…' : 'Checking again for anything still costing marks…');
       const raw = await callClaude('You are the funder\'s assessor. List the specific problems in this application that cost marks, worst first: answers that miss what the question or this funder wants; vague claims without evidence that the FACTS could support; weak links to their priorities and how they decide; value for money not shown; things that contradict each other or the FACTS; figures that look wrong or garbled phrases; repetition between answers; over-length answers. ' +
         'For each, say exactly what the rewritten answer must do, using only the FACTS given — prefer fixes that need no new information (cut, clarify, reorder, link to their priorities, use the records). Only if the funder truly cannot score the answer without it, say the answer should ask for ONE named fact (2–6 words). Each answer must stay within its word or character limit. Never touch [CONFIRM: …] items. ' +
@@ -3502,27 +3573,38 @@ async function bdRaise() {
         const q = _eoiQuestions.find(x => x.id === id);
         try {
           const t = await _bdImprove(q, byQ[id].join('\n'));
+          tried++;
           const add = t ? Math.max(0, (t.match(/\[INSERT:/g) || []).length - (String(_eoiAnswers[id]).match(/\[INSERT:/g) || []).length) : 0;
           if (t && t !== _eoiAnswers[id] && gapsBack + add <= 3) { gapsBack += add; _eoiAnswers[id] = t; changed++; }     // three new questions at most for the whole bid
         } catch (e) { if (e && e.message === 'AI_PLAN_GATE') throw e; }
       }));
+      if (changed === roundChanged) break;
       renderFilledEOI();
-      say('Scoring it again…');
+      say('Scoring the new version…');
       window._bdRaising = '';
-      await bdScore();
-      if (_eoiAnswers.__score && _eoiAnswers.__score.score >= 85) break;
+      const now = await bdScore(true);
+      // Keep the round only if it scores higher; otherwise put every answer back
+      if (now == null || best == null || now <= best) {
+        _eoiAnswers = Object.assign({}, roundStart); changed = roundChanged; gapsBack = roundGaps;
+        renderFilledEOI();
+        break;
+      }
+      best = now; kept++;
+      if (now >= 85 || now - (from || 0) < 2) break;
     }
   } catch (e) { if (!(e && e.message === 'AI_PLAN_GATE')) alert('Couldn\'t finish raising the score: ' + (e.message || e)); }
   window._bdRaising = '';
   const now = _eoiAnswers.__score ? Math.round(_eoiAnswers.__score.score) : null;
   window._bdRaised = { from, undo: changed ? before : null,
-    note: !changed ? 'The assessor found nothing more it could fix from your records.' : changed + ' answer' + (changed === 1 ? '' : 's') + ' rewritten.' + (gapsBack ? ' ' + gapsBack + ' new question' + (gapsBack === 1 ? '' : 's') + ' for you under To finish — answering ' + (gapsBack === 1 ? 'it' : 'them') + ' will lift it further.' : '') + (now != null && now < 80 ? ' What\'s left needs facts only you have — check To finish.' : '') };
+    note: !changed ? (tried ? 'Tried rewriting ' + tried + ' answer' + (tried === 1 ? '' : 's') + ', but none scored higher, so your version is kept.' : 'The assessor found nothing more it could fix from your records.') + (now != null && now < 80 ? ' What\'s left needs facts only you have — check To finish.' : '')
+      : changed + ' answer' + (changed === 1 ? '' : 's') + ' improved and kept because the score went up.' + (gapsBack ? ' ' + gapsBack + ' new question' + (gapsBack === 1 ? '' : 's') + ' for you under To finish — answering ' + (gapsBack === 1 ? 'it' : 'them') + ' will lift it further.' : '') + (now != null && now < 80 ? ' What\'s left needs facts only you have — check To finish.' : '') };
   if (typeof window._vlBidSaveSoon === 'function') window._vlBidSaveSoon();
   renderFilledEOI();
 }
 function bdRaiseUndo() {
   const r = window._bdRaised; if (!r || !r.undo) return;
   _eoiAnswers = Object.assign({}, r.undo);
+  if (window._bdScoreCache && _eoiAnswers.__score && window._bdScoreCache[_bdAnswersSig()]) _eoiAnswers.__score = window._bdScoreCache[_bdAnswersSig()];
   window._bdRaised = null;
   if (typeof window._vlBidSaveSoon === 'function') window._vlBidSaveSoon();
   renderFilledEOI();
@@ -3549,7 +3631,7 @@ async function bdAns(id, how, btn) {
       const out = await callClaude('Shorten this funding application answer to at most ' + target + '. Keep every figure, name and [INSERT: ...] or [CONFIRM: ...] placeholder, and the points that matter most to the funder. Plain British English. Reply with ONLY the shortened answer.',
         'QUESTION: ' + q.question + '\n\nANSWER:\n' + ans, 1200, false, { model: AI_MODELS.smart, purpose: 'bid_trim' });
       t = _stripLeadingLabel(cleanReportText(out));
-      if (!t || _eoiLooksLikeRefusal(t) || t.length >= ans.length) t = '';
+      if (!t || _eoiLooksLikeRefusal(t) || t.length >= ans.length || _bdCutOff(t)) t = '';
     } else t = await _bdImprove(q, '');
     if (t) {
       window._bdPrev = window._bdPrev || {}; window._bdPrev[id] = ans;
@@ -3742,8 +3824,8 @@ async function applyEOIGaps() {
         const out = await callClaude('The applicant has just typed values into gaps in this funding application answer. Rewrite ONLY the sentences that contain those values so they read naturally and correctly in British English; leave every other word exactly as it is. ' +
           'If a value does not actually answer what its gap asked, or is clearly wrong against the FACTS (for example reserves larger than the whole annual income, a fragment that is not a real answer), take it out and put back one [INSERT: …] placeholder of 2–6 words naming the fact (never a question or a note). Never invent anything. Reply with ONLY the full answer.',
           'GAPS FILLED (what was asked → what they typed):\n' + x.used.join('\n') + '\n\n' + sheet + '\n\nQUESTION: ' + x.q.question + '\n\nANSWER:\n' + _eoiAnswers[x.q.id], 1400, false, { model: AI_MODELS.smart, long: true, purpose: 'bid_gap_blend' });
-        const t = _stripLeadingLabel(cleanReportText(out));
-        if (t && !_eoiLooksLikeRefusal(t) && _wordCount(t) > _wordCount(_eoiAnswers[x.q.id]) * 0.7) _eoiAnswers[x.q.id] = t;
+        let t = _stripLeadingLabel(cleanReportText(out));
+        if (t && !_eoiLooksLikeRefusal(t) && _wordCount(t) > _wordCount(_eoiAnswers[x.q.id]) * 0.7) { t = await _bdFit(x.q, t); if (!_bdCutOff(t) && !(_bdOver(x.q, t) && !_bdOver(x.q, _eoiAnswers[x.q.id]))) _eoiAnswers[x.q.id] = t; }
       } catch (e) { /* the value stays as typed */ }
     }));
   }
