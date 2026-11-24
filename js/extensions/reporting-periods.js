@@ -298,7 +298,7 @@
       (tpl ? 'This report answers the funder\'s own reporting form. Use these headings, exactly as written and in this order, each beginning with ##, and answer each question directly' + (Object.keys(limits).length ? ' within its word limit' : '') + ': ' + tpl.items.map((it, i) => (i + 1) + '. ' + it.q + (it.limit ? ' (max ' + it.limit + ' words)' : '')).join(' | ') + '. If the figures cannot answer a question, say plainly what is not recorded this period. '
            : 'Structure with these sections, in this order, each beginning with ## and exactly this title: ' + sections.join(', ') + '. ') +
       'Open "' + first + '" with the three figures that matter most to this funder, then one sentence on what they mean' + (hasTargets ? ', then progress against targets' : '') + (quotes.length ? ', then the single quote that best shows the difference made' : '') + '. ' +
-      (hasTargets ? 'For progress against targets use the PROGRESS lines exactly as given, including the verdict (ahead of pace, on track or behind pace); never work out pace yourself and never contradict the verdict. Only if a verdict is "behind pace" explain it plainly from the figures. ' : 'No targets were entered: never say delivery is on track, ahead or behind. ') +
+      (hasTargets ? 'Give progress against targets as a plain sentence in your own words, using the figures and the verdict from the PROGRESS lines (for example "11 of the 30 starts so far (37%), ahead of the 29% of the contract period gone"); never copy a PROGRESS line as it is, never work out pace yourself and never contradict the verdict. Only if a verdict is "behind pace" explain it plainly from the figures. ' : 'No targets were entered: never say delivery is on track, ahead or behind. ') +
       'Show the difference made, not just activity: relate figures to the target, to before and after, or to each other where the figures allow. ' +
       (story ? 'Include the CASE STUDY once, in about 60–100 words, in the section about outcomes or what people said, using only its facts; never name the person. ' : 'Never describe a case study or any individual. ') +
       'Data notes belong only in the evidence or data quality section; never turn them into actions or plans. Never write commitments in the organisation\'s name ("we will", "we plan to"). Any section about learning, risks or sustainability contains only what the figures show. ' +
@@ -413,7 +413,7 @@
         '<table class="pf"><thead><tr><td><div class="pf-gap"></div></td></tr></thead><tbody><tr><td>' +
         '<div class="report-doc">' +
           _headerHTML +
-          '<div class="report-body">' + bodyHTML + (hasCirc && !tpl ? cxReportDocHTML(circ, 'Circular economy: detail', { noFigs: true }) : '') + '</div>' +
+          '<div class="report-body"><div class="rq-edit">' + bodyHTML + '</div>' + (hasCirc && !tpl ? cxReportDocHTML(circ, 'Circular economy: detail', { noFigs: true }) : '') + '</div>' +
           '<div class="report-footer">Generated with Vorlana · ' + escapeHTML(todayStr) + ' · Period: ' + escapeHTML(periodLabel) + '</div>' +
         '</div>' +
         '</td></tr></tbody><tfoot><tr><td><div class="pf-gap"></div></td></tr></tfoot></table>';

@@ -1313,7 +1313,7 @@ function cxReportStats(o) {
     const a = acts[i.activity_id];
     const qty = +i.quantity || 1, kg = +i.weight_kg || 0;
     if (a.template === 'growing' && i.custom && i.custom.bed_planter) r.byBed[i.custom.bed_planter] = (r.byBed[i.custom.bed_planter] || 0) + kg;
-    const row = r.byActivity[a.name] || (r.byActivity[a.name] = { icon: a.icon || '♻️', items: 0, kg: 0, co2: 0, value: 0 });
+    const row = r.byActivity[a.name] || (r.byActivity[a.name] = { icon: a.icon || '♻️', items: 0, kg: 0, co2: 0, value: 0, tpl: a.template });
     if (!i.event_id) r.noSession++;
     if (a.template === 'growing') {          // a harvest is food grown, not waste diverted: counted on its own
       if (!cxIsHarvest(i, a)) return;        // a planting record is not a harvest
@@ -1387,11 +1387,11 @@ function cxReportLines(r) {
   return growLines.concat(compostLines).concat([
     '',
     'CIRCULAR ECONOMY',
-    'Activities: ' + r.activities.join(', '),
+    'Activities: ' + r.activities.filter(k => !/^(growing|compost)$/.test(r.byActivity[k].tpl || '')).join(', '),   // growing and compost have their own lines above
     'Items with a final outcome: ' + r.itemsDone,
     r.inStock ? 'Items currently being processed (in stock, not yet counted): ' + r.inStock : '',
     'Weight diverted from waste (reused, repaired, shared or recycled): ' + r.kg + ' kg' + (r.recycledKg ? ' (of which recycled: ' + r.recycledKg + ' kg)' : '') + (r.estKg ? ' — ' + r.estKg + ' kg of this was estimated from photos rather than weighed' : ''),
-    r.reused ? 'Of these, reused or repaired: ' + r.reused : '',
+    r.reused && r.reused !== r.itemsDone ? 'Of these, reused or repaired: ' + r.reused : '',   // when every item was reused, the outcomes below say it
     r.co2 ? 'Estimated CO2e avoided: ' + r.co2 + ' kg (' + (Math.round(r.co2 / 100) / 10) + ' tonnes)' : '',
     r.value ? 'Estimated value to people receiving items: ' + m(r.value) : '',
     r.foodKg && !(gr && gr.sharedKg === r.foodKg) ? 'Food shared: ' + r.foodKg + ' kg (about ' + r.meals + ' meals at 420 g per meal, WRAP)' : '',   // already given under Growing

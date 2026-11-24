@@ -77,6 +77,7 @@ function figuresIn(t) {
 
 // Instructions to the writer that leaked into the report
 var LEAK = [
+  [/\bto date:\s*\d|\bof the contract period elapsed:/i, 'copies a line from the data instead of writing a sentence'],
   [/\b(relate|relates|related)\s+only\s+to\b/i, 'explains how the figures were filtered'],
   [/\bnot the same measure\b|\bare not the same (thing|figure)\b/i, 'explains what a figure is not'],
   [/\b(is|are)\s+reported\s+(here\s+)?as\b/i, 'explains how a figure is classified'],
@@ -175,7 +176,42 @@ function put(text, h, body, add) {
   }
   return joinSecs(secs);
 }
-function tag() { var d = document.querySelector('#report-output .report-doc'); if (d && CTX) d.setAttribute('data-rq', CTX.key); }
+// The narrative can be edited in place: what you type becomes the report's text (copy, PDF, the funder's form, checks)
+function inline(n) {
+  var c = n.cloneNode(true);
+  c.querySelectorAll('strong,b').forEach(function (b) { b.replaceWith('**' + b.textContent + '**'); });
+  c.querySelectorAll('br').forEach(function (b) { b.replaceWith('\n'); });
+  return c.textContent.replace(/\u00a0/g, ' ').trim();
+}
+function domToText(root) {
+  var out = [];
+  root.childNodes.forEach(function (n) {
+    if (n.nodeType === 3) { if (n.textContent.trim()) out.push(n.textContent.trim()); return; }
+    if (n.nodeType !== 1) return;
+    var t = n.tagName;
+    if (/^H[1-6]$/.test(t)) { if (n.textContent.trim()) out.push('## ' + n.textContent.trim()); }
+    else if (t === 'UL' || t === 'OL') out.push(Array.prototype.map.call(n.querySelectorAll('li'), function (li, i) { return (t === 'OL' ? (i + 1) + '. ' : '- ') + inline(li); }).join('\n'));
+    else { var s = inline(n); if (s) out.push(s); }
+  });
+  return out.join('\n\n');
+}
+var _editT = null;
+function editable() {
+  var ed = document.querySelector('#report-output .rq-edit'); if (!ed || ed.getAttribute('contenteditable')) return;
+  if (!$('rq-edit-css')) { var st = document.createElement('style'); st.id = 'rq-edit-css'; st.textContent = '.rq-edit[contenteditable]{outline:none;border-radius:6px;transition:box-shadow .15s}.rq-edit[contenteditable]:hover{box-shadow:0 0 0 2px #E5E7EB}.rq-edit[contenteditable]:focus{box-shadow:0 0 0 2px var(--em)}@media print{.rq-edit[contenteditable]{box-shadow:none!important}}'; document.head.appendChild(st); }
+  ed.setAttribute('contenteditable', 'true'); ed.setAttribute('spellcheck', 'true');
+  ed.addEventListener('input', function () {
+    clearTimeout(_editT);
+    _editT = setTimeout(function () {
+      if (!CTX) return;
+      CTX.text = domToText(ed);
+      var clean = (typeof cleanReportText === 'function') ? cleanReportText(CTX.text) : CTX.text;
+      window._lastReportText = clean; if (window._lastReport) window._lastReport.text = clean;
+      ST.edited = true; paint();
+    }, 500);
+  });
+}
+function tag() { var d = document.querySelector('#report-output .report-doc'); if (d && CTX) d.setAttribute('data-rq', CTX.key); editable(); }
 function redraw(text) {
   CTX.text = text;
   try { CTX.render(text); } catch (e) { console.warn('report redraw', e); }
@@ -277,7 +313,22 @@ async function raise() {
       redraw(next);
       say('Scoring the new version…'); ST.raising = '';
       var now = await score(true);
-      if (now == null || best == null || now <= best) { changed = roundChanged; redraw(roundStart); if (CACHE[sigOf(roundStart)]) ST.score = CACHE[sigOf(roundStart)]; break; }
+      if (now == null || best == null || now <= best) {
+        redraw(roundStart); if (CACHE[sigOf(roundStart)]) ST.score = CACHE[sigOf(roundStart)];
+        changed = roundChanged;
+        // all together didn't score higher: try the officer's worst one or two on their own
+        var single = hs.filter(function (h, i) { return outs[i]; }).slice(0, hs.length > 1 ? 2 : 0), won = false;
+        for (var si = 0; si < single.length && !won; si++) {
+          var one = put(roundStart, single[si], outs[hs.indexOf(single[si])]);
+          if (problems(one).length > problems(roundStart).length) continue;
+          say('Trying the change to "' + single[si].slice(0, 40) + '" on its own…'); ST.raising = '';
+          redraw(one);
+          var n1 = await score(true);
+          if (n1 != null && best != null && n1 > best) { best = n1; changed = roundChanged + 1; won = true; }
+          else { redraw(roundStart); if (CACHE[sigOf(roundStart)]) ST.score = CACHE[sigOf(roundStart)]; }
+        }
+        break;
+      }
       best = now;
       if (now >= 88 || now - (from || 0) < 2) break;
     }
@@ -321,6 +372,7 @@ function paint() {
       '<div style="display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:11.5px;color:var(--txt3);margin-top:8px;max-width:360px">' + RUBRIC.map(function (x) { return '<span>' + esc(x[1]) + '</span><span>' + sc.parts[x[0]] + '/20</span>'; }).join('') + '</div>'
       : '<div style="font-size:13px;color:var(--txt3);margin:6px 0 4px">See how their grants officer is likely to read it.</div>') +
     (r && r.note ? '<div style="font-size:12px;color:var(--txt2);margin-top:6px">' + esc(r.note) + '</div>' : '') +
+    '<div style="font-size:12px;color:var(--txt3);margin-top:6px">' + (ST.edited ? '✓ Your edits are in the report, the copy and the PDF.' : 'Click any paragraph in the report to edit it.') + '</div>' +
     (ST.note ? '<div class="bd-mwarn soft">' + esc(ST.note) + '</div>' : '') +
     probs.map(function (p) { return '<div class="bd-mwarn">' + esc(p.t) + ' ' + (ST.fixing === p.k ? '<span class="bd-spin"></span>' : '<a href="#" onclick="vlReportQA.fix(\'' + esc(p.k).replace(/'/g, '&#39;') + '\');return false">' + esc(p.label) + '</a>') + '</div>'; }).join('') +
     '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">' +
@@ -341,7 +393,8 @@ function caseStudy(participants, feedback) {
   for (var i = 0; i < P.length; i++) {
     var p = P[i], notes = p.notes.slice(-3).map(function (n) { return String((n && (n.t || n.text)) || n || '').trim(); }).filter(Boolean).join(' ');
     if (!notes || H.test(notes)) continue;
-    return 'CASE STUDY (one real participant, anonymised — call them "one participant", never by name; use only these facts, add nothing): referred by ' + (p.ref_source || 'a partner') +
+    var how = /self/i.test(p.ref_source || '') ? 'came to us on their own' : 'referred by ' + (p.ref_source || 'a partner');
+    return 'CASE STUDY (one real participant, anonymised — call them "one participant", never by name; use only these facts, add nothing): ' + how +
       (p.barriers && p.barriers.length ? '; facing ' + p.barriers.join(', ').toLowerCase() : '') + '. ' + notes + ' Outcome: ' + p.outcomes.join(', ').toLowerCase() + '.';
   }
   var F = (feedback || []).filter(function (f) { var q = String(f.quote || '').trim(); return q.length > 40 && !H.test(q) && +f.cb > 0 && +f.ca > +f.cb; })

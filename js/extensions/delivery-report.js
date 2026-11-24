@@ -729,7 +729,7 @@ function generateNow() {
     'Structure with these sections, in this order, each beginning with ## and exactly this title: ' + sections.join(', ') + '. ' +
     'Open the Summary with the three figures that matter most to this funder, then one sentence on what they mean' + (targets.length ? ', then progress against targets' : '') + ', then, if quotes are supplied, the single quote that best shows the difference made. ' +
     'Never point out that two different figures are the same, and do not restate a percentage in words (for example "this is a majority of responses"). ' +
-    (targets.length ? 'For progress against targets use the PROGRESS lines exactly as given, including the verdict (ahead of pace, on track or behind pace); never work out pace yourself. Only if a verdict is behind pace explain it plainly from the figures. ' : '') +
+    (targets.length ? 'Give progress against targets as a plain sentence in your own words, using the figures and the verdict from the PROGRESS lines (for example "11 of the 30 starts so far (37%), ahead of the 29% of the contract period gone"); never copy a PROGRESS line as it is, never work out pace yourself and never contradict the verdict. Only if a verdict is behind pace explain it plainly from the figures. ' : '') +
     (prev ? 'Where a previous-period figure is supplied, say whether it is up or down and by how much, using only the supplied percentage. ' : '') +
     'Use participant quotes exactly as written where supplied. ' + (story ? 'Include the CASE STUDY once, in about 60–100 words, in the section about outcomes or what people said, using only its facts; never name the person. ' : 'Never describe a case study or any individual. ') +
     'Show the difference made, not just activity: relate figures to the target, the previous period or before and after where the figures allow. ' +
@@ -1007,7 +1007,7 @@ function renderDoc(raw, s, orgName, todayStr, funderName) {
     '<table class="pf"><thead><tr><td><div class="pf-gap"></div></td></tr></thead><tbody><tr><td>' +
     '<div class="report-doc">' +
       header +
-      '<div class="report-body">' + headline + bodyHTML + appendix + '</div>' +
+      '<div class="report-body">' + headline + '<div class="rq-edit">' + bodyHTML + '</div>' + appendix + '</div>' +
       '<div class="report-footer">Generated with Vorlana · ' + esc(todayStr) + ' · Period: ' + esc(s.period.label) + '</div>' +
     '</div>' +
     '</td></tr></tbody><tfoot><tr><td><div class="pf-gap"></div></td></tr></tfoot></table>';
