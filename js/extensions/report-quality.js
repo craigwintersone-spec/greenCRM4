@@ -69,6 +69,16 @@ function figuresAll(t) {
     .match(/£?\d[\d,]*(\.\d+)?%?/g) || []).filter(function (m) { return /[£%.]/.test(m) || +m.replace(/,/g, '') >= 20; })   // small whole numbers are too often different things
     .map(function (m) { return m.replace(/[£,]/g, '').replace(/\.0+(%?)$/, '$1'); });
 }
+// a percentage is the same figure only when it measures the same thing ("83% felt more confident" and "83% learned something new" are two figures)
+var PCT_STOP = /^(of|the|a|an|and|or|to|in|on|at|for|with|who|that|which|said|were|was|had|have|has|they|their|them|responses?|respondents?|people|participants?|beneficiaries|attendees|reported|reporting|say|says|saying|felt|feel|feeling|answered|stated|identified|as)$/i;
+function pctKeys(t) {
+  var out = [], re = /(\d+(?:\.\d+)?)%((?:\s+[A-Za-z0-9'’-]+){0,7})/g, m;
+  while ((m = re.exec(String(t || '')))) {
+    var w = (m[2].match(/[A-Za-z'’-]+/g) || []).filter(function (x) { return !PCT_STOP.test(x); }).slice(0, 2).map(function (x) { return x.toLowerCase().slice(0, 5); });
+    if (+m[1] >= 2) out.push(m[1] + '%|' + w.join(' '));
+  }
+  return out;
+}
 function figuresIn(t) {
   var s = String(t || '')
     .replace(/\b\d{1,2}(st|nd|rd|th)?\s+(January|February|March|April|May|June|July|August|September|October|November|December)\b(\s+\d{4})?/gi, ' ')
@@ -122,7 +132,7 @@ function problems(text) {
     [/\baccounts for (the )?(whole|all|entire)\b|\bnothing (\w+ )?(went|goes) to waste\b/i, 'a conclusion from a sum the report did itself'],
     [/\b(harder|hard|difficult) to (engage|reach)\b|\b(less|more) (likely|able) to\b|\bthis suggests\b/i, 'a reason the figures don\'t show'],
     [/\b(reported|given|set out|mentioned|shown) (above|earlier|in the summary|previously)\b/i, 'refers back instead of saying it'],
-    [/\bevidence base\b|\bwhere the evidence is strongest\b|\bthe case study below\b|\breflects? the same themes\b|\b(figures|numbers) that matter( most)?\b|\bnot directly comparable\b|\breported separately\b/i, 'filler or an instruction showing']
+    [/\bbest shows the difference\b|\bevidence base\b|\bwhere the evidence is strongest\b|\bthe case study below\b|\breflects? the same themes\b|\b(figures|numbers) that matter( most)?\b|\bnot directly comparable\b|\breported separately\b/i, 'filler or an instruction showing']
   ], specs = [];
   secs.forEach(function (s) { if (locked(s.h)) return; sentences(s.body).forEach(function (x) { SPEC.forEach(function (L) { if (L[0].test(x)) specs.push({ h: s.h, x: x.trim(), why: L[1] }); }); }); });
   if (specs.length) {
@@ -134,15 +144,17 @@ function problems(text) {
   var seen = {}, twice = {};
   secs.forEach(function (s, i) {
     if (locked(s.h)) return;
-    var all = figuresAll(s.body.replace(/"[^"]*"|\u201c[^\u201d]*\u201d/g, ' ')), n = {};
+    var body = s.body.replace(/"[^"]*"|\u201c[^\u201d]*\u201d/g, ' ');
+    var all = figuresAll(body).filter(function (f) { return !/%$/.test(f); }).concat(pctKeys(body)), n = {};
     all.forEach(function (f) { n[f] = (n[f] || 0) + 1; if (n[f] === 2) (twice[f] = twice[f] || []).push(s.h); });
     Object.keys(n).forEach(function (f) { if (!isSummary(s.h, i)) (seen[f] = seen[f] || []).push(s.h); });
   });
   var rep = Object.keys(seen).filter(function (f) { return seen[f].length >= 2; }).concat(Object.keys(twice)).filter(function (f, i, a) { return a.indexOf(f) === i; });
+  var shown = function (f) { return f.split('|')[0]; };
   if (rep.length) {
     var rh = {};
     rep.forEach(function (f) { (seen[f] && seen[f].length >= 2 ? seen[f].slice(1) : []).concat(twice[f] || []).forEach(function (h) { rh[h] = 1; }); });
-    out.push({ k: 'repeat', secs: Object.keys(rh), t: (rep.length === 1 ? rep[0] + ' is' : rep.slice(0, 3).join(', ') + ' are') + ' given more than once.', label: 'Say ' + (rep.length === 1 ? 'it' : 'each') + ' once', fix: 'These figures are given more than once: ' + rep.join(', ') + '. Give each once — in the opening section or the one section it belongs to — and elsewhere add detail or meaning instead. If the same number means two different things, keep both.' });
+    out.push({ k: 'repeat', secs: Object.keys(rh), t: (rep.length === 1 ? shown(rep[0]) + ' is' : rep.slice(0, 3).map(shown).join(', ') + ' are') + ' given more than once.', label: 'Say ' + (rep.length === 1 ? 'it' : 'each') + ' once', fix: 'These figures are given more than once: ' + rep.map(shown).join(', ') + '. Give each once — in the opening section or the one section it belongs to — and elsewhere add detail or meaning instead. If the same number means two different things, keep both.' });
   }
   // 5. a pace verdict contradicted
   var V = { 'ahead of pace': /\bahead\b/i, 'on track': /\bon (track|target|profile|course)\b/i, 'behind pace': /\bbehind\b|\bbelow (target|profile)\b/i };
