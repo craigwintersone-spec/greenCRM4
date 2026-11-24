@@ -2,6 +2,11 @@
 Newest first. The Sentinel reads this every morning and logs what shipped in the last 7 days.
 
 ## 2026-11-24
+- Find funding shows who each funder has actually given to (360Giving open data): groups like you nearby, typical grant size, last award and examples; funders who back similar local groups rank higher. A fourth search looks for funders by what they've already funded
+- Bids never invent money: a one-off "three numbers" check (last year's spending, money secured, reserves) feeds the amount, budget and finance sections; the assessor checks the request against the funder's rules and their typical grant
+- Only real declarations go to "Only you can confirm"; facts become remembered gaps, narratives are written, and "If you selected Yes…" follow-ups are answered from the question before
+- Proposals list every section from the funder's guidelines, each with its own job; attendances are never presented as people
+- Answer library: bids reuse your strongest past answers, won bids first. Documents checklist: what each funder wants attached, ticked off and saved with the bid
 - Every bid is written for its funder: Vorlana reads how they decide, what they want submitted, their money rules and style; project ideas follow their rules (share of cost, match funding, total cost and where the rest comes from); the assessor check rewrites anything generic
 - Funders that judge a written proposal (such as Garfield Weston) now get one, section by section within their page limit, alongside the form answers
 - Declarations, policies, tax status and "applied before?" are never answered for you: they're listed under "Only you can confirm these"

@@ -87,6 +87,26 @@
     } catch (e) { /* optional */ }
   }
   function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 1500); }
+  window._vlBidSaveSoon = saveSoon;
+
+  // The answer library: the closest answers this organisation has written before, won bids first
+  var STOP = /^(what|which|your|their|have|will|with|that|this|from|into|about|please|describe|explain|tell|give|does|there|these|those|would|could|should|organisation|project|words|maximum|including)$/;
+  function words(t) { var o = {}; String(t || '').toLowerCase().split(/[^a-z]+/).forEach(function (w) { if (w.length > 3 && !STOP.test(w)) o[w] = 1; }); return o; }
+  function sim(a, b) { var ka = Object.keys(a), n = 0; ka.forEach(function (k) { if (b[k]) n++; }); var u = ka.length + Object.keys(b).length - n; return u ? n / u : 0; }
+  var RANK = { won: 3, submitted: 2, lost: 1, drafted: 1 };
+  window._vlProvenAnswers = function (question) {
+    var qw = words(question), found = [];
+    bids.forEach(function (b) {
+      if (b.id === currentId || !Array.isArray(b.questions) || !b.answers) return;
+      var best = null;
+      b.questions.forEach(function (q) {
+        var a = String(b.answers[q.id] || ''); if (a.length < 120 || /^\[(CONFIRM|INSERT)/.test(a)) return;
+        var s = sim(qw, words(q.question)); if (s >= 0.3 && (!best || s > best.s)) best = { s: s, answer: a.replace(/\[INSERT:[^\]]*\]/g, '').trim() };
+      });
+      if (best) found.push({ answer: best.answer, s: best.s, status: b.status === 'won' ? 'won' : b.status === 'lost' ? 'not won' : b.status === 'submitted' ? 'sent' : 'draft', funder: b.funder, rank: RANK[b.status] || 0 });
+    });
+    return found.sort(function (x, y) { return (y.rank - x.rank) || (y.s - x.s); }).filter(function (x) { return x.status !== 'not won' || found.length < 2; }).slice(0, 2);
+  };
 
   // Downloaded or copied: it's on its way to the funder
   async function sent() {

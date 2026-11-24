@@ -98,6 +98,9 @@
     },
     "api/bid-asks.js": {
       "maxDuration": 60
+    },
+    "api/funder-giving.js": {
+      "maxDuration": 60
     }
   }
 }
