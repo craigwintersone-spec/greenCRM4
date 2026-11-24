@@ -733,7 +733,7 @@ function generateNow() {
     (prev ? 'Where a previous-period figure is supplied, say whether it is up or down and by how much, using only the supplied percentage. ' : '') +
     'Use participant quotes exactly as written where supplied. ' + (story ? 'Include the CASE STUDY once, in about 60–100 words, in the section about outcomes or what people said, using only its facts; never name the person. ' : 'Never describe a case study or any individual. ') +
     'Show the difference made, not just activity: relate figures to the target, the previous period or before and after where the figures allow. ' +
-    'In the learning / lessons section draw only on the data gaps and the figures (e.g. low attendance against capacity), never on assumptions. ' +
+    'Write about outcomes — what changed for people and progress against the grant\'s aims — not admin. Data notes, response rates and how figures were estimated get one short sentence at most, only in an evidence or data section if there is one, and nowhere else. A learning, challenges or sustainability section is about delivery and outcomes (what worked, what is behind and why, from the figures), never about data collection or record-keeping. ' +
     (hasCirc ? (growOnly
       ? 'Harvested food is food grown, not waste diverted; never call it waste diverted, and never explain this distinction in the report. In Growing, report kilograms harvested, food shared or sold, meals and value using only the figures supplied, and say value is an estimate at shop prices. Never describe harvested food as waste diverted, reused or repaired. '
       : 'In the circular economy section, report weight diverted, reuse and repair, food shared and CO2e using only the figures supplied, and say CO2e and value are estimates. Harvested food is food grown, not waste diverted; keep the two apart without explaining the distinction. Compost in and compost out are separate figures that never balance; never add or compare them. ') : '') +
@@ -754,7 +754,7 @@ function generateNow() {
     'every statistic has already been computed from the database. Do not add totals of your own. ' +
     'Quote the supplied numbers exactly as given. Use **bold** sparingly for headline figures. 600-800 words. ' +
     'If a funder is named, write the report as delivered under that funder\'s programme. ' +
-    'In the evidence / data quality section, state the listed gaps plainly and without defensiveness, and say that the arithmetic checks listed were passed. ' +
+    'Keep any evidence or data quality section to two or three short sentences on the gaps that matter to this funder; never mention the arithmetic checks. ' +
     'Do not use hashtags except as section markers, no horizontal rules, no emoji.';
 
   var lines = [

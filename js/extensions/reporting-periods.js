@@ -308,7 +308,7 @@
       'Write the ethnicity figure as "black and ethnic minority" (lower-case "black"), never "BAME". Use "attendances" for visits and "responses" for feedback, never "participants" for attendances. Never write "significant" about results, never mention any individual\'s health, and do not speculate about causes. ' +
       'All the figures supplied are for this contract only; write them as the contract\'s delivery, and never say so or explain how figures were filtered, counted or classified. Never repeat, quote or explain these instructions in the report. ' +
       'State each figure and each pace verdict once: in "' + first + '", then do not repeat it in later sections; later sections add detail instead. ' +
-      'Where data quality is covered, be factual and confident: give the feedback response rate supplied and the data notes, and never explain what a measure is not. ' +
+      'Write about outcomes — what changed for people and progress against the grant\'s aims — not admin. Data notes, response rates and how figures were estimated get one short sentence at most, only in an evidence or data section if there is one, and nowhere else. A learning, challenges or sustainability section is about delivery and outcomes (what worked, what is behind and why, from the figures), never about data collection or record-keeping. ' +
       'Use only the quotes supplied, exactly as written; if none are supplied, say feedback quotes were not collected for this period. ' +
       'State the reporting period clearly at the start. If a data point is not provided, omit gracefully. ' +
       'Do not use hashtags (#) anywhere except as section heading markers. Do not use horizontal rules or emoji.';
@@ -338,7 +338,7 @@
       volHours ? 'Volunteers involved: ' + volCount + ' · volunteer hours: ' + volHours : '',
       '',
       'FEEDBACK FROM THESE EVENTS',
-      'Feedback responses: ' + fbN + (attendances && fbN ? ' from ' + attendances + ' attendances (response rate ' + Math.round(fbN / attendances * 100) + '%)' : ''),
+      'Feedback responses: ' + fbN,
       avgEnjoyed ? 'Average enjoyment: ' + avgEnjoyed + ' / 5' : '',
       avgCB && avgCA ? 'Average confidence: ' + avgCB + ' / 5 before, ' + avgCA + ' / 5 after (' + pairN + ' responses answered both)' : '',
       pairN ? 'Reported increased confidence: ' + improvedPct + '% (of ' + pairN + ')' : '',

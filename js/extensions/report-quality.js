@@ -30,14 +30,14 @@ var RUBRIC = [
   ['asks', 'Answers what this funder asks for'],
   ['evidence', 'Evidence of the difference made'],
   ['voice', 'Participant voice and a real story'],
-  ['honesty', 'Honest progress and plain limits'],
+  ['honesty', 'Progress against outcomes and targets'],
   ['clarity', 'Clear, consistent, no repetition']
 ];
 var RUBRIC_LONG = {
   asks: 'answers what this funder asks for and wants to see, in its language and order',
   evidence: 'shows the difference made with specific figures and change (targets, before and after, comparisons), not just activity',
   voice: 'participant voice: real quotes and a short real case study that show the difference',
-  honesty: 'honest progress against targets, variance explained plainly from the figures, data limits stated without defensiveness',
+  honesty: 'progress against the grant\'s outcomes and targets, stated plainly, with anything behind explained from delivery',
   clarity: 'clear, consistent and concise: no repetition, padding, jargon or instructions to the writer showing; within any word limits'
 };
 
@@ -228,6 +228,7 @@ async function score(force) {
   try {
     var raw = await callClaude('You are the grants officer at ' + (CTX.funder || 'the funder') + ' reading a grantee\'s monitoring report. Mark it on five parts, each out of 20, using the whole range consistently: 18–20 excellent, 14–17 good, 10–13 adequate, under 10 weak. ' +
       RUBRIC.map(function (r) { return r[0] + ' = ' + RUBRIC_LONG[r[0]]; }).join('; ') + '. ' +
+      'Judge the outcomes for people — what changed for them — not admin. Never ask for, or reward, explanations of data collection, response rates, estimates or record-keeping, and never mark down for their absence; admin detail beyond one short line costs marks under clarity. ' +
       'Progress that is behind is not marked down if the report says so plainly and explains it from the figures; hiding or blurring it is. Do not mark down figures that are simply absent from the records. ' +
       'Reply with ONLY a JSON object: {"asks":0,"evidence":0,"voice":0,"honesty":0,"clarity":0,"summary":"its main strength, under 20 words","next":"the single change that would lift the score most, naming the section, under 30 words"}',
       'FUNDER: ' + (CTX.funder || 'the funder') + (CTX.asks ? '\nWHAT THEY ASK FOR:\n' + CTX.asks : '') + '\n\nFIGURES THE WRITER HAD:\n' + String(CTX.pack).slice(0, 7000) + '\n\nREPORT:\n' + CTX.text,
@@ -284,7 +285,7 @@ async function raise() {
       var roundStart = CTX.text, roundChanged = changed;
       say(round === 1 ? 'Reading it like their grants officer and listing what costs marks…' : 'Checking again for anything still costing marks…');
       var heads = sections(CTX.text).map(function (s) { return s.h; }).filter(function (h) { return h && !locked(h); });
-      var raw = await callClaude('You are the grants officer at ' + (CTX.funder || 'the funder') + '. List the specific problems in this monitoring report that cost marks, worst first: what this funder asks for that it misses or answers vaguely; activity described without the difference it made; figures given without meaning (compare with the target, the previous period or before and after, where the FIGURES allow); weak participant voice when quotes or a case study are in the FIGURES; progress that is blurred or not explained; repetition between sections; padding, jargon or sentences about how the report was put together. ' +
+      var raw = await callClaude('You are the grants officer at ' + (CTX.funder || 'the funder') + '. List the specific problems in this monitoring report that cost marks, worst first: what this funder asks for that it misses or answers vaguely; activity described without the difference it made; figures given without meaning (compare with the target, the previous period or before and after, where the FIGURES allow); weak participant voice when quotes or a case study are in the FIGURES; progress that is blurred or not explained; repetition between sections; padding, jargon, admin or sentences about how the report was put together. Every fix must be about outcomes and delivery: never ask a section to explain data collection, response rates, estimates or record-keeping. ' +
         'For each, say exactly what the rewritten section must do, using only the FIGURES — never ask for information that is not there. Use the section headings exactly as written. Only these sections may change: ' + heads.join(' | ') + '. ' +
         'Reply with ONLY a JSON array, at most 6 items: [{"section":"","problem":"","fix":""}]. If nothing would raise the score, reply [].',
         'FUNDER: ' + (CTX.funder || 'the funder') + (CTX.asks ? '\nWHAT THEY ASK FOR:\n' + CTX.asks : '') + '\n\nFIGURES (calculated from the records):\n' + String(CTX.pack).slice(0, 8000) + '\n\nREPORT:\n' + CTX.text,
