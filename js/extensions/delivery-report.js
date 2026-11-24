@@ -467,6 +467,7 @@ function unknownNumbers(narrative, pack) {
 // Shared with the contract report
 window.FUNDER_PROFILES = FUNDER_PROFILES; window.detectFunderProfile = detectProfile; window.unknownReportNumbers = unknownNumbers;
 window.reportLintFindings = function (text, s) { return lintFindings(text, s); };
+window.vlBarChart = function (t, items, color, unit) { return barChart(t, items, color, unit); };
 
 // ── UI ─────────────────────────────────────────────────────
 function yearOptions() {
@@ -731,7 +732,7 @@ function generateNow() {
     'Never point out that two different figures are the same, and do not restate a percentage in words (for example "this is a majority of responses"). ' +
     (targets.length ? 'Give progress against targets as a plain sentence in your own words, using the figures and the verdict from the PROGRESS lines (for example "11 of the 30 starts so far (37%), ahead of the 29% of the contract period gone"); never copy a PROGRESS line as it is, never work out pace yourself and never contradict the verdict. Only if a verdict is behind pace explain it plainly from the figures. ' : '') +
     (prev ? 'Where a previous-period figure is supplied, say whether it is up or down and by how much, using only the supplied percentage. ' : '') +
-    'Use participant quotes exactly as written where supplied. ' + (story ? 'Include the CASE STUDY once, in about 60–100 words, in the section about outcomes or what people said, using only its facts; never name the person. ' : 'Never describe a case study or any individual. ') +
+    'Use participant quotes exactly as written where supplied. ' + (story ? 'Include the CASE STUDY once, as its own paragraph beginning exactly "Case study:", in about 70–110 words, in the section about outcomes or what people said: the starting point, what they did, and what changed, using only its facts; never name the person. ' : 'Never describe a case study or any individual. ') +
     'Never add claims about what people did, felt or valued, or how volunteers or staff worked, unless they come from a quote or the figures. Give each figure once: within a section never twice, and after the opening section in one section only. Base any learning or challenges section on the WHAT WORKED lines (what drew people and what made the most difference) and anything behind pace; never on how data was collected. Mention that demographic answers were optional once, in a few words, in who was reached only; describe them as responses, never attendance. ' +
     'Show the difference made, not just activity: relate figures to the target, the previous period or before and after where the figures allow. ' +
     'Write about outcomes — what changed for people and progress against the grant\'s aims — not admin. Data notes, response rates and how figures were estimated get one short sentence at most, only in an evidence or data section if there is one, and nowhere else. A learning, challenges or sustainability section is about delivery and outcomes (what worked, what is behind and why, from the figures), never about data collection or record-keeping. ' +
@@ -1011,7 +1012,7 @@ function renderDoc(raw, s, orgName, todayStr, funderName) {
     '<table class="pf"><thead><tr><td><div class="pf-gap"></div></td></tr></thead><tbody><tr><td>' +
     '<div class="report-doc">' +
       header +
-      '<div class="report-body">' + headline + '<div class="rq-edit">' + bodyHTML + '</div>' + appendix + '</div>' +
+      '<div class="report-body">' + headline + '<div class="rq-edit">' + (window.vlReportQA ? window.vlReportQA.caseBox(bodyHTML) : bodyHTML) + '</div>' + appendix + '</div>' +
       '<div class="report-footer">Generated with Vorlana · ' + esc(todayStr) + ' · Period: ' + esc(s.period.label) + '</div>' +
     '</div>' +
     '</td></tr></tbody><tfoot><tr><td><div class="pf-gap"></div></td></tr></tfoot></table>';

@@ -292,6 +292,14 @@
         .map(x => x.replace(/\s*(,|and)\s*(what happens )?(next period|next steps|forward view)\s*$/i, ''));
     }
     const story = window.vlReportQA ? window.vlReportQA.caseStudy(linked, fbInPeriod) : '';
+    // what the outcomes were, not just how many
+    const oc = {};
+    linked.forEach(p => (p.outcomes || []).forEach(o => { const k = String(o || '').trim(); if (k) oc[k] = (oc[k] || 0) + 1; }));
+    const outcomeTypes = Object.keys(oc).sort((a, b) => oc[b] - oc[a]).map(k => [k, oc[k]]);
+    // attendances month by month, for the trend
+    const mo = {};
+    eventsInPeriod.forEach(e => { const k = String(e.date || '').slice(0, 7); if (/^\d{4}-\d{2}$/.test(k)) mo[k] = (mo[k] || 0) + num(e.attendees); });
+    const months = Object.keys(mo).sort().map(k => [new Date(k + '-01').toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }), mo[k], k]);
     const worked = window.vlReportQA ? window.vlReportQA.whatWorked(eventsInPeriod, fbInPeriod) : [];
     const first = sections[0] || 'Summary';
 
@@ -302,7 +310,7 @@
       (hasTargets ? 'Give progress against targets as a plain sentence in your own words, using the figures and the verdict from the PROGRESS lines (for example "11 of the 30 starts so far (37%), ahead of the 29% of the contract period gone"); never copy a PROGRESS line as it is, never work out pace yourself and never contradict the verdict. Only if a verdict is "behind pace" explain it plainly from the figures. ' : 'No targets were entered: never say delivery is on track, ahead or behind. ') +
       'Never add claims about what people did, felt or valued, or how volunteers or staff worked, unless they come from a quote or the figures. Give each figure once: within a section never twice, and after the opening section in one section only. Base any learning or challenges section on the WHAT WORKED lines (what drew people and what made the most difference) and anything behind pace; never on how data was collected. Mention that demographic answers were optional once, in a few words, in who was reached only; describe them as responses, never attendance. ' +
       'Show the difference made, not just activity: relate figures to the target, to before and after, or to each other where the figures allow. ' +
-      (story ? 'Include the CASE STUDY once, in about 60–100 words, in the section about outcomes or what people said, using only its facts; never name the person. ' : 'Never describe a case study or any individual. ') +
+      (story ? 'Include the CASE STUDY once, as its own paragraph beginning exactly "Case study:", in about 70–110 words, in the section about outcomes or what people said: the starting point, what they did, and what changed, using only its facts; never name the person. ' : 'Never describe a case study or any individual. ') +
       'Data notes belong only in the evidence or data quality section; never turn them into actions or plans. Never write commitments in the organisation\'s name ("we will", "we plan to"). Any section about learning, risks or sustainability contains only what the figures show. ' +
       'Never point out that two different figures are the same, and do not restate a percentage in words (for example "this is a majority"). ' +
       (hasCirc ? 'Use only the circular and growing figures supplied; mark CO2e and value as estimates in a word or two ("an estimated £213"), never with a sentence about how they were calculated (the method is footnoted under the tables). Harvested food is food grown, not waste diverted: keep the two apart without explaining the distinction. Compost in and compost out are separate figures that never balance; never add or compare them. ' : '') +
@@ -333,10 +341,13 @@
       (period.type === 'cumulative' && outcomesPace) ? '' : 'Participants with an outcome recorded: ' + linkedOutcomes,
       employment ? 'Employment outcomes: ' + jobs : '',
       employment ? 'Sustained outcomes: ' + sustained : '',
+      outcomeTypes.length ? 'Outcomes recorded by type (one person can have more than one): ' + outcomeTypes.map(o => o[0] + ' ' + o[1]).join(', ') : '',
+      num(contract && contract.value) && num(contract && contract.target_starts) ? 'Planned cost per start: £' + Math.round(num(contract.value) / num(contract.target_starts)).toLocaleString() + ' (grant value ÷ target starts)' : '',
       '',
       'EVENTS DELIVERED UNDER THIS CONTRACT',
       'Events delivered in period: ' + eventsInPeriod.length,
       eventsInPeriod.length ? 'Total attendances: ' + attendances : '',
+      months.length > 1 ? 'Attendances by month: ' + months.map(m => m[0] + ' ' + m[1]).join(', ') : '',
       eventsInPeriod.length ? 'Sessions run: ' + Object.keys(sessionMix).sort((a, b) => sessionMix[b] - sessionMix[a]).slice(0, 8).map(k => k + ' (' + sessionMix[k] + ')').join('; ') : '',
       volHours ? 'Volunteers involved: ' + volCount + ' · volunteer hours: ' + volHours : '',
       '',
@@ -397,6 +408,37 @@
           '<div class="report-subtitle">' + escapeHTML(orgName) + ' · ' + escapeHTML(todayStr) + '</div>' +
         '</div>';
 
+    // Results at a glance: the figures a funder looks for first, drawn in code so they print and can't be misread
+    const visualsHTML = (() => {
+      const e = s => escapeHTML(String(s));
+      const tile = (v, l) => '<div class="rv-t"><b>' + e(v) + '</b><span>' + e(l) + '</span></div>';
+      const prog = (label, done, target) => {
+        if (!target) return '';
+        const pc = Math.round(done / target * 100);
+        return '<div class="rv-p"><div class="rv-pl"><span>' + e(label) + '</span><span>' + done + ' of ' + target + ' (' + pc + '%)</span></div><div class="rv-pb"><i style="width:' + Math.min(100, pc) + '%"></i>' + (elapsed != null ? '<em style="left:' + elapsed + '%"></em>' : '') + '</div></div>';
+      };
+      const tiles = [
+        attendances ? tile(attendances.toLocaleString(), 'Attendances') : '',
+        eventsInPeriod.length ? tile(eventsInPeriod.length, 'Sessions') : '',
+        avgCB && avgCA ? tile(avgCB + ' → ' + avgCA, 'Confidence /5') : '',
+        pairN ? tile(improvedPct + '%', 'Felt more confident') : '',
+        volHours ? tile(Math.round(volHours).toLocaleString(), 'Volunteer hours') : ''
+      ].filter(Boolean);
+      const bars = [prog('Starts', startsToDate, num(contract && contract.target_starts)), prog('Outcomes', outcomesToDate, num(contract && contract.target_outcomes))].filter(Boolean);
+      const chart = (window.vlBarChart && months.length > 1) ? window.vlBarChart('Attendances by month', months.map(m => ({ label: new Date(m[2] + '-01').toLocaleDateString('en-GB', { month: 'short' }), value: m[1] })), '#1F6F6D') : '';
+      const cbar = (l, v, c) => '<div style="margin:8px 0 2px;display:flex;justify-content:space-between;font-size:12px;font-weight:600"><span>' + l + '</span><span>' + v + ' / 5</span></div><div class="rv-pb"><i style="width:' + Math.round(v / 5 * 100) + '%;background:' + c + '"></i></div>';
+      const conf = (avgCB && avgCA) ? '<div class="rv-o"><div class="rv-h">Average confidence (out of 5)</div>' + cbar('Before', +avgCB, '#9DB8B4') + cbar('After', +avgCA, '#1F6F6D') + '<div style="font-size:10.5px;color:#777;margin-top:8px">' + pairN + ' responses answered both</div></div>' : '';
+      const ocList = outcomeTypes.length ? '<div class="rv-o"><div class="rv-h">Outcomes recorded</div>' + outcomeTypes.map(o => '<div><span>' + e(o[0]) + '</span><b>' + o[1] + '</b></div>').join('') + '</div>' : '';
+      if (!tiles.length && !bars.length) return '';
+      return '<style>.rv{margin:4px 0 22px}.rv,.rv *{-webkit-print-color-adjust:exact;print-color-adjust:exact}.rv-g{display:grid;grid-template-columns:repeat(' + Math.min(5, tiles.length) + ',1fr);gap:8px;margin-bottom:12px}.rv-t{border:1px solid #e3e3e3;border-radius:8px;padding:10px 8px;text-align:center}.rv-t b{display:block;font-size:19px;color:#1F6F6D}.rv-t span{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:#666;font-weight:700}' +
+        '.rv-p{margin:0 0 10px}.rv-pl{display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:4px}.rv-pb{position:relative;height:12px;background:#EDF2F1;border-radius:6px}.rv-pb i{position:absolute;left:0;top:0;bottom:0;background:#1F6F6D;border-radius:6px}.rv-pb em{position:absolute;top:-4px;bottom:-4px;width:2px;background:#C2410C}.rv-n{font-size:10.5px;color:#777;margin:-4px 0 12px}' +
+        '.rv-c{display:grid;grid-template-columns:' + (chart && conf ? '2fr 1fr' : '1fr') + ';gap:10px;margin-bottom:10px}.rv-o{border:1px solid #e3e3e3;border-radius:8px;padding:10px 12px;font-size:12.5px;break-inside:avoid}.rv-o div{display:flex;justify-content:space-between;padding:2px 0}.rv-h{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#555;margin-bottom:4px}</style>' +
+        '<div class="rv"><h3>Results at a glance</h3>' +
+        (tiles.length ? '<div class="rv-g">' + tiles.join('') + '</div>' : '') +
+        bars.join('') + (bars.length && elapsed != null ? '<div class="rv-n">The orange line marks how far through the contract period we are (' + elapsed + '%).</div>' : '') +
+        ((chart || conf) ? '<div class="rv-c">' + chart + conf + '</div>' : '') + ocList + '</div>';
+    })();
+
     // Draws the report from its text — again after every fix or rewrite
     const draw = (text) => {
       const unverified = window.unknownReportNumbers ? window.unknownReportNumbers(text, prompt) : [];
@@ -418,7 +460,7 @@
         '<table class="pf"><thead><tr><td><div class="pf-gap"></div></td></tr></thead><tbody><tr><td>' +
         '<div class="report-doc">' +
           _headerHTML +
-          '<div class="report-body"><div class="rq-edit">' + bodyHTML + '</div>' + (hasCirc && !tpl ? cxReportDocHTML(circ, 'Circular economy: detail', { noFigs: true }) : '') + '</div>' +
+          '<div class="report-body">' + visualsHTML + '<div class="rq-edit">' + (window.vlReportQA ? window.vlReportQA.caseBox(bodyHTML) : bodyHTML) + '</div>' + (hasCirc && !tpl ? cxReportDocHTML(circ, 'Circular economy: detail', { noFigs: true }) : '') + '</div>' +
           '<div class="report-footer">Generated with Vorlana · ' + escapeHTML(todayStr) + ' · Period: ' + escapeHTML(periodLabel) + '</div>' +
         '</div>' +
         '</td></tr></tbody><tfoot><tr><td><div class="pf-gap"></div></td></tr></tfoot></table>';

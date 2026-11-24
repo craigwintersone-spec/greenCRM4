@@ -242,7 +242,8 @@ function domToText(root) {
     if (n.nodeType === 3) { if (n.textContent.trim()) out.push(n.textContent.trim()); return; }
     if (n.nodeType !== 1) return;
     var t = n.tagName;
-    if (/^H[1-6]$/.test(t)) { if (n.textContent.trim()) out.push('## ' + n.textContent.trim()); }
+    if (n.classList && n.classList.contains('rq-case')) { var cp = n.querySelector('p'); if (cp && inline(cp)) out.push('Case study: ' + inline(cp)); }
+    else if (/^H[1-6]$/.test(t)) { if (n.textContent.trim()) out.push('## ' + n.textContent.trim()); }
     else if (t === 'UL' || t === 'OL') out.push(Array.prototype.map.call(n.querySelectorAll('li'), function (li, i) { return (t === 'OL' ? (i + 1) + '. ' : '- ') + inline(li); }).join('\n'));
     else { var s = inline(n); if (s) out.push(s); }
   });
@@ -501,6 +502,13 @@ async function funderQuestions(contractId) {
   return TPL[k];
 }
 
+// The case study paragraph gets its own box, on screen and in print
+function caseBox(html) {
+  return String(html || '').replace(/<p>\s*(?:<strong>)?Case study:?(?:<\/strong>)?:?\s*([\s\S]*?)<\/p>/i, function (m, body) {
+    return '<div class="rq-case" style="border-left:4px solid #1F6F6D;background:#F3F8F7;-webkit-print-color-adjust:exact;print-color-adjust:exact;border-radius:0 8px 8px 0;padding:12px 16px;margin:12px 0;break-inside:avoid"><div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#1F6F6D;margin-bottom:4px">Case study</div><p style="margin:0">' + body + '</p></div>';
+  });
+}
+
 window.vlReportQA = {
   attach: function (ctx) {
     var fresh = !CTX || CTX.key !== ctx.key;
@@ -514,6 +522,7 @@ window.vlReportQA = {
   problems: function (t) { return CTX ? problems(t == null ? CTX.text : t) : []; },
   sections: sections,
   caseStudy: caseStudy,
+  caseBox: caseBox,
   scrub: scrub,
   whatWorked: whatWorked,
   funderQuestions: funderQuestions

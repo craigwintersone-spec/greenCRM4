@@ -2,6 +2,7 @@
 Newest first. The Sentinel reads this every morning and logs what shipped in the last 7 days.
 
 ## 2026-11-24
+- Funder reports look the part: a Results at a glance panel at the top (attendances, sessions, confidence before → after, % more confident, volunteer hours), progress bars for starts and outcomes with a marker for how far through the contract period it is, attendances by month, confidence before and after, and the outcomes recorded by type. The writer now gets what the outcomes were (not just how many), the planned cost per start, and attendances month by month; the case study is a fuller paragraph (starting point, what they did, what changed) in its own box. All of it prints
 - Fixed: "Black and ethnic minority" in the middle of a sentence is now always corrected to lower-case "black" (the automatic fix only caught "Black or from an ethnic minority background")
 - Sentences that only describe how the report was put together ("This is reported as an input only", "Harvested food is reported separately from waste diverted") are now taken out automatically before you see the report, when they hold no figure or quote; anything with a figure or quote is still flagged for you instead. CO2e and value are marked as estimates in a word ("an estimated £213"), with the method left to the footnote
 - Report checks: two different percentages that happen to match (83% more confident, 83% learned something new) are no longer flagged as a repeat, so Raise the score isn't held back; "the quote that best shows the difference" is flagged as instruction wording
