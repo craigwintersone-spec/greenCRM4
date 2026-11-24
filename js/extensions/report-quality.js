@@ -101,8 +101,24 @@ var LEAK = [
   [/\bonly compost in\b|\bcompost in and (compost )?out\b/i, 'explains how compost is counted'],
   [/\b(the\s+)?(figures|data|numbers|information)\s+(supplied|provided|given)\b/i, 'refers to the data the writer was given'],
   [/\bas\s+(instructed|requested)\b|\bquoted verbatim\b|\bverbatim\b/i, 'repeats an instruction to the writer'],
-  [/\bthis report (does not|cannot|will not) (include|state|give|report)\b/i, 'says what the report leaves out']
+  [/\bthis report (does not|cannot|will not) (include|state|give|report)\b/i, 'says what the report leaves out'],
+  [/\breported (separately|as an input)\b|\bharvested food is food grown\b|\bkept (apart|separate) from\b/i, 'explains how a figure is classified']
 ];
+// Sentences that only describe how the report was put together, with no figure or quote in them, are taken out before you see it
+var FILLER = /\bbest shows the difference\b|\bevidence base\b|\bwhere the evidence is strongest\b|\bthe case study below\b|\breflects? the same themes\b|\b(figures|numbers) that matter( most)?\b|\bnot directly comparable\b|\breported separately\b/i;
+function scrub(text) {
+  var n = 0, auto = LEAK.slice(1).map(function (L) { return L[0]; }).concat([FILLER]);
+  var out = String(text || '').split('\n').map(function (line) {
+    if (/^\s*#/.test(line)) return line;
+    var parts = line.split(/(?<=[.!?])\s+(?=[A-Z"\u201c(\u2018])/);
+    var keep = parts.filter(function (p) {
+      if (/["\u201c\u201d]/.test(p) || /\d/.test(p)) return true;     // a quote or a figure: flagged for you instead, never silently cut
+      var hit = auto.some(function (rx) { return rx.test(p); }); if (hit) n++; return !hit;
+    });
+    return keep.join(' ');
+  }).join('\n').replace(/\n{3,}/g, '\n\n');
+  return { text: out, removed: n };
+}
 
 // ── checks in code ─────────────────────────────────────────
 function problems(text) {
@@ -132,7 +148,7 @@ function problems(text) {
     [/\baccounts for (the )?(whole|all|entire)\b|\bnothing (\w+ )?(went|goes) to waste\b/i, 'a conclusion from a sum the report did itself'],
     [/\b(harder|hard|difficult) to (engage|reach)\b|\b(less|more) (likely|able) to\b|\bthis suggests\b/i, 'a reason the figures don\'t show'],
     [/\b(reported|given|set out|mentioned|shown) (above|earlier|in the summary|previously)\b/i, 'refers back instead of saying it'],
-    [/\bbest shows the difference\b|\bevidence base\b|\bwhere the evidence is strongest\b|\bthe case study below\b|\breflects? the same themes\b|\b(figures|numbers) that matter( most)?\b|\bnot directly comparable\b|\breported separately\b/i, 'filler or an instruction showing']
+    [FILLER, 'filler or an instruction showing']
   ], specs = [];
   secs.forEach(function (s) { if (locked(s.h)) return; sentences(s.body).forEach(function (x) { SPEC.forEach(function (L) { if (L[0].test(x)) specs.push({ h: s.h, x: x.trim(), why: L[1] }); }); }); });
   if (specs.length) {
@@ -199,6 +215,7 @@ async function rewrite(sec, instruction, full) {
   if (words(t) > (lim || cap * 1.1)) return '';                                               // over the limit
   if (sec.body && words(t) < Math.min(25, words(sec.body) * 0.3)) return '';                   // gutted
   if (window.unknownReportNumbers && window.unknownReportNumbers(t, CTX.pack).length) return '';  // a figure not in the records
+  t = scrub(t).text;
   if (LEAK.some(function (L) { return L[0].test(t); })) return '';
   return t;
 }
@@ -497,6 +514,7 @@ window.vlReportQA = {
   problems: function (t) { return CTX ? problems(t == null ? CTX.text : t) : []; },
   sections: sections,
   caseStudy: caseStudy,
+  scrub: scrub,
   whatWorked: whatWorked,
   funderQuestions: funderQuestions
 };

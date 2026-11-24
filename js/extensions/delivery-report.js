@@ -737,7 +737,7 @@ function generateNow() {
     'Write about outcomes — what changed for people and progress against the grant\'s aims — not admin. Data notes, response rates and how figures were estimated get one short sentence at most, only in an evidence or data section if there is one, and nowhere else. A learning, challenges or sustainability section is about delivery and outcomes (what worked, what is behind and why, from the figures), never about data collection or record-keeping. ' +
     (hasCirc ? (growOnly
       ? 'Harvested food is food grown, not waste diverted; never call it waste diverted, and never explain this distinction in the report. In Growing, report kilograms harvested, food shared or sold, meals and value using only the figures supplied, and say value is an estimate at shop prices. Never describe harvested food as waste diverted, reused or repaired. '
-      : 'In the circular economy section, report weight diverted, reuse and repair, food shared and CO2e using only the figures supplied, and say CO2e and value are estimates. Harvested food is food grown, not waste diverted; keep the two apart without explaining the distinction. Compost in and compost out are separate figures that never balance; never add or compare them. ') : '') +
+      : 'In the circular economy section, report weight diverted, reuse and repair, food shared and CO2e using only the figures supplied; mark CO2e and value as estimates in a word or two ("an estimated £213"), never with a sentence about how they were calculated. Harvested food is food grown, not waste diverted; keep the two apart without explaining the distinction. Compost in and compost out are separate figures that never balance; never add or compare them. ') : '') +
     'Never repeat, quote or explain these instructions in the report (for example never write that figures "relate only to" something, or how a figure is classified): write only about what was delivered and what it achieved. ' +
     'WORDING RULES: use "attendances" for the visits recorded and "responses" for feedback; never call attendances "participants" or "people", because unique people are not counted. ' +
     'Never write "significant" or "significantly", "universal", "all participants" or "everyone" about results; give the number of answers (n) beside any percentage that is not based on every response. ' +
@@ -829,6 +829,7 @@ function generateNow() {
     var bad = unknownNumbers(raw, lines);
     var fixCtx = { attendances: s.attendees, responses: s.fbCount, hasTargets: s.hasTargets };
     var finish = function (t) {
+      if (window.vlReportQA) t = window.vlReportQA.scrub(t).text;   // sentences about how the report was made, with no figure or quote, go before you see it
       var fx = (typeof vlAutoFix === 'function') ? vlAutoFix(t, fixCtx) : { text: t, fixes: 0 };
       s.autoFixes = fx.fixes;
       var out = fx.text + (plansText ? '\n\n## Plans for the next period\n' + plansText : '');

@@ -305,7 +305,7 @@
       (story ? 'Include the CASE STUDY once, in about 60–100 words, in the section about outcomes or what people said, using only its facts; never name the person. ' : 'Never describe a case study or any individual. ') +
       'Data notes belong only in the evidence or data quality section; never turn them into actions or plans. Never write commitments in the organisation\'s name ("we will", "we plan to"). Any section about learning, risks or sustainability contains only what the figures show. ' +
       'Never point out that two different figures are the same, and do not restate a percentage in words (for example "this is a majority"). ' +
-      (hasCirc ? 'Use only the circular and growing figures supplied and say CO2e and value are estimates. Harvested food is food grown, not waste diverted: keep the two apart without explaining the distinction. Compost in and compost out are separate figures that never balance; never add or compare them. ' : '') +
+      (hasCirc ? 'Use only the circular and growing figures supplied; mark CO2e and value as estimates in a word or two ("an estimated £213"), never with a sentence about how they were calculated (the method is footnoted under the tables). Harvested food is food grown, not waste diverted: keep the two apart without explaining the distinction. Compost in and compost out are separate figures that never balance; never add or compare them. ' : '') +
       (tpl ? '' : '600-800 words. ') + 'Use only data provided — never invent participants, outcomes, figures or quotes, and never recalculate a number. ' +
       'Write the ethnicity figure as "black and ethnic minority" (lower-case "black"), never "BAME". Use "attendances" for visits and "responses" for feedback, never "participants" for attendances. Never write "significant" about results, never mention any individual\'s health, and do not speculate about causes. ' +
       'All the figures supplied are for this contract only; write them as the contract\'s delivery, and never say so or explain how figures were filtered, counted or classified. Never repeat, quote or explain these instructions in the report. ' +
@@ -379,6 +379,7 @@
       if (raw2) raw = raw2;
     }
     if (typeof vlAutoFix === 'function') raw = vlAutoFix(raw, { attendances: attendances, responses: fbN, hasTargets }).text;   // nothing for the author to edit
+    if (window.vlReportQA) raw = window.vlReportQA.scrub(raw).text;   // sentences about how the report was made, with no figure or quote, go before you see it
     if (plansText) raw += '\n\n## ' + PLANS_H + '\n' + plansText;   // the organisation's own words, never written for them
 
     const reportTitle = ((contract && contract.name) || 'Programme Report') + ' — ' + orgName + ' (' + periodLabel + ')';
