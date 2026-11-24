@@ -101,6 +101,9 @@
     },
     "api/funder-giving.js": {
       "maxDuration": 60
+    },
+    "api/org-lookup.js": {
+      "maxDuration": 30
     }
   }
 }
