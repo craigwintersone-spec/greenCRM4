@@ -1630,29 +1630,227 @@ function _downloadBase64(b64, filename, mime) {
 }
 const _DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
-// ── the three steps along the top: always clickable ──
+// ── the page: tabs, the details drawer, the full-screen bid ──
+const _BD_LANE_SHORT = { 'Government, UKSPF and councils': 'Councils & government', 'Trusts, foundations and the Lottery': 'Trusts & Lottery', 'Corporate and environmental funders': 'Companies', 'Funders of groups like you': 'Funded groups like you' };
+let _bdItems = [], _bdRemoved = [], _bdFilter = '', _bdSort = 'fit', _bdShowHidden = false, _bdSearching = false, _bdLastAt = '', _bdSavedAt = 0;
+const _BD_STEPS = ['Funder', 'Questions', 'Answers', 'Gaps', 'Download'];
+let _bdStep = 0;
+
+function bdTab(v) {
+  ['opps', 'bids', 'saved', 'done'].forEach(k => { const el = $('bd-v-' + k); if (el) el.style.display = k === v ? '' : 'none'; });
+  document.querySelectorAll('#bd-tabs button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  if (v === 'saved') bdRenderSaved();
+  if ((v === 'bids' || v === 'done') && typeof window.vlBidsPaint === 'function') window.vlBidsPaint();
+}
+function bdCount(id, n) { const el = $('bd-n-' + id); if (el) el.textContent = n ? String(n) : ''; }
+
+function bdDetails(open) {
+  const d = $('bd-drawer'), bg = $('bd-drawer-bg'); if (!d) return;
+  if (open) { bg.style.display = 'block'; requestAnimationFrame(() => d.classList.add('open')); setTimeout(() => { const a = $('bd-area'); if (a && !a.value) a.focus(); }, 260); }
+  else { d.classList.remove('open'); setTimeout(() => { bg.style.display = 'none'; }, 250); bdRefreshSummary(); }
+}
+// "Searching for Northgate Community Hub · Peterborough · Community & volunteering · Under £100k  Edit"
+function bdWho() {
+  const el = $('bd-who'); if (!el) return;
+  const s = (typeof bdSetupRead === 'function' && $('bd-area')) ? bdSetupRead() : bdSetupGet();
+  const what = (s.what || []).map(k => (BD_WHAT.find(x => x[0] === k) || [])[1]).filter(Boolean);
+  const size = { micro: 'Under £100k', small: '£100k–£500k', medium: '£500k–£2m', large: '£2m+' }[s.size] || '';
+  const name = (currentOrg && currentOrg.name) || 'your organisation';
+  if (!s.area) { el.className = 'bd-who warn'; el.innerHTML = 'Tell us where you deliver and what you do, and we\'ll search for <b>' + escapeHTML(name) + '</b>. <a onclick="bdDetails(true)">Add details</a>'; return; }
+  el.className = 'bd-who';
+  el.innerHTML = 'Searching for <b>' + escapeHTML(name) + '</b> · ' + escapeHTML(s.area) + (what.length ? ' · ' + escapeHTML(what.slice(0, 2).join(', ')) + (what.length > 2 ? ' +' + (what.length - 2) : '') : '') + (size ? ' · ' + escapeHTML(size) : '') + ' <a onclick="bdDetails(true)">Edit</a>';
+}
+
+// The bid, full screen
+function bdWsOpen() { const w = $('bd-ws'); if (!w || w.classList.contains('open')) return; w.classList.add('open'); w.scrollTop = 0; document.body.style.overflow = 'hidden'; bdWsHead(); }
+function bdWsClose() { const w = $('bd-ws'); if (w) w.classList.remove('open'); document.body.style.overflow = ''; bdResume(); }
+function bdWsIsOpen() { const w = $('bd-ws'); return !!(w && w.classList.contains('open')); }
+function bdWsFunder() { return (($('eoi-funder') || {}).value || '').trim(); }
+function bdWsHead() {
+  const t = $('bd-ws-title'), s = $('bd-ws-sub'); if (!t) return;
+  const f = bdWsFunder();
+  t.textContent = f ? f.replace(' — ', ' · ') : 'New bid';
+  const bits = [];
+  if (_bdSavedAt) { const m = Math.round((Date.now() - _bdSavedAt) / 60000); bits.push('Saved ' + (m < 1 ? 'just now' : m + ' min ago')); }
+  const dl = _bdSel && _bdSel.deadline ? _bdDeadline(_bdSel.deadline) : null;
+  if (dl) bits.push('Closes: ' + dl.big);
+  s.textContent = bits.join(' · ');
+}
+setInterval(() => { if (bdWsIsOpen() && _bdSavedAt) bdWsHead(); }, 60000);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('bd-drawer') && $('bd-drawer').classList.contains('open')) bdDetails(false); });
+// Leaving Find funding closes the bid screen (it stays in memory: "Carry on with your … bid")
+(function wrapGo(t) {
+  if (typeof window.go === 'function') { const g = window.go; window.go = function (p) { if (p !== 'bd' && bdWsIsOpen()) bdWsClose(); if (p !== 'bd' && $('bd-drawer') && $('bd-drawer').classList.contains('open')) bdDetails(false); return g.apply(this, arguments); }; return; }
+  if (t < 100) setTimeout(() => wrapGo(t + 1), 100);
+})(0);
+window.addEventListener('vl-bid-saved', () => { _bdSavedAt = Date.now(); bdWsHead(); });
+function bdWsSteps(active) {
+  _bdStep = active;
+  const el = $('bd-steps'); if (!el) return;
+  el.innerHTML = _BD_STEPS.map((l, i) => '<button type="button" class="bd-st' + (i < active ? ' d' : i === active ? ' on' : '') + '" onclick="bdWsJump(' + i + ')"><b>' + (i < active ? '✓' : i + 1) + '</b>' + l + '</button>').join('');
+}
+function bdWsJump(i) {
+  const w = $('bd-ws'); if (!w) return;
+  const target = i === 0 ? ($('bd-ws-brief') && $('bd-ws-brief').innerHTML ? $('bd-ws-brief') : $('bd-s2')) : i <= 2 ? $('eoi-output') : i === 3 ? $('eoi-gaps') : $('bd-dl');
+  if (!target || target.offsetParent === null) return;
+  w.scrollTo({ top: Math.max(0, target.getBoundingClientRect().top + w.scrollTop - 90), behavior: 'smooth' });
+}
+// A fresh, empty bid screen
+function bdWsReset() {
+  if ($('eoi-output')) $('eoi-output').style.display = 'none';
+  if ($('eoi-result')) $('eoi-result').innerHTML = '';
+  if ($('bd-ws-brief')) $('bd-ws-brief').innerHTML = '';
+  if ($('bd-rail')) $('bd-rail').innerHTML = '';
+  if ($('bd-pull-steps')) $('bd-pull-steps').innerHTML = '';
+  if ($('bd-pull-note')) $('bd-pull-note').innerHTML = '';
+  if ($('eoi-questions')) { $('eoi-questions').style.display = 'none'; $('eoi-questions').innerHTML = ''; }
+  _bdSavedAt = 0; window._bdPrev = {};
+}
+// Older code calls these: 2 = getting their form, 3 = the answers
 function bdShowSection(n) {
-  if (n >= 2 && $('bd-s2')) $('bd-s2').style.display = '';
+  if (n < 2) return;
+  bdWsOpen();
+  if (n === 2 && $('bd-s2')) $('bd-s2').style.display = '';
   if (n >= 3 && $('eoi-output')) $('eoi-output').style.display = 'block';
-  const reached = [true, !!($('bd-s2') && $('bd-s2').style.display !== 'none'), !!($('eoi-output') && $('eoi-output').style.display !== 'none')];
-  [1, 2, 3].forEach(i => { const c = $('bd-chip-' + i); if (!c) return; c.classList.remove('on', 'done', 'todo');
-    c.classList.add(i === n ? 'on' : (reached[i - 1] && i < n) || (reached[i - 1] && i !== n) ? 'done' : 'todo'); });
+  if (n === 2 && _bdStep > 1) bdWsSteps(_eoiQuestions && _eoiQuestions.length ? 1 : 0);
+  bdWsHead();
 }
 function bdGo(n) {
-  if (n === 1) { const e = $('bd-s1'); if (e) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); bdShowSection(1); return; }
-  const hasForm = _eoiQuestions && _eoiQuestions.length;
-  if (n === 3 && hasForm && $('eoi-output') && $('eoi-output').style.display !== 'none') { $('eoi-output').scrollIntoView({ behavior: 'smooth', block: 'start' }); bdShowSection(3); return; }
-  if (n === 2 && hasForm) { $('bd-s2').scrollIntoView({ behavior: 'smooth', block: 'start' }); bdShowSection(2); return; }
-  // nothing pulled yet: open the manual way in, and say what to do
+  if (n === 1) { bdWsClose(); return; }
+  if (_eoiQuestions && _eoiQuestions.length && $('eoi-output') && $('eoi-result') && $('eoi-result').innerHTML) { bdShowSection(3); bdWsJump(n === 2 ? 1 : 2); return; }
   bdManualStart();
-  const note = $('bd-pull-note');
-  if (note) note.innerHTML = '<div class="bd-pullnote">' + (n === 3 ? 'Nothing to review yet. ' : '') + 'Press <b>Pull their form ▸</b> on a result in step 1, or upload their form here — the filled-in answers then appear in step 3.</div>';
 }
 function bdManualStart() {
-  bdShowSection(2);
+  if (!(_eoiQuestions && _eoiQuestions.length && $('eoi-result') && $('eoi-result').innerHTML && bdWsIsOpen())) {
+    bdWsReset(); _eoiQuestions = []; _eoiAnswers = {}; _eoiDoc = null; _bdSel = null; window._eoiAssessed = null;
+    if ($('eoi-funder')) $('eoi-funder').value = '';
+    if (typeof window._vlBidNew === 'function') window._vlBidNew();
+  }
+  bdWsOpen();
+  if ($('bd-s2')) $('bd-s2').style.display = '';
+  if ($('bd-funder-row')) $('bd-funder-row').style.display = '';
   const m = $('bd-manual'); if (m) m.open = true;
-  if ($('bd-funder-bar')) $('bd-funder-bar').textContent = 'Upload their form, paste their questions, or write from a brief';
-  if ($('bd-s2')) $('bd-s2').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  bdWsSteps(0); bdWsHead();
+  setTimeout(() => { const f = $('eoi-funder'); if (f && !f.value) f.focus(); }, 50);
+}
+// "Carry on with your … bid" when the bid screen is closed
+function bdResume() {
+  const el = $('bd-resume'); if (!el) return;
+  const has = _eoiQuestions && _eoiQuestions.length && $('eoi-result') && $('eoi-result').innerHTML && !bdWsIsOpen();
+  el.innerHTML = has ? '<div class="bd-resume" onclick="bdShowSection(3)"><span>Carry on with your <b>' + escapeHTML((bdWsFunder() || 'bid').split(' — ')[0]) + '</b> bid</span><span style="color:var(--em);font-weight:600">Open ›</span></div>' : '';
+}
+
+// ── a funder card ──
+function _bdNorm(t) { return String(t || '').toLowerCase().replace(/&/g, 'and').replace(/\b(the|fund|foundation|trust|programme|program|grants?|scheme)\b/g, '').replace(/[^a-z0-9]+/g, ''); }
+function _bdKey(o) { return _bdNorm(o.funder) + '|' + _bdNorm(o.programme); }
+function _bdDeadline(s) {
+  const t = String(s || '').trim();
+  if (!t || /^check$/i.test(t)) return { big: 'Check', sort: 9e15 };
+  if (/rolling|ongoing|any ?time|open all year|no deadline/i.test(t)) return { big: 'Rolling', sort: 8e15 };
+  const d = new Date(t.replace(/(\d+)(st|nd|rd|th)/i, '$1').replace(/^[^0-9]*?(\d{1,2} \w+ \d{4}).*$/, '$1'));
+  if (!isNaN(d) && d.getFullYear() > 2000) {
+    const days = Math.ceil((d - new Date()) / 864e5);
+    if (days < 0) return { big: 'Closed?', soon: true, sort: d.getTime() };
+    if (days <= 21) return { big: days === 0 ? 'Today' : days + ' day' + (days === 1 ? '' : 's'), soon: true, sort: d.getTime() };
+    return { big: d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + (d.getFullYear() !== new Date().getFullYear() ? ' ' + String(d.getFullYear()).slice(2) : ''), sort: d.getTime() };
+  }
+  return { big: t.length > 16 ? t.slice(0, 15) + '…' : t, small: t.length > 10, sort: 7e15 };
+}
+function _bdValue(s) {
+  const t = String(s || '').replace(/,/g, '');
+  const nums = (t.match(/£\s*\d+(?:\.\d+)?\s*(?:k|m|million)?/gi) || []).map(x => { const n = parseFloat(x.replace(/[^\d.]/g, '')); return /m(illion)?\s*$/i.test(x) ? n * 1e6 : /k\s*$/i.test(x) ? n * 1000 : n; }).filter(n => n > 0);
+  if (!nums.length) return { big: t ? (t.length > 14 ? 'See page' : t) : 'Check', label: 'Grant', n: 0 };
+  const max = Math.max(...nums);
+  return { big: '£' + Math.round(max).toLocaleString('en-GB'), label: (nums.length > 1 || /up to|max|maximum/i.test(t)) ? 'Up to' : 'Grant', n: max };
+}
+function _bdCardHTML(o, key, mode) {
+  const sc = o.score || 3;
+  const fit = sc >= 5 ? ['bd-fit5', 'Great fit'] : sc === 4 ? ['bd-fit4', 'Good fit'] : ['bd-fit3', 'Possible fit'];
+  const v = _bdValue(o.value), d = _bdDeadline(o.deadline);
+  const url = /^https?:\/\//i.test(o.url || '') ? o.url : '';
+  const g = o.giving && o.giving.found ? o.giving : null;
+  const saved = _bdSavedList().some(x => x.key === _bdKey(o));
+  return '<div class="bd-card" data-k="' + escapeHTML(_bdKey(o)) + '">' +
+    '<div class="bd-card-top"><span class="bd-pill ' + fit[0] + '">' + fit[1] + '</span><span class="bd-lane">' + escapeHTML(_BD_LANE_SHORT[o.lane] || o.lane || '') + '</span></div>' +
+    (o.funder && o.programme ? '<div class="bd-fn">' + escapeHTML(o.funder) + '</div><div class="bd-pn">' + escapeHTML(o.programme) + '</div>' : '<div class="bd-pn" style="margin-top:0">' + escapeHTML(o.funder || o.programme || 'Opportunity') + '</div>') +
+    '<div class="bd-nums"><div class="bd-num"><b>' + escapeHTML(v.big) + '</b><span>' + v.label + '</span></div><div class="bd-num"><b class="' + (d.soon ? 'soon' : '') + '"' + (d.small ? ' style="font-size:16px"' : '') + '>' + escapeHTML(d.big) + '</b><span>Closes</span></div></div>' +
+    (o.fit ? '<div class="bd-why">' + escapeHTML(o.fit) + '</div>' : '') +
+    (g ? '<div class="bd-given">' + (g.localSimilar ? '<b>Funded ' + g.localSimilar + ' group' + (g.localSimilar === 1 ? '' : 's') + ' like you nearby</b>' : g.local ? 'Funds groups in your area (' + g.local + ' recent)' : 'Recent grants checked') +
+      (g.typical ? ' · typical £' + g.typical.median.toLocaleString('en-GB') : '') + (g.lastAward ? ' · last award ' + escapeHTML(g.lastAward) : '') +
+      ((g.localExamples || [])[0] ? '<br>e.g. ' + g.localExamples.slice(0, 2).map(x => escapeHTML(x.recipient) + (x.amount ? ' (£' + x.amount.toLocaleString('en-GB') + ')' : '')).join(', ') : '') +
+      ' <a href="' + escapeHTML(g.source || 'https://www.threesixtygiving.org') + '" target="_blank" rel="noopener" style="color:inherit;font-size:11px">360Giving</a></div>' : '') +
+    (o.checked ? '<div class="bd-ok">✓ ' + escapeHTML(o.checked) + '</div>' : o.linkBroken ? '<div class="bd-warnline">Their link didn\'t open — check it</div>' : '') +
+    (o.eligibility ? '<details style="margin-bottom:6px"><summary>Who can apply</summary><div style="font-size:12.5px;color:var(--txt2);margin-top:4px;line-height:1.5">' + escapeHTML(o.eligibility) + '</div></details>' : '') +
+    '<div class="bd-acts"><button class="btn btn-p btn-sm" type="button" onclick="pullFunderForm(\'' + key + '\')">Write the bid</button>' +
+      (mode === 'saved' ? '<button class="bd-link" type="button" onclick="bdUnsave(\'' + escapeHTML(_bdKey(o)) + '\')">Remove</button>'
+        : '<button class="btn btn-ghost btn-sm" type="button" onclick="bdSave(\'' + key + '\')"' + (saved ? ' disabled' : '') + '>' + (saved ? '✓ Saved' : 'Save') + '</button><button class="bd-link" type="button" onclick="bdHide(\'' + key + '\')">Not for us</button>') +
+      (url ? '<a class="bd-fp" href="' + escapeHTML(url) + '" target="_blank" rel="noopener">Funder page ↗</a>' : '') + '</div></div>';
+}
+function bdRenderOpps() {
+  const el = $('bd-list'); if (!el) return;
+  const hidden = new Set(_bdHiddenList());
+  const visible = _bdItems.filter(o => _bdShowHidden || !hidden.has(_bdKey(o)));
+  const nHidden = _bdItems.length - _bdItems.filter(o => !hidden.has(_bdKey(o))).length;
+  bdCount('opps', _bdItems.filter(o => !hidden.has(_bdKey(o))).length);
+  if (!_bdItems.length) {
+    el.innerHTML = _bdSearching ? '' : (_bdLastAt === 'none' ? '<div class="bd-empty" style="margin-top:16px"><b>No matches this time</b>Try again, or type a funder you have in mind in the box above and search for that.</div>' : '');
+    return;
+  }
+  const lanes = Object.keys(_BD_LANE_SHORT).filter(l => visible.some(o => o.lane === l));
+  if (_bdFilter && !lanes.includes(_bdFilter)) _bdFilter = '';
+  let list = visible.filter(o => !_bdFilter || o.lane === _bdFilter);
+  if (_bdSort === 'soon') list = list.slice().sort((a, b) => _bdDeadline(a.deadline).sort - _bdDeadline(b.deadline).sort);
+  else if (_bdSort === 'big') list = list.slice().sort((a, b) => _bdValue(b.value).n - _bdValue(a.value).n);
+  Object.keys(_bdOpps).forEach(k => { if (k.indexOf('opp') === 0) delete _bdOpps[k]; });
+  const when = _bdLastAt && _bdLastAt !== 'none' && !_bdSearching ? new Date(_bdLastAt) : null;
+  el.innerHTML =
+    '<div class="bd-bar">' + (lanes.length > 1 ? '<span class="bd-chip' + (!_bdFilter ? ' on' : '') + '" onclick="bdFilterLane(\'\')">All ' + visible.length + '</span>' +
+      lanes.map(l => '<span class="bd-chip' + (_bdFilter === l ? ' on' : '') + '" data-l="' + escapeHTML(l) + '" onclick="bdFilterLane(this.dataset.l)">' + escapeHTML(_BD_LANE_SHORT[l].replace(' & government', '')) + ' ' + visible.filter(o => o.lane === l).length + '</span>').join('') : '') +
+      '<select class="bd-sort" onchange="_bdSort=this.value;bdRenderOpps()"><option value="fit"' + (_bdSort === 'fit' ? ' selected' : '') + '>Best fit first</option><option value="soon"' + (_bdSort === 'soon' ? ' selected' : '') + '>Closing soonest</option><option value="big"' + (_bdSort === 'big' ? ' selected' : '') + '>Biggest grants</option></select></div>' +
+    '<div class="bd-note">' + (when && !isNaN(when) ? 'From your search on ' + when.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + '. ' : '') + 'Check dates and amounts on the funder\'s page before you apply.' +
+      (nHidden ? ' <a href="#" onclick="_bdShowHidden=!_bdShowHidden;bdRenderOpps();return false" style="color:var(--em);font-weight:600">' + (_bdShowHidden ? 'Hide the ' + nHidden + ' you said no to' : nHidden + ' hidden · show') + '</a>' : '') + '</div>' +
+    '<div class="bd-grid">' + list.map(o => { const k = 'opp' + _bdItems.indexOf(o); _bdOpps[k] = o; return _bdCardHTML(o, k); }).join('') + '</div>' +
+    (_bdRemoved.length ? '<details style="margin-top:14px"><summary style="font-size:12.5px;color:var(--txt3);cursor:pointer">' + _bdRemoved.length + ' removed after checking their pages</summary>' +
+      _bdRemoved.map(o => '<div style="font-size:12.5px;color:var(--txt2);margin:6px 0 0 14px">' + escapeHTML(o.funder || o.programme || '') + (o.programme && o.funder ? ' — ' + escapeHTML(o.programme) : '') + ': ' + escapeHTML(o.removedWhy || '') + '</div>').join('') + '</details>' : '');
+}
+function bdFilterLane(lane) { _bdFilter = lane || ''; bdRenderOpps(); }
+// The last search stays on the page next time
+function _bdKeepResults() { try { localStorage.setItem('vorlana_bd_last_' + orgId, JSON.stringify({ at: new Date().toISOString(), items: _bdItems.slice(0, 40), removed: _bdRemoved.slice(0, 20) })); } catch (e) { /* ignore */ } }
+function _bdRestoreResults() {
+  if (_bdItems.length || _bdSearching) return;
+  try { const j = JSON.parse(localStorage.getItem('vorlana_bd_last_' + orgId) || 'null'); if (j && Array.isArray(j.items) && j.items.length) { _bdItems = j.items; _bdRemoved = j.removed || []; _bdLastAt = j.at || ''; } } catch (e) { /* ignore */ }
+}
+
+// Saved and "Not for us": kept on the organisation so the whole team sees them
+function _bdSavedList() { const s = (currentOrg && currentOrg.settings && currentOrg.settings.bd_saved) || null; if (Array.isArray(s)) return s; try { return JSON.parse(localStorage.getItem('vorlana_bd_saved_' + orgId) || '[]'); } catch (e) { return []; } }
+function _bdHiddenList() { const s = (currentOrg && currentOrg.settings && currentOrg.settings.bd_hidden) || null; if (Array.isArray(s)) return s; try { return JSON.parse(localStorage.getItem('vorlana_bd_hidden_' + orgId) || '[]'); } catch (e) { return []; } }
+async function _bdKeep(field, list) {
+  try { localStorage.setItem('vorlana_' + field + '_' + orgId, JSON.stringify(list)); } catch (e) { /* ignore */ }
+  if (currentOrg) currentOrg.settings = Object.assign({}, currentOrg.settings || {}, { [field]: list });
+  try {
+    const r = await sb.from('organisations').select('settings').eq('id', orgId).limit(1);
+    const st = (r.data && r.data[0] && r.data[0].settings) || {};
+    st[field] = list;
+    await sb.from('organisations').update({ settings: st }).eq('id', orgId);
+  } catch (e) { /* kept on this device */ }
+}
+function bdSave(key) {
+  const o = _bdOpps[key]; if (!o) return;
+  const list = _bdSavedList().filter(x => x.key !== _bdKey(o));
+  list.unshift({ key: _bdKey(o), o: Object.assign({}, o), at: new Date().toISOString() });
+  _bdKeep('bd_saved', list.slice(0, 60)); bdCount('saved', Math.min(list.length, 60)); bdRenderOpps();
+}
+function bdUnsave(k) { const list = _bdSavedList().filter(x => x.key !== k); _bdKeep('bd_saved', list); bdCount('saved', list.length); bdRenderSaved(); bdRenderOpps(); }
+function bdHide(key) {
+  const o = _bdOpps[key]; if (!o) return;
+  const list = _bdHiddenList().filter(k => k !== _bdKey(o)); list.unshift(_bdKey(o));
+  _bdKeep('bd_hidden', list.slice(0, 300)); bdRenderOpps();
+}
+function bdRenderSaved() {
+  const el = $('bd-v-saved'); if (!el) return;
+  const list = _bdSavedList(); bdCount('saved', list.length);
+  if (!list.length) { el.innerHTML = '<div class="bd-empty"><b>Nothing saved yet</b>Press Save on a funder to keep it here for later.</div>'; return; }
+  el.innerHTML = '<div class="bd-grid">' + list.map((x, i) => { const k = 'sav' + i; _bdOpps[k] = x.o; return _bdCardHTML(x.o, k, 'saved'); }).join('') + '</div>';
 }
 
 // ── about your organisation (sidebar) ──
@@ -1670,13 +1868,7 @@ function bdSetupRead() {
 }
 function bdSetupLocalSave() { try { localStorage.setItem('vorlana_bd_setup_' + orgId, JSON.stringify(bdSetupRead())); } catch (e) { /* ignore */ } bdRefreshSummary(); }
 function bdWhat() { return Array.from(document.querySelectorAll('#bd-what button.on')).map(b => (BD_WHAT.find(x => x[0] === b.dataset.k) || [])[1]).filter(Boolean); }
-function bdRefreshSummary() {
-  const el = $('bd-org-sum'); if (!el) return;
-  const s = bdSetupRead(), what = bdWhat();
-  const hasProfile = !!(($('eoi-org-profile') || {}).value || '').trim();
-  const bits = [s.area || '⚠ where you deliver isn\'t set', what.length ? what.slice(0, 2).join(', ') + (what.length > 2 ? ' +' + (what.length - 2) : '') : '', hasProfile ? '✓ profile written' : '⚠ profile not written yet'].filter(Boolean);
-  el.textContent = bits.join(' · ');
-}
+function bdRefreshSummary() { bdWho(); }
 function bdPaintWhat() {
   const box = $('bd-what'); if (!box) return;
   const setup = bdSetupGet();
@@ -1704,17 +1896,27 @@ function bdInit() {
     }
   }
   bdRefreshSummary();
-  // on a phone, tuck the details away once they're complete so the page opens on the work
-  const complete = !!(s.area && (ta || {}).value);
-  const det = $('bd-org'); if (det && window.matchMedia && window.matchMedia('(max-width:980px)').matches) det.open = !complete;
-  bdShowSection(($('eoi-output') && $('eoi-output').style.display !== 'none') ? 3 : ($('bd-s2') && $('bd-s2').style.display !== 'none') ? 2 : 1);
+  _bdRestoreResults(); bdRenderOpps(); bdCount('saved', _bdSavedList().length); bdResume();
+  if (!s.area) bdDetails(true);              // first visit: ask where they deliver before anything else
 }
 
-// ── find funding: three live searches, merged, de-duplicated and scored ──
+// ── find funding: four live searches, merged, de-duplicated, checked and scored ──
 async function runBDResearch() {
+  if (_bdSearching) return;
+  if (!(($('bd-area') || {}).value || '').trim()) { bdDetails(true); return; }
+  _bdSearching = true;
+  try { await _bdResearch(); }
+  finally {
+    _bdSearching = false;
+    if (!_bdItems.length) _bdLastAt = 'none';
+    const p = $('bd-progress'); if (p) p.style.display = 'none';
+    bdRenderOpps();
+    if (_bdItems.length) _bdKeepResults();
+  }
+}
+async function _bdResearch() {
   const wrap = $('bd-opps-wrap'); const res = $('bd-opps-result');
   const area = (($('bd-area') || {}).value || '').trim();
-  if (!area) { const d = $('bd-org'); if (d) d.open = true; if ($('bd-area')) { $('bd-area').focus(); $('bd-area').scrollIntoView({ block: 'center' }); } alert('Tell us where you deliver first (on the right) — every search and bid uses it.'); return; }
   wrap.style.display = 'block';
   const size = $('bd-size').value, specific = ($('bd-specific').value || '').trim(), type = $('bd-type') ? $('bd-type').value : 'Registered charity';
   const what = bdWhat().join(', ') || 'community work';
@@ -1738,25 +1940,24 @@ async function runBDResearch() {
   // Each search returns its own scored list; they run side by side and appear as each one finishes
   const json = ' Reply with ONLY a JSON array, no other words and no code fences. Each item: {"funder":"","programme":"","deadline":"","value":"","eligibility":"","fit":"","url":"","score":0}. ' +
     '"fit" is one sentence on why it suits this organisation. "score" is 1–5 for how well it fits (5 = made for them). Use "" for anything you are unsure of. If nothing fits, reply [].';
-  const laneShort = { 'Government, UKSPF and councils': 'Councils & government', 'Trusts, foundations and the Lottery': 'Trusts & Lottery', 'Corporate and environmental funders': 'Companies', 'Funders of groups like you': 'Funded groups like you' };
   const status = lanes.map(() => 'searching');
   let items = [];
-  _bdOpps = {};
-  res.innerHTML = '<div id="bd-progress" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"></div><div id="bd-list"></div>';
+  _bdOpps = {}; _bdItems = []; _bdRemoved = []; _bdFilter = ''; _bdLastAt = '';
+  res.innerHTML = '<div class="bd-prog" id="bd-progress"></div>';
   let checking = '', giving = '';                          // '' | 'running' | 'done'
   let removed = [];                                        // closed or not eligible, found when checking their pages
   const paintProgress = () => {
     const el = $('bd-progress'); if (!el) return;
-    el.innerHTML = lanes.map((l, i) => {
-      const st = status[i], n = items.filter(o => o.lane === l[0]).length;
-      const txt = st === 'searching' ? 'Searching…' : st === 'done' ? (n ? n + ' found' : 'none found') : 'didn\'t finish';
-      return '<span class="badge" style="font-size:12px;padding:4px 10px;background:' + (st === 'searching' ? '#F0F0F2' : st === 'done' ? '#E7F6EC' : '#FDECEC') + ';color:var(--txt2)">' +
-        (st === 'searching' ? '<span class="bd-spin"></span> ' : st === 'done' ? '✓ ' : '') + escapeHTML(laneShort[l[0]]) + ' · ' + txt + '</span>';
-    }).join('') + (checking ? '<span class="badge" style="font-size:12px;padding:4px 10px;background:' + (checking === 'running' ? '#F0F0F2' : '#E7F6EC') + ';color:var(--txt2)">' +
-      (checking === 'running' ? '<span class="bd-spin"></span> Checking each funder\'s page' : '✓ Checked: open, deadlines and who can apply' + (removed.length ? ' · ' + removed.length + ' removed' : '')) + '</span>' : '') +
-      (giving ? '<span class="badge" style="font-size:12px;padding:4px 10px;background:' + (giving === 'running' ? '#F0F0F2' : '#E7F6EC') + ';color:var(--txt2)">' + (giving === 'running' ? '<span class="bd-spin"></span> Checking who they\'ve funded' : '✓ Checked who they\'ve funded') + '</span>' : '');
+    const lanesDone = status.filter(x => x !== 'searching').length;
+    const units = lanesDone + (checking === 'done' ? 1 : 0) + (giving === 'done' ? 1 : 0);
+    const n = items.length;
+    const txt = lanesDone < lanes.length ? 'Searching councils, trusts and companies…' + (n ? ' <b>' + n + ' found</b>' : '')
+      : checking === 'running' ? 'Checking each funder\'s page is open and you can apply…'
+      : giving === 'running' ? 'Checking who they\'ve funded before…' : '';
+    el.innerHTML = txt ? '<span class="bd-spin"></span><span>' + txt + '</span><div class="bar"><i style="width:' + Math.max(6, Math.round(100 * units / (lanes.length + 2))) + '%"></i></div>' : '';
+    el.style.display = txt ? '' : 'none';
   };
-  const norm = t => String(t || '').toLowerCase().replace(/&/g, 'and').replace(/\b(the|fund|foundation|trust|programme|program|grants?|scheme)\b/g, '').replace(/[^a-z0-9]+/g, '');
+  const norm = _bdNorm;
   const addItems = (list, laneName) => {
     (Array.isArray(list) ? list : []).forEach(o => {
       if (!o || !(o.funder || o.programme)) return;
@@ -1769,38 +1970,7 @@ async function runBDResearch() {
     });
     items.sort((a, b) => b.score - a.score);
   };
-  const paintList = () => {
-    const el = $('bd-list'); if (!el) return;
-    if (!items.length) { el.innerHTML = status.includes('searching') ? '' : '<div class="alert alert-warn" style="margin:0">We couldn\'t get funding matches this time. Try again, or type a funder you have in mind in the box above and search for that.</div>'; return; }
-    _bdOpps = {};
-    const laneNames = Object.keys(laneShort).filter(l => items.some(o => o.lane === l));
-    el.innerHTML = '<div style="font-size:13px;color:var(--txt3);margin-bottom:12px">' + items.length + ' matches, best first' + (status.includes('searching') ? ' — more coming' : '') + '. Check dates and amounts on the funder\'s page before you apply.</div>' +
-      (laneNames.length > 1 && !status.includes('searching') ? '<div class="bd-seg"><button class="on" onclick="bdFilterLane(\'\', this)">All (' + items.length + ')</button>' + laneNames.map(l => '<button onclick="bdFilterLane(this.dataset.l, this)" data-l="' + escapeHTML(l) + '">' + escapeHTML(laneShort[l]) + ' (' + items.filter(o => o.lane === l).length + ')</button>').join('') + '</div>' : '') +
-      items.map((o, i) => {
-        const key = 'opp' + i; _bdOpps[key] = o;
-        const sc = o.score;
-        const fit = sc >= 5 ? ['bd-fit5', 'Great fit'] : sc === 4 ? ['bd-fit4', 'Good fit'] : ['bd-fit3', 'Possible fit'];
-        const meta = [o.deadline ? ('Closes: ' + escapeHTML(o.deadline)) : '', o.value ? escapeHTML(o.value) : ''].filter(Boolean).join(' &nbsp;·&nbsp; ');
-        const url = /^https?:\/\//i.test(o.url || '') ? o.url : '';
-        return '<div class="bd-row bd-opp" data-lane="' + escapeHTML(o.lane || '') + '"><div class="bd-row-main">' +
-          '<span class="bd-pill ' + fit[0] + '">' + fit[1] + '</span><span class="bd-lane">' + escapeHTML(laneShort[o.lane] || '') + '</span>' +
-          (o.checked ? '<span class="bd-lane" style="color:#1E7B3C;margin-left:8px">✓ ' + escapeHTML(o.checked) + '</span>' : o.linkBroken ? '<span class="bd-lane" style="color:#B45309;margin-left:8px">Link didn\'t open — check</span>' : '') +
-          '<div class="bd-row-title">' + escapeHTML(o.funder || o.programme || 'Opportunity') + (o.programme && o.funder ? ' — ' + escapeHTML(o.programme) : '') + '</div>' +
-          (o.fit ? '<div class="bd-row-fit">' + escapeHTML(o.fit) + '</div>' : '') +
-          (o.giving && o.giving.found ? '<div class="bd-row-meta" style="margin-top:4px">' +
-            (o.giving.localSimilar ? '<b style="color:#1E7B3C">Has funded ' + o.giving.localSimilar + ' group' + (o.giving.localSimilar === 1 ? '' : 's') + ' like you nearby</b> · ' : o.giving.local ? '<b>Funds groups in your area</b> (' + o.giving.local + ' recent) · ' : '') +
-            (o.giving.typical ? 'typical grant £' + o.giving.typical.median.toLocaleString('en-GB') + ' (£' + o.giving.typical.low.toLocaleString('en-GB') + '–£' + o.giving.typical.high.toLocaleString('en-GB') + ')' : '') +
-            (o.giving.lastAward ? ' · last award ' + escapeHTML(o.giving.lastAward) : '') +
-            ((o.giving.localExamples || [])[0] ? '<div style="font-size:12px;color:var(--txt3);margin-top:2px">e.g. ' + o.giving.localExamples.slice(0, 2).map(x => escapeHTML(x.recipient) + (x.amount ? ' (£' + x.amount.toLocaleString('en-GB') + ')' : '')).join(', ') + '</div>' : '') +
-            '<div style="font-size:11px;color:var(--txt3);margin-top:2px">Giving data: <a href="' + escapeHTML(o.giving.source) + '" target="_blank" rel="noopener" style="color:inherit">360Giving</a> and its publishers</div></div>' : '') +
-          (meta ? '<div class="bd-row-meta">' + meta + '</div>' : '') +
-          (o.eligibility ? '<details style="margin-top:6px"><summary style="font-size:12px;color:var(--txt3);cursor:pointer">Who can apply</summary><div style="font-size:12.5px;color:var(--txt2);margin-top:4px;line-height:1.5">' + escapeHTML(o.eligibility) + '</div></details>' : '') +
-          '</div><div class="bd-row-act"><button class="btn btn-ai" onclick="pullFunderForm(\'' + key + '\')">Pull their form ▸</button>' +
-          (url ? '<a href="' + escapeHTML(url) + '" target="_blank" rel="noopener">Funder page ↗</a>' : '') + '</div></div>';
-      }).join('') +
-      (removed.length ? '<details style="margin-top:10px"><summary style="font-size:12.5px;color:var(--txt3);cursor:pointer">' + removed.length + ' removed after checking their pages</summary>' +
-        removed.map(o => '<div style="font-size:12.5px;color:var(--txt2);margin:6px 0 0 14px">' + escapeHTML(o.funder || o.programme || '') + (o.programme && o.funder ? ' — ' + escapeHTML(o.programme) : '') + ': ' + escapeHTML(o.removedWhy || '') + '</div>').join('') + '</details>' : '');
-  };
+  const paintList = () => { _bdItems = items; _bdRemoved = removed; bdRenderOpps(); };
   const parse = t => {                                            // the JSON array, even with a sentence before or after it
     const txt = String(t || '').replace(/<\/?cite[^>]*>/gi, '').replace(/```json|```/gi, '');
     const endAt = txt.lastIndexOf(']');
@@ -1884,10 +2054,6 @@ async function runBDResearch() {
     items.sort((a, b) => (b.score - a.score) || (((b.giving && b.giving.localSimilar) || 0) - ((a.giving && a.giving.localSimilar) || 0)));
   } catch (e) { /* giving data is a bonus */ }
   giving = 'done'; paintProgress(); paintList();
-}
-function bdFilterLane(lane, btn) {
-  document.querySelectorAll('#bd-opps-result .bd-seg button').forEach(b => b.classList.toggle('on', b === btn));
-  document.querySelectorAll('#bd-opps-result .bd-opp').forEach(c => { c.style.display = (!lane || c.dataset.lane === lane) ? '' : 'none'; });
 }
 
 // ── about your organisation: saved on the organisation so the whole team shares it ──
@@ -2038,18 +2204,16 @@ async function pullFunderForm(key) {
   _bdSel = o;
   const name = (o.funder && o.programme) ? (o.funder + ' — ' + o.programme) : (o.programme || o.funder || '');
   const steps = [{ label: 'Finding their form' }, { label: 'Reading the questions' }, { label: 'Writing your answers' }, { label: 'Filling in their form' }];
-  const show = (i, sub) => { const el = $('bd-pull-steps'); if (el) el.innerHTML = renderBrainProgress(steps, i, 'Getting the form for ' + (o.funder || name), sub || 'This can take a minute or two'); };
+  const show = (i, sub) => { const el = $('bd-pull-steps'); if (el) el.innerHTML = i >= 4 ? '' : renderBrainProgress(steps, i, 'Writing your bid for ' + (o.funder || name), sub || 'This can take a few minutes — you can leave this screen and come back'); bdWsSteps(i <= 0 ? 0 : i === 1 ? 1 : 2); };
   const note = (html, tone) => { const n = $('bd-pull-note'); if (n) n.innerHTML = html ? '<div class="bd-pullnote" style="' + (tone === 'warn' ? 'background:#FFFBEB' : tone === 'ok' ? 'background:#F0FDF4' : '') + '">' + html + '</div>' : ''; };
   let watchdog = null;
   try {
     if ($('eoi-funder')) $('eoi-funder').value = name;
-    _eoiDoc = null; _eoiQuestions = []; _eoiAnswers = {}; _eoiFunderPriorities = ''; _eoiPrioritiesFunder = ''; _eoiGuidanceText = ''; _eoiProject = ''; _eoiProjectFor = ''; _eoiBrief = null;
-    if ($('eoi-output')) $('eoi-output').style.display = 'none';
-    if ($('eoi-questions')) { $('eoi-questions').style.display = 'none'; $('eoi-questions').innerHTML = ''; }
+    _eoiDoc = null; _eoiQuestions = []; _eoiAnswers = {}; _eoiFunderPriorities = ''; _eoiPrioritiesFunder = ''; _eoiGuidanceText = ''; _eoiProject = ''; _eoiProjectFor = ''; _eoiBrief = null; window._eoiAssessed = null;
+    bdWsReset();
     if ($('bd-manual')) $('bd-manual').open = false;
-    if ($('bd-funder-bar')) $('bd-funder-bar').innerHTML = escapeHTML(o.funder || name) + (o.url ? ' · <a href="' + escapeHTML(o.url) + '" target="_blank" rel="noopener" style="color:var(--em);font-weight:600">Funder page ↗</a>' : '');
+    if ($('bd-funder-row')) $('bd-funder-row').style.display = 'none';
     bdShowSection(2);
-    const sec = $('bd-s2'); if (sec && sec.scrollIntoView) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
     note('');
     show(0, 'Looking on their website…');
     // a gentle nudge if it's slow, so it never looks stuck
@@ -2073,16 +2237,17 @@ async function pullFunderForm(key) {
       try { const r = await _buildFilledForm(); _eoiDoc.filled = { n: r.filled, total: r.total }; steps[3].meta = r.filled + ' of ' + r.total + ' answer spaces filled'; }
       catch (e) { steps[3].meta = 'couldn\'t write into their file — answers are below'; }
     } else steps[3].meta = 'Their form isn\'t a Word file, so the answers are written out for you to copy across';
-    renderFilledEOI();
     show(4, 'Done');
-    note('✓ <b>' + escapeHTML(o.funder || name) + '</b> — ' + (_eoiDoc && _eoiDoc.kind === 'docx' ? 'their own form is filled in. ' : 'answers are written. ') + 'Check the <mark style="background:#ffe9a8">yellow [INSERT]</mark> gaps, then download below.', 'ok');
-    const out = $('eoi-output'); if (out && out.scrollIntoView) out.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    renderFilledEOI();
   } catch (e) {
     window._eoiOnProgress = null;
     if (e && e.message === 'AI_PLAN_GATE') { note('✦ Writing bids with Org Brain is part of the <b>Pro</b> plan. You can still upload or paste the funder\'s questions and answer them yourself.', 'warn'); }
     else {
       const m = $('bd-manual'); if (m) m.open = true;
       const st = $('bd-pull-steps'); if (st) st.innerHTML = '';
+      if ($('bd-funder-row')) $('bd-funder-row').style.display = '';
+      if ($('bd-s2')) $('bd-s2').style.display = '';
+      bdWsSteps(0);
       note((e && e.message === 'NO_QUESTIONS' ? 'We couldn\'t find an application form or questions for <b>' + escapeHTML(name) + '</b> on their website.' : 'Something went wrong getting the form' + (e && e.message ? ' <span style="color:var(--txt3)">(' + escapeHTML(e.message) + ')</span>' : '') + '.') +
         '<br>No problem — upload their form, paste their questions, or write from their brief below.' + (o.url ? ' <a href="' + escapeHTML(o.url) + '" target="_blank" rel="noopener" style="color:var(--em);font-weight:600">Open their page ↗</a>' : ''), 'warn');
     }
@@ -2367,6 +2532,7 @@ function renderEOIQuestions() {
   const wrap = $('eoi-questions');
   if (!_eoiQuestions.length) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
+  bdWsSteps(1); bdWsHead();
   wrap.innerHTML =
     '<div style="font-weight:700;font-size:13px;margin:4px 0 10px">Found ' + _eoiQuestions.length +
     ' question(s)' + (_eoiDoc && _eoiDoc.kind === 'docx' ? ' in their Word form' : '') + ' — edit if needed, then write the answers:</div>' +
@@ -2697,6 +2863,9 @@ async function runEOIFormFill() {
   const evidence = evidenceAll.split('\n').filter(l => !/^- Real quotes/.test(l)).join('\n');   // quotes are handed out by the plan instead
   const out = $('eoi-output'); const res = $('eoi-result');
   out.style.display = 'block';
+  if ($('bd-rail')) $('bd-rail').innerHTML = '';
+  if ($('eoi-questions')) $('eoi-questions').style.display = 'none';
+  bdWsSteps(2); bdWsHead();
   const panel = (icon, title, sub) => '<div class="brain-panel"><div class="brain-header"><div class="brain-icon">' + icon + '</div><div><div class="brain-title">' + title + '</div><div class="brain-sub">' + sub + '</div></div></div></div>';
 
   const applicant = _eoiApplicant(profile) || (currentOrg && currentOrg.name) || '';
@@ -2862,104 +3031,235 @@ function _wordCount(s) { return (s || '').trim() ? (s.trim().split(/\s+/).length
 
 // Assemble — render the completed form, flag limits + placeholders
 function _plainAnswer(a) { return String(a || '').replace(/\*\*([^*]+)\*\*/g, '$1'); }
+function _eoiCountHTML(q, ans) {
+  const wc = _wordCount(ans), len = ans.length;
+  const lim = q.charLimit || q.wordLimit || 0, used = q.charLimit ? len : wc;
+  const over = lim && used > lim;
+  return { over, pct: lim ? Math.min(100, Math.round(100 * used / lim)) : 0, lim,
+    text: (q.charLimit ? len + ' / ' + q.charLimit + ' characters' : q.wordLimit ? wc + ' / ' + q.wordLimit + ' words' : wc + (wc === 1 ? ' word' : ' words')) + (over ? ' · over the limit' : '') };
+}
+// The answer as text, with the highlighted gaps turned back into [INSERT: …] so they stay gaps
+function _bdAnsText(el) {
+  let out = '';
+  const walk = n => n.childNodes.forEach(c => {
+    if (c.nodeType === 3) out += c.nodeValue;
+    else if (c.nodeName === 'BR') out += '\n';
+    else if (c.nodeName === 'MARK' && c.dataset && c.dataset.t != null) out += c.classList.contains('conf') ? '[CONFIRM:' + c.dataset.t + ']' : '[INSERT: ' + c.dataset.t + ']';
+    else if (c.nodeType === 1) { if (/^(DIV|P)$/.test(c.nodeName) && out && !out.endsWith('\n')) out += '\n'; walk(c); }
+  });
+  walk(el);
+  return out.replace(/\u00a0/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+}
 function _eoiEditAnswer(id, el) {
-  _eoiAnswers[id] = el.innerText.replace(/\u00a0/g, ' ').trim();
-  const q = _eoiQuestions.find(x => x.id === id), wc = _wordCount(_eoiAnswers[id]);
-  const m = $('eoi-wc-' + id);
-  if (m) { const len = _eoiAnswers[id].length, over = q && (q.charLimit ? len > q.charLimit : (q.wordLimit && wc > q.wordLimit)); m.textContent = (q && q.charLimit ? len + '/' + q.charLimit + ' characters' : q && q.wordLimit ? wc + '/' + q.wordLimit + ' words' : wc + ' words') + (over ? ' · OVER LIMIT' : ''); m.style.color = over ? '#b91c1c' : '#888'; }
+  _eoiAnswers[id] = _bdAnsText(el);
+  const q = _eoiQuestions.find(x => x.id === id); if (!q) return;
+  const c = _eoiCountHTML(q, _eoiAnswers[id]);
+  const m = $('eoi-wc-' + id); if (m) { m.textContent = c.text; m.classList.toggle('over', !!c.over); }
+  const b = $('eoi-bar-' + id); if (b) { b.style.width = c.pct + '%'; b.classList.toggle('over', !!c.over); }
+}
+function _eoiAnswerHTML(ans) {
+  return boldify(escapeHTML(ans))
+    .replace(/\[CONFIRM:([^\]]*)\]/gi, (m, t) => '<mark class="conf" contenteditable="false" data-t="' + t + '">For you to confirm</mark>')
+    .replace(/\[INSERT:([^\]]*)\]/gi, (m, t) => '<mark class="gap" contenteditable="false" data-t="' + t.trim() + '">' + t.trim() + '?</mark>')
+    .replace(/\n/g, '<br/>');
 }
 function renderFilledEOI() {
   const res = $('eoi-result');
   window._eoiLastKind = 'form';
-  let placeholderCount = 0;
+  const funderShort = (bdWsFunder() || 'the funder').split(' — ')[0];
   const parts = _eoiQuestions.map((q, i) => {
-    const ans = _eoiAnswers[q.id] || '';
-    const wc = _wordCount(ans);
-    const over = q.charLimit ? ans.length > q.charLimit : (q.wordLimit && wc > q.wordLimit);
-    (ans.match(/\[INSERT:[^\]]*\]/gi) || []).forEach(() => placeholderCount++);
-    const meta = (q.charLimit ? (ans.length + '/' + q.charLimit + ' characters') : q.wordLimit ? (wc + '/' + q.wordLimit + ' words') : (wc + ' words')) + (over ? ' · OVER LIMIT' : '');
-    const html = boldify(escapeHTML(ans))
-      .replace(/\[CONFIRM:([^\]]*)\]/gi, '<mark style="background:#DBEAFE;color:#1E3A8A">For you to confirm</mark>')
-      .replace(/\[INSERT:([^\]]*)\]/gi, '<mark style="background:#ffe9a8">[INSERT:$1]</mark>')
-      .replace(/\n/g, '<br/>');
+    const ans = _eoiAnswers[q.id] || '', id = escapeHTML(q.id);
+    const c = _eoiCountHTML(q, ans);
+    const confirm = /^\[CONFIRM:/.test(ans);
     const firstProposal = q.proposal && !(_eoiQuestions[i - 1] || {}).proposal;
-    const qNum = q.proposal ? '' : 'Q' + (i + 1) + '. ';
-    return (firstProposal ? '<div style="font-family:inherit;margin:30px 0 16px;padding-top:18px;border-top:2px solid #E8E8ED"><div style="font-size:20px;font-weight:700">Written proposal</div><div style="font-size:13px;color:#6E6E73">What ' + escapeHTML((($('eoi-funder') || {}).value || 'the funder').split(' — ')[0]) + ' actually judges' + (_eoiBrief && _eoiBrief.proposal && _eoiBrief.proposal.maxPages ? ' · up to ' + _eoiBrief.proposal.maxPages + ' pages' : '') + '. Download it as a Word document and attach it.</div></div>' : '') +
-      '<div style="margin-bottom:22px">' +
-      '<div style="font-weight:700;font-size:14px;margin-bottom:2px">' + qNum + escapeHTML(q.proposal ? q.question.replace(/^Proposal — /, '').split(':')[0] : q.question) + '</div>' +
-      '<div id="eoi-wc-' + escapeHTML(q.id) + '" style="font-size:11px;color:' + (over ? '#b91c1c' : '#888') + ';margin-bottom:6px">' + meta + '</div>' +
-      '<div contenteditable="true" spellcheck="true" oninput="_eoiEditAnswer(\'' + escapeHTML(q.id) + '\',this)" onfocus="this.style.borderColor=\'var(--border)\'" onblur="this.style.borderColor=\'transparent\'" ' +
-        'style="font-size:14px;line-height:1.7;border:1px solid transparent;border-radius:8px;padding:6px 8px;margin:-6px -8px;outline:none">' + html + '</div></div>';
+    const title = q.proposal ? q.question.replace(/^Proposal — /, '').split(':')[0] : q.question;
+    const num = q.proposal ? '' : (i + 1) + '. ';
+    const long = !confirm && _wordCount(ans) >= 25;
+    return (firstProposal ? '<div class="bd-sect">Written proposal</div><div class="bd-sect-s">What ' + escapeHTML(funderShort) + ' actually judges' + (_eoiBrief && _eoiBrief.proposal && _eoiBrief.proposal.maxPages ? ' · up to ' + _eoiBrief.proposal.maxPages + ' pages' : '') + '. Download it as a Word document and attach it.</div>' : '') +
+      '<div class="bd-q" id="bd-q-' + id + '"><div class="bd-q-h"><div class="bd-q-t">' + num + escapeHTML(title) + '</div><div class="bd-q-n' + (c.over ? ' over' : '') + '" id="eoi-wc-' + id + '">' + (confirm ? 'Only you can answer' : c.text) + '</div></div>' +
+      (c.lim && !confirm ? '<div class="bd-wc"><i id="eoi-bar-' + id + '" class="' + (c.over ? 'over' : '') + '" style="width:' + c.pct + '%"></i></div>' : '<div style="height:10px"></div>') +
+      (confirm ? '<div class="bd-ans" style="color:#1E3A8A">Tick or type this yourself in ' + escapeHTML(funderShort) + '\'s form — Vorlana never answers declarations for you.</div>'
+        : '<div class="bd-ans" id="eoi-ans-' + id + '" contenteditable="true" spellcheck="true" oninput="_eoiEditAnswer(\'' + id + '\',this)">' + _eoiAnswerHTML(ans) + '</div>' +
+          '<div class="bd-q-a"><button type="button" onclick="bdAnsFocus(\'' + id + '\')">Edit</button>' +
+          (long ? '<button type="button" onclick="bdAns(\'' + id + '\',\'shorter\',this)">Make shorter</button><button type="button" onclick="bdAns(\'' + id + '\',\'stronger\',this)">Make stronger</button>' : '') +
+          '<button type="button" onclick="bdCopyAns(\'' + id + '\',this)">Copy</button>' +
+          (window._bdPrev && window._bdPrev[q.id] != null ? '<button type="button" onclick="bdAnsUndo(\'' + id + '\')">Undo</button>' : '') + '</div>') +
+      '</div>';
   });
 
   const docx = !!(_eoiDoc && _eoiDoc.kind === 'docx');
-  const docNote = !_eoiDoc ? '' : docx
-    ? '<div style="background:#F0FDF4;border:1px solid #BBF7D0;color:#166534;border-radius:10px;padding:10px 14px;font-size:13px;margin:0 0 16px">✓ Their own Word form is filled in' + (_eoiDoc.filled ? ' — ' + _eoiDoc.filled.n + ' of ' + _eoiDoc.filled.total + ' answer spaces' : '') + '. Click any answer below to edit it, then download.</div>'
-    : '<div class="alert alert-info" style="margin:0 0 16px">Their form is ' + (_eoiDoc.kind === 'pdf' ? 'a PDF' : 'online') + ', so we can\'t type into it. The answers are written out below — copy them across, or download them as a Word document.' +
-      (_eoiDoc.fromWeb ? '<br><b>We couldn\'t open their actual form</b>, so these questions and limits come from their published guidance. Check each limit against the real form (words or characters) — if they differ, paste their questions in and we\'ll rewrite to fit.' : '') + '</div>';
-  const flagBar = placeholderCount
-    ? '<div class="alert alert-warn" style="margin:0 0 16px">⚠ ' + placeholderCount + ' placeholder(s) need your real figures before you submit — highlighted below.</div>'
-    : '';
+  const docNote = !_eoiDoc || _eoiDoc.reopened ? '' : docx
+    ? '<div class="bd-pullnote" style="background:#F0FDF4;color:#166534;margin:0 0 14px">✓ Their own Word form is filled in' + (_eoiDoc.filled ? ' — ' + _eoiDoc.filled.n + ' of ' + _eoiDoc.filled.total + ' answer spaces' : '') + '. Edit any answer below, then download.</div>'
+    : '<div class="bd-pullnote" style="margin:0 0 14px">Their form is ' + (_eoiDoc.kind === 'pdf' ? 'a PDF' : 'online') + ', so copy each answer across, or download them all as a Word document.' +
+      (_eoiDoc.fromWeb ? '<br><b>We couldn\'t open their actual form</b>, so these questions and limits come from their published guidance. Check each limit against the real form — if they differ, <a href="#" onclick="bdUseOtherForm();return false" style="color:var(--em);font-weight:600">paste their questions in</a> and we\'ll rewrite to fit.' : '') + '</div>';
 
   _lastEOIText = _eoiQuestions.map((q, i) => 'Q' + (i + 1) + '. ' + q.question + '\n\n' + _plainAnswer(_eoiAnswers[q.id] || '')).join('\n\n');
 
-  $('eoi-output').style.display = 'block';
-  if (typeof bdShowSection === 'function') bdShowSection(3);
-  res.style.cssText = 'background:#fff;color:#1a1a1a;border-radius:var(--radiuslg);padding:30px 36px';
-  res.innerHTML =
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">' +
-      (docx ? '<button class="btn btn-p" id="eoi-dl-form" onclick="downloadFilledForm()">⬇ Download their form, filled in (Word)</button>' : '') +
-      '<button class="btn ' + (docx ? 'btn-ghost btn-sm' : 'btn-p') + '" onclick="downloadAnswersDoc()">⬇ Answers as a Word document</button>' +
-      '<button class="btn btn-ghost btn-sm" onclick="downloadEOIPDF()">⬇ PDF</button>' +
-      '<button class="btn btn-ghost btn-sm" onclick="copyEOI()">📋 Copy all</button>' +
-      '<button class="btn btn-ghost btn-sm" onclick="runEOIQualitySupervisor()">🔍 Run Quality Supervisor</button>' +
-    '</div>' +
-    docNote + (window._eoiAssessed && window._eoiAssessed.fixed ? '<div style="font-size:12.5px;color:#166534;margin:0 0 10px">✓ Checked like an assessor · ' + window._eoiAssessed.fixed + ' answer' + (window._eoiAssessed.fixed === 1 ? '' : 's') + ' improved</div>' : '') +
-    (function () {
-      const conf = _eoiQuestions.filter(q => /^\[CONFIRM:/.test(_eoiAnswers[q.id] || ''));
-      return conf.length ? '<div style="font-family:inherit;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:12px;padding:14px 16px;margin:0 0 14px"><div style="font-weight:700;font-size:14px;color:#1E3A8A">Only you can confirm these (' + conf.length + ')</div>' +
-        '<div style="font-size:12.5px;color:#1E40AF;margin:2px 0 6px">Declarations, policies and anything about your history with this funder. Vorlana never answers these for you — tick or type them in the funder\'s own form.</div>' +
-        conf.map(q => '<div style="font-size:13px;color:#1E3A8A;margin:3px 0">• ' + escapeHTML(q.question.slice(0, 160)) + (q.question.length > 160 ? '…' : '') + '</div>').join('') + '</div>' : '';
-    })() +
-    (function () {
-      const fromBrief = (_eoiBrief && Array.isArray(_eoiBrief.documents)) ? _eoiBrief.documents.filter(Boolean) : [];
-      const st = (_eoiAnswers.__docs && typeof _eoiAnswers.__docs === 'object') ? _eoiAnswers.__docs : {};
-      const names = [...new Set(fromBrief.concat(Object.keys(st)))].slice(0, 15);
-      if (!names.length) return '';
-      _eoiAnswers.__docs = Object.assign({}, ...names.map(n => ({ [n]: !!st[n] })));
-      window._eoiDocNames = names;
-      const done = names.filter(n => _eoiAnswers.__docs[n]).length;
-      return '<div style="font-family:inherit;background:#F5F5F7;border-radius:12px;padding:14px 16px;margin:0 0 14px"><div style="font-weight:700;font-size:14px">Documents to attach (' + done + ' of ' + names.length + ' ready)</div>' +
-        '<div style="font-size:12.5px;color:#6E6E73;margin:2px 0 6px">A missing document is one of the commonest reasons bids are turned down.</div>' +
-        names.map((n, i) => '<label style="display:flex;gap:8px;align-items:center;margin:4px 0;font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;color:#1D1D1F"><input type="checkbox" style="width:16px;height:16px;margin:0" ' + (_eoiAnswers.__docs[n] ? 'checked' : '') + ' onchange="_eoiDocToggle(' + i + ',this.checked)"/>' + escapeHTML(n) + '</label>').join('') + '</div>';
-    })() +
-    '<div id="eoi-gaps"></div>' +
-    '<div id="eoi-fill-body" style="font-family:Georgia,serif">' + parts.join('') + '</div>' +
-    '<div id="eoi-qa-result"></div>' +
-    '<div style="margin-top:20px;padding-top:12px;border-top:1px solid #eee;font-size:11px;color:#999">Drafted with Vorlana · verify all figures before submission</div>';
-  renderEOIGaps();
+  bdShowSection(3);
+  if ($('bd-s2') && _eoiQuestions.length && Object.keys(_eoiAnswers).length) $('bd-s2').style.display = 'none';
+  res.style.cssText = '';
+  res.innerHTML = docNote + parts.join('') + '<div id="eoi-qa-result"></div>' +
+    '<div style="margin-top:14px;font-size:11.5px;color:var(--txt3)">Drafted with Vorlana · check every figure before you submit</div>';
+  bdWsBrief(); bdRenderRail(); bdResume();
 }
 
-// Every [INSERT: …] gap in one short list: answer each once and it fills every answer.
-// Organisation facts (charity number, address, year end…) are remembered for the next bid. Bank details never are.
+// What this funder wants, in a few lines, above the answers
+function bdWsBrief() {
+  const el = $('bd-ws-brief'); if (!el) return;
+  const t = String(_eoiFunderPriorities || '').trim();
+  if (!t) { el.innerHTML = ''; return; }
+  const section = h => { const m = new RegExp('(?:^|\\n)[#*\\s]*' + h + '[^\\n]*\\n([\\s\\S]*?)(?=\\n[#*\\s]*(?:PRIORITIES|HOW THEY DECIDE|WHAT YOU MUST SUBMIT|FUNDING RULES|ELIGIBILITY|THEIR STYLE|THEIR RECENT GIVING)\\b|$)', 'i').exec(t); return m ? m[1] : ''; };
+  const bullets = s => s.split('\n').map(x => x.replace(/^[\s\-•*·]+/, '').replace(/\*\*/g, '').trim()).filter(x => x && !/^not stated\.?$/i.test(x));
+  const want = bullets(section('PRIORITIES')).slice(0, 3).map(x => x.replace(/[.;]\s*$/, '')).join('; ');
+  const decide = bullets(section('HOW THEY DECIDE')).slice(0, 2).map(x => x.replace(/[.;]\s*$/, '')).join('; ');
+  const r = (_eoiBrief && _eoiBrief.rules) || {};
+  const money = [r.maxGrant ? 'up to £' + Number(r.maxGrant).toLocaleString('en-GB') : '', r.shareOfCost || '', r.matchFunding || ''].filter(Boolean).join(' · ');
+  if (!want && !decide) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="bd-brief">' + (want ? '<b>What this funder wants:</b> ' + escapeHTML(want) + '. ' : '') + (decide ? '<b>How they decide:</b> ' + escapeHTML(decide) + '. ' : '') + (money ? '<b>Money:</b> ' + escapeHTML(money) + '.' : '') +
+    '<div style="font-size:12.5px;color:var(--txt3);margin-top:4px">Every answer is written to this — not just to the question.</div>' +
+    '<details><summary>Everything we read about them</summary><div style="white-space:pre-wrap;font-size:12.5px;margin-top:6px;color:var(--txt2)">' + escapeHTML(t.replace(/\*\*/g, '')) + '</div></details></div>';
+}
+
+// The right-hand side: bid strength, what's left to do, documents, download
+function bdRenderRail() {
+  const el = $('bd-rail'); if (!el) return;
+  const form = window._eoiLastKind === 'form' && _eoiQuestions.length;
+  const docx = !!(_eoiDoc && _eoiDoc.kind === 'docx');
+  el.innerHTML = (form ? '<div class="bd-panel" id="bd-score"></div><div class="bd-panel" id="eoi-gaps"></div><div id="bd-attach"></div>' : '') +
+    '<div class="bd-dl" id="bd-dl">' +
+      (docx ? '<button class="btn btn-p" id="eoi-dl-form" type="button" onclick="downloadFilledForm()">Download their form, filled in</button>' : '') +
+      (form ? '<button class="btn ' + (docx ? 'btn-ghost' : 'btn-p') + '" type="button" onclick="downloadAnswersDoc()">Download Word</button>' : '') +
+      '<div style="display:flex;gap:8px"><button class="btn btn-ghost" style="flex:1" type="button" onclick="downloadEOIPDF()">PDF</button><button class="btn btn-ghost" style="flex:1" type="button" onclick="copyEOI();this.textContent=\'Copied\'">Copy all</button></div>' +
+      '<a href="#" onclick="bdUseOtherForm();return false" style="font-size:12.5px;color:var(--txt3);text-align:center;margin-top:4px">Use a different form</a>' +
+    '</div>';
+  if (form) { bdRenderScore(); renderEOIGaps(); bdRenderAttach(); }
+  else bdWsSteps(4);
+}
+function bdUseOtherForm() {
+  if ($('bd-s2')) $('bd-s2').style.display = '';
+  if ($('bd-funder-row')) $('bd-funder-row').style.display = '';
+  const m = $('bd-manual'); if (m) m.open = true;
+  const w = $('bd-ws'); if (w) w.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function _bdAnswersSig() { return _eoiQuestions.map(q => String(_eoiAnswers[q.id] || '').length).join('.'); }
+function bdRenderScore() {
+  const el = $('bd-score'); if (!el) return;
+  const sc = _eoiAnswers.__score;
+  const fixed = window._eoiAssessed && window._eoiAssessed.fixed;
+  if (window._bdScoring) { el.innerHTML = '<div class="bd-ph">Bid strength <span>assessor check</span></div><div style="font-size:13px;color:var(--txt3);margin-top:8px"><span class="bd-spin"></span> Reading it like their assessor…</div>'; return; }
+  if (!sc || typeof sc.score !== 'number') {
+    el.innerHTML = '<div class="bd-ph">Bid strength <span>assessor check</span></div><div style="font-size:13px;color:var(--txt3);margin:6px 0 8px">See how their assessor is likely to score it.</div><button class="btn btn-ghost btn-sm" type="button" onclick="bdScore()">Check it</button>';
+    const tag = bdWsFunder() + '|' + _eoiQuestions.length;
+    if (window._bdScoreTried !== tag) { window._bdScoreTried = tag; bdScore(); }
+    return;
+  }
+  const stale = sc.sig && sc.sig !== _bdAnswersSig();
+  el.innerHTML = '<div class="bd-ph">Bid strength <span>assessor check</span></div>' +
+    '<div class="bd-score">' + Math.round(sc.score) + '<small> / 100</small></div>' +
+    (sc.summary ? '<div style="font-size:12.5px;color:var(--txt2);margin-top:4px;line-height:1.5">' + escapeHTML(sc.summary) + (sc.next ? ' ' + escapeHTML(sc.next) : '') + '</div>' : '') +
+    (fixed ? '<div style="font-size:12px;color:#166534;margin-top:6px">✓ ' + fixed + ' answer' + (fixed === 1 ? '' : 's') + ' already improved by the assessor check</div>' : '') +
+    (stale ? '<div style="margin-top:8px"><a href="#" onclick="bdScore();return false" style="font-size:12.5px;color:var(--em);font-weight:600">Answers changed — check again</a></div>' : '');
+}
+async function bdScore() {
+  if (window._bdScoring || !_eoiQuestions.length) return;
+  window._bdScoring = true; bdRenderScore();
+  const funder = bdWsFunder() || 'the funder';
+  try {
+    const qa = _eoiQuestions.map((q, i) => 'Q' + (i + 1) + '. ' + q.question + (q.charLimit ? ' (limit ' + q.charLimit + ' characters)' : q.wordLimit ? ' (limit ' + q.wordLimit + ' words)' : '') + '\nANSWER: ' + (_eoiAnswers[q.id] || '')).join('\n\n');
+    const raw = await callClaude('You are the funder\'s assessor. Score this application out of 100 for how likely it is to be funded, judged on what this funder wants and how they decide: does each answer answer its question, is it specific and evidenced, does it fit their priorities and money rules, is it within limits. ' +
+      'Do not mark down [CONFIRM: …] items — the applicant completes those. A few short [INSERT: …] gaps cost a little. Be honest and consistent: 85+ is a strong, fundable bid; 70–84 is good with fixes; below 60 is unlikely to be funded. ' +
+      'Reply with ONLY a JSON object: {"score":0,"summary":"one short sentence on its main strength","next":"one short sentence: the single change that would lift the score most, naming the question number"}',
+      'FUNDER: ' + funder + '\n' + (_eoiFunderPriorities ? 'WHAT THE FUNDER WANTS:\n' + _eoiFunderPriorities.slice(0, 2500) + '\n' : '') + '\nAPPLICATION:\n' + qa, 600, false, { model: AI_MODELS.smart, long: true, purpose: 'bid_score' });
+    const m = String(raw || '').replace(/```json|```/gi, '').match(/\{[\s\S]*\}/);
+    const j = m ? JSON.parse(m[0]) : null;
+    if (j && isFinite(+j.score)) {
+      _eoiAnswers.__score = { score: Math.max(0, Math.min(100, +j.score)), summary: String(j.summary || '').slice(0, 220), next: String(j.next || '').slice(0, 220), sig: _bdAnswersSig(), at: new Date().toISOString() };
+      if (typeof window._vlBidSaveSoon === 'function') window._vlBidSaveSoon();
+    }
+  } catch (e) { /* the bid is fine without a score */ }
+  window._bdScoring = false; bdRenderScore();
+}
+
+// Make shorter / Make stronger / Copy / Undo on each answer
+function bdAnsFocus(id) { const el = $('eoi-ans-' + id); if (!el) return; el.focus(); const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); }
+function bdCopyAns(id, btn) { try { navigator.clipboard.writeText(_plainAnswer(_eoiAnswers[id] || '')); } catch (e) { /* ignore */ } if (btn) { btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = 'Copy'; }, 1500); } }
+function bdAnsUndo(id) {
+  if (!window._bdPrev || window._bdPrev[id] == null) return;
+  _eoiAnswers[id] = window._bdPrev[id]; delete window._bdPrev[id];
+  renderFilledEOI(); if (typeof window._vlBidSaveSoon === 'function') window._vlBidSaveSoon();
+}
+async function bdAns(id, how, btn) {
+  const q = _eoiQuestions.find(x => x.id === id); if (!q) return;
+  const ans = String(_eoiAnswers[id] || ''); if (!ans) return;
+  const box = btn && btn.parentNode; if (box) box.querySelectorAll('button').forEach(b => { b.disabled = true; });
+  if (btn) btn.innerHTML = '<span class="bd-spin"></span> ' + (how === 'shorter' ? 'Shortening…' : 'Strengthening…');
+  const funder = bdWsFunder() || 'the funder';
+  const wc = _wordCount(ans);
+  const limitTxt = q.charLimit ? 'at most ' + Math.floor(q.charLimit * 0.95) + ' characters including spaces' : q.wordLimit ? 'at most ' + Math.floor(q.wordLimit * 0.97) + ' words' : 'about ' + Math.round(wc * 1.1) + ' words at most';
+  let out = '';
+  try {
+    if (how === 'shorter') {
+      const target = q.charLimit && ans.length > q.charLimit ? Math.floor(q.charLimit * 0.92) + ' characters including spaces' : q.wordLimit && wc > q.wordLimit ? Math.floor(q.wordLimit * 0.95) + ' words' : Math.max(20, Math.round(wc * 0.75)) + ' words';
+      out = await callClaude('Shorten this funding application answer to at most ' + target + '. Keep every figure, name and [INSERT: ...] or [CONFIRM: ...] placeholder, and the points that matter most to the funder. Plain British English. Reply with ONLY the shortened answer.',
+        'QUESTION: ' + q.question + '\n\nANSWER:\n' + ans, 1200, false, { model: AI_MODELS.smart, purpose: 'bid_trim' });
+    } else {
+      const known = typeof _eoiKnownFacts === 'function' ? _eoiKnownFacts() : '';
+      out = await callClaude('You are an expert UK bid writer improving ONE answer in a funding application so it scores higher with THIS funder. Make it more specific, more evidenced and more clearly about what this funder wants and how they decide; lead with the direct answer; use their words. ' +
+        'Use ONLY facts already in the answer or in the FACTS and RECORDS given — never invent numbers, partners, consultation, policies or quotes. Keep every [INSERT: ...] and [CONFIRM: ...] placeholder. Length: ' + limitTxt + '. Never comment or add a heading. Reply with ONLY the improved answer.',
+        ['FUNDER: ' + funder, _eoiFunderPriorities ? 'WHAT THE FUNDER WANTS:\n' + _eoiFunderPriorities.slice(0, 2500) : '', _eoiProject ? 'THE PROJECT: ' + _eoiProject : '',
+          known ? 'FACTS:\n' + known : '', 'ABOUT THE ORGANISATION:\n' + _eoiCleanProfile(getOrgProfile()).slice(0, 2500), typeof _eoiMoneyFacts === 'function' ? _eoiMoneyFacts() : '', 'RECORDS:\n' + buildEOIEvidence(),
+          'QUESTION: ' + q.question + (q.guidance ? '\nTHEIR GUIDANCE: ' + q.guidance : ''), 'CURRENT ANSWER:\n' + ans].filter(Boolean).join('\n\n'),
+        1400, false, { model: AI_MODELS.best, effort: 'medium', long: true, purpose: 'bid_improve' });
+    }
+    const t = _stripLeadingLabel(cleanReportText(out));
+    if (t && !_eoiLooksLikeRefusal(t) && (how !== 'shorter' || t.length < ans.length)) {
+      window._bdPrev = window._bdPrev || {}; window._bdPrev[id] = ans;
+      _eoiAnswers[id] = t;
+      if (typeof window._vlBidSaveSoon === 'function') window._vlBidSaveSoon();
+    }
+  } catch (e) { if (!(e && e.message === 'AI_PLAN_GATE')) alert('Couldn\'t change that answer: ' + (e.message || e)); }
+  renderFilledEOI();
+  const card = $('bd-q-' + id); if (card) card.scrollIntoView({ block: 'nearest' });
+}
+
+// Documents the funder wants attached
 function _eoiDocToggle(i, on) {
   const n = (window._eoiDocNames || [])[i]; if (!n) return;
-  _eoiAnswers.__docs = Object.assign({}, _eoiAnswers.__docs || {}, { [n]: !!on });
+  _eoiAnswers.__docs = Object.assign({}, _eoiAnswers.__docs || {}, { [n]: on == null ? !(_eoiAnswers.__docs || {})[n] : !!on });
   if (typeof window._vlBidSaveSoon === 'function') window._vlBidSaveSoon();
+  bdRenderAttach();
 }
+function bdRenderAttach() {
+  const el = $('bd-attach'); if (!el) return;
+  const fromBrief = (_eoiBrief && Array.isArray(_eoiBrief.documents)) ? _eoiBrief.documents.filter(Boolean) : [];
+  const st = (_eoiAnswers.__docs && typeof _eoiAnswers.__docs === 'object') ? _eoiAnswers.__docs : {};
+  const names = [...new Set(fromBrief.concat(Object.keys(st)))].slice(0, 15);
+  if (!names.length) { el.innerHTML = ''; return; }
+  _eoiAnswers.__docs = Object.assign({}, ...names.map(n => ({ [n]: !!st[n] })));
+  window._eoiDocNames = names;
+  const done = names.filter(n => _eoiAnswers.__docs[n]).length;
+  el.innerHTML = '<div class="bd-panel"><div class="bd-ph">Attach <span>' + done + ' of ' + names.length + ' ready</span></div><div style="font-size:12px;color:var(--txt3);margin:2px 0 4px">A missing document is one of the commonest reasons bids are turned down.</div>' +
+    names.map((n, i) => '<div class="bd-gi"><button type="button" class="bd-ck' + (_eoiAnswers.__docs[n] ? ' y' : '') + '" onclick="_eoiDocToggle(' + i + ')" aria-label="Ready">' + (_eoiAnswers.__docs[n] ? '✓' : '') + '</button><div class="tx">' + (_eoiAnswers.__docs[n] ? '<s>' + escapeHTML(n) + '</s>' : escapeHTML(n)) + '</div></div>').join('') + '</div>';
+}
+
+// "To finish": every gap to fill and everything only they can confirm, in one checklist.
+// The same thing asked in different words becomes one question. Organisation facts are remembered for the next bid; bank details never are.
 function _eoiGapKey(label) {
   return String(label || '').replace(/\s*\((e\.g\.|for example)[^)]*\)/gi, '').replace(/,?\s*(e\.g\.|for example|such as)[\s\S]*$/i, '').replace(/[\s.:;–-]+$/, '').trim().toLowerCase();
+}
+function bdConfirm(qid) {
+  _eoiAnswers.__confirmed = Object.assign({}, _eoiAnswers.__confirmed || {}, { [qid]: !(_eoiAnswers.__confirmed || {})[qid] });
+  if (typeof window._vlBidSaveSoon === 'function') window._vlBidSaveSoon();
+  renderEOIGaps();
 }
 function renderEOIGaps() {
   const box = $('eoi-gaps'); if (!box) return;
   const gaps = {};
   _eoiQuestions.forEach(q => { (String(_eoiAnswers[q.id] || '').match(/\[INSERT:[^\]]*\]/gi) || []).forEach(m => {
     const label = m.replace(/^\[INSERT:\s*/i, '').replace(/\]$/, '').trim(), key = _eoiGapKey(label);
-    if (key) (gaps[key] = gaps[key] || { label, n: 0 }).n++;
+    if (key) { (gaps[key] = gaps[key] || { label, n: 0, qs: [] }).n++; const qn = _eoiQuestions.indexOf(q) + 1; if (!q.proposal && !gaps[key].qs.includes(qn)) gaps[key].qs.push(qn); }
   }); });
   const keys = Object.keys(gaps);
-  if (!keys.length) { box.innerHTML = '<div style="background:#F0FDF4;border:1px solid #BBF7D0;color:#166534;border-radius:10px;padding:10px 14px;font-size:13px;margin:0 0 16px">✓ No gaps left to fill.</div>'; return; }
-  // the same thing asked in different words becomes one question (e.g. four ways of asking for the venue postcode)
   const sig = keys.slice().sort().join('|');
   let groups = (window._eoiGapGroups && window._eoiGapGroups.sig === sig) ? window._eoiGapGroups.list : null;
   if (!groups) {
@@ -2982,21 +3282,30 @@ function renderEOIGaps() {
   const saved = ((currentOrg && currentOrg.settings && currentOrg.settings.bid_facts) || {});
   const fact = t => (_EOI_FACT_KEYS.find(f => f[1].test(t)) || [])[0];
   window._eoiGapList = groups;
-  const n = g => g.covers.reduce((a, k) => a + ((gaps[k] && gaps[k].n) || 0), 0);
-  box.innerHTML = '<div class="card" style="font-family:inherit;margin:0 0 18px;padding:16px 18px;background:#FFFBEB;border:1px solid #FDE68A;box-shadow:none">' +
-    '<div style="font-weight:700;font-size:15px;margin-bottom:2px">Fill the gaps (' + groups.length + ')' + (window._eoiGapGrouping ? ' <span style="font-weight:400;font-size:12px;color:#8A857A">· tidying…</span>' : '') + '</div>' +
-    '<div style="font-size:12.5px;color:#6B665C;margin-bottom:10px">Answer each once and it goes into every answer that needs it. Details about your organisation are remembered for your next bid.</div>' +
+  const conf = _eoiQuestions.filter(q => /^\[CONFIRM:/.test(_eoiAnswers[q.id] || ''));
+  const confirmed = _eoiAnswers.__confirmed || {};
+  const filled = Array.isArray(_eoiAnswers.__filled) ? _eoiAnswers.__filled : [];
+  const total = filled.length + groups.length + conf.length;
+  const done = filled.length + conf.filter(q => confirmed[q.id]).length;
+  const where = g => { const qs = [...new Set(g.covers.flatMap(k => (gaps[k] && gaps[k].qs) || []))].sort((a, b) => a - b); return qs.length ? ' · Q' + qs.join(', Q') : ''; };
+  const open = groups.filter(g => !bank(g.ask + ' ' + g.covers.join(' ')));
+  bdWsSteps(done < total ? 3 : 4);
+  if (!total) { box.innerHTML = '<div class="bd-ph">To finish</div><div style="font-size:13px;color:#166534;margin-top:8px">✓ Nothing left to fill in.</div>'; return; }
+  box.innerHTML = '<div class="bd-ph">To finish <span>' + done + ' of ' + total + ' done' + (window._eoiGapGrouping ? ' · tidying…' : '') + '</span></div>' +
+    '<div class="bd-meter"><i style="width:' + Math.round(100 * done / total) + '%"></i></div>' +
+    filled.map(f => '<div class="bd-gi"><span class="bd-ck y">✓</span><div class="tx"><s>' + escapeHTML(f) + '</s></div></div>').join('') +
     groups.map((g, i) => bank(g.ask + ' ' + g.covers.join(' '))
-      ? '<div style="font-size:12.5px;color:#6B665C;margin:8px 0">🔒 <b>' + escapeHTML(g.ask) + '</b> — type bank details straight into the funder\'s form. Vorlana never stores them.</div>'
-      : '<label style="display:block;margin:8px 0 3px;font-size:12.5px;font-weight:600;color:#1D1D1F;text-transform:none;letter-spacing:0">' + escapeHTML(g.ask) + (n(g) > 1 ? ' <span style="font-weight:400;color:#8A857A">· in ' + n(g) + ' places</span>' : '') + '</label>' +
-        '<input id="eoi-gap-' + i + '" style="max-width:560px" value="' + escapeHTML((fact(g.ask) && saved[fact(g.ask)]) || '') + '"/>').join('') +
-    '<div style="margin-top:12px;display:flex;gap:10px;align-items:center"><button class="btn btn-p btn-sm" type="button" onclick="applyEOIGaps()">Put these into my answers</button><span id="eoi-gap-msg" style="font-size:12px"></span></div></div>';
+      ? '<div class="bd-gi"><span class="bd-ck" style="cursor:default">🔒</span><div class="tx">' + escapeHTML(g.ask) + '<br><small>Type bank details straight into the funder\'s form. Vorlana never stores them.</small></div></div>'
+      : '<div class="bd-gi"><span class="bd-ck" style="cursor:default"></span><div class="tx">' + escapeHTML(g.ask) + '<small>' + where(g) + '</small><input id="eoi-gap-' + i + '" value="' + escapeHTML((fact(g.ask) && saved[fact(g.ask)]) || '') + '" onkeydown="if(event.key===\'Enter\')applyEOIGaps()"/></div></div>').join('') +
+    conf.map(q => '<div class="bd-gi"><button type="button" class="bd-ck' + (confirmed[q.id] ? ' y' : '') + '" onclick="bdConfirm(\'' + escapeHTML(q.id) + '\')" aria-label="Done">' + (confirmed[q.id] ? '✓' : '') + '</button><div class="tx">' + (confirmed[q.id] ? '<s>' : '') + 'Only you can confirm: ' + escapeHTML(q.question.slice(0, 120)) + (q.question.length > 120 ? '…' : '') + (confirmed[q.id] ? '</s>' : '') + '<small> · Q' + (_eoiQuestions.indexOf(q) + 1) + '</small></div></div>').join('') +
+    (open.length ? '<div style="margin-top:10px;display:flex;gap:10px;align-items:center"><button class="btn btn-p btn-sm" type="button" onclick="applyEOIGaps()">Put these into my answers</button><span id="eoi-gap-msg" style="font-size:12px"></span></div>' : '');
 }
 async function applyEOIGaps() {
-  const groups = window._eoiGapList || [], vals = {}, facts = {};
+  const groups = window._eoiGapList || [], vals = {}, facts = {}, labels = [];
   groups.forEach((g, i) => {
     const el = $('eoi-gap-' + i); const v = el && el.value.trim(); if (!v) return;
     g.covers.forEach(k => { vals[k] = v; });
+    labels.push(g.ask.replace(/\?\s*$/, '') + ': ' + v);
     const f = (_EOI_FACT_KEYS.find(x => x[1].test(g.ask)) || _EOI_FACT_KEYS.find(x => g.covers.some(k => x[1].test(k))) || [])[0];
     if (f && !/bank|sort code|account (number|name)|roll number/i.test(g.ask)) facts[f] = v;     // remembered for the next bid
   });
@@ -3007,6 +3316,7 @@ async function applyEOIGaps() {
       return vals[key] != null ? vals[key] : m;
     });
   });
+  _eoiAnswers.__filled = (Array.isArray(_eoiAnswers.__filled) ? _eoiAnswers.__filled : []).concat(labels).slice(-30);
   if (Object.keys(facts).length && typeof sb !== 'undefined' && sb && orgId) {
     try {
       const r = await sb.from('organisations').select('settings').eq('id', orgId).limit(1);
@@ -3125,7 +3435,9 @@ async function runEOIGenerator() {
       .replace(/\[INSERT:([^\]]*)\]/gi, '<mark style="background:#ffe9a8">[INSERT:$1]</mark>');
     res.innerHTML = html +
       '<div style="margin-top:20px;padding-top:12px;border-top:1px solid #eee;font-size:11px;color:#999">Drafted with Vorlana · verify all figures before submission</div>';
-    res.style.cssText = 'background:#fff;color:#1a1a1a;border-radius:var(--radiuslg);padding:30px 36px;font-family:Georgia,serif;line-height:1.7';
+    res.style.cssText = 'background:var(--surface);color:var(--txt);border-radius:16px;padding:26px 30px;line-height:1.7';
+    if ($('bd-s2')) $('bd-s2').style.display = 'none';
+    bdRenderRail(); bdResume();
   }
 }
 
@@ -3134,7 +3446,11 @@ function downloadEOIPDF() {
   const orig = document.title;
   const title = 'EOI — ' + (($('eoi-funder') && $('eoi-funder').value) || 'Untitled');
   document.title = title.replace(/[^a-z0-9 \-]/gi, '').slice(0, 80);
-  const inner = $('eoi-result').innerHTML;
+  const inner = (window._eoiLastKind === 'form' && _eoiQuestions.length)
+    ? _eoiQuestions.map((q, i) => (q.proposal && !(_eoiQuestions[i - 1] || {}).proposal ? '<h2>Written proposal</h2>' : '') +
+        '<h3>' + (q.proposal ? '' : 'Q' + (i + 1) + '. ') + escapeHTML(q.proposal ? q.question.replace(/^Proposal — /, '').split(':')[0] : q.question) + '</h3>' +
+        '<p>' + boldify(escapeHTML(/^\[CONFIRM:/.test(_eoiAnswers[q.id] || '') ? '(For you to complete)' : _plainAnswer(_eoiAnswers[q.id] || ''))).replace(/\n/g, '<br/>') + '</p>').join('')
+    : $('eoi-result').innerHTML;
   const printWrap = document.createElement('div');
   printWrap.id = 'report-output';
   const _logo = getOrgLogoUrl(currentOrg);

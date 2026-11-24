@@ -116,12 +116,12 @@
 
   // A nudge on Find funding until the register has been checked
   function nudge() {
-    var side = document.querySelector('#page-bd .bd-side'); if (!side) return;
+    var side = document.getElementById('bd-nudges'); if (!side) return;
     var s = st(), old = $('vlf-nudge');
     if ((s.register && (s.register.id || s.register.none)) || facts().charity_number || facts().company_number || !isManager()) { if (old) old.remove(); return; }
     if (old) return;
-    var d = document.createElement('div'); d.id = 'vlf-nudge'; d.className = 'card'; d.style.cssText = 'margin-bottom:16px;padding:14px 16px';
-    d.innerHTML = '<div style="font-size:14px;font-weight:650">Fewer gaps in every bid</div><div style="font-size:12.5px;color:var(--txt3);margin:3px 0 10px">We can fill your charity number, address, turnover, staff and volunteers from the public register in one tap.</div>' +
+    var d = document.createElement('div'); d.id = 'vlf-nudge'; d.className = 'card'; d.style.cssText = 'margin-bottom:14px;padding:14px 18px;display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap';
+    d.innerHTML = '<div style="min-width:0;flex:1"><div style="font-size:14px;font-weight:650">Fewer gaps in every bid</div><div style="font-size:12.5px;color:var(--txt3);margin-top:2px">We can fill your charity number, address, turnover, staff and volunteers from the public register in one tap.</div></div>' +
       '<button class="btn btn-p btn-sm" type="button" onclick="vlOrgFactsOpen(true)">Find us</button>';
     side.insertBefore(d, side.firstChild);
   }

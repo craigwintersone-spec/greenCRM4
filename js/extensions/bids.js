@@ -1,7 +1,7 @@
 // js/extensions/bids.js — the bid tracker, with no admin.
 // A bid is saved automatically when Vorlana writes it (questions and answers included), kept up to date as it's edited,
 // and marked "submitted" when it's downloaded or copied. Eight weeks later the writer gets one email asking
-// "Did you win?" (api/bid-asks.js). "Your bids" on the Find funding page shows the win rate and opens any past bid.
+// "Did you win?" (api/bid-asks.js). "Bids in progress" and "Won & lost" on Find funding show the win rate and open any past bid.
 // Needs bid-tracker.sql; without it, this stays hidden.
 (function () {
   'use strict';
@@ -24,33 +24,44 @@
     paint();
   }
 
+  // "Bids in progress" and "Won & lost" tabs on Find funding
+  function row(b) {
+    var acts = b.status === 'submitted' ? '<button class="btn btn-ghost btn-sm" onclick="vlBidResult(\'' + b.id + '\',\'won\')">Won</button><button class="btn btn-ghost btn-sm" onclick="vlBidResult(\'' + b.id + '\',\'lost\')">Not won</button>'
+      : b.status === 'drafted' ? '<button class="btn btn-ghost btn-sm" onclick="vlBidResult(\'' + b.id + '\',\'submitted\')">Mark as sent</button>' : '';
+    var canOpen = Array.isArray(b.questions) && b.questions.length;
+    var amt = b.status === 'won' && b.amount_won ? '£' + Number(b.amount_won).toLocaleString('en-GB') + ' won' : b.amount;
+    return '<div class="bd-list-row"><div style="min-width:0">' +
+        '<div class="t">' + esc(b.funder) + (b.programme ? ' <span style="font-weight:500;color:var(--txt3)">· ' + esc(b.programme) + '</span>' : '') + '</div>' +
+        '<div class="s">' + esc([amt, b.status === 'drafted' ? 'started ' + when(b.created_at) : b.status === 'submitted' ? 'sent ' + when(b.submitted_at || b.created_at) : when(b.decided_at || b.created_at)].filter(Boolean).join(' · ')) + '</div></div>' +
+      '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><span class="badge" style="background:' + (COLOUR[b.status] || COLOUR.drafted) + '">' + esc(LABEL[b.status] || b.status) + '</span>' + acts +
+        (canOpen ? '<button class="btn btn-p btn-sm" onclick="vlBidOpen(\'' + b.id + '\')">Open</button>' : '') + '</div></div>';
+  }
   function paint() {
-    var side = document.querySelector('#page-bd .bd-side'); if (!side) return;
-    var box = $('vl-bids');
-    if (!ready || !bids.length) { if (box) box.remove(); return; }
-    if (!box) { box = document.createElement('div'); box.id = 'vl-bids'; box.className = 'card'; box.style.marginBottom = '16px'; side.insertBefore(box, side.firstChild); }
-    var decided = bids.filter(function (b) { return b.status === 'won' || b.status === 'lost'; });
-    var won = bids.filter(function (b) { return b.status === 'won'; });
-    var raised = won.reduce(function (a, b) { return a + (Number(b.amount_won) || money(b.amount)); }, 0);
-    var waiting = bids.filter(function (b) { return b.status === 'submitted'; }).length;
-    var list = showAll ? bids : bids.slice(0, 6);
-    box.innerHTML = '<div style="font-size:17px;font-weight:650;color:var(--txt);margin-bottom:4px">Your bids</div>' +
-      '<div style="font-size:13px;color:var(--txt3);margin-bottom:12px">' +
-        (decided.length ? '<b style="color:var(--txt)">' + Math.round(100 * won.length / decided.length) + '% win rate</b> · won ' + won.length + ' of ' + decided.length + (raised ? ' · £' + raised.toLocaleString('en-GB') + ' raised' : '') : 'Your win rate appears once you hear back.') +
-        (waiting ? ' · ' + waiting + ' waiting to hear' : '') + '</div>' +
-      list.map(function (b) {
-        var acts = b.status === 'submitted' ? '<button class="btn btn-ghost btn-sm" onclick="vlBidResult(\'' + b.id + '\',\'won\')">Won</button> <button class="btn btn-ghost btn-sm" onclick="vlBidResult(\'' + b.id + '\',\'lost\')">Not won</button>'
-          : b.status === 'drafted' ? '<button class="btn btn-ghost btn-sm" onclick="vlBidResult(\'' + b.id + '\',\'submitted\')">Mark as sent</button>' : '';
-        var canOpen = Array.isArray(b.questions) && b.questions.length;
-        return '<div style="padding:10px 0;border-top:1px solid var(--border)' + (b.id === currentId ? ';background:rgba(31,111,109,.05);margin:0 -10px;padding:10px' : '') + '"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">' +
-          '<div style="min-width:0">' + (canOpen ? '<a href="#" onclick="vlBidOpen(\'' + b.id + '\');return false" style="font-size:13.5px;font-weight:600;color:var(--em2);text-decoration:none">' + esc(b.funder) + ' ›</a>' : '<div style="font-size:13.5px;font-weight:600;color:var(--txt)">' + esc(b.funder) + '</div>') +
-          '<div style="font-size:12px;color:var(--txt3)">' + esc([b.programme, b.amount, when(b.created_at)].filter(Boolean).join(' · ')) + '</div></div>' +
-          '<span class="badge" style="background:' + (COLOUR[b.status] || COLOUR.drafted) + '">' + esc(LABEL[b.status] || b.status) + '</span></div>' +
-          (acts || canOpen ? '<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">' + (canOpen ? '<button class="btn btn-ghost btn-sm" onclick="vlBidOpen(\'' + b.id + '\')">Open</button>' : '') + acts + '</div>' : '') + '</div>';
-      }).join('') +
-      (bids.length > 6 ? '<a href="#" onclick="vlBidsAll();return false" style="display:block;margin-top:10px;font-size:12.5px;color:var(--em);font-weight:600">' + (showAll ? 'Show fewer' : 'Show all ' + bids.length + ' bids') + '</a>' : '');
+    var live = bids.filter(function (b) { return b.status === 'drafted' || b.status === 'submitted'; });
+    var done = bids.filter(function (b) { return b.status === 'won' || b.status === 'lost' || b.status === 'withdrawn'; });
+    var n = function (id, k) { var el = $('bd-n-' + id); if (el) el.textContent = k ? String(k) : ''; };
+    n('bids', live.length); n('done', done.length);
+    var v1 = $('bd-v-bids'), v2 = $('bd-v-done');
+    if (v1) v1.innerHTML = live.length ? '<div class="card" style="padding:6px 20px">' + live.map(row).join('') + '</div>' +
+        (live.some(function (b) { return b.status === 'submitted'; }) ? '<div class="bd-note" style="margin-top:10px">We\'ll email you eight weeks after you send a bid to ask how it went.</div>' : '')
+      : '<div class="bd-empty"><b>No bids on the go</b>Press Write the bid on a funder and it\'s saved here as you work.</div>';
+    if (v2) {
+      var decided = bids.filter(function (b) { return b.status === 'won' || b.status === 'lost'; });
+      var won = bids.filter(function (b) { return b.status === 'won'; });
+      var raised = won.reduce(function (a, b) { return a + (Number(b.amount_won) || money(b.amount)); }, 0);
+      var list = showAll ? done : done.slice(0, 20);
+      v2.innerHTML = done.length ? '<div class="card" style="padding:18px 20px 6px">' +
+          '<div class="bd-stats">' +
+            '<div class="bd-num"><b>' + (decided.length ? Math.round(100 * won.length / decided.length) + '%' : '–') + '</b><span>Win rate</span></div>' +
+            '<div class="bd-num"><b>' + won.length + ' of ' + decided.length + '</b><span>Won</span></div>' +
+            (raised ? '<div class="bd-num"><b>£' + raised.toLocaleString('en-GB') + '</b><span>Raised</span></div>' : '') + '</div>' +
+          '<div style="margin-top:10px">' + list.map(row).join('') + '</div>' +
+          (done.length > 20 ? '<a href="#" onclick="vlBidsAll();return false" style="display:block;margin:6px 0 12px;font-size:12.5px;color:var(--em);font-weight:600">' + (showAll ? 'Show fewer' : 'Show all ' + done.length) + '</a>' : '') + '</div>'
+        : '<div class="bd-empty"><b>Nothing decided yet</b>When you hear back, press Won or Not won on the bid — your win rate shows here.</div>';
+    }
   }
   window.vlBidsAll = function () { showAll = !showAll; paint(); };
+  window.vlBidsPaint = paint;
 
   // What's on screen now, ready to save
   function content() {
@@ -73,7 +84,7 @@
     try {
       var r = await sb.from('bids').insert([noContent ? row : Object.assign({}, row, content())]).select();
       if (r.error && !noContent) { noContent = true; r = await sb.from('bids').insert([row]).select(); }   // before the answers columns were added
-      if (!r.error && r.data && r.data[0]) { currentId = r.data[0].id; currentKey = key; bids.unshift(r.data[0]); paint(); }
+      if (!r.error && r.data && r.data[0]) { currentId = r.data[0].id; currentKey = key; bids.unshift(r.data[0]); paint(); window.dispatchEvent(new Event('vl-bid-saved')); }
     } catch (e) { /* tracker is optional */ }
   }
   // Keep the saved copy up to date as answers are edited and gaps filled
@@ -84,6 +95,7 @@
       var r = await sb.from('bids').update(c).eq('id', currentId);
       if (r.error) { noContent = true; return; }
       var b = bids.find(function (x) { return x.id === currentId; }); if (b) Object.assign(b, c);
+      window.dispatchEvent(new Event('vl-bid-saved'));
     } catch (e) { /* optional */ }
   }
   function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 1500); }
@@ -148,14 +160,15 @@
     _bdSel = { funder: b.funder, programme: b.programme, deadline: b.deadline, url: b.url };
     _eoiDoc = { kind: 'text', url: b.url, reopened: true };
     window._eoiAssessed = null;
+    if (typeof _eoiFunderPriorities !== 'undefined') { _eoiFunderPriorities = ''; _eoiPrioritiesFunder = ''; _eoiBrief = null; }
+    if (typeof bdWsReset === 'function') bdWsReset();
     var f = $('eoi-funder'); if (f) f.value = b.funder_full || (b.funder + (b.programme ? ' — ' + b.programme : ''));
     currentId = b.id; currentKey = (f ? f.value : b.funder) + '|' + (_eoiProject || '');
-    if (typeof bdShowSection === 'function') bdShowSection(3);
     if (typeof renderFilledEOI === 'function') renderFilledEOI();
-    var note = $('bd-pull-note'); if (note) note.innerHTML = '<div class="bd-pullnote" style="background:#F0FDF4">Opened your <b>' + esc(b.funder) + '</b> bid from ' + esc(when(b.created_at)) + '. Changes are saved as you go.</div>';
+    var sub = $('bd-ws-sub'); if (sub) sub.textContent = 'Started ' + when(b.created_at) + ' · changes are saved as you go';
     paint();
-    var out = $('eoi-output'); if (out && out.scrollIntoView) out.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
+  window._vlBidNew = function () { currentId = null; currentKey = ''; };
 
   // Hook into the bid writer without changing it
   function wrap(name, after) {
@@ -176,6 +189,7 @@
       var g = window.go;
       window.go = function (p) { var r = g.apply(this, arguments); if (p === 'bd') load(); return r; };
       if (document.querySelector('#page-bd.active')) load();
+      paint();
       return;
     }
     if (t < 100) setTimeout(function () { wait(t + 1); }, 100);

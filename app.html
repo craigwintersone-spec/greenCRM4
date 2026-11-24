@@ -431,156 +431,220 @@
   </div>
 </div>
 
-<!-- BD MANAGER -->
+<!-- FIND FUNDING -->
 <div id="page-bd" class="page">
   <style>
-    .bd-flow{display:flex;align-items:center;gap:8px;margin:0 0 18px;flex-wrap:wrap}
-    .bd-flow a{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:20px;background:var(--surface);border:1px solid var(--border);font-size:13px;font-weight:600;color:var(--txt3);cursor:pointer;text-decoration:none;user-select:none}
-    .bd-flow a b{width:20px;height:20px;border-radius:50%;background:var(--border);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px}
-    .bd-flow a.on{color:var(--txt);border-color:var(--em)}
-    .bd-flow a.on b{background:var(--em)}
-    .bd-flow a.done b{background:#16A34A}
-    .bd-flow a.todo{color:var(--txt3)}
-    .bd-flow a:hover{border-color:var(--em)}
-    .bd-flow i{flex:0 0 16px;height:1px;background:var(--border)}
-    .bd-grid{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:18px;align-items:start}
-    @media(max-width:980px){.bd-grid{grid-template-columns:1fr}.bd-side{order:-1}}
-    .bd-sec-h{display:flex;align-items:center;gap:12px;margin:0 0 14px}
-    .bd-sec-h .n{width:26px;height:26px;border-radius:50%;background:var(--em);color:#fff;font-size:13px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
-    .bd-sec-h .t{font-size:17px;font-weight:700;color:var(--txt);letter-spacing:-.2px}
-    .bd-sec-h .s{font-size:12.5px;color:var(--txt3);margin-top:1px}
-    .bd-find{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
-    .bd-find .form-row{flex:1;min-width:220px;margin:0}
-    .bd-hint{font-size:12.5px;color:var(--txt3);margin-top:10px;line-height:1.5}
+    #page-bd{--amber:#B45309;--amberL:#FEF3C7}
+    .bd-tabs{display:flex;gap:4px;background:#ECECF0;border-radius:12px;padding:4px;width:max-content;max-width:100%;overflow-x:auto;margin:4px 0 20px}
+    .bd-tabs button{border:none;background:none;padding:8px 16px;border-radius:9px;font-size:13.5px;font-weight:600;color:var(--txt2);cursor:pointer;white-space:nowrap}
+    .bd-tabs button.on{background:#fff;color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+    .bd-tabs button i{font-style:normal;color:var(--txt3);font-weight:500;margin-left:5px}
+    .bd-search{padding:20px 22px}
+    .bd-who{font-size:13px;color:var(--txt3);margin-bottom:12px;line-height:1.5}.bd-who b{color:var(--txt);font-weight:600}
+    .bd-who a{color:var(--em);font-weight:600;margin-left:6px;text-decoration:none;cursor:pointer}
+    .bd-who.warn{color:var(--amber)}
+    .bd-find{display:flex;gap:10px}
+    .bd-find input{flex:1;min-width:0}
+    .bd-find .btn{white-space:nowrap}
+    @media(max-width:600px){.bd-find{flex-direction:column}}
+    .bd-hint{font-size:12.5px;color:var(--txt3);margin-top:10px}
+    .bd-hint a{color:var(--em);font-weight:600;text-decoration:none;cursor:pointer}
+    .bd-prog{display:flex;align-items:center;gap:12px;margin-top:14px;font-size:13px;color:var(--txt2)}
+    .bd-prog .bar{flex:1;height:5px;background:#ECECF0;border-radius:4px;overflow:hidden;min-width:60px}
+    .bd-prog .bar i{display:block;height:100%;background:var(--em);border-radius:4px;transition:width .5s}
     .bd-spin{display:inline-block;width:10px;height:10px;border:2px solid var(--border);border-top-color:var(--em);border-radius:50%;animation:bdspin .8s linear infinite;vertical-align:-1px}@keyframes bdspin{to{transform:rotate(360deg)}}
-    .bd-seg{display:inline-flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:0 0 12px;flex-wrap:wrap}
-    .bd-seg button{border:none;background:var(--surface);padding:7px 13px;font-size:12.5px;font-weight:600;color:var(--txt2);cursor:pointer}
-    .bd-seg button.on{background:var(--em);color:#fff}
-    .bd-row{display:flex;gap:14px;justify-content:space-between;align-items:flex-start;padding:14px 0;border-top:1px solid var(--border)}
-    .bd-row:first-of-type{border-top:none}
-    .bd-row-main{min-width:0;flex:1}
-    .bd-pill{display:inline-block;font-size:11px;font-weight:700;border-radius:10px;padding:2px 9px;margin-right:6px}
+    .bd-resume{display:flex;align-items:center;gap:12px;justify-content:space-between;background:var(--surface);border:1px solid var(--em);border-radius:14px;padding:12px 16px;margin-bottom:14px;font-size:13.5px;cursor:pointer}
+    .bd-resume b{color:var(--em)}
+    .bd-bar{display:flex;gap:8px;margin:20px 0 12px;align-items:center;flex-wrap:wrap}
+    .bd-chip{padding:6px 12px;border-radius:20px;background:#fff;border:1px solid var(--border);font-size:12.5px;font-weight:600;color:var(--txt2);cursor:pointer}
+    .bd-chip.on{background:var(--txt);color:#fff;border-color:var(--txt)}
+    .bd-sort{margin-left:auto;width:auto;font-size:12.5px;padding:6px 28px 6px 10px;border-radius:10px;color:var(--txt2)}
+    .bd-note{font-size:13px;color:var(--txt3);margin:0 0 12px}
+    .bd-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:14px}
+    @media(max-width:600px){.bd-grid{grid-template-columns:1fr}}
+    .bd-card{background:var(--surface);border-radius:18px;padding:18px 20px;box-shadow:0 1px 2px rgba(0,0,0,.04);display:flex;flex-direction:column;min-width:0}
+    .bd-card-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
+    .bd-pill{display:inline-block;font-size:11.5px;font-weight:700;border-radius:20px;padding:3px 9px}
     .bd-fit5{background:#DCFCE7;color:#166534}.bd-fit4{background:#E0F2FE;color:#075985}.bd-fit3{background:#F3F4F6;color:#4B5563}
-    .bd-lane{font-size:11.5px;color:var(--txt3)}
-    .bd-row-title{font-size:15px;font-weight:700;color:var(--txt);margin:5px 0 2px}
-    .bd-row-fit{font-size:13.5px;color:var(--txt2);line-height:1.5}
-    .bd-row-meta{font-size:12.5px;color:var(--txt3);margin-top:5px}
-    .bd-row-act{display:flex;flex-direction:column;gap:8px;align-items:flex-end;flex-shrink:0}
-    .bd-row-act a{font-size:12.5px;color:var(--em);font-weight:600;text-decoration:none}
-    @media(max-width:600px){.bd-row{flex-direction:column}.bd-row-act{flex-direction:row;align-items:center}}
-    .bd-org label{font-size:11px}
-    .bd-side summary{cursor:pointer;list-style:none}
-    .bd-side summary::-webkit-details-marker{display:none}
-    .bd-sum{font-size:12.5px;color:var(--txt3);margin-top:3px;line-height:1.45}
-    .bd-how{font-size:12.5px;color:var(--txt2);line-height:1.65;padding-left:16px;margin:6px 0 0}
-    #bd-manual summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--em)}
+    .bd-lane{font-size:12px;color:var(--txt3)}
+    .bd-fn{font-size:13px;color:var(--txt3);font-weight:500}
+    .bd-pn{font-size:17px;font-weight:700;letter-spacing:-.2px;margin:2px 0 12px;color:var(--txt)}
+    .bd-nums{display:flex;gap:26px;margin-bottom:12px;flex-wrap:wrap}
+    .bd-num b{display:block;font-size:20px;font-weight:700;letter-spacing:-.4px;color:var(--txt);line-height:1.2}
+    .bd-num span{font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px}
+    .bd-num b.soon{color:var(--amber)}
+    .bd-why{font-size:13.5px;color:var(--txt2);line-height:1.5;margin-bottom:6px}
+    .bd-given{font-size:12.5px;color:var(--txt3);margin-bottom:6px;line-height:1.5}
+    .bd-given b{color:#1E7B3C}
+    .bd-ok{font-size:12px;color:#1E7B3C;margin-bottom:6px}.bd-warnline{font-size:12px;color:var(--amber);margin-bottom:6px}
+    .bd-card details summary{font-size:12px;color:var(--txt3);cursor:pointer}
+    .bd-acts{display:flex;gap:6px;align-items:center;margin-top:auto;padding-top:12px;border-top:1px solid var(--border);flex-wrap:wrap}
+    .bd-acts .bd-fp{margin-left:auto;font-size:12.5px;color:var(--em);font-weight:600;text-decoration:none}
+    .bd-link{background:none;border:none;color:var(--txt3);font-size:13px;font-weight:600;cursor:pointer;padding:6px}
+    .bd-empty{background:var(--surface);border-radius:18px;padding:28px 24px;text-align:center;color:var(--txt3);font-size:13.5px;line-height:1.6}
+    .bd-empty b{display:block;color:var(--txt);font-size:15px;margin-bottom:4px}
+    .bd-list-row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:14px 0;border-top:1px solid var(--border)}
+    .bd-list-row:first-child{border-top:none}
+    .bd-list-row .t{font-size:14.5px;font-weight:650;color:var(--txt)}.bd-list-row .s{font-size:12.5px;color:var(--txt3);margin-top:2px}
+    .bd-stats{display:flex;gap:28px;margin-bottom:6px;flex-wrap:wrap}
+    /* details drawer */
+    .bd-drawer-bg{position:fixed;inset:0;background:rgba(0,0,0,.28);z-index:300;display:none}
+    .bd-drawer{position:fixed;top:0;right:0;bottom:0;width:min(440px,100%);background:var(--surface);z-index:301;overflow-y:auto;padding:22px 22px 30px;box-shadow:-10px 0 40px rgba(0,0,0,.12);transform:translateX(105%);transition:transform .25s}
+    .bd-drawer.open{transform:none}
+    .bd-drawer-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+    .bd-drawer-h b{font-size:18px}
+    .bd-x{border:none;background:#F0F0F3;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--txt2)}
+    /* bid workspace */
+    .bd-ws{position:fixed;inset:0;background:var(--bg);z-index:250;overflow-y:auto;display:none}
+    .bd-ws.open{display:block}
+    .bd-ws-h{position:sticky;top:0;z-index:2;background:rgba(255,255,255,.92);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--border);padding:12px 28px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+    .bd-back{font-size:13.5px;color:var(--em);font-weight:600;background:none;border:none;cursor:pointer;padding:6px 0;white-space:nowrap}
+    .bd-ws-t{min-width:0;flex:1}
+    .bd-ws-t b{display:block;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .bd-ws-t span{font-size:12.5px;color:var(--txt3)}
+    .bd-steps{display:flex;gap:4px;overflow-x:auto;max-width:100%}
+    .bd-st{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--txt3);padding:6px 11px;border-radius:20px;border:none;background:none;cursor:pointer;white-space:nowrap}
+    .bd-st b{width:20px;height:20px;border-radius:50%;background:#D1D1D6;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px}
+    .bd-st.d{color:var(--txt2)}.bd-st.d b{background:#16A34A}
+    .bd-st.on{background:rgba(31,111,109,.1);color:var(--em)}.bd-st.on b{background:var(--em)}
+    .bd-ws-b{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:22px;padding:22px 28px 60px;max-width:1400px;margin:0 auto}
+    @media(max-width:980px){.bd-ws-b{grid-template-columns:1fr;padding:16px}.bd-ws-h{padding:10px 16px}}
+    .bd-brief{background:var(--surface);border-radius:16px;padding:16px 20px;margin-bottom:14px;font-size:13.5px;color:var(--txt2);line-height:1.6}
+    .bd-brief b{color:var(--txt)}
+    .bd-brief details summary{font-size:12.5px;color:var(--em);font-weight:600;cursor:pointer;margin-top:6px}
+    .bd-q{background:var(--surface);border-radius:16px;padding:18px 22px;margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+    .bd-q-h{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+    .bd-q-t{font-size:15px;font-weight:700;color:var(--txt);line-height:1.4}
+    .bd-q-n{font-size:12px;color:var(--txt3);white-space:nowrap}.bd-q-n.over{color:#B91C1C;font-weight:600}
+    .bd-wc{height:4px;background:#ECECF0;border-radius:3px;margin:10px 0 10px;overflow:hidden}.bd-wc i{display:block;height:100%;border-radius:3px;background:#16A34A}
+    .bd-wc i.over{background:#DC2626}
+    .bd-ans{font-size:14px;line-height:1.65;color:var(--txt2);border:1px solid transparent;border-radius:10px;padding:8px 10px;margin:0 -10px;outline:none;white-space:normal}
+    .bd-ans:focus{border-color:var(--em);box-shadow:0 0 0 4px rgba(31,111,109,.1);background:#fff}
+    .bd-ans mark.gap{background:var(--amberL);color:var(--amber);font-weight:600;border-radius:5px;padding:1px 5px}
+    .bd-ans mark.conf{background:#DBEAFE;color:#1E3A8A;font-weight:600;border-radius:5px;padding:1px 5px}
+    .bd-q-a{display:flex;gap:14px;margin-top:8px;flex-wrap:wrap;align-items:center}
+    .bd-q-a button{background:none;border:none;font-size:12.5px;color:var(--txt3);font-weight:600;cursor:pointer;padding:2px 0}
+    .bd-q-a button:first-child{color:var(--em)}
+    .bd-q-a button:disabled{opacity:.5;cursor:default}
+    .bd-sect{font-size:20px;font-weight:700;margin:26px 0 4px;color:var(--txt)}
+    .bd-sect-s{font-size:13px;color:var(--txt3);margin-bottom:14px}
+    .bd-rail{position:sticky;top:80px;align-self:start}
+    @media(max-width:980px){.bd-rail{position:static}}
+    .bd-panel{background:var(--surface);border-radius:16px;padding:16px 18px;margin-bottom:14px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+    .bd-ph{font-size:14px;font-weight:700;display:flex;justify-content:space-between;gap:8px;color:var(--txt)}.bd-ph span{color:var(--txt3);font-weight:500;font-size:12.5px}
+    .bd-meter{height:6px;background:#ECECF0;border-radius:4px;margin:10px 0 6px;overflow:hidden}.bd-meter i{display:block;height:100%;background:var(--em);border-radius:4px}
+    .bd-gi{display:flex;gap:10px;padding:9px 0;border-top:1px solid var(--border);font-size:13px;align-items:flex-start;line-height:1.45}
+    .bd-gi:first-of-type{border-top:none}
+    .bd-ck{width:18px;height:18px;border-radius:6px;border:1.5px solid #C7C7CC;flex:none;margin-top:1px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;background:#fff;cursor:pointer;padding:0}
+    .bd-ck.y{background:#16A34A;border-color:#16A34A}
+    .bd-gi .tx{flex:1;color:var(--txt2);min-width:0}.bd-gi .tx s{color:var(--txt3)}
+    .bd-gi .tx small{color:var(--txt3)}
+    .bd-gi input{width:100%;margin-top:6px;font-size:13px;padding:7px 9px}
+    .bd-score{font-size:30px;font-weight:700;letter-spacing:-.6px;color:var(--em);line-height:1.2;margin-top:4px}
+    .bd-score small{font-size:15px;color:var(--txt3);font-weight:500}
+    .bd-dl{display:flex;flex-direction:column;gap:8px}
+    .bd-dl .btn{justify-content:center;width:100%}
+    .bd-pullnote{font-size:13px;line-height:1.55;padding:10px 12px;border-radius:10px;background:var(--surface);color:var(--txt2);margin-top:12px}
     .bd-man-blk{border-top:1px solid var(--border);padding:14px 0 4px;margin-top:12px}
-    .bd-man-blk h4{font-size:13px;margin:0 0 4px;color:var(--txt)}
+    .bd-man-blk h4{font-size:13.5px;margin:0 0 4px;color:var(--txt)}
     .bd-man-blk p{font-size:12.5px;color:var(--txt3);margin:0 0 10px}
-    .bd-pullnote{font-size:13px;line-height:1.55;padding:10px 12px;border-radius:10px;background:var(--bg);color:var(--txt2);margin-top:12px}
+    #bd-manual summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--em)}
   </style>
 
-  <div class="page-header"><div><div class="page-title">Find funding</div><div class="page-sub">We pull the funder's own form and fill it in</div></div></div>
+  <div class="page-header"><div><div class="page-title">Find funding</div></div></div>
 
-  <div class="bd-flow">
-    <a id="bd-chip-1" class="on" onclick="bdGo(1)"><b>1</b> Find funding</a><i></i>
-    <a id="bd-chip-2" class="todo" onclick="bdGo(2)" title="Upload a funder's form, or pull one from a result"><b>2</b> Their form</a><i></i>
-    <a id="bd-chip-3" class="todo" onclick="bdGo(3)" title="Your filled-in form and answers appear here"><b>3</b> Review &amp; download</a>
+  <div class="bd-tabs" id="bd-tabs">
+    <button class="on" data-v="opps" onclick="bdTab('opps')">Opportunities<i id="bd-n-opps"></i></button>
+    <button data-v="bids" onclick="bdTab('bids')">Bids in progress<i id="bd-n-bids"></i></button>
+    <button data-v="saved" onclick="bdTab('saved')">Saved<i id="bd-n-saved"></i></button>
+    <button data-v="done" onclick="bdTab('done')">Won &amp; lost<i id="bd-n-done"></i></button>
   </div>
 
-  <div class="bd-grid">
-    <div class="bd-main">
-
-      <!-- 1 · FIND FUNDING -->
-      <div class="card" id="bd-s1">
-        <div class="bd-sec-h"><span class="n">1</span><div><div class="t">Find funding</div><div class="s">Councils and government, trusts and the Lottery, and company funders, searched live for your area</div></div></div>
-        <div class="bd-find">
-          <div class="form-row"><label>Any funders you already have in mind? <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label><input id="bd-specific" placeholder="e.g. National Lottery, your local council, Veolia…"/></div>
-          <button class="btn btn-ai" onclick="runBDResearch()" style="height:40px">✦ Find opportunities</button>
-        </div>
-        <div class="bd-hint">It uses the details on the right. Takes about a minute. Already have a funder's form? <a href="#" onclick="bdManualStart();return false" style="color:var(--em);font-weight:600">Upload it instead</a></div>
-        <div id="bd-opps-wrap" style="display:none;margin-top:16px;padding-top:6px;border-top:1px solid var(--border)">
-          <div id="bd-opps-result"></div>
-        </div>
+  <!-- OPPORTUNITIES -->
+  <div id="bd-v-opps">
+    <div id="bd-resume"></div>
+    <div id="bd-nudges"></div>
+    <div class="card bd-search" id="bd-s1">
+      <div class="bd-who" id="bd-who"></div>
+      <div class="bd-find">
+        <input id="bd-specific" placeholder="Any funders in mind? e.g. National Lottery, your council… (optional)" onkeydown="if(event.key==='Enter')runBDResearch()"/>
+        <button class="btn btn-p" onclick="runBDResearch()">Find funding</button>
       </div>
-
-      <!-- 2 · THEIR FORM -->
-      <div class="card" id="bd-s2" style="display:none;margin-top:16px">
-        <div class="bd-sec-h"><span class="n">2</span><div><div class="t">Their form</div><div class="s" id="bd-funder-bar">We find it, read it, answer it and fill it in</div></div></div>
-        <div class="form-row"><label>Funder / scheme</label><input id="eoi-funder" placeholder="e.g. Veolia Environmental Trust — Community grants"/></div>
-        <div id="bd-pull-steps"></div>
-        <div id="bd-pull-note"></div>
-        <div id="eoi-questions" style="display:none;margin-top:14px"></div>
-        <details id="bd-manual" style="margin-top:14px">
-          <summary>Use your own form or brief instead</summary>
-          <div class="bd-man-blk">
-            <h4>📄 Upload their form</h4>
-            <p>Word forms are filled in for you, box by box. PDFs are read and the answers written out for you to copy across.</p>
-            <input type="file" id="eoi-form-file" accept=".docx,.pdf,.txt" onchange="handleEOIFormUpload(this)" style="font-size:13px"/>
-          </div>
-          <div class="bd-man-blk">
-            <h4>📋 Paste their questions</h4>
-            <div class="form-row"><textarea id="eoi-form-text" style="min-height:90px" placeholder="Paste the funder's questions here — one per line is fine…"></textarea></div>
-            <button class="btn btn-ai btn-sm" onclick="parseEOIForm()">Read the questions</button>
-          </div>
-          <div class="bd-man-blk">
-            <h4>✍️ No form — write from a brief</h4>
-            <div class="form-row"><textarea id="eoi-brief" style="min-height:100px" placeholder="Paste the funding brief, or describe what outcomes they want…"></textarea></div>
-            <button class="btn btn-ai btn-sm" onclick="runEOIGenerator()">Write my bid</button>
-          </div>
-        </details>
-      </div>
-
-      <!-- 3 · REVIEW & DOWNLOAD -->
-      <div id="eoi-output" style="display:none;margin-top:16px">
-        <div class="ai-panel">
-          <div class="ai-panel-title"><span class="ai-icon">📄</span>Review &amp; download</div>
-          <div id="eoi-result"></div>
-          <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
-            <button class="btn btn-p btn-sm" onclick="downloadEOIPDF()">⬇ Download as PDF</button>
-            <button class="btn btn-ghost btn-sm" onclick="copyEOI()">📋 Copy text</button>
-            <button class="btn btn-ghost btn-sm" onclick="runEOIGenerator()">↻ Regenerate</button>
-          </div>
-        </div>
-      </div>
+      <div class="bd-hint" id="bd-hint">Searches councils, trusts, the Lottery and companies live for your area. Takes about a minute. Already have a funder's form? <a onclick="bdManualStart()">Upload it instead</a></div>
+      <div id="bd-opps-wrap" style="display:none"><div id="bd-opps-result"></div></div>
     </div>
+    <div id="bd-list"></div>
+  </div>
 
-    <!-- YOUR ORGANISATION — always visible, set once -->
-    <aside class="bd-side">
-      <div class="card bd-org">
-        <details id="bd-org" open>
-          <summary><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:15px;color:var(--txt)">Your organisation</b><span style="font-size:12px;color:var(--em);font-weight:600">Edit</span></div>
-            <div class="bd-sum" id="bd-org-sum">Set once — used for every search and bid</div></summary>
-          <div style="margin-top:14px">
-            <div class="form-row"><label>Where you deliver</label><input id="bd-area" list="bd-area-list" onchange="bdSetupLocalSave()" placeholder="e.g. Peterborough and Cambridgeshire"/>
-              <datalist id="bd-area-list"><option value="London"><option value="Greater Manchester"><option value="Birmingham / West Midlands"><option value="Leeds / West Yorkshire"><option value="Bristol / South West"><option value="Peterborough / Cambridgeshire"><option value="National / England-wide"></datalist></div>
-            <div class="form-row"><label>What you do <span style="font-weight:400;text-transform:none;letter-spacing:0">— tap all that apply</span></label>
-              <div id="bd-what" style="display:flex;flex-wrap:wrap;gap:6px"></div></div>
-            <div class="form-grid-2">
-              <div class="form-row"><label>Type</label><select id="bd-type" onchange="bdSetupLocalSave()"><option>Registered charity</option><option>CIC</option><option>CIO</option><option>Community group (unincorporated)</option><option>Company</option><option>Social enterprise</option></select></div>
-              <div class="form-row"><label>Yearly income</label><select id="bd-size" onchange="bdSetupLocalSave()"><option value="micro">Under £100k</option><option value="small">£100k–£500k</option><option value="medium">£500k–£2m</option><option value="large">£2m+</option></select></div>
-            </div>
-            <div class="form-row"><label>About your organisation <span style="font-weight:400;text-transform:none;letter-spacing:0">— every bid starts from this</span></label>
-              <textarea id="eoi-org-profile" oninput="bdRefreshSummary()" style="min-height:140px;font-size:13px" placeholder="Legal &amp; trading name: [your organisation] (charity no. …, company no. …)
-Registered address: …
-Website: …
-Lead contact: name, role — email — phone
-Founded: year · Where you deliver: towns, boroughs or counties
-Mission: one or two sentences
-Track record: programme, years, numbers (e.g. 320 people supported, 140 into work, 1.2 tonnes diverted from waste)
+  <!-- BIDS IN PROGRESS / SAVED / WON & LOST -->
+  <div id="bd-v-bids" style="display:none"></div>
+  <div id="bd-v-saved" style="display:none"></div>
+  <div id="bd-v-done" style="display:none"></div>
+
+  <!-- YOUR ORGANISATION (drawer) -->
+  <div class="bd-drawer-bg" id="bd-drawer-bg" onclick="bdDetails(false)"></div>
+  <aside class="bd-drawer" id="bd-drawer" aria-label="Your organisation">
+    <div class="bd-drawer-h"><b>Your organisation</b><button class="bd-x" type="button" onclick="bdDetails(false)" aria-label="Close">✕</button></div>
+    <div style="font-size:12.5px;color:var(--txt3);margin-bottom:16px">Used for every search and bid. Charity number, turnover and staff are in <a href="#" onclick="bdDetails(false);vlOrgFactsOpen&&vlOrgFactsOpen();return false" style="color:var(--em);font-weight:600">Settings › Details for bids</a>.</div>
+    <div class="form-row"><label>Where you deliver</label><input id="bd-area" list="bd-area-list" onchange="bdSetupLocalSave()" placeholder="e.g. Peterborough and Cambridgeshire"/>
+      <datalist id="bd-area-list"><option value="London"><option value="Greater Manchester"><option value="Birmingham / West Midlands"><option value="Leeds / West Yorkshire"><option value="Bristol / South West"><option value="Peterborough / Cambridgeshire"><option value="National / England-wide"></datalist></div>
+    <div class="form-row"><label>What you do <span style="font-weight:400;text-transform:none;letter-spacing:0">— tap all that apply</span></label>
+      <div id="bd-what" style="display:flex;flex-wrap:wrap;gap:6px"></div></div>
+    <div class="form-grid-2">
+      <div class="form-row"><label>Type</label><select id="bd-type" onchange="bdSetupLocalSave()"><option>Registered charity</option><option>CIC</option><option>CIO</option><option>Community group (unincorporated)</option><option>Company</option><option>Social enterprise</option></select></div>
+      <div class="form-row"><label>Yearly income</label><select id="bd-size" onchange="bdSetupLocalSave()"><option value="micro">Under £100k</option><option value="small">£100k–£500k</option><option value="medium">£500k–£2m</option><option value="large">£2m+</option></select></div>
+    </div>
+    <div class="form-row"><label>About your organisation <span style="font-weight:400;text-transform:none;letter-spacing:0">— every bid starts from this</span></label>
+      <textarea id="eoi-org-profile" oninput="bdRefreshSummary()" style="min-height:170px;font-size:13px" placeholder="Mission: one or two sentences
+Track record: programme, years, numbers (e.g. 320 people supported, 140 into work)
 Partnerships: councils, Jobcentre Plus, schools, employers, other charities
 Accreditations and policies: e.g. Matrix, safeguarding, Cyber Essentials"></textarea></div>
-            <div style="display:flex;gap:6px;margin-bottom:10px"><input id="bd-site" placeholder="Your website (optional)" style="flex:1;font-size:13px"/><button class="btn btn-ghost btn-sm" onclick="fillOrgProfileFromWeb()" style="white-space:nowrap" title="Looks up your website, the Charity Commission and Companies House and drafts the profile for you to check">✨ Look us up</button></div>
-            <div class="form-row"><label>What makes you different? <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label><input id="eoi-usps" placeholder="e.g. 10 years in the area · the only repair café in the district"/></div>
-            <div style="display:flex;gap:10px;align-items:center"><button class="btn btn-p btn-sm" onclick="saveOrgProfileFromField()">Save</button><span id="eoi-profile-saved" style="display:none;color:var(--em);font-size:12px;font-weight:600">✓ Saved for your whole team</span></div>
-          </div>
-        </details>
+    <div style="display:flex;gap:6px;margin-bottom:12px"><input id="bd-site" placeholder="Your website (optional)" style="flex:1;font-size:13px"/><button class="btn btn-ghost btn-sm" type="button" onclick="fillOrgProfileFromWeb()" style="white-space:nowrap" title="Reads your website, the Charity Commission and Companies House and drafts the box above for you to check">Draft it from our website</button></div>
+    <div class="form-row"><label>What makes you different? <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label><input id="eoi-usps" placeholder="e.g. 10 years in the area · the only repair café in the district"/></div>
+    <div style="display:flex;gap:10px;align-items:center"><button class="btn btn-p" type="button" onclick="saveOrgProfileFromField().then(()=>bdDetails(false))">Save</button><span id="eoi-profile-saved" style="display:none;color:var(--em);font-size:12px;font-weight:600">✓ Saved for your whole team</span></div>
+  </aside>
+
+  <!-- THE BID (full screen) -->
+  <div class="bd-ws" id="bd-ws" role="dialog" aria-label="Your bid">
+    <div class="bd-ws-h">
+      <button class="bd-back" type="button" onclick="bdGo(1)">‹ Find funding</button>
+      <div class="bd-ws-t"><b id="bd-ws-title">New bid</b><span id="bd-ws-sub"></span></div>
+      <div class="bd-steps" id="bd-steps"></div>
+    </div>
+    <div class="bd-ws-b">
+      <div class="bd-ws-main">
+        <div id="bd-ws-brief"></div>
+        <!-- getting their form -->
+        <div class="card" id="bd-s2" style="display:none;margin-bottom:14px">
+          <div class="form-row" id="bd-funder-row"><label>Funder / scheme</label><input id="eoi-funder" placeholder="e.g. Veolia Environmental Trust — Community grants"/></div>
+          <div class="bd-sum" id="bd-funder-bar" style="display:none"></div>
+          <div id="bd-pull-steps"></div>
+          <div id="bd-pull-note"></div>
+          <div id="eoi-questions" style="display:none;margin-top:14px"></div>
+          <details id="bd-manual" style="margin-top:14px">
+            <summary>Use your own form or brief instead</summary>
+            <div class="bd-man-blk">
+              <h4>Upload their form</h4>
+              <p>Word forms are filled in for you, box by box. PDFs are read and the answers written out for you to copy across.</p>
+              <input type="file" id="eoi-form-file" accept=".docx,.pdf,.txt" onchange="handleEOIFormUpload(this)" style="font-size:13px"/>
+            </div>
+            <div class="bd-man-blk">
+              <h4>Paste their questions</h4>
+              <div class="form-row"><textarea id="eoi-form-text" style="min-height:90px" placeholder="Paste the funder's questions here — one per line is fine…"></textarea></div>
+              <button class="btn btn-p btn-sm" onclick="parseEOIForm()">Read the questions</button>
+            </div>
+            <div class="bd-man-blk">
+              <h4>No form — write from a brief</h4>
+              <div class="form-row"><textarea id="eoi-brief" style="min-height:100px" placeholder="Paste the funding brief, or describe what outcomes they want…"></textarea></div>
+              <button class="btn btn-p btn-sm" onclick="runEOIGenerator()">Write my bid</button>
+            </div>
+          </details>
+        </div>
+        <!-- the answers -->
+        <div id="eoi-output" style="display:none"><div id="eoi-result"></div></div>
       </div>
-      <div class="card" style="margin-top:14px">
-        <div style="font-size:14px;font-weight:700;color:var(--txt)">How it works</div>
-        <ol class="bd-how"><li><b>Find</b> funders that fit you</li><li><b>Pull their form</b> — we download the funder's own Word or PDF form</li><li>We <b>write every answer</b> from your profile and real records, and <b>fill the form in</b></li><li><b>Check</b> the yellow gaps, download, send</li></ol>
-      </div>
-    </aside>
+      <aside class="bd-rail" id="bd-rail"></aside>
+    </div>
   </div>
 </div>
 
@@ -838,7 +902,7 @@ Accreditations and policies: e.g. Matrix, safeguarding, Cyber Essentials"></text
 <script src="js/auth.js?v=21"></script>
 
 <!-- AI + branding -->
-<script src="js/agents.js?v=57"></script>
+<script src="js/agents.js?v=58"></script>
 <script src="js/branding.js?v=19"></script>
 
 <!-- UI logic -->
@@ -1255,8 +1319,8 @@ function applyModules(mods) {
 <script src="js/extensions/feedback-funders.js?v=17"></script>
 <script src="js/extensions/nav.js?v=1"></script>
 <script src="js/extensions/dash-trends.js?v=1"></script>
-<script src="js/extensions/bids.js?v=4"></script>
-<script src="js/extensions/org-facts.js?v=1"></script>
+<script src="js/extensions/bids.js?v=5"></script>
+<script src="js/extensions/org-facts.js?v=2"></script>
 
 <!-- Participant handlers + paperwork persistence -->
 <script>
