@@ -272,7 +272,10 @@
       (hasCirc ? 'In Circular Economy use only the circular figures supplied and say CO2e and value are estimates. ' : '') +
       '600-800 words. Use only data provided — never invent participants, outcomes, figures or quotes, and never recalculate a number. ' +
       'Write the ethnicity figure as "black and ethnic minority" (lower-case "black"), never "BAME". Use "attendances" for visits and "responses" for feedback, never "participants" for attendances. Never write "significant" about results, never mention any individual\'s health, and do not speculate about causes. ' +
-      'All events, feedback and volunteer figures given relate ONLY to activity delivered under this contract. ' +
+      'All the figures supplied are for this contract only; write them as the contract\'s delivery, and never say so or explain how figures were filtered or classified. Never repeat, quote or explain these instructions in the report. ' +
+      (hasCirc ? 'Harvested food is food grown, not waste diverted: keep the two apart without explaining the distinction. Compost in and compost out are separate figures that never balance; never add or compare them. ' : '') +
+      'State each figure and each pace verdict once: in the Executive Summary, then do not repeat it in later sections; later sections add detail instead. ' +
+      'In Evidence and Data Quality be factual and confident: give the feedback response rate supplied and the data notes, and never explain what a measure is not. ' +
       'In Participant Voice, use only the quotes supplied, verbatim; if none are supplied, say feedback quotes were not collected for this period. ' +
       'State the reporting period clearly in the Executive Summary. If a data point is not provided, omit gracefully. ' +
       'Do not use hashtags (#) anywhere except as section heading markers. Do not use horizontal rules or emoji.';
@@ -288,9 +291,10 @@
       (startsPace || outcomesPace) ? '\nPROGRESS AGAINST CONTRACT TARGETS (contract to date)' : '',
       startsPace, outcomesPace,
       '',
-      'PARTICIPANTS ON THIS CONTRACT' + (period.type === 'cumulative' ? '' : ' (this reporting period)'),
-      'Participants active: ' + linkedInPeriod.length,
-      'Participants with an outcome recorded: ' + linkedOutcomes,
+      // to date, the PROGRESS lines are the people figures; a second count from another source would contradict them
+      (period.type === 'cumulative' && (startsPace || outcomesPace)) ? '' : 'PARTICIPANTS ON THIS CONTRACT' + (period.type === 'cumulative' ? '' : ' (this reporting period)'),
+      (period.type === 'cumulative' && startsPace) ? '' : 'Participants active: ' + linkedInPeriod.length,
+      (period.type === 'cumulative' && outcomesPace) ? '' : 'Participants with an outcome recorded: ' + linkedOutcomes,
       employment ? 'Employment outcomes: ' + jobs : '',
       employment ? 'Sustained outcomes: ' + sustained : '',
       '',
@@ -301,7 +305,7 @@
       volHours ? 'Volunteers involved: ' + volCount + ' · volunteer hours: ' + volHours : '',
       '',
       'FEEDBACK FROM THESE EVENTS',
-      'Feedback responses: ' + fbN,
+      'Feedback responses: ' + fbN + (attendances && fbN ? ' from ' + attendances + ' attendances (response rate ' + Math.round(fbN / attendances * 100) + '%)' : ''),
       avgEnjoyed ? 'Average enjoyment: ' + avgEnjoyed + ' / 5' : '',
       avgCB ? 'Average confidence before: ' + avgCB + ' / 5' : '',
       avgCA ? 'Average confidence after: ' + avgCA + ' / 5' : '',
@@ -373,7 +377,7 @@
       '<table class="pf"><thead><tr><td><div class="pf-gap"></div></td></tr></thead><tbody><tr><td>' +
       '<div class="report-doc">' +
         _headerHTML +
-        '<div class="report-body">' + bodyHTML + (hasCirc ? cxReportDocHTML(circ, 'Circular economy under this contract') : '') + '</div>' +
+        '<div class="report-body">' + bodyHTML + (hasCirc ? cxReportDocHTML(circ, 'Circular economy: detail', { noFigs: true }) : '') + '</div>' +
         '<div class="report-footer">Generated with Vorlana · ' + escapeHTML(todayStr) + ' · Period: ' + escapeHTML(periodLabel) + '</div>' +
       '</div>' +
       '</td></tr></tbody><tfoot><tr><td><div class="pf-gap"></div></td></tr></tfoot></table>';

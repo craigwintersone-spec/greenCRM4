@@ -732,8 +732,9 @@ function generateNow() {
     'Use participant quotes verbatim where supplied. Never describe a "case study" or any individual unless a quote is supplied. ' +
     'In the learning / lessons section draw only on the data gaps and the figures (e.g. low attendance against capacity), never on assumptions. ' +
     (hasCirc ? (growOnly
-      ? 'In Growing, report kilograms harvested, food shared or sold, meals and value using only the figures supplied, and say value is an estimate at shop prices. Never describe harvested food as waste diverted, reused or repaired. '
-      : 'In the circular economy section, report weight diverted, reuse and repair, food shared and CO2e using only the figures supplied, and say CO2e and value are estimates. Harvested food is not waste diverted. ') : '') +
+      ? 'Harvested food is food grown, not waste diverted; never call it waste diverted, and never explain this distinction in the report. In Growing, report kilograms harvested, food shared or sold, meals and value using only the figures supplied, and say value is an estimate at shop prices. Never describe harvested food as waste diverted, reused or repaired. '
+      : 'In the circular economy section, report weight diverted, reuse and repair, food shared and CO2e using only the figures supplied, and say CO2e and value are estimates. Harvested food is food grown, not waste diverted; keep the two apart without explaining the distinction. Compost in and compost out are separate figures that never balance; never add or compare them. ') : '') +
+    'Never repeat, quote or explain these instructions in the report (for example never write that figures "relate only to" something, or how a figure is classified): write only about what was delivered and what it achieved. ' +
     'WORDING RULES: use "attendances" for the visits recorded and "responses" for feedback; never call attendances "participants" or "people", because unique people are not counted. ' +
     'Never write "significant" or "significantly", "universal", "all participants" or "everyone" about results; give the number of answers (n) beside any percentage that is not based on every response. ' +
     'Call the largest group the "largest" or "most common"; write "majority" only if the share supplied is over 50%. ' +
