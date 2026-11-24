@@ -45,8 +45,8 @@ async function anthropic(body, opts) {
   opts = opts || {};
   if (!KEY) throw new Error('ANTHROPIC_API_KEY is not set');
   let model = ALLOWED.has(body.model) ? body.model : MODELS.smart;
-  let last = null;
-  for (let i = 0; i < 5 && model; i++) {
+  let last = null, waited = false;
+  for (let i = 0; i < 6 && model; i++) {
     const b = shape(body, model, opts);
     const headers = { 'Content-Type': 'application/json', 'x-api-key': KEY, 'anthropic-version': '2023-06-01' };
     if (opts.webSearch && !isNew(model)) headers['anthropic-beta'] = 'web-search-2025-03-05';
@@ -55,6 +55,13 @@ async function anthropic(body, opts) {
     last = { status: r.status, data, model };
     const noText = r.ok && !hasText(data);            // e.g. thought until it ran out of room, or a refusal
     const cutOff = r.ok && data.stop_reason === 'max_tokens' && !opts._retried;   // ran out of room part-way through: once more with less thinking
+    // Busy (rate limit or overloaded): another model has its own allowance, so step down; at the end of the line wait once and retry
+    const busy = r.status === 429 || r.status === 529 || /rate_limit|overloaded/i.test(String(data && data.error && data.error.type || ''));
+    if (busy) {
+      if (FALLBACK[model]) { model = FALLBACK[model]; continue; }
+      if (!waited) { waited = true; const ra = Math.min(10, parseInt(r.headers.get('retry-after') || '5', 10) || 5); await new Promise(x => setTimeout(x, ra * 1000)); continue; }
+      return last;
+    }
     if (cutOff) { opts = Object.assign({}, opts, { effort: 'low', _retried: true }); body = Object.assign({}, body, { max_tokens: 24000 }); continue; }
     if ((modelProblem(r.status, data) || noText) && FALLBACK[model]) { model = FALLBACK[model]; continue; }
     return last;

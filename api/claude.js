@@ -68,7 +68,7 @@ async function getAuthUser(req) {
 // Now returns BOTH plan and org_id — we need the org for quota + logging.
 async function getUserOrg(userId) {
   const r = await fetch(
-    `${SUPABASE_URL}/rest/v1/memberships?user_id=eq.${userId}&status=eq.active&select=org_id,role,organisations(plan,status,created_at)`,
+    `${SUPABASE_URL}/rest/v1/memberships?user_id=eq.${userId}&status=eq.active&select=org_id,role,organisations(plan,status,created_at,settings)`,
     { headers: svcHeaders() }
   );
   if (!r.ok) return null;
@@ -76,7 +76,9 @@ async function getUserOrg(userId) {
   if (!Array.isArray(rows) || rows.length === 0) return null;
   const live = rows.find(m => m.organisations && m.organisations.status !== 'suspended');
   if (!live) return null;
-  return { orgId: live.org_id, plan: live.organisations.plan || 'free', createdAt: live.organisations.created_at || null };
+  const st = live.organisations.settings || {};
+  return { orgId: live.org_id, plan: live.organisations.plan || 'free', createdAt: live.organisations.created_at || null,
+    dailyCap: Number.isFinite(+st.ai_daily_cap) && +st.ai_daily_cap > 0 ? Math.min(5000, Math.round(+st.ai_daily_cap)) : null };   // per-organisation override, set by Vorlana
 }
 
 async function isSuperAdmin(userId) {
@@ -153,10 +155,10 @@ module.exports = async function handler(req, res) {
 
   // 3. Daily quota
   const used = await callsToday(orgId);
-  const cap = (!admin && org && DAILY_CALLS_BY_PLAN[org.plan]) || DAILY_CALLS_PER_ORG;
+  const cap = (org && org.dailyCap) || (!admin && org && DAILY_CALLS_BY_PLAN[org.plan]) || DAILY_CALLS_PER_ORG;
   if (used >= cap) {
     return res.status(429).json({
-      error: 'Daily AI limit reached for your organisation. Resets at midnight UTC.',
+      error: 'Your organisation has used today\'s AI allowance (' + cap + ' requests). It resets at midnight.',
       code: 'AI_QUOTA',
     });
   }

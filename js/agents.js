@@ -123,10 +123,12 @@ async function _callClaudeOnce(sys, user, maxTok, webSearch, attempt, opts) {
   let res = await send(false);
   if (res.status === 401) res = await send(true);     // sign-in had gone stale: refresh once and retry
 
-  // Rate limited — exponential backoff
+  // Rate limited — exponential backoff (but the daily allowance being used up won't clear by waiting)
   if (res.status === 429) {
+    let body = null; try { body = await res.clone().json(); } catch (e) { /* ignore */ }
+    if (body && body.code === 'AI_QUOTA') { const e = new Error(body.error || 'Your organisation has used today\'s AI allowance. It resets at midnight.'); e.code = 'AI_QUOTA'; throw e; }
     if (attempt >= 3) {
-      const e = new Error('RATE_LIMITED');
+      const e = new Error('The AI is busy (rate limit) — wait a minute and try again');
       e.code = 'RATE_LIMITED';
       throw e;
     }
@@ -155,7 +157,7 @@ async function _callClaudeOnce(sys, user, maxTok, webSearch, attempt, opts) {
   if (data.type === 'error') {
     const msg = (data.error && data.error.message) || JSON.stringify(data.error);
     if (/rate.?limit/i.test(msg) || /tokens per minute/i.test(msg)) {
-      const e = new Error('RATE_LIMITED');
+      const e = new Error('The AI is busy (rate limit) — wait a minute and try again');
       e.code = 'RATE_LIMITED';
       throw e;
     }
