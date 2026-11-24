@@ -111,6 +111,18 @@ function problems(text) {
     var lh = {}; leaks.forEach(function (l) { lh[l.h] = 1; });
     out.push({ k: 'leak', secs: Object.keys(lh), t: leaks.length + ' sentence' + (leaks.length === 1 ? '' : 's') + ' talk about how the report was put together, not what was delivered: "' + leaks[0].x.slice(0, 90) + (leaks[0].x.length > 90 ? '…' : '') + '"', label: 'Take ' + (leaks.length === 1 ? 'it' : 'them') + ' out', fix: 'Remove these sentences or rewrite them about what was delivered: ' + leaks.map(function (l) { return '"' + l.x + '" (' + l.why + ')'; }).join('; ') + '.' });
   }
+  // 3b. guesses and sums the figures don't state
+  var SPEC = [
+    [/\baccounts for (the )?(whole|all|entire)\b|\bnothing (\w+ )?(went|goes) to waste\b/i, 'a conclusion from a sum the report did itself'],
+    [/\b(harder|hard|difficult) to (engage|reach)\b|\b(less|more) (likely|able) to\b|\bthis suggests\b/i, 'a reason the figures don\'t show'],
+    [/\b(reported|given|set out|mentioned|shown) (above|earlier|in the summary|previously)\b/i, 'refers back instead of saying it'],
+    [/\bevidence base\b|\bwhere the evidence is strongest\b/i, 'filler']
+  ], specs = [];
+  secs.forEach(function (s) { if (locked(s.h)) return; sentences(s.body).forEach(function (x) { SPEC.forEach(function (L) { if (L[0].test(x)) specs.push({ h: s.h, x: x.trim(), why: L[1] }); }); }); });
+  if (specs.length) {
+    var sh = {}; specs.forEach(function (l) { sh[l.h] = 1; });
+    out.push({ k: 'spec', secs: Object.keys(sh), t: specs.length + ' sentence' + (specs.length === 1 ? '' : 's') + ' a funder could question: "' + specs[0].x.slice(0, 90) + (specs[0].x.length > 90 ? '…' : '') + '" (' + specs[0].why + ')', label: 'Fix ' + (specs.length === 1 ? 'it' : 'them'), fix: 'Remove or rewrite these so they state only what the figures show: ' + specs.map(function (l) { return '"' + l.x + '" (' + l.why + ')'; }).join('; ') + '.' });
+  }
   // 4. the same figure again and again
   var seen = {};
   secs.forEach(function (s, i) { figuresIn(s.body).forEach(function (f) { (seen[f] = seen[f] || []).push({ h: s.h, i: i }); }); });

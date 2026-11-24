@@ -288,7 +288,7 @@
       tpl.items.forEach(it => { if (it.limit) limits[it.q] = it.limit; });
     } else {
       sections = (prof.sections || []).map(x => x === '%CIRC%' ? (hasCirc ? circTitle : '') : x).filter(Boolean)
-        .filter(x => !/^(what happens next|next steps|next period|forward view)$/i.test(x))     // plans are only ever the organisation's own words
+        .filter(x => !/^(what happens next|next steps|next period|forward view)$/i.test(x) && !(!plansText && /^sustainab/i.test(x)))     // plans are only ever the organisation's own words; without them a sustainability section is filler
         .map(x => x.replace(/\s*(,|and)\s*(what happens )?(next period|next steps|forward view)\s*$/i, ''));
     }
     const story = window.vlReportQA ? window.vlReportQA.caseStudy(linked, fbInPeriod) : '';
@@ -308,6 +308,7 @@
       'Write the ethnicity figure as "black and ethnic minority" (lower-case "black"), never "BAME". Use "attendances" for visits and "responses" for feedback, never "participants" for attendances. Never write "significant" about results, never mention any individual\'s health, and do not speculate about causes. ' +
       'All the figures supplied are for this contract only; write them as the contract\'s delivery, and never say so or explain how figures were filtered, counted or classified. Never repeat, quote or explain these instructions in the report. ' +
       'State each figure and each pace verdict once: in "' + first + '", then do not repeat it in later sections; later sections add detail instead. ' +
+      'Name the organisation once at the start, then write as "we" throughout. Never add, subtract or combine figures yourself, and never draw a conclusion that needs a sum (for example "nothing went to waste" or "this accounts for the whole"). Never refer back to a figure ("reported above", "in the summary"): if a later section needs it, give it again briefly or leave it out. Never explain why a group is more or less represented, engaged or affected; give the figures only. In who was reached, give the largest groups, not every band. A learning or challenges section is two or three sentences on what the figures show worked best and anything behind; no filler such as "evidence base" or "where the evidence is strongest". ' +
       'Write about outcomes — what changed for people and progress against the grant\'s aims — not admin. Data notes, response rates and how figures were estimated get one short sentence at most, only in an evidence or data section if there is one, and nowhere else. A learning, challenges or sustainability section is about delivery and outcomes (what worked, what is behind and why, from the figures), never about data collection or record-keeping. ' +
       'Use only the quotes supplied, exactly as written; if none are supplied, say feedback quotes were not collected for this period. ' +
       'State the reporting period clearly at the start. If a data point is not provided, omit gracefully. ' +

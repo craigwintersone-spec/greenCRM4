@@ -716,7 +716,7 @@ function generateNow() {
   var plansText = ((typeof currentOrg !== 'undefined' && currentOrg && currentOrg.settings && currentOrg.settings.report_plans) || '').toString().trim();
   var sections = prof.p.sections.map(function (x) { return x === '%CIRC%' ? (hasCirc ? circTitle : '') : x; }).filter(Boolean);
   if (!plansText) {   // no plans on file: drop the forward-looking sections instead of leaving blanks for someone to fill
-    sections = sections.filter(function (x) { return !/^(what happens next|next steps|next period|forward view)$/i.test(x); })
+    sections = sections.filter(function (x) { return !/^(what happens next|next steps|next period|forward view)$/i.test(x) && !/^sustainab/i.test(x); })
       .map(function (x) { return x.replace(/\s*(,|and)\s*(what happens )?(next period|next steps|forward view)\s*$/i, ''); });
   }
   var prevP = previousPeriod(p), prev = prevP ? buildStats(prevP) : null;
@@ -742,11 +742,12 @@ function generateNow() {
     'Never write "significant" or "significantly", "universal", "all participants" or "everyone" about results; give the number of answers (n) beside any percentage that is not based on every response. ' +
     'Call the largest group the "largest" or "most common"; write "majority" only if the share supplied is over 50%. ' +
     'Do not comment on how the survey or form was designed, and do not state doubts about the data beyond the listed data quality notes. ' +
-    'Never mention any individual\'s health, condition or personal circumstances. Refer to the organisation only by the Organisation name given. ' +
+    'Never mention any individual\'s health, condition or personal circumstances. Use the Organisation name given, never another. ' +
     'Never estimate, round up or describe a figure that was not supplied (for example "several hundred pounds" or "around half"): if a figure is not in the data, leave it out. ' +
     'Never write commitments, plans or promises in the organisation\'s name ("we will...", "we plan to..."). Any section whose title contains "lessons", "learn", "risks" or "sustainab" must contain only observations the figures support; never write what the organisation intends to do. ' +
     'If no targets or profile figures are supplied, never say there is no variance, that delivery is on profile or on track, or that targets were met: say instead that no targets were entered for this period. ' +
     'State each figure once outside the Summary; do not repeat the same number in a later section. ' +
+    'Name the organisation once at the start, then write as "we" throughout. Never add, subtract or combine figures yourself, and never draw a conclusion that needs a sum (for example "nothing went to waste" or "this accounts for the whole"). Never refer back to a figure ("reported above", "in the summary"): if a later section needs it, give it again briefly or leave it out. Never explain why a group is more or less represented, engaged or affected; give the figures only. In who was reached, give the largest groups, not every band. A learning or challenges section is two or three sentences on what the figures show worked best and anything behind; no filler such as "evidence base" or "where the evidence is strongest". ' +
     'Write the ethnicity figure as "black and ethnic minority" (lower-case "black"), never "BAME" or "Black or from an ethnic minority background". ' +
     'In any lessons section, state only what the figures show: do not guess at causes, and do not write what the organisation "does not yet know". ' +
     'In Who We Reached, describe the people reached using only the demographic figures supplied, in plain respectful language, and say they are from optional anonymous answers. ' +
