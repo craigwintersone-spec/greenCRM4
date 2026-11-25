@@ -1,7 +1,7 @@
 // /api/_lib/sentinel-guard.js — the checks that would have caught Yaxley, and the rest of the platform's quiet failures
 // Runs inside the daily Sentinel job. Writes cards to sentinel_decisions (your Sentinel page), one per issue, never twice:
 // an issue already on the page is left alone, and a card whose issue has gone away is closed automatically.
-// Uses your existing agents only, with their roles as you defined them:
+// Cards are filed by agent; api/_lib/sentinel-teams.js groups the agents into teams. Agents used here:
 //   Customer Success (the health of each customer's data)   Legal & GDPR (privacy, consent, who can read what)
 //   Dev (errors: the site, its services, missing files)     Finance (plans: trials, staff limits, AI allowance)   Product (what shipped)
 // Reads only. The one write besides the cards is the changelog line in sentinel_actions.
@@ -249,14 +249,17 @@ async function runGuard(now) {
 }
 
 // Write the cards: new issues added, existing ones left alone, fixed ones closed
-async function syncDecisions(found) {
+async function syncDecisions(found, opts) {
+  const closeGone = !opts || opts.closeGone !== false;
+  // cards from before every card had a key (old churn and insight cards, filed again every morning) are superseded by keyed ones
+  try { await sb(`sentinel_decisions?status=eq.pending&or=(metadata->>signal.in.(inactivity,onboarding_stalled),and(agent.eq.Insights,metadata->>kind.eq.insight))&metadata->>guard=is.null`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'resolved', resolved_at: new Date().toISOString() }) }); } catch (e) { /* not essential */ }
   let existing = [];
   try { existing = await sb(`sentinel_decisions?status=eq.pending&metadata->>guard=eq.true&select=id,metadata&limit=2000`); } catch (e) { existing = []; }
   const have = {}; (existing || []).forEach(d => { if (d.metadata && d.metadata.key) have[d.metadata.key] = d.id; });
   const seen = {}; const fresh = [];
   found.forEach(d => { if (seen[d.metadata.key]) return; seen[d.metadata.key] = 1; if (!have[d.metadata.key]) fresh.push(d); });
   if (fresh.length) await sb('sentinel_decisions', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(fresh) });
-  const gone = Object.keys(have).filter(k => !seen[k]).map(k => have[k]);
+  const gone = closeGone ? Object.keys(have).filter(k => !seen[k]).map(k => have[k]) : [];
   if (gone.length) await sb(`sentinel_decisions?id=in.(${gone.join(',')})`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'resolved', resolved_at: new Date().toISOString() }) });
   return { found: found.length, added: fresh.length, closed: gone.length };
 }

@@ -305,7 +305,8 @@ tr:last-child td{border-bottom:none}
 
   <div class="stats-grid">
     <div class="stat"><div class="stat-lbl">Pending decisions</div><div class="stat-val" id="sentinel-st-pending">—</div></div>
-    <div class="stat"><div class="stat-lbl">Churn risks flagged</div><div class="stat-val" style="color:var(--amber)" id="sentinel-st-churn">—</div></div>
+    <div class="stat"><div class="stat-lbl">Urgent</div><div class="stat-val" style="color:var(--red)" id="sentinel-st-urgent">—</div></div>
+    <div class="stat" style="display:none"><div class="stat-lbl">Churn risks flagged</div><div class="stat-val" style="color:var(--amber)" id="sentinel-st-churn">—</div></div>
     <div class="stat"><div class="stat-lbl">Actions today</div><div class="stat-val" id="sentinel-st-actions">—</div></div>
     <div class="stat"><div class="stat-lbl">Cost this month</div><div class="stat-val" style="font-size:22px" id="sentinel-st-cost">—</div></div>
   </div>
@@ -324,7 +325,10 @@ tr:last-child td{border-bottom:none}
     </div>
   </div>
 
-  <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:16px;margin-bottom:16px" id="sentinel-twocol">
+  <div id="sentinel-teams" style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px;width:100%"></div>
+  <div id="sentinel-team-panel" style="width:100%;align-self:stretch"></div>
+
+  <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:16px;margin-bottom:16px;width:100%" id="sentinel-twocol">
     <div class="card">
       <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
         <span>⚠️ Decisions awaiting you</span>
@@ -697,6 +701,8 @@ function renderSubscriptions(){
 let _sentinelDecisions = [];
 let _sentinelBriefings = [];
 let _sentinelActions = [];
+let _sentinelOutreach = [];
+let _sentTeam = (function(){ try { return localStorage.getItem('vl_sent_team') || 'overview'; } catch(e){ return 'overview'; } })();
 
 const SENTINEL_AGENTS = [
   { id:'cos', name:'Chief of Staff', icon:'🎯', role:'Coordinates all agents · daily briefing', status:'live', cos:true },
@@ -704,12 +710,12 @@ const SENTINEL_AGENTS = [
   { id:'onboarding', name:'Onboarding', icon:'🚀', role:'Watches new signups for activation', status:'live' },
   { id:'insights', name:'Insights', icon:'🧠', role:'Surfaces cross-domain patterns', status:'live' },
   { id:'sales', name:'Sales', icon:'💼', role:'Cold outreach to UK charity prospects', status:'live' },
-  { id:'finance', name:'Finance', icon:'💰', role:'MRR, Stripe reconciliation, dunning', status:'soon' },
+  { id:'finance', name:'Finance', icon:'💰', role:'MRR, trials, plan limits, AI allowance', status:'live' },
   { id:'support', name:'Support', icon:'🛟', role:'Auto-resolves common tickets', status:'soon' },
-  { id:'product', name:'Product', icon:'🧭', role:'Clusters feature requests', status:'soon' },
+  { id:'product', name:'Product', icon:'🧭', role:'What shipped this week', status:'live' },
   { id:'marketing', name:'Marketing', icon:'📣', role:'Content, social, newsletter', status:'soon' },
-  { id:'dev', name:'Dev', icon:'⚙️', role:'Self-fixes errors, ships PRs', status:'soon' },
-  { id:'legal', name:'Legal & GDPR', icon:'⚖️', role:'DPAs, privacy, data requests', status:'soon' },
+  { id:'dev', name:'Dev', icon:'⚙️', role:'Site up, missing files, agent failures', status:'live' },
+  { id:'legal', name:'Legal & GDPR', icon:'⚖️', role:'Open tables, consent, personal details on forms', status:'live' },
   { id:'bd', name:'BD Researcher', icon:'🔍', role:'Finds grants for Vorlana to apply for', status:'live' },
 ];
 
@@ -718,9 +724,14 @@ async function loadSentinel(){
   $('sentinel-status').textContent = 'Loading…';
 
   try {
-    const { data: decs, error: e1 } = await sb.from('sentinel_decisions').select('*').order('created_at',{ascending:false}).limit(50);
+    // every open card (they're kept up to date, one per issue), plus the last week's closed ones
+    const since = new Date(Date.now() - 7*864e5).toISOString();
+    const [{ data: open, error: e1 }, { data: closed }] = await Promise.all([
+      sb.from('sentinel_decisions').select('*').eq('status','pending').order('created_at',{ascending:false}).limit(2000),
+      sb.from('sentinel_decisions').select('id,agent,tier,title,status,metadata,created_at,resolved_at').neq('status','pending').gte('resolved_at', since).limit(500)
+    ]);
     if(e1) throw e1;
-    _sentinelDecisions = decs || [];
+    _sentinelDecisions = (open || []).concat(closed || []);
   } catch(e) {
     console.error('[sentinel] decisions:', e);
     _sentinelDecisions = [];
@@ -744,13 +755,18 @@ async function loadSentinel(){
     _sentinelActions = [];
   }
 
+  try {
+    const { data: deals } = await sb.from('sentinel_outreach').select('*').in('kind',['deal','sales','grant']).order('created_at',{ascending:false}).limit(500);
+    _sentinelOutreach = deals || [];
+  } catch(e) { _sentinelOutreach = []; }
+
   renderSentinel();
 }
 
 function renderSentinel(){
   const pending = _sentinelDecisions.filter(d => d.status === 'pending');
   const churn = pending.filter(d => d.agent === 'Customer Success').length;
-  const insights = pending.filter(d => d.agent === 'Insights');
+  const insights = pending.filter(d => d.agent === 'Insights' || (d.metadata || {}).kind === 'insight');
   const otherDecisions = pending.filter(d => d.agent !== 'Insights');
 
   const liveAgents = SENTINEL_AGENTS.filter(a => a.status === 'live').length;
@@ -758,6 +774,7 @@ function renderSentinel(){
 
   $('sentinel-st-pending').textContent = pending.length;
   $('sentinel-st-churn').textContent = churn;
+  $('sentinel-st-urgent').textContent = pending.filter(d => d.tier === 'urgent').length;
 
   const todayStart = new Date(); todayStart.setHours(0,0,0,0);
   const actionsToday = _sentinelActions.filter(a => new Date(a.created_at) >= todayStart).length;
@@ -792,13 +809,19 @@ function renderSentinel(){
     ? 'Last briefing: ' + new Date(_sentinelBriefings[0].created_at).toLocaleString('en-GB')
     : 'No briefings yet — click Run agents now';
 
-  $('sentinel-decisions-meta').textContent = otherDecisions.length ? otherDecisions.length + ' pending' : 'All clear';
-
-  if(!otherDecisions.length){
-    $('sentinel-decisions-list').innerHTML = '<div style="text-align:center;padding:20px;color:var(--txt3);font-size:13px">✓ No decisions awaiting you. Sentinel will check again at 06:00 tomorrow.</div>';
-  } else {
-    $('sentinel-decisions-list').innerHTML = otherDecisions.map(d => sentinelDecisionCard(d)).join('');
-  }
+  // the cards for the team you're looking at (Overview: everything, most urgent first)
+  const TR = { urgent:0, high:1, medium:2, low:3 };
+  const shown = (_sentTeam === 'overview' ? pending : pending.filter(d => sentTeamOf(d) === _sentTeam))
+    .slice().sort((a,b) => (TR[a.tier] ?? 4) - (TR[b.tier] ?? 4) || String(b.created_at).localeCompare(String(a.created_at)));
+  const tName = _sentTeam === 'overview' ? '' : (SENT_TEAMS.find(t => t.id === _sentTeam) || {}).name;
+  document.querySelector('#sentinel-twocol .card-title span').textContent = '⚠️ ' + (tName ? tName + ' — open cards' : 'Decisions awaiting you');
+  $('sentinel-decisions-meta').textContent = shown.length ? shown.length + ' open' : 'All clear';
+  $('sentinel-decisions-list').innerHTML = shown.length
+    ? shown.slice(0, 60).map(d => sentinelDecisionCard(d)).join('') + (shown.length > 60 ? '<div style="font-size:12px;color:var(--txt3);text-align:center;padding:8px">' + (shown.length - 60) + ' more — pick a team to see them</div>' : '')
+    : '<div style="text-align:center;padding:20px;color:var(--txt3);font-size:13px">✓ Nothing open' + (tName ? ' for ' + escapeHTML(tName) : '') + '. Sentinel checks again at 06:00 tomorrow.</div>';
+  $('sentinel-twocol').style.gridTemplateColumns = _sentTeam === 'overview' ? '1.5fr 1fr' : '1fr';
+  $('sentinel-insights-list').parentElement.style.display = _sentTeam === 'overview' ? '' : 'none';
+  renderSentinelTeams(pending);
 
   if(!insights.length){
     $('sentinel-insights-list').innerHTML = '<div style="padding:14px;color:var(--txt3);font-size:13px;text-align:center">Insights agent will surface cross-domain patterns once you have more data.</div>';
@@ -874,6 +897,147 @@ function renderSentinel(){
   }
 }
 
+// ── Sentinel by team (keep in step with api/_lib/sentinel-teams.js) ──
+const SENT_TEAMS = [
+  { id:'customers',  name:'Customers',         icon:'💜', agents:['Customer Success'] },
+  { id:'onboarding', name:'Onboarding',        icon:'🚀', agents:['Onboarding'] },
+  { id:'sales',      name:'Sales & Marketing', icon:'💼', agents:['Sales','Marketing'] },
+  { id:'finance',    name:'Finance',           icon:'💰', agents:['Finance'] },
+  { id:'product',    name:'Product & Dev',     icon:'⚙️', agents:['Product','Dev'] },
+  { id:'legal',      name:'Legal & GDPR',      icon:'⚖️', agents:['Legal & GDPR'] },
+  { id:'funding',    name:'Funding',           icon:'🔍', agents:['BD Researcher'] }
+];
+const SENT_OLD_INSIGHT = { empty_orgs:'onboarding', low_conversion:'finance', contract_underperformance:'customers' };
+function sentTeamOf(d){
+  if(d && d.agent === 'Insights') return SENT_OLD_INSIGHT[(d.metadata||{}).signal] || 'customers';
+  const t = SENT_TEAMS.find(x => x.agents.indexOf(d && d.agent) !== -1);
+  return t ? t.id : 'customers';
+}
+function sentTeam(id){ _sentTeam = id; try { localStorage.setItem('vl_sent_team', id); } catch(e){} renderSentinel(); }
+
+const DEAL_STAGES = ['Talking','Demo booked','Demo done','Proposal sent','Trial','Won','Lost'];
+function sentFinance(){
+  const live = (allOrgs||[]).filter(o => String(o.status||'').toLowerCase() !== 'suspended');
+  const paid = live.filter(o => PRICES[o.plan] > 0 && String(o.status||'').toLowerCase() !== 'trial');
+  const trials = live.filter(o => !PRICES[o.plan] || String(o.status||'').toLowerCase() === 'trial');
+  const mrr = paid.reduce((a,o) => a + PRICES[o.plan], 0);
+  const byPlan = {}; paid.forEach(o => { byPlan[o.plan] = (byPlan[o.plan]||0) + 1; });
+  const ending = trials.map(o => ({ o, left: 14 - Math.floor((Date.now() - new Date(o.created_at)) / 864e5) })).filter(x => x.left <= 7).sort((a,b) => a.left - b.left);
+  return { mrr, paid, trials, byPlan, ending };
+}
+function sentKpis(items){
+  return '<div class="stats-grid" style="margin-bottom:14px">' + items.map(k => '<div class="stat"><div class="stat-lbl">' + escapeHTML(k[0]) + '</div><div class="stat-val" style="font-size:22px' + (k[2] ? ';color:' + k[2] : '') + '">' + escapeHTML(String(k[1])) + '</div></div>').join('') + '</div>';
+}
+
+function renderSentinelTeams(pending){
+  const count = id => pending.filter(d => sentTeamOf(d) === id);
+  const chip = (id, label, n, urgent) => '<button type="button" class="btn btn-sm ' + (_sentTeam === id ? 'btn-p' : 'btn-ghost') + '" onclick="sentTeam(\'' + id + '\')">' + label +
+    (n ? ' <span style="margin-left:4px;font-size:11px;padding:1px 7px;border-radius:10px;background:' + (urgent ? 'var(--red)' : (_sentTeam === id ? 'rgba(255,255,255,.25)' : 'var(--card)')) + ';color:' + (urgent ? '#fff' : 'inherit') + '">' + n + '</span>' : '') + '</button>';
+  $('sentinel-teams').innerHTML = chip('overview', '🎯 Overview', pending.length, pending.some(d => d.tier === 'urgent')) +
+    SENT_TEAMS.map(t => { const c = count(t.id); return chip(t.id, t.icon + ' ' + t.name, c.length, c.some(d => d.tier === 'urgent')); }).join('');
+
+  const F = sentFinance(), panel = $('sentinel-team-panel');
+  const weekAgo = Date.now() - 7*864e5;
+  const fixedThisWeek = id => _sentinelDecisions.filter(d => d.status !== 'pending' && d.resolved_at && new Date(d.resolved_at) > weekAgo && sentTeamOf(d) === id).length;
+
+  if(_sentTeam === 'overview'){
+    panel.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-bottom:16px">' + SENT_TEAMS.map(t => {
+      const c = count(t.id), u = c.filter(d => d.tier === 'urgent').length, h = c.filter(d => d.tier === 'high').length;
+      let fact = '';
+      if(t.id === 'finance') fact = '£' + F.mrr.toLocaleString('en-GB') + ' MRR · ' + F.paid.length + ' paying · ' + F.trials.length + ' on trial';
+      if(t.id === 'sales'){ const open = _sentinelOutreach.filter(o => o.kind === 'deal' && !/^(won|lost)$/i.test(o.status||'')); fact = open.length + ' open deal' + (open.length === 1 ? '' : 's'); }
+      if(t.id === 'onboarding'){ const n = (allOrgs||[]).filter(o => Date.now() - new Date(o.created_at) < 7*864e5).length; fact = n + ' new sign-up' + (n === 1 ? '' : 's') + ' this week'; }
+      if(t.id === 'product'){ const a = _sentinelActions.find(x => x.agent === 'Product'); fact = a ? escapeHTML(a.action) : 'Nothing shipped logged yet'; }
+      return '<div class="card" style="cursor:pointer;margin:0;padding:14px;border-left:3px solid ' + (u ? 'var(--red)' : h ? 'var(--amber)' : c.length ? 'var(--em)' : 'var(--border)') + '" onclick="sentTeam(\'' + t.id + '\')">' +
+        '<div style="font-weight:700;font-size:13px;margin-bottom:4px">' + t.icon + ' ' + escapeHTML(t.name) + '</div>' +
+        '<div style="font-size:12.5px;color:var(--txt2)">' + (c.length ? c.length + ' open' + (u ? ' · <b style="color:var(--red)">' + u + ' urgent</b>' : '') + (h ? ' · ' + h + ' high' : '') : '✓ Clear') + '</div>' +
+        (fact ? '<div style="font-size:11.5px;color:var(--txt3);margin-top:4px">' + fact + '</div>' : '') +
+        '<div style="font-size:11px;color:var(--txt3);margin-top:4px">' + fixedThisWeek(t.id) + ' closed this week</div></div>';
+    }).join('') + '</div>';
+    return;
+  }
+
+  const c = count(_sentTeam), u = c.filter(d => d.tier === 'urgent').length;
+  let html = '';
+  if(_sentTeam === 'finance'){
+    html = sentKpis([['MRR (list prices)', '£' + F.mrr.toLocaleString('en-GB')], ['ARR', '£' + (F.mrr*12).toLocaleString('en-GB')], ['Paying', F.paid.length], ['On trial', F.trials.length], ['Trials ending in 7 days', F.ending.length, F.ending.length ? 'var(--amber)' : '']]) +
+      '<div class="card"><div class="card-title">Paying by plan</div><div style="font-size:13px">' + (['group','starter','pro','network'].filter(k => F.byPlan[k]).map(k => planBadge(k) + ' ' + F.byPlan[k] + ' × £' + PRICES[k] + ' = £' + (F.byPlan[k]*PRICES[k]).toLocaleString('en-GB')).join('<br/>') || 'No paying customers yet.') + '</div>' +
+      (F.ending.length ? '<div class="card-title" style="margin-top:14px">Trials ending soon</div>' + F.ending.map(x => '<div style="font-size:13px;padding:3px 0">' + escapeHTML(x.o.name) + ' — ' + (x.left > 0 ? x.left + ' day' + (x.left === 1 ? '' : 's') + ' left' : '<b style="color:var(--red)">' + (-x.left) + ' days over</b>') + '</div>').join('') : '') +
+      '<div style="font-size:11.5px;color:var(--txt3);margin-top:10px">MRR is worked out from each customer\'s plan at list price; yearly payers and discounts aren\'t shown separately, and failed payments aren\'t read from Stripe yet.</div></div>';
+  } else if(_sentTeam === 'onboarding'){
+    const recent = (allOrgs||[]).filter(o => Date.now() - new Date(o.created_at) < 30*864e5).sort((a,b) => String(b.created_at).localeCompare(String(a.created_at)));
+    const notStarted = c.filter(d => (d.metadata||{}).signal === 'not_started').map(d => String(d.org_id));
+    html = sentKpis([['New this week', recent.filter(o => Date.now() - new Date(o.created_at) < 7*864e5).length], ['New this month', recent.length], ['Not started yet', notStarted.length, notStarted.length ? 'var(--amber)' : '']]) +
+      '<div class="card"><div class="card-title">Sign-ups in the last 30 days</div>' + (recent.length ? recent.map(o => '<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:5px 0;border-bottom:1px solid var(--border)"><span>' + escapeHTML(o.name) + ' ' + planBadge(o.plan) + '</span><span style="color:' + (notStarted.indexOf(String(o.id)) !== -1 ? 'var(--amber)' : 'var(--txt3)') + '">' + (notStarted.indexOf(String(o.id)) !== -1 ? 'not started · ' : '') + Math.floor((Date.now() - new Date(o.created_at))/864e5) + ' days</span></div>').join('') : '<div style="font-size:13px;color:var(--txt3)">No sign-ups in the last 30 days.</div>') + '</div>';
+  } else if(_sentTeam === 'sales'){
+    const deals = _sentinelOutreach.filter(o => o.kind === 'deal');
+    const open = deals.filter(o => !/^(won|lost)$/i.test(o.status||'')), won = deals.filter(o => /^won$/i.test(o.status||''));
+    const monthAgo = Date.now() - 30*864e5, cold = _sentinelOutreach.filter(o => o.kind === 'sales' && new Date(o.created_at) > monthAgo);
+    const today = new Date().toLocaleDateString('en-CA');
+    html = sentKpis([['Open deals', open.length], ['Won', won.length, won.length ? 'var(--green)' : ''], ['Next steps due', open.filter(d => (d.metadata||{}).next_date && d.metadata.next_date <= today).length, 'var(--amber)'], ['Cold emails drafted (30 days)', cold.length], ['Sent', cold.filter(o => o.status === 'sent').length]]) +
+      '<div class="card"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center"><span>Pipeline</span><button class="btn btn-p btn-sm" onclick="sentDealForm()">+ Add a deal</button></div><div id="sent-deal-form"></div>' +
+      (deals.length ? '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="text-align:left;color:var(--txt3);font-size:11px;text-transform:uppercase"><th style="padding:6px">Organisation</th><th>Stage</th><th>Next step</th><th>Due</th><th></th></tr></thead><tbody>' +
+        deals.sort((a,b) => (/^(won|lost)$/i.test(a.status||'') - /^(won|lost)$/i.test(b.status||'')) || String((a.metadata||{}).next_date||'9').localeCompare(String((b.metadata||{}).next_date||'9'))).map(d => { const m = d.metadata || {}, late = m.next_date && m.next_date < today && !/^(won|lost)$/i.test(d.status||'');
+          return '<tr style="border-top:1px solid var(--border)"><td style="padding:7px 6px;font-weight:600">' + escapeHTML(d.target_name) + (m.contact ? '<div style="font-weight:400;font-size:11.5px;color:var(--txt3)">' + escapeHTML(m.contact) + '</div>' : '') + '</td>' +
+            '<td><select onchange="sentDealSet(' + d.id + ',{status:this.value})" style="font-size:12.5px;padding:3px 6px;border:1px solid var(--border);border-radius:6px">' + DEAL_STAGES.map(st => '<option' + (st === d.status ? ' selected' : '') + '>' + st + '</option>').join('') + '</select></td>' +
+            '<td>' + escapeHTML(m.next_step || '—') + (m.notes ? '<div style="font-size:11.5px;color:var(--txt3)">' + escapeHTML(m.notes) + '</div>' : '') + '</td>' +
+            '<td style="white-space:nowrap;color:' + (late ? 'var(--red)' : 'var(--txt2)') + '">' + escapeHTML(m.next_date ? new Date(m.next_date + 'T12:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'}) : '—') + '</td>' +
+            '<td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="sentDealForm(' + d.id + ')">Edit</button></td></tr>'; }).join('') + '</tbody></table></div>'
+        : '<div style="font-size:13px;color:var(--txt3);padding:8px 0">No deals yet. Add the charities you\'re talking to (Acorn, Project Abundance, Friday\'s call) and Sentinel will remind you when a next step is due.</div>') + '</div>';
+  } else if(_sentTeam === 'product'){
+    const shipped = _sentinelActions.find(x => x.agent === 'Product');
+    const fails = c.filter(d => /^agent_/.test((d.metadata||{}).key || '') || /agent failed/i.test(d.title||''));
+    html = sentKpis([['Open', c.length], ['Urgent', u, u ? 'var(--red)' : ''], ['Agent failures', fails.length, fails.length ? 'var(--red)' : '']]) +
+      '<div class="card"><div class="card-title">Shipped in the last 7 days</div>' + (shipped ? '<div style="font-size:12.5px;color:var(--txt2);line-height:1.6">' + escapeHTML(shipped.detail || shipped.action).split(' · ').map(x => '• ' + x).join('<br/>') + '</div>' : '<div style="font-size:13px;color:var(--txt3)">Nothing logged yet — it\'s read from the changelog each morning.</div>') + '</div>';
+  } else {
+    html = sentKpis([['Open', c.length], ['Urgent', u, u ? 'var(--red)' : ''], ['High', c.filter(d => d.tier === 'high').length], ['Closed this week', fixedThisWeek(_sentTeam)]]);
+  }
+  panel.innerHTML = html;
+}
+
+async function sentFollowedUp(decisionId, outreachId){
+  const o = _sentinelOutreach.find(x => x.id === outreachId) || {};
+  try {
+    await sb.from('sentinel_outreach').update({ metadata: Object.assign({}, o.metadata || {}, { followed_up: new Date().toISOString() }) }).eq('id', outreachId);
+    await resolveSentinelDecision(decisionId, 'approved');
+  } catch(e) { alert('Could not update: ' + e.message); }
+}
+
+// ── Deals: the charities you're talking to ──
+function sentDealForm(id){
+  const d = id ? _sentinelOutreach.find(x => x.id === id) : null, m = (d && d.metadata) || {};
+  const v = x => escapeHTML(x || '');
+  $('sent-deal-form').innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin:8px 0 12px">' +
+    '<input id="sd-name" class="input" placeholder="Organisation" value="' + v(d && d.target_name) + '"/>' +
+    '<input id="sd-contact" class="input" placeholder="Contact (e.g. Hollie, Head of Fundraising)" value="' + v(m.contact) + '"/>' +
+    '<select id="sd-stage" class="input">' + DEAL_STAGES.map(st => '<option' + (d && d.status === st ? ' selected' : '') + '>' + st + '</option>').join('') + '</select>' +
+    '<input id="sd-next" class="input" placeholder="Next step (e.g. team call)" value="' + v(m.next_step) + '"/>' +
+    '<input id="sd-date" class="input" type="date" value="' + v(m.next_date) + '"/>' +
+    '<input id="sd-notes" class="input" placeholder="Notes" value="' + v(m.notes) + '"/>' +
+    '<div style="display:flex;gap:6px"><button class="btn btn-p btn-sm" onclick="sentDealSave(' + (id || 0) + ')">Save</button><button class="btn btn-ghost btn-sm" onclick="$(\'sent-deal-form\').innerHTML=\'\'">Cancel</button>' +
+    (id ? '<button class="btn btn-danger btn-sm" onclick="sentDealDelete(' + id + ')">Delete</button>' : '') + '</div></div>';
+}
+async function sentDealSave(id){
+  const name = $('sd-name').value.trim(); if(!name){ alert('Add the organisation\'s name'); return; }
+  const old = id ? (_sentinelOutreach.find(x => x.id === id) || {}) : {};
+  const metadata = Object.assign({}, old.metadata || {}, { contact: $('sd-contact').value.trim(), next_step: $('sd-next').value.trim(), next_date: $('sd-date').value || null, notes: $('sd-notes').value.trim() });
+  const row = { kind:'deal', target_name:name, target_key:name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''), status:$('sd-stage').value, metadata };
+  try {
+    const r = id ? await sb.from('sentinel_outreach').update(row).eq('id', id) : await sb.from('sentinel_outreach').insert([row]);
+    if(r.error) throw r.error;
+    await loadSentinel();
+  } catch(e) { alert('Could not save the deal: ' + e.message); }
+}
+async function sentDealSet(id, patch){
+  try { const r = await sb.from('sentinel_outreach').update(patch).eq('id', id); if(r.error) throw r.error; await loadSentinel(); }
+  catch(e) { alert('Could not update the deal: ' + e.message); }
+}
+async function sentDealDelete(id){
+  if(!confirm('Delete this deal?')) return;
+  try { const r = await sb.from('sentinel_outreach').delete().eq('id', id); if(r.error) throw r.error; await loadSentinel(); }
+  catch(e) { alert('Could not delete: ' + e.message); }
+}
+
 function sentinelDecisionCard(d){
   const tierColor = d.tier==='urgent'?'var(--red)':d.tier==='high'?'var(--amber)':'var(--em)';
   const tierClass = { urgent:'b-suspended', high:'b-trial', medium:'b-pro' };
@@ -894,7 +1058,9 @@ function sentinelDecisionCard(d){
     `;
   }
 
-  const copyButton = isOutreach
+  const copyButton = meta.deal_id ? `<button class="btn btn-p btn-sm" onclick="sentTeam('sales');setTimeout(()=>sentDealForm(${meta.deal_id}),0)">Update the deal</button>`
+    : (meta.signal === 'follow_up' && meta.outreach_id) ? `<button class="btn btn-p btn-sm" onclick="sentFollowedUp(${d.id},${meta.outreach_id})">Followed up</button>`
+    : isOutreach
     ? `<button class="btn btn-p btn-sm" onclick="copyOutreachDraft(${d.id})">📋 Copy ${meta.outreach_kind==='grant'?'EOI':'email'}</button>`
     : (d.primary_action ? `<button class="btn btn-p btn-sm" onclick="resolveSentinelDecision(${d.id},'approved')">${escapeHTML(d.primary_action)}</button>` : '');
 
@@ -907,7 +1073,7 @@ function sentinelDecisionCard(d){
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:8px">
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <span class="badge ${tierClass[d.tier]||'b-pro'}">${d.tier||'medium'}</span>
-          <span class="badge" style="background:var(--card);color:var(--txt2);border:1px solid var(--border)">${escapeHTML(d.agent||'')}</span>
+          <span class="badge" style="background:var(--card);color:var(--txt2);border:1px solid var(--border)">${escapeHTML((SENT_TEAMS.find(t => t.id === sentTeamOf(d)) || {}).name || d.agent || '')}</span>
           ${isOutreach ? `<span class="badge" style="background:var(--purple-bg);color:var(--purple);border:1px solid #DDD6FE">${meta.outreach_kind==='grant'?'Grant EOI':'Cold email'}</span>`:''}
         </div>
         <span style="font-size:11px;color:var(--txt3)">${new Date(d.created_at).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</span>
@@ -978,7 +1144,8 @@ async function markOutreachSent(decisionId){
   const outreachId = d.metadata && d.metadata.outreach_id;
   try {
     if(outreachId){
-      await sb.from('sentinel_outreach').update({ status: 'sent' }).eq('id', outreachId);
+      const o = _sentinelOutreach.find(x => x.id === outreachId) || {};
+      await sb.from('sentinel_outreach').update({ status: 'sent', metadata: Object.assign({}, o.metadata || {}, { sent_at: new Date().toISOString() }) }).eq('id', outreachId);
     }
     await sb.from('sentinel_decisions').update({ status: 'approved', resolved_at: new Date().toISOString() }).eq('id', decisionId);
     await loadSentinel();

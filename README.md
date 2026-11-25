@@ -136,17 +136,22 @@ With vercel.json updated, /api/sentinel-cron runs at 06:00 UTC daily.
 ~£0.005-0.01 per run on Claude Haiku 4.5. About 30p/month if you only have 
 the cron firing once a day.
 
-## Adding agents
-Sentinel currently runs two agents:
-- Chief of Staff briefing — generates the daily narrative
-- Churn detector — flags inactive paying customers
+## Teams
+Sentinel is organised by team: Customers, Onboarding, Sales & Marketing, Finance, Product & Dev,
+Legal & GDPR and Funding. The team list lives in /api/_lib/sentinel-teams.js and super-admin.html
+(keep them in step). Each card is filed under an agent; the agent decides the team.
 
-To add more, edit /api/sentinel-cron.js and add a new async function 
-following the same pattern as runChurnDetector. Call it in the handler. 
-Decisions go to sentinel_decisions, briefings to sentinel_briefings.
+/api/sentinel-cron-core.js runs at 06:00: the checks (/api/_lib/sentinel-guard.js), quiet customers,
+new sign-ups not started, patterns, and the sales pipeline. Every card has a key (metadata.key):
+one card per issue, closed automatically when the issue goes away. The briefing is written last,
+one line per team. Sales (06:30) and BD (07:00) use web search.
+
+Deals (the charities you're talking to) are rows in sentinel_outreach with kind = 'deal'.
+
+To add a check, add a card(...) or add(...) with a new key in the right agent.
 
 ## If something breaks
-- Briefing missing → check Vercel function logs for /api/sentinel-cron
+- Briefing missing → check Vercel function logs for /api/sentinel-cron-core
 - "Not authorized" → check super_admins table contains your user_id
 - Empty briefing narrative → Claude API key issue, check ANTHROPIC_API_KEY
 - "Run failed" alert → check browser console for the underlying error

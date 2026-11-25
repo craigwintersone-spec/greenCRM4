@@ -1,6 +1,13 @@
 # Vorlana changelog
 Newest first. The Sentinel reads this every morning and logs what shipped in the last 7 days.
 
+## 2026-11-25
+- Sentinel runs the business by team: Customers, Onboarding, Sales & Marketing, Finance, Product & Dev, Legal & GDPR and Funding each have a tab with their open cards and key numbers; Overview shows every team at a glance (open, urgent, closed this week). The morning briefing is one line per team plus the three things to do today, and its headline is MRR, paying, on trial and urgent
+- Finance tab: MRR and ARR at list prices, paying by plan, trials ending in the next 7 days. Onboarding tab: sign-ups in the last 30 days and which haven't started (now a card for each). Product & Dev tab: what shipped in the last 7 days and any agent that failed
+- Sales pipeline: add the charities you're talking to with stage, contact, next step and date; Sentinel raises a card when a next step is due or a cold email sent 10+ days ago has had no follow-up
+- Every Sentinel card is now kept up to date (one per issue, closed automatically when it's fixed): quiet paying customers and patterns no longer pile up as new cards every morning, and old duplicates are cleared. Nothing is closed on a morning an agent failed. All open cards show (not just the newest 50)
+- Run buttons on the Sentinel page work for super admins even when the daily job has its own secret
+
 ## 2026-11-24
 - Volunteers page: choose the period (a week, last 4 weeks, last 3 months, last 12 months). A week shows who volunteered and their hours, with previous/next week and a date picker; a week-by-week table shows the last 12 weeks (volunteers, hours, sessions, new) and opens any week with a tap. The choice is remembered
 - Case studies are full stories (150–220 words): where the person started (how they came and their barriers), what they did with you in date order from the case notes, how long they've been with you, and what changed (outcomes and stage). Sensitive notes are left out one at a time rather than dropping the whole story, and no names from the notes are ever used. Demo people who reached an outcome now have a full set of case notes

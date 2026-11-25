@@ -68,10 +68,7 @@ function slugify(s) {
 }
 
 module.exports = async function handler(req, res) {
-  if (CRON_SECRET) {
-    const auth = req.headers.authorization || '';
-    if (auth !== `Bearer ${CRON_SECRET}`) return res.status(401).json({ error: 'Unauthorized' });
-  }
+  if (!(await require('./_lib/sentinel-teams.js').allowed(req))) return res.status(401).json({ error: 'Unauthorized' });   // the daily job, or a super admin pressing Run
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !ANTHROPIC_API_KEY) {
     return res.status(500).json({ error: 'Missing env vars' });
   }
