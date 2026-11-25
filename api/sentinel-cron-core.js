@@ -237,13 +237,14 @@ async function runChiefOfStaffBriefing(pending, shipped) {
   const teams = {};
   TEAMS_LIB.TEAMS.forEach(t => { const c = byTeam[t.id].cards; teams[t.id] = { open: c.length, urgent: c.filter(x => x.tier === 'urgent').length, high: c.filter(x => x.tier === 'high').length }; });
   const urgentAll = (pending || []).filter(d => d.tier === 'urgent').length;
-  await sbInsert('sentinel_briefings', [{
+  const briefing = {
     headline: `£${mrr.toLocaleString('en-GB')} MRR · ${paid.length} paying · ${trials.length} on trial · ${urgentAll} urgent`,
     narrative,
     stats: { mrr, paid_orgs: paid.length, trial_orgs: trials.length, total_orgs: orgs.length, new_this_week: newThisWeek, open_deals: openDeals.length, shipped_7d: shipped || 0, teams, generated_at: new Date().toISOString() },
     status: 'ready',
-  }]);
-  return { mrr, paid: paid.length };
+  };
+  await sbInsert('sentinel_briefings', [briefing]);
+  return { mrr, paid: paid.length, briefing, teams: TEAMS_LIB.TEAMS.map(t => Object.assign({ name: t.name }, teams[t.id])) };
 }
 
 module.exports = async function handler(req, res) {
@@ -273,9 +274,17 @@ module.exports = async function handler(req, res) {
 
   // the briefing last, so it sees every team's cards as they now stand
   try {
-    const pending = await sbSelect('sentinel_decisions', 'select=agent,tier,title,metadata&status=eq.pending&limit=2000');
-    results.briefing = await runChiefOfStaffBriefing(pending, results.shipped);
+    const pending = await sbSelect('sentinel_decisions', 'select=agent,tier,title,description,metadata&status=eq.pending&limit=2000');
+    const b = await runChiefOfStaffBriefing(pending, results.shipped);
+    results.briefing = { mrr: b.mrr, paid: b.paid };
+    // …and to your inbox, once a day
+    const teamName = d => (TEAMS_LIB.TEAMS.find(t => t.id === TEAMS_LIB.teamOf(d)) || {}).name;
+    const urgent = pending.filter(d => d.tier === 'urgent').map(d => Object.assign({ team: teamName(d) }, d));
+    const fresh = ((results.cards && results.cards.fresh) || []).map(d => Object.assign({ team: teamName(d) }, d));
+    try { results.email = await require('./_lib/sentinel-mail.js').sendBriefingEmail({ briefing: b.briefing, teams: b.teams, urgent, fresh, force: /[?&]email=force\b/.test(req.url || '') }); }
+    catch (e) { results.errors.push({ agent: 'email', error: e.message }); }
   } catch (e) { results.errors.push({ agent: 'briefing', error: e.message }); }
+  if (results.cards) delete results.cards.fresh;
 
   return res.status(200).json({ ok: true, ...results });
 };

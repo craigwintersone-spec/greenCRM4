@@ -2,6 +2,7 @@
 Newest first. The Sentinel reads this every morning and logs what shipped in the last 7 days.
 
 ## 2026-11-25
+- Sentinel emails you the morning briefing after its 06:00 run: the team-by-team briefing, a table of open/urgent/high by team, every urgent card and what's new this morning, with a button to open Sentinel. Once a day (a second run doesn't resend it); 'Email me the briefing' on the Sentinel page sends it now. Goes to SENTINEL_EMAIL (set in Vercel; several addresses separated by commas), otherwise hello@vorlana.com
 - Sentinel runs the business by team: Customers, Onboarding, Sales & Marketing, Finance, Product & Dev, Legal & GDPR and Funding each have a tab with their open cards and key numbers; Overview shows every team at a glance (open, urgent, closed this week). The morning briefing is one line per team plus the three things to do today, and its headline is MRR, paying, on trial and urgent
 - Finance tab: MRR and ARR at list prices, paying by plan, trials ending in the next 7 days. Onboarding tab: sign-ups in the last 30 days and which haven't started (now a card for each). Product & Dev tab: what shipped in the last 7 days and any agent that failed
 - Sales pipeline: add the charities you're talking to with stage, contact, next step and date; Sentinel raises a card when a next step is due or a cold email sent 10+ days ago has had no follow-up

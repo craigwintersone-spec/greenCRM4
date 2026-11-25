@@ -146,6 +146,8 @@ new sign-ups not started, patterns, and the sales pipeline. Every card has a key
 one card per issue, closed automatically when the issue goes away. The briefing is written last,
 one line per team. Sales (06:30) and BD (07:00) use web search.
 
+The briefing is emailed once a day to SENTINEL_EMAIL (Vercel environment variable; comma-separated for several), otherwise hello@vorlana.com. It uses RESEND_API_KEY.
+
 Deals (the charities you're talking to) are rows in sentinel_outreach with kind = 'deal'.
 
 To add a check, add a card(...) or add(...) with a new key in the right agent.

@@ -261,7 +261,7 @@ async function syncDecisions(found, opts) {
   if (fresh.length) await sb('sentinel_decisions', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(fresh) });
   const gone = closeGone ? Object.keys(have).filter(k => !seen[k]).map(k => have[k]) : [];
   if (gone.length) await sb(`sentinel_decisions?id=in.(${gone.join(',')})`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'resolved', resolved_at: new Date().toISOString() }) });
-  return { found: found.length, added: fresh.length, closed: gone.length };
+  return { found: found.length, added: fresh.length, closed: gone.length, fresh: fresh.map(d => ({ agent: d.agent, tier: d.tier, title: d.title, description: d.description })) };
 }
 
 // Product: what shipped in the last 7 days, from CHANGELOG.md on the site

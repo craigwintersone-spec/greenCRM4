@@ -277,6 +277,7 @@ tr:last-child td{border-bottom:none}
    <div style="display:flex;gap:8px;flex-wrap:wrap">
   <button class="btn btn-ghost btn-sm" onclick="loadSentinel()">↻ Refresh</button>
   <button class="btn btn-p btn-sm" onclick="runSentinelCore()">⚡ Run core agents</button>
+  <button class="btn btn-ghost btn-sm" onclick="runSentinelCore(true)" title="Runs the core agents and emails you the briefing now">📧 Email me the briefing</button>
   <button class="btn btn-ghost btn-sm" onclick="runSentinelSales()">💼 Run Sales</button>
   <button class="btn btn-ghost btn-sm" onclick="runSentinelBD()">🔍 Run BD</button>
 </div>
@@ -1154,18 +1155,19 @@ async function markOutreachSent(decisionId){
   }
 }
 
-async function runSentinelCore(){
-  if(!confirm('Run core agents (briefing, churn, onboarding, insights)? Takes ~10 seconds.')) return;
+async function runSentinelCore(email){
+  if(!confirm(email ? 'Run the core agents and email you the briefing now? Takes ~20 seconds.' : 'Run core agents (checks, customers, onboarding, pipeline, briefing)? Takes ~20 seconds. The briefing is emailed once a day.')) return;
   $('sentinel-status').textContent = 'Running core agents…';
   try {
     const { data: { session } } = await sb.auth.getSession();
     const token = session && session.access_token;
-    const r = await fetch('/api/sentinel-cron-core', {
+    const r = await fetch('/api/sentinel-cron-core' + (email ? '?email=force' : ''), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': token ? 'Bearer ' + token : '' }
     });
     const data = await r.json();
     if(!r.ok){ alert('Run failed: ' + (data.error || 'Unknown')); return; }
+    if(email) alert(data.email && data.email.sent ? '✓ Briefing emailed to ' + data.email.to.join(', ') : 'The briefing wasn\'t emailed: ' + ((data.email && data.email.why) || (data.errors || []).map(e => e.error).join('; ') || 'unknown'));
     await loadSentinel();
   } catch(e) { alert('Run failed: ' + e.message); }
 }
