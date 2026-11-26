@@ -33,7 +33,15 @@
     await postFixed();
     if (typeof window.vlDonSyncAuto === 'function') window.vlDonSyncAuto();   // new gifts from connected accounts
     setTimeout(draftThanks, 2500);
+    setTimeout(draftComms, 9000);
   };
+  // the week's story pack (from Friday) and the month's newsletter (from the 25th) are written ahead
+  async function draftComms() {
+    if (typeof window.vlCommsDue !== 'function' || typeof window.vlComms !== 'function') return;
+    var due = window.vlCommsDue().filter(function (x) { return !x.ready; });
+    for (var i = 0; i < due.length; i++) await window.vlComms(due[i].kind, { background: true });
+    if (due.length && typeof window.vlPaintChecks === 'function') window.vlPaintChecks();
+  }
   async function add(table, key, row) {
     var a = A(), S = a.S;
     if (!S.sql.auto || /^(demo|mem)-/.test(String(row.line_id || ''))) { row.id = 'mem-' + Date.now() + Math.random().toString(36).slice(2, 6); S[key].push(row); return row; }
@@ -210,7 +218,7 @@
 
   // ── morning briefing: what Vorlana prepared, waiting for a tap ─
   window.vlExtraChecks = function () {
-    var U = unsorted(); return U.length ? [{ lvl: 'amber', page: 'budget', text: U.length + ' payment' + (U.length === 1 ? '' : 's') + ' from the bank to sort (' + A().gbp(U.reduce(function (s, x) { return s + A().n(x.amount); }, 0)) + ')' }] : [];
+    var U = unsorted(); return U.length ? [{ lvl: 'amber', page: 'budget', sort: true, text: U.length + ' payment' + (U.length === 1 ? '' : 's') + ' from the bank to sort (' + A().gbp(U.reduce(function (s, x) { return s + A().n(x.amount); }, 0)) + ')' }] : [];
   };
   window.vlInboxHTML = function () {
     var a = A(), S = a.S, items = [], month = a.today().slice(0, 7);
@@ -222,6 +230,7 @@
     if (fx.length) items.push(['budget', 'Fixed costs posted this month: ' + a.gbp(fx.reduce(function (t, s) { return t + a.n(s.amount); }, 0)) + ' across ' + fx.length + ' line' + (fx.length === 1 ? '' : 's')]);
     var auto = S.don.filter(function (d) { return d.source && d.source !== 'manual' && !/^csv/.test(d.source) && String(d.created_at || '').slice(0, 10) >= a.iso(a.addDays(new Date(), -1)); }).length;
     if (auto) items.push(['donations', auto + ' new gift' + (auto === 1 ? '' : 's') + ' came in from your giving accounts']);
+    (typeof window.vlCommsDue === 'function' ? window.vlCommsDue() : []).forEach(function (x) { if (x.ready) items.push(['social', x.kind === 'story' ? 'This week’s story pack is written: check it and post' : 'This month’s newsletter is written: check it and send']); });
     if (!items.length) return '';
     return '<div style="font-size:12px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--txt3);margin:12px 0 8px">Ready for you</div>' + items.map(function (x) {
       return '<div onclick="go(\'' + x[0] + '\')" style="display:flex;gap:10px;align-items:flex-start;padding:7px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;font-size:13px;background:#F3F8F7"><span style="color:#1F6F6D;font-weight:700">✓</span><span>' + a.esc(x[1]) + '</span></div>'; }).join('');

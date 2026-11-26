@@ -120,8 +120,56 @@
   }
   function giftAidable(d) { return d.gift_aid ? n(d.amount) * 0.25 : 0; }
 
+  // ── Lenses: the same checks, shown for the person looking ────
+  // manager: everything. frontline: my own people and this week's events, no money. trustee: the big picture, no names.
+  function lens() {
+    var v = null; try { v = sessionStorage.getItem('vl_lens'); } catch (e) { /* none */ }
+    if (v) return v;
+    return (typeof isAdviserRole === 'function' && isAdviserRole()) ? 'frontline' : 'manager';
+  }
+  // a frontline worker's own caseload: people they own; when trying the lens as a manager, the first adviser's people
+  function myPeople() {
+    var P = (DB.participants || []), me = (typeof currentUser !== 'undefined' && currentUser && currentUser.id) || null;
+    var mine = P.filter(function (p) { return me && p.owner_user_id === me; });
+    if (mine.length) return { who: 'your', list: mine };
+    var names = {}; P.forEach(function (p) { if (p.advisor && p.advisor !== 'Unassigned') names[p.advisor] = (names[p.advisor] || 0) + 1; });
+    var top = Object.keys(names).sort(function (a, b) { return names[b] - names[a]; })[0];
+    return top ? { who: top + '\u2019s', list: P.filter(function (p) { return p.advisor === top; }) } : { who: 'your', list: [] };
+  }
+  window.vlLens = lens;
+  window.vlSetLens = function (v) { try { sessionStorage.setItem('vl_lens', v); } catch (e) { /* none */ } if (typeof window.runMorningBriefing === 'function') window.runMorningBriefing(); };
+
   // ── 1. Morning briefing checks ───────────────────────────────
-  function checks() {
+  function checks() { return lensChecks(lens()); }
+  function lensChecks(L) {
+    if (L === 'frontline') return frontlineChecks();
+    var all = allChecks();
+    if (L !== 'trustee') return all;
+    // trustees: contracts, money and risk as counts; never a person's name
+    return all.filter(function (x) { return x.lvl !== 'info' && x.page !== 'volunteers' && x.page !== 'donations' && !x.sort; }).map(function (x) {
+      return x.page === 'participants' ? { lvl: x.lvl, page: 'dashboard', text: x.text.split(':')[0] } : { lvl: x.lvl, page: 'dashboard', text: x.text };
+    });
+  }
+  function frontlineChecks() {
+    var out = [], t = today(), mp = myPeople(), mine = mp.list.filter(function (p) { return p.stage !== 'Closed'; });
+    var since = function (p) { return p.last_contact ? Math.floor((new Date() - new Date(p.last_contact)) / 864e5) : null; };
+    var nm = function (p) { return p.first_name + ' ' + p.last_name; };
+    mine.filter(function (p) { return (p.safeguarding || p.risk === 'High') && (since(p) == null || since(p) > 14); }).forEach(function (p) {
+      out.push({ lvl: 'red', page: 'participants', text: nm(p) + ': ' + (p.safeguarding ? 'safeguarding flag' : 'high risk') + ', ' + (since(p) == null ? 'no contact recorded' : 'no contact for ' + since(p) + ' days') });
+    });
+    mine.filter(function (p) { return !(p.safeguarding || p.risk === 'High') && since(p) != null && since(p) > 21; }).sort(function (a, b) { return since(b) - since(a); }).slice(0, 6).forEach(function (p) {
+      out.push({ lvl: 'amber', page: 'participants', text: nm(p) + ': no contact for ' + since(p) + ' days' });
+    });
+    var noNotes = mine.filter(function (p) { return !(p.notes || []).length; });
+    if (noNotes.length) out.push({ lvl: 'amber', page: 'participants', text: noNotes.length + ' of ' + mp.who + ' people have no case note yet: ' + noNotes.slice(0, 4).map(nm).join(', ') + (noNotes.length > 4 ? ' and ' + (noNotes.length - 4) + ' more' : '') });
+    var ready = mine.filter(function (p) { return p.stage === 'Job Ready'; });
+    if (ready.length) out.push({ lvl: 'info', page: 'employers', text: ready.length + ' job ready: ' + ready.slice(0, 4).map(nm).join(', ') });
+    if (uses('events')) (DB.events || []).filter(function (e) { return e.date >= t && e.date <= iso(addDays(new Date(), 7)); }).sort(function (a, b) { return a.date < b.date ? -1 : 1; }).slice(0, 5).forEach(function (e) {
+      out.push({ lvl: 'info', page: 'events', text: e.name + ' on ' + fmt(e.date) });
+    });
+    return out;
+  }
+  function allChecks() {
     var out = [], t = today(), in14 = iso(addDays(new Date(), 14)), in21 = iso(addDays(new Date(), 21)), in90 = iso(addDays(new Date(), 90));
     var C = uses('funders') ? (DB.contracts || []).filter(function (c) { return c.status !== 'closed'; }) : [];
     C.forEach(function (c) {
@@ -181,13 +229,15 @@
     var body = $('mb-body'); if (!body) return;
     var box = $('ao-checks');
     if (!box) { box = document.createElement('div'); box.id = 'ao-checks'; body.parentNode.insertBefore(box, body); }
-    var c = checks();
-    box.innerHTML = '<div style="font-size:12px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--txt3);margin:4px 0 8px">Today’s checks</div>' +
+    var c = checks(), L = lens(), canSwitch = typeof isAdviserRole !== 'function' || !isAdviserRole();
+    var title = L === 'frontline' ? 'Today for ' + myPeople().who + ' caseload (' + myPeople().list.filter(function (p) { return p.stage !== 'Closed'; }).length + ' people)' : L === 'trustee' ? 'For trustees: where things stand' : 'Today’s checks';
+    box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:4px 0 8px"><div style="font-size:12px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--txt3)">' + esc(title) + '</div>' +
+      (canSwitch ? '<select onchange="vlSetLens(this.value)" title="See what each role sees" style="width:auto;font-size:12px;padding:3px 6px">' + [['manager', 'View as manager'], ['frontline', 'View as frontline worker'], ['trustee', 'View as trustee']].map(function (o) { return '<option value="' + o[0] + '"' + (L === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' : '') + '</div>' +
       (c.length ? c.map(function (x) {
         return '<div onclick="go(\'' + x.page + '\')" style="display:flex;gap:10px;align-items:flex-start;padding:7px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;font-size:13px;background:var(--surface,#fff)">' +
           '<span style="width:8px;height:8px;border-radius:50%;background:' + DOT[x.lvl] + ';margin-top:6px;flex-shrink:0"></span><span>' + esc(x.text) + '</span></div>';
       }).join('') : '<div style="font-size:13px;color:var(--txt3);margin-bottom:8px">Nothing due or overdue. All clear.</div>') +
-      (typeof window.vlInboxHTML === 'function' ? window.vlInboxHTML() : '');
+      (L === 'manager' && typeof window.vlInboxHTML === 'function' ? window.vlInboxHTML() : '');
   }
   window.vlPaintChecks = paintChecks;
   var CACHE_KEY = function () { return 'vl_mb_' + oid() + '_' + today(); };
@@ -197,6 +247,7 @@
       if (!on()) return orig.apply(this, arguments);
       if (!S.loaded) await load();
       paintChecks();
+      if (lens() !== 'manager') { var mb = $('mb-body'); if (mb) mb.innerHTML = '<div style="font-size:12px;color:var(--txt3)">' + (lens() === 'frontline' ? 'Frontline staff see their own people and this week’s events. No contracts, budgets or donations.' : 'Trustees see contracts, money and risk as totals. No names.') + '</div>'; return; }
       await orig.apply(this, arguments);
       var b = $('mb-body');
       if (b && b.querySelector('.ai-response')) { try { localStorage.setItem(CACHE_KEY(), b.innerHTML); } catch (e) { /* private mode */ } }
@@ -208,6 +259,7 @@
   function autoBriefing() {
     if (autoDone || !on() || !$('mb-body')) return; autoDone = true;
     var cached = null; try { cached = localStorage.getItem(CACHE_KEY()); } catch (e) { /* none */ }
+    if (lens() !== 'manager') { window.runMorningBriefing(); return; }
     if (cached) { paintChecks(); $('mb-body').innerHTML = cached; var tm = $('mb-time'); if (tm) tm.textContent = 'Written this morning'; }
     else window.runMorningBriefing();
   }
@@ -257,7 +309,7 @@
       var top = Object.keys(per).sort(function (a, b) { return per[b] - per[a]; }).slice(0, 5).map(function (id) { var v = V.find(function (x) { return String(x.id) === id; }); return v ? v.name + ' ' + Math.round(per[id] * 10) / 10 + ' hours' : null; }).filter(Boolean);
       if (top.length && opts.volNames) L.push('Most hours: ' + top.join(', '));
     }
-    if (uses('funders')) {
+    if (uses('funders') && lens() !== 'frontline') {
       var C = DB.contracts || [];
       if (C.length) {
         L.push('', 'CONTRACTS AND GRANTS');
@@ -270,7 +322,7 @@
         });
       }
     }
-    var D = S.don.filter(function (d) { return inR(d.gift_date, from, to); });
+    var D = lens() === 'frontline' ? [] : S.don.filter(function (d) { return inR(d.gift_date, from, to); });
     if (D.length) {
       var tot = D.reduce(function (a, d) { return a + n(d.amount); }, 0), funds = {}, donors = {};
       D.forEach(function (d) { var k = d.fund || 'Unrestricted'; funds[k] = (funds[k] || 0) + n(d.amount); donors[d.donor_name] = 1; });
@@ -323,6 +375,7 @@
     var sys = 'You are Vorlana, the assistant inside a UK charity\'s records system. Answer the question using ONLY the FACTS provided. Be short and direct: one to four sentences, or a short list. Use **bold** for the key figure. ' +
       'Never invent people, events, figures or dates. Never add up, average or calculate new figures yourself; if the question needs a figure that is not in the facts, say plainly it isn\'t in your records and name the page in Vorlana where it would be (Events, Volunteers, Contracts, Budget, Donations, Reports, Funding calendar). ' +
       'Say which period a figure covers. Use "black and ethnic minority", never "BAME". British English. No headings.';
+    window._aoFacts = window._aoFacts || {}; window._aoFacts.ask = ctx;
     var hist = chat.slice(-8, -2).map(function (m) { return (m.who === 'me' ? 'Q: ' : 'A: ') + m.text; }).join('\n');
     try { ans.text = await callClaude(sys, (hist ? 'Earlier in this chat:\n' + hist + '\n\n' : '') + 'Question: ' + qn, 500, false, { context: 'FACTS\n' + ctx, purpose: 'ask' }); }
     catch (e) { ans.text = 'Sorry, I couldn’t answer that just now (' + (e.message || 'error') + ').'; }
@@ -390,7 +443,18 @@
     var done = function () { if (btn) { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1500); } };
     try { navigator.clipboard.writeText(t).then(done, done); } catch (e) { done(); }
   };
-  window.vlComms = async function (kind) {
+  // one story pack a week (from Friday), one newsletter a month (from the 25th)
+  function commsKey(kind) {
+    var d = new Date(), mon = addDays(d, -((d.getDay() + 6) % 7));
+    return kind === 'story' ? 'vl_comms_story_' + oid() + '_' + iso(mon) : kind === 'news' ? 'vl_comms_news_' + oid() + '_' + iso(d).slice(0, 7) : null;
+  }
+  window.vlCommsDue = function () {
+    var d = new Date(), due = [];
+    if (d.getDay() === 5 || d.getDay() === 6 || d.getDay() === 0) due.push('story');
+    if (d.getDate() >= 25) due.push('news');
+    return due.map(function (k) { var r = null; try { r = localStorage.getItem(commsKey(k)); } catch (e) { /* none */ } return { kind: k, ready: !!r }; });
+  };
+  window.vlComms = async function (kind, opts) {
     var out = $('ao-comms-out'); if (!S.loaded) await load();
     var to = today(), from = iso(addDays(new Date(), kind === 'story' ? -7 : -30));
     var facts = factsFor(from, to, { volNames: true, quotes: 8, upcoming: true }) + (await circFacts(from, to));
@@ -400,11 +464,18 @@
       news: { label: 'Newsletter', sys: 'Write a monthly supporter newsletter for a UK charity. Sections with ## headings: a subject line (one line), Hello (two sentences), What we did this month (figures and highlights), In their words (one or two quotes, if supplied), Thank you (volunteers and donors, as groups, no amounts per person), What\'s coming up (from the events coming up), How you can help (volunteer, donate, share; two sentences). 350-450 words.' + rule, tok: 1100 },
       thanks: { label: 'Thank-yous', sys: 'Write a short personal thank-you message for each volunteer named in "Most hours", one per volunteer, each starting with a ## heading of their name. 50-70 words each, warm and specific: mention their hours and the kind of events delivered in the period. Sign off from the team at the organisation.' + rule, tok: 1000 }
     }[kind];
+    window._aoFacts = window._aoFacts || {}; window._aoFacts.comms = facts;
     if (kind === 'thanks' && !/Most hours:/.test(facts)) { out.innerHTML = '<div class="alert alert-info">No volunteer hours logged in the last 30 days, so there’s no one to thank yet.</div>'; return; }
+    var ck = commsKey(kind), ready = null; try { ready = ck && localStorage.getItem(ck); } catch (e) { /* none */ }
+    if (opts && opts.background) {
+      if (ready || !ck) return ready;
+      try { var bg = await callClaude(spec.sys, facts, spec.tok, false, { purpose: 'comms' }); if (bg) { if (typeof vlAutoFix === 'function') bg = vlAutoFix(bg).text || bg; localStorage.setItem(ck, bg); } return bg; } catch (e) { return null; }
+    }
+    if (ready && !(opts && opts.fresh)) { out.innerHTML = '<div style="font-size:12px;color:var(--txt3)">Written ahead for you. <a href="#" onclick="vlComms(\'' + kind + '\',{fresh:true});return false">Write it again</a></div>' + copyBox('ao-comms-text', ready); return; }
     var raw = await runAgent({ container: out, headerLabel: 'Comms — ' + spec.label, headerSub: 'Reading the last ' + (kind === 'story' ? '7' : '30') + ' days',
       steps: [{ label: 'Reading what you delivered', meta: '' }, { label: 'Picking the best story', meta: '' }, { label: 'Writing', meta: '' }, { label: 'Ready', meta: '' }],
       sys: spec.sys, prompt: facts, maxTok: spec.tok, ai: { purpose: 'comms' } });
-    if (raw) { if (typeof vlAutoFix === 'function') raw = vlAutoFix(raw).text || raw; out.innerHTML = copyBox('ao-comms-text', raw); }
+    if (raw) { if (typeof vlAutoFix === 'function') raw = vlAutoFix(raw).text || raw; try { if (ck) localStorage.setItem(ck, raw); } catch (e) { /* private mode */ } out.innerHTML = copyBox('ao-comms-text', raw); }
   };
 
   // ── 5. Annual / trustee report (Reports page) ─────────────────
@@ -422,6 +493,7 @@
     var out = $('ao-annual-out'); if (!S.loaded) await load();
     var r = ($('ao-annual-year').value || '').split('|'), from = r[0], to = r[1] > today() ? today() : r[1], label = $('ao-annual-year').selectedOptions[0].textContent;
     var facts = factsFor(from, to, { quotes: 6, budgetLines: true, eventList: 8 }) + (await circFacts(from, to));
+    window._aoFacts = window._aoFacts || {}; window._aoFacts.annual = facts;
     var sys = 'You are a senior UK charity writer. Write an annual report for trustees and supporters covering ' + label + ', from the facts only. ' +
       'Sections, each starting with ## and exactly this title: Our year at a glance, What we did, The difference we made, Our volunteers, Money in and how we used it, Thank you, Looking ahead. ' +
       'Our year at a glance: four to six bullets of the headline figures. What we did: activities by area, with figures. The difference we made: feedback results and one or two quotes exactly as written. ' +
@@ -606,5 +678,5 @@
     orgName: orgName, factsFor: factsFor, budgetOf: budgetOf, elapsedPct: elapsedPct, renderDonations: function () { return renderDonations(); }, renderBudget: function () { return renderBudget(); }, budC: function () { return budC; },
     thanksSys: function (d) { return thanksSys(d); }, thanksPrompt: function (d) { return thanksPrompt(d); } };
 
-  if (window.__VORLANA_TEST) window.__aoTest = { S: S, checks: checks, calItems: calItems, factsFor: factsFor, budgetOf: budgetOf, reportPeriods: reportPeriods, load: load };
+  if (window.__VORLANA_TEST) window.__aoTest = { S: S, checks: checks, calItems: calItems, factsFor: factsFor, budgetOf: budgetOf, reportPeriods: reportPeriods, load: load, lensChecks: lensChecks, myPeople: myPeople };
 })();
