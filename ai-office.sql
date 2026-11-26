@@ -1,4 +1,4 @@
--- Vorlana: the AI back office — donations, budget lines and spend (js/extensions/ai-office.js).
+-- Vorlana: the AI back office — donations (and the accounts they sync from), budget lines and spend (js/extensions/ai-office.js, api/donations.js).
 -- Same access rules as the bid tracker: members of the organisation, its owner, and super admins. Safe to run twice.
 
 create table if not exists public.donations (
@@ -18,6 +18,26 @@ create table if not exists public.donations (
   created_at   timestamptz not null default now()
 );
 create index if not exists donations_org_idx on public.donations (org_id, gift_date desc);
+
+-- where a gift came from (manual, csv, justgiving, stripe, paypal) and its id there, so the same gift is never saved twice
+alter table public.donations add column if not exists source      text not null default 'manual';
+alter table public.donations add column if not exists external_id text;
+create unique index if not exists donations_ext_uidx on public.donations (org_id, source, external_id);
+
+-- connected donation accounts (JustGiving, Stripe, PayPal). Holds read-only login details, so row-level security
+-- is on with NO policies: only the server (service role, /api/donations) can read or write it, never the browser.
+create table if not exists public.donation_links (
+  org_id        uuid not null references public.organisations(id) on delete cascade,
+  provider      text not null check (provider in ('justgiving', 'stripe', 'paypal')),
+  config        jsonb not null default '{}'::jsonb,
+  last_sync_at  timestamptz,
+  last_error    text,
+  last_count    integer default 0,
+  created_by    uuid,
+  created_at    timestamptz not null default now(),
+  primary key (org_id, provider)
+);
+alter table public.donation_links enable row level security;
 
 create table if not exists public.budget_lines (
   id           uuid primary key default gen_random_uuid(),
