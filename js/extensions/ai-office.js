@@ -396,9 +396,10 @@
       }
     });
     S.bids.forEach(function (b) { var d = parseDeadline(b.deadline); if (d && d >= t && d <= until && (b.status === 'drafted' || b.status === 'submitted')) out.push({ date: d, kind: 'bid', what: 'Bid deadline: ' + b.funder + (b.programme ? ' · ' + b.programme : '') + (b.status === 'submitted' ? ' (sent)' : ' (draft)'), page: 'bd' }); });
+    if (typeof window.vlExtraCal === 'function') { try { out = out.concat(window.vlExtraCal(t, until) || []); } catch (e) { /* optional */ } }
     return out.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
   }
-  var KIND = { report: ['Report', '#1A56DB', '#E8F0FE'], end: ['Ends', '#B42318', '#FDECEC'], renew: ['Renewal', '#B7791F', '#FEF6E7'], bid: ['Bid', '#1E7B3C', '#E7F6EC'] };
+  var KIND = { report: ['Report', '#1A56DB', '#E8F0FE'], end: ['Ends', '#B42318', '#FDECEC'], renew: ['Renewal', '#B7791F', '#FEF6E7'], bid: ['Bid', '#1E7B3C', '#E7F6EC'], date: ['Key date', '#5B3FB8', '#EFEAFB'] };
   async function renderCalendar() {
     var el = $('ao-cal-body'); if (!el) return;
     if (!S.loaded) await load();
@@ -629,7 +630,7 @@
     catch (e) { cell.innerHTML = '<div class="alert alert-warn">' + esc(e.message) + '</div>'; return; }
     cell.innerHTML = '<div id="ao-thx-' + esc(id) + '" contenteditable="true" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.6;white-space:pre-wrap;outline:none">' + esc(txt.trim()) + '</div>' +
       '<div style="display:flex;gap:6px;margin-top:8px"><button class="btn btn-ghost btn-sm" onclick="vlCopyEl(\'ao-thx-' + esc(id) + '\',this)">Copy</button>' + (d.donor_email ? '<a class="btn btn-ghost btn-sm" href="mailto:' + esc(d.donor_email) + '?subject=' + encodeURIComponent('Thank you from ' + orgName()) + '&body=' + encodeURIComponent(txt.trim()) + '">Open in email</a>' : '') +
-      '<button class="btn btn-p btn-sm" onclick="vlDonThanked(\'' + esc(id) + '\')">Mark as thanked</button></div>';
+      (typeof window.vlThanksExtra === 'function' ? window.vlThanksExtra(d) : '') + '<button class="btn btn-p btn-sm" onclick="vlDonThanked(\'' + esc(id) + '\')">Mark as thanked</button></div>';
   };
   window.vlDonThanked = async function (id) { await patch('donations', 'don', id, { thanked_at: new Date().toISOString() }); renderDonations(); };
   window.vlDonCSV = function () {
@@ -652,7 +653,7 @@
       main.appendChild(d);
     });
   }
-  window.VL_EXTRA_PAGES = { calendar: function () { renderCalendar(); }, budget: function () { renderBudget(); }, donations: function () { renderDonations(); } };
+  window.VL_EXTRA_PAGES = { calendar: function () { renderCalendar().then(function () { if (typeof window.vlCalAfter === 'function') window.vlCalAfter(); }); }, budget: function () { renderBudget(); }, donations: function () { renderDonations(); } };
   function showNav() { window.__aoOn = true; document.querySelectorAll('.nav-btn.ao-only').forEach(function (b) { b.style.display = ''; }); }
 
   function init() {
@@ -676,6 +677,7 @@
   // shared with the add-ons (donations-in.js, money-auto.js)
   window.vlAO = { S: S, q: q, save: save, patch: patch, remove: remove, on: on, isDemo: isDemo, oid: oid, esc: esc, n: n, iso: iso, fmt: fmt, gbp: gbp, today: today, addDays: addDays, addMonths: addMonths,
     orgName: orgName, factsFor: factsFor, budgetOf: budgetOf, elapsedPct: elapsedPct, renderDonations: function () { return renderDonations(); }, renderBudget: function () { return renderBudget(); }, budC: function () { return budC; },
+    checksFor: function (L) { return lensChecks(L); }, calItems: function () { return calItems(); }, renderCalendar: function () { return renderCalendar(); }, giftAidable: giftAidable,
     thanksSys: function (d) { return thanksSys(d); }, thanksPrompt: function (d) { return thanksPrompt(d); } };
 
   if (window.__VORLANA_TEST) window.__aoTest = { S: S, checks: checks, calItems: calItems, factsFor: factsFor, budgetOf: budgetOf, reportPeriods: reportPeriods, load: load, lensChecks: lensChecks, myPeople: myPeople };

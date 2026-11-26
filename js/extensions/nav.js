@@ -42,7 +42,7 @@
     { key: 'funders', label: 'Funders', icon: 'funders', pages: ['funders', 'funding', 'budget', 'calendar', 'rag', 'reports', 'evidence'] },
     { key: 'contacts', label: 'Contacts', icon: 'contacts', pages: ['contacts', 'donations', 'employers'] },
     { key: 'circ', pages: ['circular'] },
-    { key: 'growth', label: 'Growth', icon: 'growth', pages: ['bd', 'social'] },
+    { key: 'growth', label: 'Growth', icon: 'growth', pages: ['bd', 'social', 'companies'] },
     { key: 'settings', pages: ['settings'] }
   ];
   var svg = function (k) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICON[k] || '') + '</svg>'; };

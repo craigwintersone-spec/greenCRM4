@@ -88,7 +88,57 @@ create table if not exists public.spend_rules (
   unique (org_id, match)
 );
 
+-- Gift Aid claims (HMRC schedule) and thank-yous sent from Vorlana
+alter table public.donations add column if not exists donor_house          text;
+alter table public.donations add column if not exists donor_postcode       text;
+alter table public.donations add column if not exists gift_aid_claimed_at  timestamptz;
+alter table public.donations add column if not exists thanks_sent_at       timestamptz;
+
+-- key dates: insurance, annual return, policy reviews, DBS renewals (shown on the funding calendar and the morning checks)
+create table if not exists public.key_dates (
+  id             uuid primary key default gen_random_uuid(),
+  org_id         uuid not null references public.organisations(id) on delete cascade,
+  title          text not null,
+  due_date       date not null,
+  repeat_months  integer,                      -- 12 = every year; empty = once
+  done_at        timestamptz,
+  created_at     timestamptz not null default now()
+);
+
+-- company partners: what a charity offers companies (team days, things to fund), and the enquiries that come in.
+-- The public page reads open offers through /api/office (service role); enquiries are written the same way.
+create table if not exists public.company_offers (
+  id           uuid primary key default gen_random_uuid(),
+  org_id       uuid not null references public.organisations(id) on delete cascade,
+  kind         text not null default 'team_day' check (kind in ('team_day', 'fund')),
+  title        text not null,
+  description  text,
+  offer_date   date,
+  places       integer,
+  amount       numeric,
+  area         text,
+  cause        text,
+  open         boolean not null default true,
+  created_at   timestamptz not null default now()
+);
+create table if not exists public.company_enquiries (
+  id           uuid primary key default gen_random_uuid(),
+  org_id       uuid not null references public.organisations(id) on delete cascade,
+  offer_id     uuid references public.company_offers(id) on delete set null,
+  company      text not null,
+  contact_name text,
+  email        text not null,
+  phone        text,
+  people       integer,
+  message      text,
+  status       text not null default 'new',
+  created_at   timestamptz not null default now()
+);
+
 alter table public.donations    enable row level security;
+alter table public.key_dates         enable row level security;
+alter table public.company_offers    enable row level security;
+alter table public.company_enquiries enable row level security;
 alter table public.budget_recurring enable row level security;
 alter table public.spend_rules      enable row level security;
 alter table public.budget_lines enable row level security;
@@ -97,7 +147,7 @@ alter table public.budget_spend enable row level security;
 do $$
 declare t text;
 begin
-  foreach t in array array['donations', 'budget_lines', 'budget_spend', 'budget_recurring', 'spend_rules'] loop
+  foreach t in array array['donations', 'budget_lines', 'budget_spend', 'budget_recurring', 'spend_rules', 'key_dates', 'company_offers', 'company_enquiries'] loop
     execute format('drop policy if exists %I on public.%I', t || '_member_all', t);
     execute format($p$create policy %I on public.%I for all
       using (
