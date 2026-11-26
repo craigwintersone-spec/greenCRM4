@@ -467,6 +467,17 @@ async function runMorningBriefing() {
     lines.push('', 'CONTRACTS', prog.join('\n') || 'none');
   }
 
+  // ── Deadlines, money and volunteer checks (ai-office.js, demo account) ──
+  let extra = null;
+  if (typeof window.vlBriefingExtra === 'function') {
+    try { extra = await window.vlBriefingExtra(); } catch (e) { extra = null; }
+    if (extra && extra.lines && extra.lines.length) {
+      chase += extra.count || 0;
+      steps.push({ label: 'Checking deadlines, budgets, donations and volunteers', meta: (extra.count || 0) + ' to look at' });
+      lines.push('', 'DEADLINES AND CHECKS', extra.lines.join('\n'));
+    }
+  }
+
   if (steps.length === 0) { el.innerHTML = '<div class="alert alert-info">Switch on the areas you work in (Settings → What you do) and the briefing will cover them.</div>'; return; }
   steps.push({ label: "Spotting today's priorities", meta: chase + ' things to chase' }, { label: 'Ready', meta: '' });
 
@@ -476,6 +487,7 @@ async function runMorningBriefing() {
     'This organisation works in: ' + areas + '. Only talk about those areas — never mention participants, caseload or anything else not listed. ' +
     'Priority actions must be concrete and doable today, taken from the facts: e.g. chase named people, collect feedback for named sessions, log hours, ' +
     'move items that have waited too long, sort entries with no destination, fill in missing wipe certificates, confirm upcoming collections. ' +
+    (extra ? 'Put anything in DEADLINES AND CHECKS marked URGENT first in Priority actions, then the other checks. ' : '') +
     'Use ONLY the facts given; never invent people, events, items or numbers. If a line says none, do not mention it. ' +
     'Max 220 words. Do not use ## headings or hashtags.';
 

@@ -47,6 +47,7 @@
   <div class="nav-section">People</div>
   <button class="nav-btn" data-module="participants" onclick="go('participants')"><span class="icon">👤</span><span>Participants</span><span class="ai-dot"></span></button>
   <button class="nav-btn" data-module="contacts" onclick="go('contacts')"><span class="icon">📋</span><span>Contacts &amp; Donors</span></button>
+  <button class="nav-btn ao-only" style="display:none" onclick="go('donations')"><span class="icon">💷</span><span>Donations</span></button>
   <button class="nav-btn" data-module="volunteers" onclick="go('volunteers')"><span class="icon">🙋</span><span>Volunteers &amp; Staff</span></button>
   <button class="nav-btn" data-module="employers" onclick="go('employers')"><span class="icon">🏢</span><span>Employers</span><span class="ai-dot"></span></button>
 
@@ -62,6 +63,8 @@
   <button class="nav-btn" data-module="participants" onclick="go('outcomes')"><span class="icon">🎯</span><span>Outcomes</span><span class="ai-dot"></span></button>
   <button class="nav-btn" data-module="funders" onclick="go('funders')"><span class="icon">🏦</span><span>Funders</span></button>
   <button class="nav-btn" data-module="funders" onclick="go('funding')"><span class="icon">💰</span><span>Contracts</span></button>
+  <button class="nav-btn ao-only" style="display:none" onclick="go('budget')"><span class="icon">🧾</span><span>Budgets</span></button>
+  <button class="nav-btn ao-only" style="display:none" onclick="go('calendar')"><span class="icon">🗓️</span><span>Funding calendar</span></button>
   <button class="nav-btn" data-module="funders" onclick="go('reports')"><span class="icon">📄</span><span>Reports</span></button>
   <button class="nav-btn" data-module="evidence" onclick="go('evidence')"><span class="icon">🗂️</span><span>Evidence Hub</span></button>
   <button class="nav-btn" data-module="demographics" onclick="go('demographics')"><span class="icon">📊</span><span>Demographics</span></button>
@@ -919,7 +922,7 @@ Accreditations and policies: e.g. Matrix, safeguarding, Cyber Essentials"></text
 <script src="js/auth.js?v=21"></script>
 
 <!-- AI + branding -->
-<script src="js/agents.js?v=69"></script>
+<script src="js/agents.js?v=70"></script>
 <script src="js/branding.js?v=19"></script>
 
 <!-- UI logic -->
@@ -928,7 +931,7 @@ Accreditations and policies: e.g. Matrix, safeguarding, Cyber Essentials"></text
 <script src="js/circular.js?v=26"></script>
 <script src="js/modals.js?v=47"></script>
 <script src="js/demo.js?v=24"></script>
-<script src="js/router.js?v=24"></script>
+<script src="js/router.js?v=25"></script>
 
 <!-- Module visibility — shows/hides sidebar items per currentOrg.modules -->
 <script>
@@ -1315,7 +1318,7 @@ function applyModules(mods) {
 <!-- Extensions (run after boot, patch existing functions) -->
 <script src="js/extensions/demographics.js?v=42"></script>
 <script src="js/extensions/csv-import.js?v=15"></script>
-<script src="js/extensions/reporting-periods.js?v=35"></script>
+<script src="js/extensions/reporting-periods.js?v=36"></script>
 <script src="js/extensions/opportunities.js?v=15"></script>
 <script src="js/extensions/partner-portal.js?v=15"></script>
 <script src="js/extensions/volunteers-plus.js?v=39"></script>
@@ -1335,10 +1338,11 @@ function applyModules(mods) {
 <script src="js/extensions/contract-forms.js?v=3"></script>
 <script src="js/extensions/historic-import.js?v=46"></script>
 <script src="js/extensions/feedback-funders.js?v=17"></script>
-<script src="js/extensions/nav.js?v=1"></script>
+<script src="js/extensions/nav.js?v=2"></script>
 <script src="js/extensions/dash-trends.js?v=1"></script>
 <script src="js/extensions/bids.js?v=5"></script>
 <script src="js/extensions/org-facts.js?v=4"></script>
+<script src="js/extensions/ai-office.js?v=1"></script>
 
 <!-- Participant handlers + paperwork persistence -->
 <script>

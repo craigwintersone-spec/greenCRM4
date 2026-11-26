@@ -2,6 +2,7 @@
 Newest first. The Sentinel reads this every morning and logs what shipped in the last 7 days.
 
 ## 2026-11-26
+- AI back office (demo account only for testing; run ai-office.sql in Supabase so budgets and donations save): the morning briefing now runs by itself once a day and opens with Today's checks (report deadlines, contracts ending, targets behind pace, overspends, draft bids closing, safeguarding with no contact, quiet volunteers, donations not thanked); Ask Vorlana answers questions from your own records; Funding calendar lists every report, contract end, renewal and bid deadline with a calendar download; Social Media writes a weekly story pack, monthly newsletter and volunteer thank-yous; Reports writes an annual report for trustees and supporters; Budgets tracks budget lines and spend per contract and feeds them into that contract's funder reports; Donations records gifts, Gift Aid and restricted funds and writes thank-you emails
 - Find us on the register now finds companies that Find that Charity doesn't hold, such as many community interest companies and newer companies: a company number, or a name with no close match, is looked up on Companies House (legal name, number, registered office and postcode). Uses the official Companies House API when COMPANIES_HOUSE_API_KEY is set in Vercel, otherwise the public Companies House pages. 'Not found' now says whether the number or the name wasn't found
 
 ## 2026-11-25

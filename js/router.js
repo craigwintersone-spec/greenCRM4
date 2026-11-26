@@ -36,7 +36,7 @@ function _renderForPage(page) {
     social:       () => {}, // form-only page, no render needed
     bd:           () => { if (typeof populateOrgProfileField === 'function') populateOrgProfileField(); }   // loads the organisation panel
   };
-  return renders[page];
+  return renders[page] || (window.VL_EXTRA_PAGES && window.VL_EXTRA_PAGES[page]);   // pages added by extensions (ai-office.js)
 }
 
 // ── Who can open which page ────────────────────────────────
@@ -121,7 +121,7 @@ function _paintModules(mods, access) {
     const k = btn.getAttribute('data-module');
     const m = /go\('([a-z]+)'\)/.exec(btn.getAttribute('onclick') || '');
     const byRole = m ? pageAllowed(m[1], role, pages) : true;
-    btn.style.display = (k && mods[k] === false) || !byRole ? 'none' : '';
+    btn.style.display = (k && mods[k] === false) || !byRole || (btn.classList.contains('ao-only') && !window.__aoOn) ? 'none' : '';   // ao-only: demo account only (ai-office.js)
   });
   // Hide a section heading when everything under it is hidden
   document.querySelectorAll('.nav-section').forEach(sec => {

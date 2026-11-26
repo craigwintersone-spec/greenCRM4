@@ -331,6 +331,7 @@
       'Contract: ' + ((contract && contract.name) || 'Unnamed contract'),
       'Funder: ' + ((funder && funder.name) || 'Funder'),
       'Contract value: £' + num(contract && contract.value).toLocaleString(),
+      typeof window.vlBudgetFacts === 'function' ? window.vlBudgetFacts(contract, period) : '',
       elapsed != null ? 'Contract period: ' + contract.start_date + ' to ' + contract.end_date + ' (' + elapsed + '% of the contract period has elapsed)' : '',
       hasTargets ? '\nPROGRESS AGAINST CONTRACT TARGETS (contract to date)' : '',
       startsPace, outcomesPace,

@@ -39,8 +39,8 @@
     { key: 'vols', pages: ['volunteers'] },
     { key: 'events', label: 'Events', icon: 'events', pages: ['events', 'feedback'] },
     { key: 'impact', label: 'Impact', icon: 'impact', pages: ['impact', 'outcomes', 'demographics'] },
-    { key: 'funders', label: 'Funders', icon: 'funders', pages: ['funders', 'funding', 'rag', 'reports', 'evidence'] },
-    { key: 'contacts', label: 'Contacts', icon: 'contacts', pages: ['contacts', 'employers'] },
+    { key: 'funders', label: 'Funders', icon: 'funders', pages: ['funders', 'funding', 'budget', 'calendar', 'rag', 'reports', 'evidence'] },
+    { key: 'contacts', label: 'Contacts', icon: 'contacts', pages: ['contacts', 'donations', 'employers'] },
     { key: 'circ', pages: ['circular'] },
     { key: 'growth', label: 'Growth', icon: 'growth', pages: ['bd', 'social'] },
     { key: 'settings', pages: ['settings'] }
