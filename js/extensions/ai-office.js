@@ -39,6 +39,7 @@
     S.don = (res[0] || []).slice(); S.lines = (res[1] || []).slice(); S.spend = (res[2] || []).slice(); S.bids = res[3] || [];
     if (isDemo()) addSamples();
     S.loaded = true;
+    if (typeof window.vlAOLoaded === 'function') { try { await window.vlAOLoaded(); } catch (e) { console.warn('[ai-office] add-on load', e); } }
   }
   function addSamples() {
     if (!S.don.some(function (d) { return d._demo; })) {
@@ -66,6 +67,7 @@
   }
   async function save(table, row, key) {
     var sqlOk = table === 'donations' ? S.sql.don : S.sql.bud;
+    if (sqlOk && /^(demo|mem)-/.test(String(row.line_id || ''))) sqlOk = false;   // spend on a sample line stays in memory, like the line
     if (!sqlOk) { row.id = 'mem-' + Date.now() + Math.random().toString(36).slice(2, 6); S[key].push(row); return row; }
     var r = await sb.from(table).insert([Object.assign({ org_id: oid() }, row)]).select();
     if (r.error) throw new Error(r.error.message);
@@ -74,7 +76,7 @@
   async function patch(table, key, id, p) {
     var row = S[key].find(function (x) { return String(x.id) === String(id); }); if (!row) return;
     Object.assign(row, p);
-    if (/^(demo|mem)-/.test(String(id))) return;
+    if (/^(demo|mem)-/.test(String(id)) || /^(demo|mem)-/.test(String(p.line_id || ''))) return;
     var r = await sb.from(table).update(p).eq('id', id); if (r && r.error) alert('Couldn’t save: ' + r.error.message);
   }
   async function remove(table, key, id) {
@@ -163,6 +165,7 @@
     }
     var unthanked = S.don.filter(function (d) { return !d.thanked_at && d.gift_date && (new Date() - new Date(d.gift_date)) / 864e5 >= 2; });
     if (unthanked.length) out.push({ lvl: 'amber', page: 'donations', text: unthanked.length + ' donation' + (unthanked.length === 1 ? '' : 's') + ' not thanked yet (' + gbp(unthanked.reduce(function (a, d) { return a + n(d.amount); }, 0)) + ')' });
+    if (typeof window.vlExtraChecks === 'function') { try { out = out.concat(window.vlExtraChecks() || []); } catch (e) { /* optional */ } }
     var order = { red: 0, amber: 1, info: 2 };
     return out.sort(function (a, b) { return order[a.lvl] - order[b.lvl]; });
   }
@@ -183,8 +186,10 @@
       (c.length ? c.map(function (x) {
         return '<div onclick="go(\'' + x.page + '\')" style="display:flex;gap:10px;align-items:flex-start;padding:7px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;font-size:13px;background:var(--surface,#fff)">' +
           '<span style="width:8px;height:8px;border-radius:50%;background:' + DOT[x.lvl] + ';margin-top:6px;flex-shrink:0"></span><span>' + esc(x.text) + '</span></div>';
-      }).join('') : '<div style="font-size:13px;color:var(--txt3);margin-bottom:8px">Nothing due or overdue. All clear.</div>');
+      }).join('') : '<div style="font-size:13px;color:var(--txt3);margin-bottom:8px">Nothing due or overdue. All clear.</div>') +
+      (typeof window.vlInboxHTML === 'function' ? window.vlInboxHTML() : '');
   }
+  window.vlPaintChecks = paintChecks;
   var CACHE_KEY = function () { return 'vl_mb_' + oid() + '_' + today(); };
   function wrapBriefing() {
     var orig = window.runMorningBriefing; if (typeof orig !== 'function' || orig._ao) return;
@@ -465,7 +470,8 @@
       '<input id="ao-sp-date" type="date" value="' + today() + '" style="flex:1;min-width:130px"/><input id="ao-sp-amt" type="number" min="0" step="0.01" placeholder="£" style="flex:1;min-width:90px"/><input id="ao-sp-note" placeholder="What for (optional)" style="flex:2;min-width:150px"/><button class="btn btn-p btn-sm" onclick="vlBudAddSpend()">+ Add spend</button></div>' +
       (spend.length ? '<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Line</th><th>Amount</th><th>Note</th><th></th></tr></thead><tbody>' + spend.slice(0, 40).map(function (s) { var l = lines.find(function (x) { return String(x.id) === String(s.line_id); });
         return '<tr><td>' + esc(fmt(s.spend_date)) + '</td><td>' + esc(l ? l.name : '') + '</td><td>' + gbp(s.amount) + '</td><td>' + esc(s.note || '') + '</td><td style="text-align:right"><button class="btn btn-ghost btn-sm" onclick="vlBudDelSpend(\'' + esc(s.id) + '\')">×</button></td></tr>'; }).join('') + '</tbody></table></div>' : '<div style="color:var(--txt3);font-size:13px">No spend logged yet.</div>') + '</div>' : '';
-    el.innerHTML = head + stats + table + spendCard + '<div style="font-size:12px;color:var(--txt3);margin-top:10px">Budget and spend go into this contract’s funder reports.</div>';
+    el.innerHTML = head + stats + (typeof window.vlBudTop === 'function' ? window.vlBudTop(c, lines) : '') + table + spendCard + '<div style="font-size:12px;color:var(--txt3);margin-top:10px">Budget and spend go into this contract’s funder reports.</div>';
+    if (typeof window.vlBudAfter === 'function') window.vlBudAfter();
   }
   window.vlBudPick = function (id) { budC = String(id); renderBudget(); };
   window.vlBudAddLine = async function () {
@@ -521,7 +527,8 @@
         '<td>' + (d.thanked_at ? esc(fmt(d.thanked_at)) : '<button class="btn btn-ai btn-sm" onclick="vlDonThank(\'' + esc(d.id) + '\')">Write thank-you</button>') + '</td><td style="text-align:right"><button class="btn btn-ghost btn-sm" onclick="vlDonDel(\'' + esc(d.id) + '\')">×</button></td></tr>' +
         '<tr id="ao-th-' + esc(d.id) + '" style="display:none"><td colspan="8"></td></tr>';
     }).join('') + '</tbody></table></div>' : '<div class="card" style="color:var(--txt3)">No donations here yet.</div>';
-    el.innerHTML = stats + fundLine + form + tabs + table;
+    el.innerHTML = stats + fundLine + (typeof window.vlDonTop === 'function' ? window.vlDonTop() : '') + form + tabs + table;
+    if (typeof window.vlDonAfter === 'function') window.vlDonAfter();
   }
   window.vlDonShow = function (k) { donShow = k; renderDonations(); };
   window.vlDonAdd = async function () {
@@ -532,15 +539,21 @@
     renderDonations();
   };
   window.vlDonDel = async function (id) { if (!confirm('Delete this donation?')) return; await remove('donations', 'don', id); renderDonations(); };
+  function thanksSys(d) {
+    var prev = S.don.filter(function (x) { return x.donor_name === d.donor_name && String(x.id) !== String(d.id); }).length;
+    var sys = 'Write a short, warm thank-you email from a UK charity to a donor. 70-110 words, starting "Dear <first name>,". Say what the gift helps with, using one or two real figures from the recent work in the facts' + (d.fund ? ' and the restricted fund it goes to' : '') + '. ' + (prev ? 'They have given before: thank them for their continued support. ' : '') +
+      (d.gift_aid ? 'Mention that Gift Aid adds 25p to every pound at no cost to them. ' : '') + 'Never invent figures, people or plans; never name anyone the charity supports. British English. Sign off "With thanks, the team at ' + orgName() + '". No subject line, no headings.';
+    return sys;
+  }
+  function thanksPrompt(d) {
+    var facts = factsFor(iso(addDays(new Date(), -90)), today(), { quotes: 2 });
+    return 'Donor: ' + d.donor_name + '\nGift: ' + gbp(d.amount) + ' on ' + fmt(d.gift_date) + (d.fund ? '\nFund: ' + d.fund : '\nUnrestricted gift') + '\n\nRecent work:\n' + facts;
+  }
   window.vlDonThank = async function (id) {
     var d = S.don.find(function (x) { return String(x.id) === String(id); }); if (!d) return;
     var row = $('ao-th-' + id); row.style.display = ''; var cell = row.firstChild; cell.innerHTML = '<div style="color:var(--txt3);font-size:13px">Writing…</div>';
-    var prev = S.don.filter(function (x) { return x.donor_name === d.donor_name && String(x.id) !== String(id); }).length;
-    var facts = factsFor(iso(addDays(new Date(), -90)), today(), { quotes: 2 });
-    var sys = 'Write a short, warm thank-you email from a UK charity to a donor. 70-110 words, starting "Dear <first name>,". Say what the gift helps with, using one or two real figures from the recent work in the facts' + (d.fund ? ' and the restricted fund it goes to' : '') + '. ' + (prev ? 'They have given before: thank them for their continued support. ' : '') +
-      (d.gift_aid ? 'Mention that Gift Aid adds 25p to every pound at no cost to them. ' : '') + 'Never invent figures, people or plans; never name anyone the charity supports. British English. Sign off "With thanks, the team at ' + orgName() + '". No subject line, no headings.';
     var txt;
-    try { txt = await callClaude(sys, 'Donor: ' + d.donor_name + '\nGift: ' + gbp(d.amount) + ' on ' + fmt(d.gift_date) + (d.fund ? '\nFund: ' + d.fund : '\nUnrestricted gift') + '\n\nRecent work:\n' + facts, 400, false, { purpose: 'donor-thanks' }); }
+    try { txt = (window.vlThanksDraft && window.vlThanksDraft(id)) || await callClaude(thanksSys(d), thanksPrompt(d), 400, false, { purpose: 'donor-thanks' }); }
     catch (e) { cell.innerHTML = '<div class="alert alert-warn">' + esc(e.message) + '</div>'; return; }
     cell.innerHTML = '<div id="ao-thx-' + esc(id) + '" contenteditable="true" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.6;white-space:pre-wrap;outline:none">' + esc(txt.trim()) + '</div>' +
       '<div style="display:flex;gap:6px;margin-top:8px"><button class="btn btn-ghost btn-sm" onclick="vlCopyEl(\'ao-thx-' + esc(id) + '\',this)">Copy</button>' + (d.donor_email ? '<a class="btn btn-ghost btn-sm" href="mailto:' + esc(d.donor_email) + '?subject=' + encodeURIComponent('Thank you from ' + orgName()) + '&body=' + encodeURIComponent(txt.trim()) + '">Open in email</a>' : '') +
@@ -587,6 +600,11 @@
     if (++tries > 60) { if (typeof currentOrg !== 'undefined' && currentOrg) init(); return; }
     setTimeout(wait, 500);
   })();
+
+  // shared with the add-ons (donations-in.js, money-auto.js)
+  window.vlAO = { S: S, q: q, save: save, patch: patch, remove: remove, on: on, isDemo: isDemo, oid: oid, esc: esc, n: n, iso: iso, fmt: fmt, gbp: gbp, today: today, addDays: addDays, addMonths: addMonths,
+    orgName: orgName, factsFor: factsFor, budgetOf: budgetOf, elapsedPct: elapsedPct, renderDonations: function () { return renderDonations(); }, renderBudget: function () { return renderBudget(); }, budC: function () { return budC; },
+    thanksSys: function (d) { return thanksSys(d); }, thanksPrompt: function (d) { return thanksPrompt(d); } };
 
   if (window.__VORLANA_TEST) window.__aoTest = { S: S, checks: checks, calItems: calItems, factsFor: factsFor, budgetOf: budgetOf, reportPeriods: reportPeriods, load: load };
 })();

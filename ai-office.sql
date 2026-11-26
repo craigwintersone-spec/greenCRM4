@@ -61,14 +61,43 @@ create table if not exists public.budget_spend (
 );
 create index if not exists budget_spend_org_idx on public.budget_spend (org_id, spend_date desc);
 
+-- spend that arrives by itself: fixed costs posted monthly, and bank statement payments sorted by remembered payees
+alter table public.budget_spend alter column line_id drop not null;            -- a bank payment waits here until it is sorted
+alter table public.budget_spend add column if not exists source      text not null default 'manual';   -- manual, fixed, bank
+alter table public.budget_spend add column if not exists external_id text;
+alter table public.budget_spend add column if not exists description text;
+alter table public.budget_spend add column if not exists ignored     boolean not null default false;   -- "not a project cost"
+create unique index if not exists budget_spend_ext_uidx on public.budget_spend (org_id, source, external_id);
+
+create table if not exists public.budget_recurring (
+  id           uuid primary key default gen_random_uuid(),
+  org_id       uuid not null references public.organisations(id) on delete cascade,
+  line_id      uuid not null references public.budget_lines(id) on delete cascade,
+  amount       numeric not null check (amount >= 0),
+  start_date   date not null default current_date,
+  end_date     date,
+  note         text,
+  created_at   timestamptz not null default now()
+);
+create table if not exists public.spend_rules (
+  id           uuid primary key default gen_random_uuid(),
+  org_id       uuid not null references public.organisations(id) on delete cascade,
+  match        text not null,                                                   -- the payee, tidied ("screwfix direct")
+  line_id      uuid references public.budget_lines(id) on delete cascade,       -- empty = not a project cost
+  created_at   timestamptz not null default now(),
+  unique (org_id, match)
+);
+
 alter table public.donations    enable row level security;
+alter table public.budget_recurring enable row level security;
+alter table public.spend_rules      enable row level security;
 alter table public.budget_lines enable row level security;
 alter table public.budget_spend enable row level security;
 
 do $$
 declare t text;
 begin
-  foreach t in array array['donations', 'budget_lines', 'budget_spend'] loop
+  foreach t in array array['donations', 'budget_lines', 'budget_spend', 'budget_recurring', 'spend_rules'] loop
     execute format('drop policy if exists %I on public.%I', t || '_member_all', t);
     execute format($p$create policy %I on public.%I for all
       using (
