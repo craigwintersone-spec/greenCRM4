@@ -88,7 +88,7 @@
       (m.length ? '<div style="font-size:14px;font-weight:600;margin-bottom:6px">Is this you?</div>' + m.map(function (x) {
         return '<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 0;border-top:1px solid #E8E8ED"><div><div style="font-size:13.5px;font-weight:600">' + esc(x.name) + (x.active === false ? ' <span style="color:#B42318;font-weight:400">(removed)</span>' : '') + '</div><div style="font-size:12px;color:var(--txt3)">' + esc(x.summary) + '</div></div>' +
           '<button class="btn btn-p btn-sm" type="button" onclick="vlFactsPick(\'' + esc(x.id) + '\')">This is us</button></div>';
-      }).join('') : '<div style="font-size:13px;color:var(--txt2)">We couldn’t find you by name.</div>') +
+      }).join('') : '<div style="font-size:13px;color:var(--txt2)">' + (number ? 'We couldn’t find ' + esc(number) + ' on the charity or company registers. Check the number, or fill in your details below.' : 'We couldn’t find you by name. Try your charity or company number.') + '</div>') +
       '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center"><input id="vlf-num" placeholder="Charity or company number" style="max-width:220px;font-size:13px"/><button class="btn btn-ghost btn-sm" type="button" onclick="vlFactsFind(($(\'vlf-num\')||{}).value)">Search</button>' +
       '<a href="#" onclick="vlFactsNone();return false" style="font-size:12.5px;color:var(--txt3)">We’re not registered</a></div></div>';
   };

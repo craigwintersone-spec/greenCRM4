@@ -1,6 +1,9 @@
 # Vorlana changelog
 Newest first. The Sentinel reads this every morning and logs what shipped in the last 7 days.
 
+## 2026-11-26
+- Find us on the register now finds companies that Find that Charity doesn't hold, such as many community interest companies and newer companies: a company number, or a name with no close match, is looked up on Companies House (legal name, number, registered office and postcode). Uses the official Companies House API when COMPANIES_HOUSE_API_KEY is set in Vercel, otherwise the public Companies House pages. 'Not found' now says whether the number or the name wasn't found
+
 ## 2026-11-25
 - Sentinel emails you the morning briefing after its 06:00 run: the team-by-team briefing, a table of open/urgent/high by team, every urgent card and what's new this morning, with a button to open Sentinel. Once a day (a second run doesn't resend it); 'Email me the briefing' on the Sentinel page sends it now. Goes to SENTINEL_EMAIL (set in Vercel; several addresses separated by commas), otherwise hello@vorlana.com
 - Sentinel runs the business by team: Customers, Onboarding, Sales & Marketing, Finance, Product & Dev, Legal & GDPR and Funding each have a tab with their open cards and key numbers; Overview shows every team at a glance (open, urgent, closed this week). The morning briefing is one line per team plus the three things to do today, and its headline is MRR, paying, on trial and urgent
