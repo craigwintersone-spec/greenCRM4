@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>My volunteering</title>
+<style>
+  :root { --em:#1F6F6D; --bg:#F5F5F7; --txt:#1d1d1f; --txt2:#424245; --txt3:#6e6e73; --border:#e5e5ea; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; background:var(--bg); color:var(--txt); line-height:1.5; }
+  main { max-width:560px; margin:0 auto; padding:22px 16px 50px; }
+  h1 { font-size:26px; margin:0 0 2px; letter-spacing:-.4px; } .sub { color:var(--txt3); margin:0 0 18px; }
+  .stats { display:flex; gap:10px; margin-bottom:20px; } .stat { flex:1; background:#fff; border-radius:16px; padding:14px 16px; }
+  .stat b { display:block; font-size:28px; letter-spacing:-.5px; } .stat span { font-size:13px; color:var(--txt3); }
+  h2 { font-size:16px; margin:20px 0 8px; }
+  .card { background:#fff; border-radius:16px; padding:14px 16px; margin-bottom:10px; }
+  .card b { font-size:16px; } .meta { font-size:13px; color:var(--txt2); margin:2px 0 10px; }
+  button { font:inherit; font-weight:600; border:0; border-radius:12px; min-height:46px; width:100%; cursor:pointer; background:var(--em); color:#fff; }
+  button.on { background:#E7F6EC; color:#1E7B3C; } button:disabled { opacity:.5; }
+  .row { display:flex; justify-content:space-between; font-size:14px; padding:8px 0; border-top:1px solid var(--border); } .row:first-child { border-top:0; }
+  .empty { color:var(--txt3); font-size:14px; } footer { text-align:center; font-size:12px; color:var(--txt3); padding-bottom:24px; }
+</style>
+</head>
+<body>
+<main id="m"><p class="empty">Loading…</p></main>
+<footer>This page is just for you. Keep the link to yourself.</footer>
+<script>
+var T = new URLSearchParams(location.search).get('t') || '';
+var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+var fmt = function (d) { return new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }); };
+function call(body) { return fetch('/api/office', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ t: T }, body)) }).then(function (r) { return r.json().then(function (j) { if (!r.ok || j.ok === false) throw new Error(j.error || 'Something went wrong.'); return j; }); }); }
+function paint(d) {
+  if (d.colour) document.documentElement.style.setProperty('--em', d.colour);
+  document.title = 'My volunteering · ' + d.org;
+  document.getElementById('m').innerHTML = '<h1>Hello ' + esc(d.name) + '</h1><p class="sub">Your volunteering with ' + esc(d.org) + '</p>' +
+    '<div class="stats"><div class="stat"><b>' + d.hours_year + '</b><span>hours this year</span></div><div class="stat"><b>' + d.hours_all + '</b><span>hours in all</span></div></div>' +
+    '<h2>Coming up</h2>' + (d.events.length ? d.events.map(function (e) {
+      return '<div class="card"><b>' + esc(e.name) + '</b><div class="meta">' + esc(fmt(e.date)) + (e.where ? ' · ' + esc(e.where) : '') + (e.volunteers ? ' · ' + e.volunteers + ' volunteer' + (e.volunteers === 1 ? '' : 's') + ' so far' : '') + '</div>' +
+        '<button class="' + (e.joined ? 'on' : '') + '" onclick="toggle(\'' + esc(e.id) + '\',' + (e.joined ? 'false' : 'true') + ',this)">' + (e.joined ? '✓ I’ll be there (tap to change)' : 'I’ll be there') + '</button></div>'; }).join('') : '<p class="empty">Nothing in the diary just now. Check back soon.</p>') +
+    '<h2>What you’ve given</h2><div class="card">' + (d.sessions.length ? d.sessions.map(function (s) { return '<div class="row"><span>' + esc(fmt(s.date)) + (s.what ? '<br><span style="color:var(--txt3);font-size:13px">' + esc(s.what) + '</span>' : '') + '</span><b style="font-size:14px">' + s.hours + ' h</b></div>'; }).join('') : '<span class="empty">Your hours will show here after your first session.</span>') + '</div>' +
+    '<p class="empty" style="text-align:center;margin-top:18px">Thank you for everything you do.</p>';
+}
+function toggle(id, join, btn) { btn.disabled = true; call({ action: join ? 'vol_join' : 'vol_leave', event_id: id }).then(paint).catch(function (e) { btn.disabled = false; alert(e.message); }); }
+call({ action: 'vol_me' }).then(paint).catch(function (e) { document.getElementById('m').innerHTML = '<p class="empty">' + esc(e.message) + '</p>'; });
+</script>
+</body>
+</html>

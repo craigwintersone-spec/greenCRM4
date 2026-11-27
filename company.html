@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Your company’s community impact · Vorlana</title>
+<style>
+  :root { --em:#1F6F6D; --bg:#F5F5F7; --txt:#1d1d1f; --txt2:#424245; --txt3:#6e6e73; --border:#e5e5ea; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; background:var(--bg); color:var(--txt); line-height:1.55; }
+  header { background:#fff; border-bottom:1px solid var(--border); padding:14px 16px; } header div { max-width:860px; margin:0 auto; display:flex; align-items:center; gap:10px; } header img { height:34px; }
+  main { max-width:860px; margin:0 auto; padding:26px 16px 60px; }
+  h1 { font-size:28px; margin:0 0 4px; letter-spacing:-.5px; } .sub { color:var(--txt2); margin:0 0 20px; }
+  .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:22px; } .stat { background:#fff; border-radius:16px; padding:16px 18px; }
+  .stat b { display:block; font-size:30px; letter-spacing:-.5px; } .stat span { font-size:13px; color:var(--txt3); }
+  .card { background:#fff; border-radius:16px; padding:18px; margin-bottom:12px; } .card h3 { margin:0 0 2px; font-size:17px; } .meta { font-size:13px; color:var(--txt3); margin-bottom:8px; }
+  .rep { font-size:14px; color:var(--txt2); border-top:1px solid var(--border); padding-top:10px; margin-top:10px; } .rep h4 { color:var(--em); margin:12px 0 4px; font-size:14px; } .rep p { margin:0 0 8px; }
+  button, a.btn { font:inherit; font-weight:600; border:0; border-radius:22px; padding:10px 18px; background:var(--em); color:#fff; cursor:pointer; text-decoration:none; display:inline-block; }
+  button.ghost, a.ghost { background:#EFEFF2; color:var(--txt); }
+  .plan { background:#F3F8F7; border:1px solid rgba(31,111,109,.25); } .empty { color:var(--txt3); }
+  @media print { header, .no-print { display:none } body { background:#fff } .card, .stat { border:1px solid var(--border) } }
+  @media (max-width:560px) { .stats { grid-template-columns:1fr 1fr } }
+</style>
+</head>
+<body>
+<header><div><img src="logo.png" alt="Vorlana"><span style="color:var(--txt3);font-size:14px">for companies</span></div></header>
+<main id="m"><p class="empty">Loading…</p></main>
+<script>
+var q = new URLSearchParams(location.search), C = q.get('c') || '';
+var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+var fmt = function (d) { return new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }); };
+function call(body) { return fetch('/api/office', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ c: C }, body)) }).then(function (r) { return r.json().then(function (j) { if (!r.ok || j.ok === false) throw new Error(j.error || 'Something went wrong.'); return j; }); }); }
+function report(t) { return esc(t).split(/\n{2,}/).map(function (p) { return /^##\s*/.test(p) ? '<h4>' + p.replace(/^##\s*/, '') + '</h4>' : '<p>' + p.replace(/\n/g, '<br>').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>') + '</p>'; }).join(''); }
+function paint(d) {
+  document.getElementById('m').innerHTML = '<h1>' + esc(d.company) + '</h1><p class="sub">Your team’s time with local charities, in one place for your CSR and ESG reporting.</p>' +
+    '<div class="stats"><div class="stat"><b>' + d.hours + '</b><span>volunteer hours given</span></div><div class="stat"><b>' + d.people + '</b><span>people took part</span></div><div class="stat"><b>' + d.charities + '</b><span>' + (d.charities === 1 ? 'charity' : 'charities') + ' supported</span></div></div>' +
+    (d.plan_price && !d.paid ? '<div class="card plan no-print"><h3>Yearly plan: £' + Number(d.plan_price).toLocaleString('en-GB') + '</h3><div class="meta" style="color:var(--txt2)">Keep every charity’s full impact report on this page, and print the year’s record for your annual report.</div><button onclick="subscribe(this)">Subscribe</button> <span id="sub-msg" class="meta"></span></div>' : '') +
+    (d.paid ? '<div class="card plan no-print"><b>Yearly plan active</b> until ' + esc(fmt(d.paid_until)) + '. Thank you for backing local charities.</div>' : '') +
+    '<div class="no-print" style="display:flex;gap:8px;margin:0 0 14px"><a class="btn" href="companies.html">Find another team day</a><button class="ghost" onclick="print()">Print or save as PDF</button></div>' +
+    (d.days.length ? d.days.map(function (x) { return '<div class="card"><h3>' + esc(x.title) + '</h3><div class="meta">' + esc(x.charity) + ' · ' + esc(fmt(x.date)) + ' · ' + x.people + ' people · ' + x.hours + ' hours</div>' + (x.report ? '<div class="rep">' + report(x.report) + '</div>' : '<div class="meta">' + (x.has_report ? 'The full impact report is kept here with the yearly plan. It was also emailed to you.' : 'The charity’s impact report will appear here once they send it.') + '</div>') + '</div>'; }).join('') : '<div class="card empty">Your days will appear here after your first team day.</div>');
+}
+function subscribe(btn) { btn.disabled = true; call({ action: 'company_sub' }).then(function (j) { location.href = j.url; }).catch(function (e) { btn.disabled = false; document.getElementById('sub-msg').textContent = e.message; }); }
+var paid = q.get('paid');
+(paid ? call({ action: 'company_subbed', session: paid }).then(function (j) { history.replaceState(null, '', 'company.html?c=' + encodeURIComponent(C)); return j; }) : call({ action: 'company_me' })).then(paint)
+  .catch(function (e) { document.getElementById('m').innerHTML = '<p class="empty">' + esc(e.message) + '</p>'; });
+</script>
+</body>
+</html>

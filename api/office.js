@@ -5,6 +5,9 @@
 //   give / gave  (public)     pay towards a "something to fund" offer by card, straight into the charity's own Stripe
 //                             account (the one connected for bookings); the gift is saved in donations once Stripe says paid
 //   send_report  (signed in)  email a company its impact report after a team day
+//   vol_links    (signed in)  make each active volunteer's personal link, and optionally email it to them
+//   vol_me / vol_join / vol_leave (public, by link)  a volunteer's own page: hours, sessions, and "I'll be there"
+//   company_me / company_sub / company_subbed (public, by link)  a company's page of every day done; optional yearly plan
 // Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY, APP_URL. Needs ai-office.sql.
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -32,6 +35,22 @@ async function stripe(path, params, account) {
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error('Stripe: ' + ((j.error && j.error.message) || r.status));
   return j;
+}
+const PLAN_PENCE = parseInt(process.env.COMPANY_PLAN_PENCE || '0', 10) || 0;          // yearly company plan; 0 = not on sale
+const token = () => require('crypto').randomBytes(18).toString('base64url');
+const evDate = e => String(e.event_date || e.date || '').slice(0, 10);
+async function volFromToken(t) {
+  if (!/^[A-Za-z0-9_-]{16,40}$/.test(String(t || ''))) return null;
+  const l = (await sb(`volunteer_links?token=eq.${t}&select=org_id,volunteer_id&limit=1`))[0]; if (!l) return null;
+  const v = (await sb(`volunteers?org_id=eq.${l.org_id}&id=eq.${encodeURIComponent(l.volunteer_id)}&select=id,name,first_name,email,status&limit=1`))[0]; if (!v) return null;
+  const org = (await sb(`organisations?id=eq.${l.org_id}&select=id,name,brand_color,settings&limit=1`))[0]; if (!org) return null;
+  return { org, v, vid: String(l.volunteer_id) };
+}
+async function companyAccount(email, company) {
+  email = String(email || '').toLowerCase(); if (!okEmail(email)) return null;
+  let a = (await sb(`company_accounts?email=eq.${encodeURIComponent(email)}&select=*&limit=1`))[0];
+  if (!a) { a = (await sb('company_accounts', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify([{ token: token(), email, company: trim(company, 120) || null }]) }))[0]; }
+  return a;
 }
 const payReady = org => !!(STRIPE_KEY && org && org.settings && org.settings.stripe_account && org.settings.stripe_ready);
 const bad = (res, message, code) => res.status(code || 400).json({ ok: false, error: message });
@@ -154,6 +173,50 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ ok: true, charity: org.name, amount, title: offer.title });
     }
 
+    if (action === 'vol_me' || action === 'vol_join' || action === 'vol_leave') {
+      const me = await volFromToken(body.t || q.t); if (!me) return bad(res, 'This link isn\u2019t right. Ask the organisation to send you a new one.', 404);
+      const o = `org_id=eq.${me.org.id}`, today = new Date().toISOString().slice(0, 10);
+      const events = ((await sb(`events?${o}&select=*&limit=2000`)) || []).filter(e => evDate(e) >= today && evDate(e) <= new Date(Date.now() + 70 * 864e5).toISOString().slice(0, 10)).sort((a, b) => evDate(a) < evDate(b) ? -1 : 1).slice(0, 30);
+      if (action !== 'vol_me') {
+        const ev = events.find(e => String(e.id) === String(body.event_id)); if (!ev) return bad(res, 'That session isn\u2019t open for sign-up.', 404);
+        if (action === 'vol_join') await sb('volunteer_signups?on_conflict=org_id,volunteer_id,event_id', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify([{ org_id: me.org.id, volunteer_id: me.vid, event_id: String(ev.id) }]) });
+        else await sb(`volunteer_signups?${o}&volunteer_id=eq.${encodeURIComponent(me.vid)}&event_id=eq.${encodeURIComponent(String(ev.id))}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+      }
+      const [hours, mine, all] = await Promise.all([sb(`volunteer_hours?${o}&volunteer_id=eq.${encodeURIComponent(me.vid)}&select=session_date,hours,activity&order=session_date.desc&limit=500`).catch(() => []),
+        sb(`volunteer_signups?${o}&volunteer_id=eq.${encodeURIComponent(me.vid)}&select=event_id`), sb(`volunteer_signups?${o}&select=event_id`)]);
+      const year = today.slice(0, 4), joined = new Set((mine || []).map(x => String(x.event_id))), count = {}; (all || []).forEach(x => { count[x.event_id] = (count[x.event_id] || 0) + 1; });
+      return res.status(200).json({ ok: true, org: me.org.name, colour: me.org.brand_color || '', name: me.v.first_name || String(me.v.name || '').split(' ')[0] || 'there',
+        hours_year: Math.round((hours || []).filter(h => String(h.session_date || '').slice(0, 4) === year).reduce((a, h) => a + (+h.hours || 0), 0) * 10) / 10,
+        hours_all: Math.round((hours || []).reduce((a, h) => a + (+h.hours || 0), 0) * 10) / 10, sessions: (hours || []).slice(0, 6).map(h => ({ date: h.session_date, hours: +h.hours || 0, what: h.activity || '' })),
+        events: events.map(e => ({ id: String(e.id), name: e.name, date: evDate(e), where: e.location || '', type: e.type || '', joined: joined.has(String(e.id)), volunteers: count[String(e.id)] || 0 })) });
+    }
+    if (action === 'company_me' || action === 'company_sub' || action === 'company_subbed') {
+      const c = String(body.c || q.c || ''); if (!/^[A-Za-z0-9_-]{16,40}$/.test(c)) return bad(res, 'This link isn\u2019t right.', 404);
+      let acct = (await sb(`company_accounts?token=eq.${c}&select=*&limit=1`))[0]; if (!acct) return bad(res, 'This link isn\u2019t right.', 404);
+      if (action === 'company_sub') {
+        if (!PLAN_PENCE || !STRIPE_KEY) return bad(res, 'The yearly plan isn\u2019t on sale yet.');
+        const session = await stripe('checkout/sessions', { mode: 'subscription', customer_email: acct.email, line_items: [{ price_data: { currency: 'gbp', unit_amount: PLAN_PENCE, recurring: { interval: 'year' }, product_data: { name: 'Vorlana for companies: yearly plan' } }, quantity: 1 }],
+          success_url: `${APP_URL}/company.html?c=${c}&paid={CHECKOUT_SESSION_ID}`, cancel_url: `${APP_URL}/company.html?c=${c}`, metadata: { vorlana_company: c } });
+        return res.status(200).json({ ok: true, url: session.url });
+      }
+      if (action === 'company_subbed') {
+        if (!/^cs_[A-Za-z0-9_]+$/.test(String(body.session || ''))) return bad(res, 'We couldn\u2019t find that payment.', 404);
+        const s = await stripe('checkout/sessions/' + encodeURIComponent(body.session));
+        if (s.payment_status !== 'paid' || (s.metadata || {}).vorlana_company !== c) return bad(res, 'That payment hasn\u2019t gone through.', 402);
+        const until = new Date(Date.now() + 366 * 864e5).toISOString().slice(0, 10);
+        await sb(`company_accounts?token=eq.${c}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ paid_until: until, stripe_ref: s.subscription || s.id }) });
+        acct = Object.assign({}, acct, { paid_until: until });
+      }
+      const days = (await sb(`company_enquiries?email=eq.${encodeURIComponent(acct.email)}&day_date=not.is.null&select=org_id,offer_id,company,day_date,day_people,day_hours,report_text,report_sent_at&order=day_date.desc&limit=200`)) || [];
+      const ids = [...new Set(days.map(d => d.org_id))], offIds = [...new Set(days.map(d => d.offer_id).filter(Boolean))];
+      const orgs = ids.length ? await sb(`organisations?id=in.(${ids.join(',')})&select=id,name`) : [], offs = offIds.length ? await sb(`company_offers?id=in.(${offIds.join(',')})&select=id,title`) : [];
+      const on = {}, tn = {}; (orgs || []).forEach(o => { on[o.id] = o.name; }); (offs || []).forEach(o => { tn[o.id] = o.title; });
+      const paid = !!(acct.paid_until && acct.paid_until >= new Date().toISOString().slice(0, 10));
+      return res.status(200).json({ ok: true, company: acct.company || (days[0] && days[0].company) || 'Your company', paid, paid_until: acct.paid_until || null, plan_price: PLAN_PENCE && STRIPE_KEY ? PLAN_PENCE / 100 : 0,
+        people: days.reduce((a, d) => a + (d.day_people || 0), 0), hours: Math.round(days.reduce((a, d) => a + (+d.day_hours || 0), 0) * 10) / 10, charities: ids.length,
+        days: days.map(d => ({ charity: on[d.org_id] || 'A charity', title: tn[d.offer_id] || 'Team volunteering day', date: d.day_date, people: d.day_people || 0, hours: +d.day_hours || 0, report: d.report_sent_at && (paid || !(PLAN_PENCE && STRIPE_KEY)) ? d.report_text || '' : '', has_report: !!d.report_sent_at })) });
+    }
+
     // ── signed in ──
     const user = await userFrom(req); if (!user) return bad(res, 'Please sign in again.', 401);
     const orgId = String(body.org_id || ''); if (!orgId) return bad(res, 'No organisation.');
@@ -177,9 +240,29 @@ module.exports = async function handler(req, res) {
       if (!e || !okEmail(e.email || '')) return bad(res, 'There\u2019s no email address for this company.', 404);
       const org = (await sb(`organisations?id=eq.${encodeURIComponent(orgId)}&select=name&limit=1`))[0] || {};
       const html = esc(text).split(/\n{2,}/).map(p => /^##\s*/.test(p) ? `<h3 style="color:#1F6F6D;margin:20px 0 6px">${p.replace(/^##\s*/, '')}</h3>` : `<p style="margin:0 0 12px">${p.replace(/\n/g, '<br>').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')}</p>`).join('');
-      await sendMail({ to: [e.email], replyTo: user.email, fromName: org.name || 'Thank you', subject: `Your team\u2019s impact with ${org.name || 'us'}`, html: shell(html) });
+      let link = '';
+      try { const acct = await companyAccount(e.email, e.company); if (acct) link = `<p style="margin:18px 0 0;font-size:13px;color:#6e6e73">Every day your team has given, in one place for your CSR reporting: <a href="${APP_URL}/company.html?c=${acct.token}">your company page</a>.</p>`; } catch (err) { /* the report still goes */ }
+      await sendMail({ to: [e.email], replyTo: user.email, fromName: org.name || 'Thank you', subject: `Your team\u2019s impact with ${org.name || 'us'}`, html: shell(html + link) });
       await sb(`company_enquiries?id=eq.${e.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ report_sent_at: new Date().toISOString() }) });
       return res.status(200).json({ ok: true });
+    }
+    if (action === 'vol_links') {
+      const vols = ((await sb(`volunteers?org_id=eq.${encodeURIComponent(orgId)}&select=id,name,first_name,email,status&limit=2000`)) || []).filter(v => (v.status || 'Active') === 'Active');
+      const have = {}; ((await sb(`volunteer_links?org_id=eq.${encodeURIComponent(orgId)}&select=token,volunteer_id`)) || []).forEach(l => { have[String(l.volunteer_id)] = l.token; });
+      const fresh = vols.filter(v => !have[String(v.id)]).map(v => ({ token: token(), org_id: orgId, volunteer_id: String(v.id) }));
+      if (fresh.length) { await sb('volunteer_links?on_conflict=org_id,volunteer_id', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify(fresh) }); fresh.forEach(l => { have[l.volunteer_id] = l.token; }); }
+      let sent = 0, noEmail = 0;
+      if (body.send) {
+        const org = (await sb(`organisations?id=eq.${encodeURIComponent(orgId)}&select=name&limit=1`))[0] || {};
+        const only = body.volunteer_id != null ? String(body.volunteer_id) : null;
+        for (const v of vols.slice(0, 200)) {
+          if (only && String(v.id) !== only) continue;
+          if (!okEmail(v.email || '')) { noEmail++; continue; }
+          try { await sendMail({ to: [v.email], replyTo: user.email, fromName: org.name || 'Volunteering', subject: `Your volunteering with ${org.name || 'us'}`,
+            html: shell(`<p>Hello ${esc(v.first_name || String(v.name || '').split(' ')[0] || '')},</p><p>Here\u2019s your own page for volunteering with ${esc(org.name || 'us')}. See what\u2019s coming up, say which sessions you\u2019ll be at, and see the hours you\u2019ve given.</p><p style="margin:18px 0"><a href="${APP_URL}/volunteer.html?t=${have[String(v.id)]}" style="background:#1F6F6D;color:#fff;text-decoration:none;border-radius:20px;padding:10px 20px;font-weight:bold">Open my volunteering page</a></p><p style="font-size:13px;color:#6e6e73">This link is just for you. No password needed.</p>`) }); sent++; } catch (err) { /* next */ }
+        }
+      }
+      return res.status(200).json({ ok: true, links: have, sent, no_email: noEmail, volunteers: vols.length });
     }
     return bad(res, 'Unknown action.');
   } catch (e) {

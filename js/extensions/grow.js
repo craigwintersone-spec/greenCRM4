@@ -108,6 +108,7 @@
     var ov = $('gr-ov'); if (!ov) { ov = document.createElement('div'); ov.id = 'gr-ov'; ov.className = 'modal-overlay'; ov.innerHTML = '<div class="modal" style="max-width:680px"><div id="gr-body"></div></div>'; ov.addEventListener('click', function (e) { if (e.target === ov) ov.classList.remove('open'); }); document.body.appendChild(ov); }
     FOUND = null; suMsg = ''; paintSetup(); ov.classList.add('open'); ov.style.display = 'flex';
   }
+  window.vlSetupOpen = openSetup;
   window.vlSetupClose = function () { var ov = $('gr-ov'); if (ov) { ov.classList.remove('open'); ov.style.display = 'none'; } };
   function paintSetup() {
     var el = $('gr-body'); if (!el) return; var a = A(), esc = a.esc;

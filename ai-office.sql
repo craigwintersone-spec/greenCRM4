@@ -142,6 +142,43 @@ alter table public.company_enquiries add column if not exists day_hours      num
 alter table public.company_enquiries add column if not exists report_text    text;
 alter table public.company_enquiries add column if not exists report_sent_at timestamptz;
 
+-- volunteer self-service: each volunteer's own link, and the sessions they've said they'll come to.
+-- Read and written only through /api/office (service role): no policies, so the browser can't reach them.
+create table if not exists public.volunteer_links (
+  token         text primary key,
+  org_id        uuid not null references public.organisations(id) on delete cascade,
+  volunteer_id  text not null,
+  created_at    timestamptz not null default now(),
+  unique (org_id, volunteer_id)
+);
+create table if not exists public.volunteer_signups (
+  id            uuid primary key default gen_random_uuid(),
+  org_id        uuid not null references public.organisations(id) on delete cascade,
+  volunteer_id  text not null,
+  event_id      text not null,
+  reminded_at   timestamptz,
+  created_at    timestamptz not null default now(),
+  unique (org_id, volunteer_id, event_id)
+);
+alter table public.volunteer_links   enable row level security;
+alter table public.volunteer_signups enable row level security;
+drop policy if exists volunteer_signups_member_read on public.volunteer_signups;
+create policy volunteer_signups_member_read on public.volunteer_signups for select using (
+  org_id in (select m.org_id from public.memberships m where m.user_id = auth.uid() and m.status = 'active')
+  or org_id in (select o.id from public.organisations o where o.owner_id = auth.uid())
+  or public.auth_is_super_admin());
+
+-- companies: one private page per company (by email) showing every day they've done; paid plan dates if they subscribe
+create table if not exists public.company_accounts (
+  token       text primary key,
+  email       text not null unique,
+  company     text,
+  paid_until  date,
+  stripe_ref  text,
+  created_at  timestamptz not null default now()
+);
+alter table public.company_accounts enable row level security;
+
 alter table public.donations    enable row level security;
 alter table public.key_dates         enable row level security;
 alter table public.company_offers    enable row level security;

@@ -122,4 +122,32 @@ async function runDailyBriefs(now) {
   return results;
 }
 
-module.exports = { runDailyBriefs, buildChecks, emailHTML };
+// The day before a session, volunteers who said they'd come get one reminder with a link to their page.
+async function runVolunteerReminders(now) {
+  now = now ? new Date(now) : new Date();
+  const tomorrow = day(addDays(now, 1)), results = { sent: 0, errors: [] };
+  if (!RESEND_API_KEY) return results;
+  const due = await opt('volunteer_signups?reminded_at=is.null&select=id,org_id,volunteer_id,event_id&limit=2000');
+  const byOrg = {}; due.forEach(s => { (byOrg[s.org_id] = byOrg[s.org_id] || []).push(s); });
+  for (const orgId of Object.keys(byOrg)) {
+    try {
+      const org = (await sb(`organisations?id=eq.${orgId}&select=id,name,settings,status&limit=1`))[0];
+      if (!org || org.status === 'suspended' || !(org.settings && org.settings.demo_account === true)) continue;
+      const events = (await opt(`events?org_id=eq.${orgId}&select=*&limit=2000`)).filter(e => String(e.event_date || e.date || '').slice(0, 10) === tomorrow);
+      if (!events.length) continue;
+      const vols = await opt(`volunteers?org_id=eq.${orgId}&select=id,name,first_name,email`), links = await opt(`volunteer_links?org_id=eq.${orgId}&select=token,volunteer_id`);
+      for (const s of byOrg[orgId]) {
+        const ev = events.find(e => String(e.id) === String(s.event_id)); if (!ev) continue;
+        const v = vols.find(x => String(x.id) === String(s.volunteer_id)), l = links.find(x => String(x.volunteer_id) === String(s.volunteer_id));
+        if (!v || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.email || '')) continue;
+        const r = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ from: `${String(org.name).replace(/[<>"\r\n]/g, '').slice(0, 60)} <hello@vorlana.com>`, to: [v.email], subject: `Tomorrow: ${ev.name}`,
+            html: `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1d1d1f;max-width:560px"><p>Hello ${esc(v.first_name || String(v.name || '').split(' ')[0] || '')},</p><p>A reminder that you\u2019re down to help at <b>${esc(ev.name)}</b> tomorrow, ${esc(fmt(tomorrow))}${ev.location ? ', at ' + esc(ev.location) : ''}. Thank you.</p>${l ? `<p>Can\u2019t make it? <a href="${APP_URL}/volunteer.html?t=${l.token}">Tell us on your volunteering page</a>.</p>` : ''}</div>` }) });
+        if (r.ok) { results.sent++; await sb(`volunteer_signups?id=eq.${s.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ reminded_at: new Date().toISOString() }) }); }
+      }
+    } catch (e) { results.errors.push(e.message); }
+  }
+  return results;
+}
+
+module.exports = { runDailyBriefs, runVolunteerReminders, buildChecks, emailHTML };

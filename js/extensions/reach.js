@@ -25,7 +25,7 @@
       var bd = a.budgetOf(c);
       if (bd) { var over = bd.rows.filter(function (r) { return r.budget && r.spent > r.budget; }); if (over.length) { flags.push(over.length + ' budget line' + (over.length === 1 ? '' : 's') + ' overspent'); worse('red'); } else if (bd.elapsed != null && bd.pct > bd.elapsed + 15) { flags.push('spend ' + bd.pct + '% vs ' + bd.elapsed + '% of time'); worse('amber'); } }
       if (c.end_date && c.end_date >= t && c.end_date <= a.iso(a.addDays(new Date(), 90))) { flags.push('ends ' + a.fmt(c.end_date)); worse('amber'); }
-      progs.push({ name: c.name, sub: [c.funder, a.n(c.value) ? a.gbp(c.value) : ''].filter(Boolean).join(' · '), lvl: lvl, flags: flags });
+      progs.push({ id: String(c.id), name: c.name, sub: [c.funder, a.n(c.value) ? a.gbp(c.value) : ''].filter(Boolean).join(' · '), lvl: lvl, flags: flags });
     });
     var by = {};
     (DB.participants || []).filter(function (p) { return p.stage !== 'Closed'; }).forEach(function (p) { var k = p.advisor && p.advisor !== 'Unassigned' ? p.advisor : 'Unassigned'; (by[k] = by[k] || []).push(p); });
@@ -35,10 +35,11 @@
       if (risk) flags.push(risk + ' high-risk with no contact for 14+ days');
       if (quiet > Math.max(2, L.length * 0.3)) flags.push(quiet + ' of ' + L.length + ' not contacted for 3+ weeks');
       if (k === 'Unassigned' && L.length) flags.push('nobody is responsible for these people');
-      teams.push({ name: k === 'Unassigned' ? 'Unassigned' : k + '’s caseload', sub: L.length + ' people', lvl: risk || k === 'Unassigned' ? 'red' : flags.length ? 'amber' : 'green', flags: flags });
+      teams.push({ key: k, name: k === 'Unassigned' ? 'Unassigned' : k + '’s caseload', sub: L.length + ' people', lvl: risk || k === 'Unassigned' ? 'red' : flags.length ? 'amber' : 'green', flags: flags });
     });
     return { progs: progs, teams: teams };
   }
+  window.vlCeoRows = ceoRows;
   window.vlLensRender = function (L) {
     if (L !== 'ceo') return null;
     var a = A(), esc = a.esc, r = ceoRows(), order = { red: 0, amber: 1, green: 2 };

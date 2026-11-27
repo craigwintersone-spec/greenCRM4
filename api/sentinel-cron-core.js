@@ -265,6 +265,7 @@ module.exports = async function handler(req, res) {
   // jobs that act rather than report
   try { results.reports = await require('./_lib/report-reminders.js').runReportReminders(); } catch (e) { results.errors.push({ agent: 'reports', error: e.message }); }
   try { results.volunteerAutoOut = (await require('./_lib/volunteer-autoout.js').closePlannedShifts()).length; } catch (e) { results.errors.push({ agent: 'volunteer-auto-out', error: e.message }); }
+  try { results.volunteerReminders = await require('./_lib/daily-brief.js').runVolunteerReminders(); } catch (e) { results.errors.push({ agent: 'volunteer-reminders', error: e.message }); }
   try { results.dailyBriefs = await require('./_lib/daily-brief.js').runDailyBriefs(); } catch (e) { results.errors.push({ agent: 'daily-briefs', error: e.message }); }
   try { results.bookingReminders = await require('./_lib/booking-mail.js').runBookingReminders(); } catch (e) { results.errors.push({ agent: 'booking-reminders', error: e.message }); }
 
