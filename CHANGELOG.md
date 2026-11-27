@@ -2,6 +2,7 @@
 Newest first. The Sentinel reads this every morning and logs what shipped in the last 7 days.
 
 ## 2026-11-27
+- Three more views (demo account only): 'View as CEO' on the Dashboard shows every programme and team on one screen, green, amber or red; 'Who to ask next' on Donations lists lapsed, regular, new and larger donors and funders coming up for renewal, with the approach drafted on request; 'My day' is a phone screen for frontline staff with who needs contact, call, add a note by voice, and this week's events, and frontline staff on a phone land there
 - Company journey finished and setup from a document (demo account only; run the latest ai-office.sql): after a company's team day, one tap logs the hours under the company's team, writes their impact report and emails it to them; 'something to fund' offers can be paid by card on the public company page, straight into the charity's own Stripe account, with Gift Aid captured, and the gift lands in Donations; a photo of a receipt is read (shop, date, amount) and waits to be sorted to a budget line; 'Set up from a document' on Contracts reads a grant agreement, award letter or annual report and lists the contracts, targets, budget lines and key dates it found, creating only what you tick
 
 ## 2026-11-26

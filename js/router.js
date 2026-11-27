@@ -68,6 +68,7 @@ function myPageAccess() {
 }
 function pageAllowed(page, role, pages) {
   if (page === 'dashboard') return true;
+  if (page === 'myday' && window.__aoOn) return true;   // frontline phone screen (reach.js, demo account)
   role = role !== undefined ? role : (typeof currentRole !== 'undefined' ? currentRole : '');
   if (/super/i.test(role || '')) return true;
   const list = pages !== undefined ? pages : myPageAccess();

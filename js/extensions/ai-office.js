@@ -230,10 +230,11 @@
     var box = $('ao-checks');
     if (!box) { box = document.createElement('div'); box.id = 'ao-checks'; body.parentNode.insertBefore(box, body); }
     var c = checks(), L = lens(), canSwitch = typeof isAdviserRole !== 'function' || !isAdviserRole();
-    var title = L === 'frontline' ? 'Today for ' + myPeople().who + ' caseload (' + myPeople().list.filter(function (p) { return p.stage !== 'Closed'; }).length + ' people)' : L === 'trustee' ? 'For trustees: where things stand' : 'Today’s checks';
+    var custom = typeof window.vlLensRender === 'function' ? window.vlLensRender(L) : null;
+    var title = custom ? custom.title : L === 'frontline' ? 'Today for ' + myPeople().who + ' caseload (' + myPeople().list.filter(function (p) { return p.stage !== 'Closed'; }).length + ' people)' : L === 'trustee' ? 'For trustees: where things stand' : 'Today’s checks';
     box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:4px 0 8px"><div style="font-size:12px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--txt3)">' + esc(title) + '</div>' +
-      (canSwitch ? '<select onchange="vlSetLens(this.value)" title="See what each role sees" style="width:auto;font-size:12px;padding:3px 6px">' + [['manager', 'View as manager'], ['frontline', 'View as frontline worker'], ['trustee', 'View as trustee']].map(function (o) { return '<option value="' + o[0] + '"' + (L === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' : '') + '</div>' +
-      (c.length ? c.map(function (x) {
+      (canSwitch ? '<select onchange="vlSetLens(this.value)" title="See what each role sees" style="width:auto;font-size:12px;padding:3px 6px">' + [['manager', 'View as manager'], ['frontline', 'View as frontline worker'], ['trustee', 'View as trustee']].concat(window.vlLenses || []).map(function (o) { return '<option value="' + o[0] + '"' + (L === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' : '') + '</div>' +
+      (custom ? custom.html : c.length ? c.map(function (x) {
         return '<div onclick="go(\'' + x.page + '\')" style="display:flex;gap:10px;align-items:flex-start;padding:7px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;font-size:13px;background:var(--surface,#fff)">' +
           '<span style="width:8px;height:8px;border-radius:50%;background:' + DOT[x.lvl] + ';margin-top:6px;flex-shrink:0"></span><span>' + esc(x.text) + '</span></div>';
       }).join('') : '<div style="font-size:13px;color:var(--txt3);margin-bottom:8px">Nothing due or overdue. All clear.</div>') +
@@ -247,7 +248,7 @@
       if (!on()) return orig.apply(this, arguments);
       if (!S.loaded) await load();
       paintChecks();
-      if (lens() !== 'manager') { var mb = $('mb-body'); if (mb) mb.innerHTML = '<div style="font-size:12px;color:var(--txt3)">' + (lens() === 'frontline' ? 'Frontline staff see their own people and this week’s events. No contracts, budgets or donations.' : 'Trustees see contracts, money and risk as totals. No names.') + '</div>'; return; }
+      if (lens() !== 'manager') { var mb = $('mb-body'); if (mb) mb.innerHTML = '<div style="font-size:12px;color:var(--txt3)">' + (lens() === 'frontline' ? 'Frontline staff see their own people and this week’s events. No contracts, budgets or donations.' : lens() === 'trustee' ? 'Trustees see contracts, money and risk as totals. No names.' : (window.vlLensNote || '')) + '</div>'; return; }
       await orig.apply(this, arguments);
       var b = $('mb-body');
       if (b && b.querySelector('.ai-response')) { try { localStorage.setItem(CACHE_KEY(), b.innerHTML); } catch (e) { /* private mode */ } }
@@ -677,7 +678,7 @@
   // shared with the add-ons (donations-in.js, money-auto.js)
   window.vlAO = { S: S, q: q, save: save, patch: patch, remove: remove, on: on, isDemo: isDemo, oid: oid, esc: esc, n: n, iso: iso, fmt: fmt, gbp: gbp, today: today, addDays: addDays, addMonths: addMonths,
     orgName: orgName, factsFor: factsFor, budgetOf: budgetOf, elapsedPct: elapsedPct, renderDonations: function () { return renderDonations(); }, renderBudget: function () { return renderBudget(); }, budC: function () { return budC; },
-    checksFor: function (L) { return lensChecks(L); }, calItems: function () { return calItems(); }, renderCalendar: function () { return renderCalendar(); }, giftAidable: giftAidable,
+    checksFor: function (L) { return lensChecks(L); }, myPeople: function () { return myPeople(); }, lens: function () { return lens(); }, allChecks: function () { return allChecks(); }, calItems: function () { return calItems(); }, renderCalendar: function () { return renderCalendar(); }, giftAidable: giftAidable,
     thanksSys: function (d) { return thanksSys(d); }, thanksPrompt: function (d) { return thanksPrompt(d); } };
 
   if (window.__VORLANA_TEST) window.__aoTest = { S: S, checks: checks, calItems: calItems, factsFor: factsFor, budgetOf: budgetOf, reportPeriods: reportPeriods, load: load, lensChecks: lensChecks, myPeople: myPeople };

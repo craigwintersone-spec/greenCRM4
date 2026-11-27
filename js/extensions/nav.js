@@ -35,7 +35,7 @@
   // Ten sections, in order. One page = no sub-list.
   var GROUPS = [
     { key: 'home', pages: ['dashboard'] },
-    { key: 'people', label: 'People', icon: 'participants', pages: ['participants', 'pipeline', 'referrals', 'partnerrefs', 'safeguarding'] },
+    { key: 'people', label: 'People', icon: 'participants', pages: ['myday', 'participants', 'pipeline', 'referrals', 'partnerrefs', 'safeguarding'] },
     { key: 'vols', pages: ['volunteers'] },
     { key: 'events', label: 'Events', icon: 'events', pages: ['events', 'feedback'] },
     { key: 'impact', label: 'Impact', icon: 'impact', pages: ['impact', 'outcomes', 'demographics'] },
