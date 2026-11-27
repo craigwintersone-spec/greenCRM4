@@ -110,7 +110,7 @@
       if (!p || !p.ok || !(p.items || []).length) throw new Error((p && p.error) || 'No answer boxes were found on that form');
       say('Answering ' + p.items.length + ' questions from your report\u2026');
       var qs = p.items.map(function (it, i) { return (i + 1) + '. [' + it.id + '] ' + it.question + (it.wordLimit ? ' (max ' + it.wordLimit + ' words)' : ''); }).join('\n');
-      var out = await runAgent({ container: $('brain-progress'), headerLabel: 'Org Brain \u00b7 Funder form', headerSub: 'Filling ' + esc(row.data.report_template_name), maxTok: 2400,
+      var out = await runAgent({ container: $('brain-progress'), headerLabel: 'Vorlana \u00b7 Funder form', headerSub: 'Filling ' + esc(row.data.report_template_name), maxTok: 2400,
         sys: 'You complete a UK funder\u2019s monitoring return. Use ONLY the report and the figures supplied: never invent a number, name, date or plan. If a question cannot be answered from them, answer exactly "Not recorded this period". Respect each word limit. No promises in the organisation\u2019s name. Write "black and ethnic minority" for ethnicity. Return JSON only: {"answers":{"<id>":"<text>"}}',
         prompt: 'QUESTIONS ON THE FORM:\n' + qs + '\n\nTHE REPORT:\n' + R.text + '\n\nTHE FIGURES (calculated from records):\n' + R.prompt, silent: true });
       var j; try { j = JSON.parse(String(out).replace(/```json|```/g, '').trim()); } catch (e) { var m = String(out).match(/\{[\s\S]*\}/); j = m ? JSON.parse(m[0]) : null; }

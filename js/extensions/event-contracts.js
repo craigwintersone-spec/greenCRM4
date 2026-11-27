@@ -268,7 +268,7 @@ function runEventReport2(ev, ci) {
   var steps = [
     { label: 'Reading the session record', meta: ev.name },
     { label: 'Gathering volunteers and feedback', meta: s.volunteers.length + ' volunteers · ' + s.fbCount + ' responses' },
-    { label: 'Writing the report', meta: 'Org Brain composing from verified figures' },
+    { label: 'Writing the report', meta: 'Vorlana composing from verified figures' },
     { label: 'Ready', meta: '' }
   ];
 
@@ -314,13 +314,13 @@ function runEventReport2(ev, ci) {
   ]).filter(Boolean).join('\n');
 
   if (typeof runAgent !== 'function') {
-    outEl.innerHTML = '<div class="alert alert-warn">The Org Brain agent is not available.</div>';
+    outEl.innerHTML = '<div class="alert alert-warn">Vorlana’s AI is not available.</div>';
     return;
   }
 
   runAgent({
     container: progressEl,
-    headerLabel: 'Org Brain — Session Report',
+    headerLabel: 'Vorlana — Session Report',
     headerSub: ev.name,
     steps: steps, sys: sys, prompt: prompt, maxTok: 900
   }).then(function (raw) {

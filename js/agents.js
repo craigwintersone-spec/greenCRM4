@@ -4,7 +4,7 @@
 // Responsibilities:
 //   • call /api/claude (the Vercel route that proxies to Anthropic)
 //   • queue calls so we don't trip rate limits
-//   • render the "Org Brain" progress UI
+//   • render the "Vorlana" progress UI
 //   • clean / format AI output
 //   • all specific agents: morning briefing, intake, case note,
 //     RAG explainer, feedback analyst, outcomes analyst,
@@ -60,7 +60,7 @@ function checkAIAccess() {
     msg.style.cssText = 'position:fixed;top:24px;right:24px;background:var(--surface);border:1px solid var(--amber);border-radius:var(--radiuslg);padding:16px 20px;z-index:999;max-width:320px;box-shadow:0 8px 24px rgba(0,0,0,.12)';
     msg.innerHTML =
       '<div style="font-size:13px;font-weight:700;color:var(--amber);margin-bottom:4px">✦ AI features — start a plan</div>' +
-      '<div style="font-size:12px;color:var(--txt2)">Org Brain agents come with every paid plan (Community, Standard and Provider).</div>' +
+      '<div style="font-size:12px;color:var(--txt2)">Vorlana’s AI comes with every paid plan (Community, Standard and Provider).</div>' +
       '<button onclick="this.parentElement.remove()" style="position:absolute;top:8px;right:10px;background:none;border:none;color:var(--txt3);cursor:pointer;font-size:16px">✕</button>';
     document.body.appendChild(msg);
     setTimeout(() => msg.remove(), 5000);
@@ -177,12 +177,12 @@ async function _callClaudeOnce(sys, user, maxTok, webSearch, attempt, opts) {
   return text;
 }
 
-// ── Org Brain progress UI ────────────────────────────────────
+// ── Vorlana progress UI ────────────────────────────────────
 function renderBrainProgress(steps, activeIdx, headerLabel, headerSub) {
   return '<div class="brain-panel">' +
     '<div class="brain-header">' +
       '<div class="brain-icon">🧠</div>' +
-      '<div><div class="brain-title">' + escapeHTML(headerLabel || 'Org Brain — working') + '</div>' +
+      '<div><div class="brain-title">' + escapeHTML(headerLabel || 'Vorlana — working') + '</div>' +
       '<div class="brain-sub">' + escapeHTML(headerSub || 'Reading live records and composing your output') + '</div></div>' +
     '</div>' +
     '<div class="brain-steps">' +
@@ -286,7 +286,7 @@ async function runAgent(opts) {
           '<div class="brain-header">' +
             '<div class="brain-icon" style="background:rgba(245,158,11,.18);animation:none">⏳</div>' +
             '<div>' +
-              '<div class="brain-title" style="color:var(--amber)">Org Brain is busy</div>' +
+              '<div class="brain-title" style="color:var(--amber)">Vorlana is busy</div>' +
               '<div class="brain-sub">The AI service is rate-limited. Wait about 60 seconds, then click the agent button again.</div>' +
             '</div>' +
           '</div>' +
@@ -493,7 +493,7 @@ async function runMorningBriefing() {
 
   const raw = await runAgent({
     container: el,
-    headerLabel: 'Org Brain — Morning Briefing',
+    headerLabel: 'Vorlana — Morning Briefing',
     headerSub: 'Reading ' + areas,
     steps, sys, prompt: lines.join('\n').replace(/\n{3,}/g, '\n\n'), maxTok: 420
   });
@@ -835,7 +835,7 @@ async function generateAIReport(type, contractId) {
   const steps = [
     { label: 'Data check', meta: linked.length + ' participants · ' + E.length + ' events · ' + FB.length + ' feedback responses' },
     { label: 'Cross-checking funder requirements', meta: 'Mapping data against ' + ((funder && funder.name) || 'funder') + ' framework' },
-    { label: 'Writing the report', meta: 'Org Brain composing narrative with your live numbers' },
+    { label: 'Writing the report', meta: 'Vorlana composing narrative with your live numbers' },
     { label: 'Quality Supervisor check', meta: 'Verifying tone, claims and structure' },
     { label: 'Ready', meta: 'Report delivered — review and download below' }
   ];
@@ -862,7 +862,7 @@ async function generateAIReport(type, contractId) {
 
   const raw = await runAgent({
     container: progressEl,
-    headerLabel: 'Org Brain — Funder Report',
+    headerLabel: 'Vorlana — Funder Report',
     headerSub: 'Reading your data, mapping to funder requirements, writing the report',
     steps, sys, prompt, maxTok: 1400
   });
@@ -1032,7 +1032,7 @@ async function generateImpactReport() {
   const steps = [
     { label: 'Calculating your impact', meta: s.participants + ' participants · ' + s.events + ' events · ' + s.fbN + ' feedback' },
     { label: 'Checking data completeness', meta: gaps.length ? gaps.length + ' gap(s)' : 'complete' },
-    { label: 'Writing the story', meta: 'Org Brain composing from verified numbers' },
+    { label: 'Writing the story', meta: 'Vorlana composing from verified numbers' },
     { label: 'Ready', meta: '' }
   ];
 
@@ -1078,7 +1078,7 @@ async function generateImpactReport() {
 
   const raw = await runAgent({
     container: out,
-    headerLabel: 'Org Brain — Social Impact Report',
+    headerLabel: 'Vorlana — Social Impact Report',
     headerSub: s.range.label,
     steps, sys, prompt, maxTok: 1300
   });
@@ -2255,7 +2255,7 @@ async function pullFunderForm(key) {
     bdShowSection(3);
     await runEOIFormFill();
     window._eoiOnProgress = null;
-    if (!Object.keys(_eoiAnswers).length) { note('✦ Writing bids with Org Brain is part of the <b>Pro</b> plan. You can still upload or paste the funder\'s questions and answer them yourself.', 'warn'); return; }
+    if (!Object.keys(_eoiAnswers).length) { note('✦ Writing bids with Vorlana is part of the <b>Pro</b> plan. You can still upload or paste the funder\'s questions and answer them yourself.', 'warn'); return; }
     show(3, 'Putting the answers into their form');
     if (_eoiDoc && _eoiDoc.kind === 'docx') {
       try { const r = await _buildFilledForm(); _eoiDoc.filled = { n: r.filled, total: r.total }; steps[3].meta = r.filled + ' of ' + r.total + ' answer spaces filled'; }
@@ -2265,7 +2265,7 @@ async function pullFunderForm(key) {
     renderFilledEOI();
   } catch (e) {
     window._eoiOnProgress = null;
-    if (e && e.message === 'AI_PLAN_GATE') { note('✦ Writing bids with Org Brain is part of the <b>Pro</b> plan. You can still upload or paste the funder\'s questions and answer them yourself.', 'warn'); }
+    if (e && e.message === 'AI_PLAN_GATE') { note('✦ Writing bids with Vorlana is part of the <b>Pro</b> plan. You can still upload or paste the funder\'s questions and answer them yourself.', 'warn'); }
     else {
       const m = $('bd-manual'); if (m) m.open = true;
       const st = $('bd-pull-steps'); if (st) st.innerHTML = '';

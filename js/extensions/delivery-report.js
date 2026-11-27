@@ -509,7 +509,7 @@ function injectUI() {
     '<div class="card-title">📅 Delivery report — events, volunteers &amp; feedback</div>' +
     '<p style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:14px">' +
       'For workshops, volunteering and community delivery. Every figure is calculated from your records; ' +
-      'the Org Brain writes the narrative around them. The report states what data is missing, so nothing is overclaimed.' +
+      'Vorlana writes the narrative around them. The report states what data is missing, so nothing is overclaimed.' +
     '</p>' +
     '<div class="form-grid-3">' +
       '<div class="form-row"><label>Funder / contract</label>' +
@@ -812,13 +812,13 @@ function generateNow() {
   s.checks = checks; s.profile = prof;
 
   if (typeof runAgent !== 'function') {
-    outEl.innerHTML = '<div class="alert alert-warn">The Org Brain agent is not available on this page.</div>';
+    outEl.innerHTML = '<div class="alert alert-warn">Vorlana’s AI is not available on this page.</div>';
     return;
   }
 
   runAgent({
     container: progressEl,
-    headerLabel: 'Org Brain — Delivery Report',
+    headerLabel: 'Vorlana — Delivery Report',
     headerSub: (funderName ? 'For ' + funderName + ' · ' : '') + 'written as ' + prof.p.label,
     steps: steps,
     sys: sys,
@@ -847,7 +847,7 @@ function generateNow() {
     var issues = lintFindings(raw, s);
     if (!bad.length && !issues.length) { s.unverified = []; return finish(raw); }
     return runAgent({
-      container: progressEl, headerLabel: 'Org Brain — Delivery Report', headerSub: 'Correcting ' + bad.length + ' figure(s) not in the records',
+      container: progressEl, headerLabel: 'Vorlana — Delivery Report', headerSub: 'Correcting ' + bad.length + ' figure(s) not in the records',
       steps: [{ label: 'Checking every number against the records', meta: bad.length + ' to correct' }, { label: 'Ready', meta: '' }],
       sys: sys + (bad.length ? ' You previously wrote a draft containing numbers that are NOT in the supplied data: ' + bad.join(', ') + '. Rewrite the full report so that every number appears in the supplied data; remove or reword any sentence that needs a number you were not given.' : '') +
         (issues.length ? ' Your draft also contains wording that must not appear in a funder report: ' + issues.map(function (i) { return '"' + i.m + '" (' + i.why + ')'; }).join('; ') + '. Rewrite those sentences so the problem is gone, using only the supplied figures.' : '') + ' Keep everything else the same.',

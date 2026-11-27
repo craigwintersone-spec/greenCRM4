@@ -373,7 +373,7 @@
     }
     let raw = await window.runAgent({
       container: progressEl,
-      headerLabel: 'Org Brain — Funder Report',
+      headerLabel: 'Vorlana — Funder Report',
       headerSub:   (tpl ? 'Answering ' + ((funder && funder.name) || 'the funder') + '\'s reporting form' : 'Written as ' + prof.label) + ' · every figure from your records',
       steps, sys, prompt, maxTok: 1800
     });
@@ -383,7 +383,7 @@
     const unverified0 = window.unknownReportNumbers ? window.unknownReportNumbers(raw, prompt) : [];
     const issues = window.reportLintFindings ? window.reportLintFindings(raw, lintCtx) : [];
     if (unverified0.length || issues.length) {
-      const raw2 = await window.runAgent({ container: progressEl, headerLabel: 'Org Brain — Funder Report', headerSub: 'Checking the draft against your records',
+      const raw2 = await window.runAgent({ container: progressEl, headerLabel: 'Vorlana — Funder Report', headerSub: 'Checking the draft against your records',
         steps: [{ label: 'Checking every number and claim against the records', meta: (unverified0.length + issues.length) + ' to correct' }, { label: 'Ready', meta: '' }],
         sys: sys + (unverified0.length ? ' Your previous draft contained numbers that are NOT in the supplied data: ' + unverified0.join(', ') + '. Rewrite the full report so every number appears in the supplied data; remove or reword any sentence that needs a number you were not given.' : '') +
           (issues.length ? ' Your draft also contains wording that must not appear in a funder report: ' + issues.map(i => '"' + i.m + '" (' + i.why + ')').join('; ') + '. Rewrite those sentences so the problem is gone.' : '') + ' Keep everything else the same.',
