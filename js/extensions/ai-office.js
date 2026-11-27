@@ -753,6 +753,21 @@
       window.go._ao = true;
     }
   }
+  // A switch at the bottom of the menu (demo account managers only): hide every new feature for a live demo, or bring them back.
+  // It is there in both states, so it can always be switched back. Same setting as app.html?labs=off / ?labs=on.
+  function labsSwitch() {
+    if ($('ao-labs') || !(typeof currentOrg !== 'undefined' && currentOrg && currentOrg.settings && currentOrg.settings.demo_account === true)) return;
+    if (typeof isAdviserRole === 'function' && isAdviserRole()) return;
+    var host = document.querySelector('#sidebar .sidebar-bottom'); if (!host) return;
+    var off = labsOff(), b = document.createElement('button'); b.id = 'ao-labs'; b.type = 'button'; b.className = 'btn btn-ghost btn-sm';
+    b.style.cssText = 'width:100%;margin-bottom:6px;font-size:11.5px;display:block !important';
+    b.textContent = off ? 'New features: off · turn on' : 'New features: on · turn off';
+    b.title = off ? 'Show the new features on this browser again' : 'Hide the new features on this browser, for a live demo';
+    b.onclick = function () { try { if (off) localStorage.removeItem('vl_labs'); else localStorage.setItem('vl_labs', 'off'); } catch (e) { /* private mode */ } location.href = location.pathname + location.search.replace(/([?&])labs=(on|off)&?/, '$1').replace(/[?&]$/, ''); };
+    host.insertBefore(b, host.firstChild);
+  }
+  var lt = 0; (function waitLabs() { if (typeof currentOrg !== 'undefined' && currentOrg && document.querySelector('#sidebar .sidebar-bottom')) return labsSwitch(); if (++lt < 80) setTimeout(waitLabs, 500); })();
+
   // wait for sign-in and the organisation to load
   var tries = 0;
   (function wait() {
