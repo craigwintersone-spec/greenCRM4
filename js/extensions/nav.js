@@ -47,7 +47,7 @@
   ];
   var svg = function (k) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICON[k] || '') + '</svg>'; };
   var pageOf = function (b) { var m = /go\('([a-z]+)'\)/.exec(b.getAttribute('onclick') || ''); return m ? m[1] : null; };
-  var shown = function (b) { return b.style.display !== 'none'; };
+  var shown = function (b) { return b.style.display !== 'none' && !b.hasAttribute('data-lens-hide'); };
   var built = false, syncing = false;
 
   function build() {
@@ -57,7 +57,7 @@
       var p = pageOf(b); if (!p) return;
       btns[p] = b;
       var ic = b.querySelector('.icon'); if (ic && ICON[p]) ic.innerHTML = svg(p);
-      var lbl = b.querySelector('span:not(.icon):not(.ai-dot)'); if (lbl && NAME[p]) lbl.textContent = NAME[p];
+      var lbl = b.querySelector('span:not(.icon):not(.ai-dot):not(.nav-count)'); if (lbl && NAME[p]) lbl.textContent = NAME[p];
       if (!b.title) b.title = (lbl && lbl.textContent) || '';
     });
     var anchor = sb.querySelector('.sidebar-bottom');
@@ -107,6 +107,17 @@
     });
     syncing = false;
   }
+  // A different grouping (the demo account's six-section menu, js/extensions/menu.js): put the buttons back, then build again
+  var DEFAULT_NAMES = {};
+  window.vlNavRegroup = function (groups, names) {
+    var sb = document.getElementById('sidebar'), nav = document.getElementById('vl-nav'); if (!sb || !nav) return false;
+    var anchor = sb.querySelector('.sidebar-bottom');
+    nav.querySelectorAll('.nav-btn').forEach(function (b) { sb.insertBefore(b, anchor || null); });
+    nav.remove(); built = false; lastActive = undefined;
+    GROUPS = groups; Object.keys(names || {}).forEach(function (k) { NAME[k] = names[k]; });
+    build(); return true;
+  };
+  window.vlNavSync = function () { if (built) sync(); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build); else build();
   if (window.__VORLANA_TEST) window.__navTest = { build: build, sync: sync, GROUPS: GROUPS };
 })();

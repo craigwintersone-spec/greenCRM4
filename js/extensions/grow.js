@@ -101,7 +101,7 @@
   var FOUND = null, suMsg = '';
   function setupButton() {
     if (!on()) return; var hdr = document.querySelector('#page-funding .page-header'); if (!hdr || $('gr-setup-btn')) return;
-    var b = document.createElement('button'); b.id = 'gr-setup-btn'; b.className = 'btn btn-ai btn-sm'; b.style.marginRight = '6px'; b.textContent = '✦ Set up from a document'; b.onclick = openSetup;
+    var b = document.createElement('button'); b.id = 'gr-setup-btn'; b.className = 'btn btn-ai btn-sm'; b.style.marginLeft = 'auto'; b.style.marginRight = '8px'; b.textContent = '✦ Set up from a document'; b.onclick = openSetup;
     hdr.insertBefore(b, hdr.lastElementChild);
   }
   function openSetup() {
