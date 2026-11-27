@@ -110,9 +110,12 @@
   function hide() { var p = $('ot-pop'); if (p) p.remove(); }
   function onClick(e) {
     hide(); if (!on()) return;
-    var area = null;
-    AREAS.some(function (a) { var el = $(a[0]); if (el && el.contains(e.target)) { area = a; return true; } return false; });
-    if (!area || (e.target.closest && e.target.closest('button,select,input,a,.no-print,#rq-panel,table'))) return;
+    var area = null, box = null;
+    AREAS.some(function (a) { var el = $(a[0]); if (el && el.contains(e.target)) { area = a; box = el; return true; } return false; });
+    if (!area || !e.target.closest) return;
+    // skip controls and tool strips INSIDE the text (the Ask Vorlana panel itself is marked no-print, so only look within the area)
+    var skip = e.target.closest('button,select,input,a,.no-print,#rq-panel,table');
+    if (skip && box.contains(skip) && skip !== box) return;
     var facts = area[1](); if (!facts) return;
     var tok = tokenAt(e.clientX, e.clientY); if (!tok) return;
     var plain = norm(tok.replace(/%$/, ''));
