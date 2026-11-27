@@ -585,7 +585,8 @@
     if (!budC || !C.some(function (c) { return String(c.id) === String(budC); })) budC = String(C[0].id);
     var c = C.find(function (x) { return String(x.id) === budC; }), bd = budgetOf(c), lines = S.lines.filter(function (l) { return String(l.contract_id) === budC; });
     var head = '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px"><select onchange="vlBudPick(this.value)" style="width:auto">' + C.map(function (x) { return '<option value="' + esc(x.id) + '"' + (String(x.id) === budC ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select>' +
-      (S.sql.bud ? '' : '<span style="font-size:12px;color:#B7791F">Not saved yet: run ai-office.sql in Supabase to keep budgets.</span>') + '</div>';
+      (S.sql.bud ? '' : '<span style="font-size:12px;color:#B7791F">Not saved yet: run ai-office.sql in Supabase to keep budgets.</span>') +
+      '<span style="margin-left:auto;display:flex;gap:6px"><button class="btn btn-ghost btn-sm" onclick="vlPnL(false)"' + (bd ? '' : ' disabled') + '>Export P&amp;L (this project)</button><button class="btn btn-ghost btn-sm" onclick="vlPnL(true)">Export P&amp;L (all projects)</button></span></div>';
     var stats = bd ? '<div class="stats-grid">' + [['Budget', gbp(bd.budget)], ['Spent', gbp(bd.spent)], ['Left', gbp(bd.budget - bd.spent)], ['Spent vs time', bd.pct + '%' + (bd.elapsed != null ? ' vs ' + bd.elapsed + '%' : '')]].map(function (s) { return '<div class="stat-card"><div class="stat-lbl">' + s[0] + '</div><div class="stat-val">' + s[1] + '</div></div>'; }).join('') + '</div>' : '';
     var table = '<div class="card"><div class="card-title">Budget lines</div>' + (bd ? '<div class="tbl-wrap"><table><thead><tr><th>Line</th><th>Budget</th><th>Spent</th><th>Left</th><th>% spent</th><th></th></tr></thead><tbody>' +
       bd.rows.map(function (r) { var pc = r.budget ? Math.round(r.spent / r.budget * 100) : 0, col = r.spent > r.budget ? '#B42318' : (bd.elapsed != null && pc > bd.elapsed + 15) ? '#B7791F' : 'inherit';
@@ -604,6 +605,56 @@
     if (typeof window.vlBudAfter === 'function') window.vlBudAfter();
   }
   window.vlBudPick = function (id) { budC = String(id); renderBudget(); };
+
+  // ── Profit and loss per project (a spreadsheet for the treasurer or accountant) ──
+  // Income is the award value on the contract; spend is what's logged against its budget lines, month by month.
+  function pnlBlock(c) {
+    var bd = budgetOf(c); if (!bd) return null;
+    var lines = S.lines.filter(function (l) { return String(l.contract_id) === String(c.id); });
+    var sp = S.spend.filter(function (x) { return x.line_id && !x.ignored && lines.some(function (l) { return String(l.id) === String(x.line_id); }); });
+    // months from the contract's start (or the first spend) to this month, at most the last 24
+    var first = sp.reduce(function (m, x) { var d = String(x.spend_date).slice(0, 7); return !m || d < m ? d : m; }, c.start_date ? String(c.start_date).slice(0, 7) : ''), now = today().slice(0, 7), months = [];
+    if (!first || first > now) first = now;
+    for (var d = new Date(first + '-01T12:00:00'); iso(d).slice(0, 7) <= now && months.length < 240; d.setMonth(d.getMonth() + 1)) months.push(iso(d).slice(0, 7));
+    months = months.slice(-24);
+    var mLabel = function (m) { return new Date(m + '-01T12:00:00').toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }); };
+    var by = function (lineId, m) { return sp.filter(function (x) { return String(x.line_id) === String(lineId) && String(x.spend_date).slice(0, 7) === m; }).reduce(function (a, x) { return a + n(x.amount); }, 0); };
+    var before = function (lineId) { return sp.filter(function (x) { return String(x.line_id) === String(lineId) && String(x.spend_date).slice(0, 7) < months[0]; }).reduce(function (a, x) { return a + n(x.amount); }, 0); };
+    var hasEarlier = lines.some(function (l) { return before(l.id) > 0; }), f = function (v) { return (Math.round(n(v) * 100) / 100).toFixed(2); };
+    var head = ['', 'Budget'].concat(hasEarlier ? ['Earlier'] : []).concat(months.map(mLabel)).concat(['Spent to date', 'Remaining', '% of budget spent']);
+    var rows = [], tot = { b: 0, e: 0, m: months.map(function () { return 0; }), s: 0 };
+    lines.forEach(function (l) {
+      var e = before(l.id), ms = months.map(function (m) { return by(l.id, m); }), spent = e + ms.reduce(function (a, v) { return a + v; }, 0);
+      tot.b += n(l.amount); tot.e += e; ms.forEach(function (v, i) { tot.m[i] += v; }); tot.s += spent;
+      rows.push([l.name, f(l.amount)].concat(hasEarlier ? [f(e)] : []).concat(ms.map(f)).concat([f(spent), f(n(l.amount) - spent), n(l.amount) ? Math.round(spent / n(l.amount) * 100) + '%' : '']));
+    });
+    var award = n(c.value), pad = function (r) { while (r.length < head.length) r.push(''); return r; };
+    var out = [pad([c.name + (c.funder ? ' (' + c.funder + ')' : '')]), pad(['Period', (c.start_date ? fmt(c.start_date) : 'start not set') + ' to ' + (c.end_date ? fmt(c.end_date) : 'end not set') + (bd.elapsed != null ? ', ' + bd.elapsed + '% of the time gone' : '')]), pad([]),
+      pad(['INCOME']), pad(['Award value (from the contract)', f(award)]), pad([]), pad(['EXPENDITURE']), head].concat(rows);
+    out.push(['Total expenditure', f(tot.b)].concat(hasEarlier ? [f(tot.e)] : []).concat(tot.m.map(f)).concat([f(tot.s), f(tot.b - tot.s), tot.b ? Math.round(tot.s / tot.b * 100) + '%' : '']));
+    out.push(pad([]));
+    out.push(pad(['Award less budget', f(award - tot.b)]));
+    out.push(pad(['Award less spend to date (surplus, or deficit if negative)', f(award - tot.s)]));
+    return { rows: out, award: award, budget: tot.b, spent: tot.s, name: c.name, funder: c.funder || '' };
+  }
+  window.vlPnL = function (all) {
+    var C = (DB.contracts || []).filter(function (c) { return all ? true : String(c.id) === String(budC); }), blocks = C.map(pnlBlock).filter(Boolean);
+    if (!blocks.length) { alert(all ? 'No project has budget lines yet.' : 'Add budget lines to this project first.'); return; }
+    var f = function (v) { return (Math.round(n(v) * 100) / 100).toFixed(2); }, rows = [[orgName() + ': profit and loss by project'], ['Produced ' + fmt(today()) + ' from Vorlana. Income is the award value on each contract; money actually received is in your accounts. Spend is what has been logged against each budget line.'], []];
+    if (blocks.length > 1) {
+      rows.push(['SUMMARY'], ['Project', 'Funder', 'Award', 'Budget', 'Spent to date', 'Award less spend', '% of budget spent']);
+      blocks.forEach(function (b) { rows.push([b.name, b.funder, f(b.award), f(b.budget), f(b.spent), f(b.award - b.spent), b.budget ? Math.round(b.spent / b.budget * 100) + '%' : '']); });
+      var T = blocks.reduce(function (a, b) { return { a: a.a + b.award, b: a.b + b.budget, s: a.s + b.spent }; }, { a: 0, b: 0, s: 0 });
+      rows.push(['Total', '', f(T.a), f(T.b), f(T.s), f(T.a - T.s), T.b ? Math.round(T.s / T.b * 100) + '%' : ''], []);
+    }
+    blocks.forEach(function (b) { rows = rows.concat(b.rows, [[]]); });
+    var uns = S.spend.filter(function (x) { return !x.line_id && !x.ignored; });
+    if (uns.length) rows.push(['Not included: ' + uns.length + ' payment' + (uns.length === 1 ? '' : 's') + ' still to sort (' + gbp(uns.reduce(function (a, x) { return a + n(x.amount); }, 0)) + ').']);
+    var csv = '\ufeff' + rows.map(function (r) { return r.map(function (v) { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(','); }).join('\r\n');
+    var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = 'vorlana-pnl-' + (all ? 'all-projects' : String(blocks[0].name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')) + '-' + today() + '.csv'; a.click();
+    window.__lastPnL = rows;
+  };
   window.vlBudAddLine = async function () {
     var nm = ($('ao-bl-name').value || '').trim(), amt = n($('ao-bl-amt').value); if (!nm || !amt) { alert('Add a name and an amount.'); return; }
     try { await save('budget_lines', { contract_id: budC, name: nm, amount: amt }, 'lines'); } catch (e) { alert('Couldn’t save: ' + e.message); }
