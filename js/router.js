@@ -77,6 +77,7 @@ function pageAllowed(page, role, pages) {
 }
 
 function go(page) {
+  document.body.classList.remove('nav-open');   // phones: the slide-in menu closes when a page is picked
   // Advisers only reach the pages their organisation allows
   if (!pageAllowed(page)) page = 'dashboard';
   // Hide all pages and clear active nav

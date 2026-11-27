@@ -151,6 +151,7 @@ const MAPPERS = {
     date: r.event_date || r.date || '',
     attendees: num(r.attendees),
     capacity: num(r.capacity) || 20,
+    capacity_set: num(r.capacity) > 0,          // false = no limit was entered (20 is only a display default)
     location: r.location || '',
     contract_ids: toArr(r.contract_ids),
     import_batch: r.import_batch || null,

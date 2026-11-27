@@ -142,3 +142,19 @@ tr:hover td{background:#FAFAFB}
 }
 @media(max-width:600px){.vt-grid{grid-template-columns:1fr 1fr;gap:10px}.vt-val{font-size:26px}.vt-card{padding:14px 14px 10px}.vt-sub{display:none}
   .mb-header{flex-wrap:wrap;gap:10px}.mb-header .ai-tag{display:none}.mb-greeting{font-size:19px}.page-header{gap:10px;flex-wrap:wrap}}
+
+/* ── Phones: the menu slides in from the left, so pages get the full width ── */
+#nav-toggle,#nav-backdrop{display:none}
+@media(max-width:600px){
+  #nav-toggle{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;margin-right:8px;border:0;border-radius:10px;background:rgba(0,0,0,.06);font-size:18px;line-height:1;cursor:pointer;flex-shrink:0;color:inherit}
+  #sidebar{position:fixed;left:0;top:0;bottom:0;height:100%;z-index:960;width:264px;transform:translateX(-105%);transition:transform .2s ease;background:var(--surface,#fff);box-shadow:none}
+  body.nav-open #sidebar{transform:none;box-shadow:0 0 40px rgba(0,0,0,.25)}
+  body.nav-open #nav-backdrop{display:block;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:955}
+  #sidebar .nav-btn span:not(.icon),#sidebar .nav-head .nav-head-lbl,#sidebar .nav-head .chev{display:inline}
+  #sidebar .nav-head,#sidebar .nav-btn,#sidebar .nav-kids .nav-btn{justify-content:flex-start;padding:10px 12px;margin:1px 8px;width:calc(100% - 16px)}
+  #sidebar .nav-kids{background:none;margin:0}
+  #sidebar .sidebar-logo{padding:6px 16px 14px}
+  #sidebar .sidebar-logo img{content:normal;height:34px;margin:0}
+  #main{padding:16px 14px}
+  .stats-grid{grid-template-columns:1fr 1fr}
+}

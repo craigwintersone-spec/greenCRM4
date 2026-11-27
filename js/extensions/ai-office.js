@@ -140,7 +140,7 @@
   window.vlSetLens = function (v) {
     try { sessionStorage.setItem('vl_lens', v); } catch (e) { /* none */ }
     var cached = null; try { cached = localStorage.getItem(CACHE_KEY()); } catch (e) { /* none */ }
-    if (v === 'manager' && cached && $('mb-body')) { paintChecks(); $('mb-body').innerHTML = cached; return; }
+    if (v === 'manager' && cached && $('mb-body')) { $('mb-body').innerHTML = cached; paintChecks(); return; }
     if (typeof window.runMorningBriefing === 'function') window.runMorningBriefing();
   };
 
@@ -214,7 +214,7 @@
     }
     if (uses('events')) {
       var soon = (DB.events || []).filter(function (e) { return e.date >= t && e.date <= iso(addDays(new Date(), 2)); });
-      soon.forEach(function (e) { out.push({ lvl: 'info', page: 'events', text: e.name + ' on ' + fmt(e.date) + (e.capacity ? ': ' + n(e.attendees) + ' of ' + n(e.capacity) + ' places taken' : '') }); });
+      soon.forEach(function (e) { out.push({ lvl: 'info', page: 'events', text: e.name + ' on ' + fmt(e.date) + (e.capacity && e.capacity_set !== false ? ': ' + n(e.attendees) + ' of ' + n(e.capacity) + ' places taken' : '') }); });
     }
     var unthanked = S.don.filter(function (d) { return !d.thanked_at && d.gift_date && (new Date() - new Date(d.gift_date)) / 864e5 >= 2; });
     if (unthanked.length) out.push({ lvl: 'amber', page: 'donations', text: unthanked.length + ' donation' + (unthanked.length === 1 ? '' : 's') + ' not thanked yet (' + gbp(unthanked.reduce(function (a, d) { return a + n(d.amount); }, 0)) + ')' });
@@ -245,19 +245,53 @@
           '<span style="width:8px;height:8px;border-radius:50%;background:' + DOT[x.lvl] + ';margin-top:6px;flex-shrink:0"></span><span>' + esc(x.text) + '</span></div>';
       }).join('') + (c.length > 8 && !showAll ? '<button class="btn btn-ghost btn-sm" style="margin-bottom:8px" onclick="vlChecksAll()">Show ' + (c.length - 6) + ' more</button>' : '') : '<div style="font-size:13px;color:var(--txt3);margin-bottom:8px">Nothing due or overdue. All clear.</div>') +
       (L === 'manager' && typeof window.vlInboxHTML === 'function' ? window.vlInboxHTML() : '');
+    dashLayout(); foldBriefing();
   }
   window.vlPaintChecks = paintChecks;
   var CACHE_KEY = function () { return 'vl_mb_' + oid() + '_' + today(); };
+  // Dashboard order: what needs doing comes first; the written briefing opens when wanted
+  var briefOpen = false;
+  function dashLayout() {
+    var card = document.querySelector('#page-dashboard .morning-briefing'), page = $('page-dashboard'); if (!card || !page) return;
+    var hdr = page.querySelector('.page-header');
+    whatsNew(card);
+    var nw = $('ao-new'), first = nw || card;
+    if (hdr && hdr.nextElementSibling !== first) page.insertBefore(first, hdr.nextSibling);          // order: header, what's new, today's checks, then the trends
+    if (nw && nw.nextElementSibling !== card) page.insertBefore(card, nw.nextSibling); else if (!nw && hdr && hdr.nextElementSibling !== card) page.insertBefore(card, hdr.nextSibling);
+    card.style.marginBottom = '20px';
+    var tag = card.querySelector('.ai-tag'); if (tag) tag.style.display = 'none';
+  }
+  function foldBriefing() {
+    var b = $('mb-body'); if (!b) return; var t = $('ao-brief-toggle');
+    var written = !!b.querySelector('.ai-response');
+    if (!written || lens() !== 'manager') { if (t) t.remove(); b.style.display = ''; return; }
+    if (!t) { t = document.createElement('button'); t.id = 'ao-brief-toggle'; t.className = 'btn btn-ghost btn-sm'; t.style.marginTop = '6px'; t.onclick = function () { briefOpen = !briefOpen; foldBriefing(); }; b.parentNode.insertBefore(t, b); }
+    b.style.display = briefOpen ? '' : 'none'; t.textContent = briefOpen ? 'Hide the written briefing' : 'Read Vorlana’s written briefing';
+  }
+  var NEW = [['myday', 'My day', 'a phone screen for frontline staff'], ['budget', 'Budgets', 'spend that sorts itself'], ['donations', 'Donations', 'gifts in, Gift Aid, thank-yous'], ['calendar', 'Funding calendar', 'every deadline and key date'], ['companies', 'Company partners', 'team days and things to fund'], ['reports', 'Reports', 'annual report and trustee pack'], ['social', 'Social Media', 'story pack and newsletter']];
+  function whatsNew(card) {
+    var seen = null; try { seen = localStorage.getItem('vl_new_seen_' + oid()); } catch (e) { /* none */ }
+    if (seen || $('ao-new') || (typeof isAdviserRole === 'function' && isAdviserRole())) return;
+    var d = document.createElement('div'); d.id = 'ao-new'; d.className = 'card'; d.style.cssText = 'margin-bottom:16px;border:1px solid rgba(31,111,109,.25);background:#F3F8F7';
+    d.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-weight:700">New in Vorlana: your back office, done for you</div><button class="btn btn-ghost btn-sm" onclick="vlNewSeen()">Got it</button></div>' +
+      '<div style="font-size:13px;color:var(--txt2);margin:4px 0 10px">Vorlana now prepares the work and you approve it. Start with today’s checks below, or jump in:</div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap">' + NEW.map(function (x) { return '<button class="btn btn-ghost btn-sm" style="background:#fff" onclick="go(\'' + x[0] + '\')" title="' + esc(x[2]) + '"><b>' + x[1] + '</b>&nbsp;<span style="color:var(--txt3);font-weight:400">' + x[2] + '</span></button>'; }).join('') +
+      '<button class="btn btn-ghost btn-sm" style="background:#fff" onclick="document.getElementById(\'ao-ask-btn\').click()"><b>Ask Vorlana</b>&nbsp;<span style="color:var(--txt3);font-weight:400">questions from your records</span></button></div>';
+    card.parentNode.insertBefore(d, card);
+  }
+  window.vlNewSeen = function () { try { localStorage.setItem('vl_new_seen_' + oid(), '1'); } catch (e) { /* none */ } var d = $('ao-new'); if (d) d.remove(); dashLayout(); };
   function wrapBriefing() {
     var orig = window.runMorningBriefing; if (typeof orig !== 'function' || orig._ao) return;
     window.runMorningBriefing = async function () {
       if (!on()) return orig.apply(this, arguments);
       if (!S.loaded) await load();
       paintChecks();
+      var bb = $('mb-body'), tg = $('ao-brief-toggle'); if (tg) tg.remove(); if (bb) bb.style.display = '';     // show the progress while it writes
       if (lens() !== 'manager') { var mb = $('mb-body'); if (mb) mb.innerHTML = '<div style="font-size:12px;color:var(--txt3)">' + (lens() === 'frontline' ? 'Frontline staff see their own people and this week’s events. No contracts, budgets or donations.' : lens() === 'trustee' ? 'Trustees see contracts, money and risk as totals. No names.' : (window.vlLensNote || '')) + '</div>'; return; }
       await orig.apply(this, arguments);
       var b = $('mb-body');
       if (b && b.querySelector('.ai-response')) { try { localStorage.setItem(CACHE_KEY(), b.innerHTML); } catch (e) { /* private mode */ } }
+      foldBriefing();
     };
     window.runMorningBriefing._ao = true;
   }
@@ -267,7 +301,7 @@
     if (autoDone || !on() || !$('mb-body')) return; autoDone = true;
     var cached = null; try { cached = localStorage.getItem(CACHE_KEY()); } catch (e) { /* none */ }
     if (lens() !== 'manager') { window.runMorningBriefing(); return; }
-    if (cached) { paintChecks(); $('mb-body').innerHTML = cached; var tm = $('mb-time'); if (tm) tm.textContent = 'Written this morning'; }
+    if (cached) { $('mb-body').innerHTML = cached; paintChecks(); var tm = $('mb-time'); if (tm) tm.textContent = 'Written this morning'; }
     else window.runMorningBriefing();
   }
 
@@ -551,6 +585,8 @@
       '<input id="ao-sp-date" type="date" value="' + today() + '" style="flex:1;min-width:130px"/><input id="ao-sp-amt" type="number" min="0" step="0.01" placeholder="£" style="flex:1;min-width:90px"/><input id="ao-sp-note" placeholder="What for (optional)" style="flex:2;min-width:150px"/><button class="btn btn-p btn-sm" onclick="vlBudAddSpend()">+ Add spend</button></div>' +
       (spend.length ? '<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Line</th><th>Amount</th><th>Note</th><th></th></tr></thead><tbody>' + spend.slice(0, 40).map(function (s) { var l = lines.find(function (x) { return String(x.id) === String(s.line_id); });
         return '<tr><td>' + esc(fmt(s.spend_date)) + '</td><td>' + esc(l ? l.name : '') + '</td><td>' + gbp(s.amount) + '</td><td>' + esc(s.note || '') + '</td><td style="text-align:right"><button class="btn btn-ghost btn-sm" onclick="vlBudDelSpend(\'' + esc(s.id) + '\')">×</button></td></tr>'; }).join('') + '</tbody></table></div>' : '<div style="color:var(--txt3);font-size:13px">No spend logged yet.</div>') + '</div>' : '';
+    var sample = lines.length && lines.every(function (l) { return l._demo; });
+    if (sample) head += '<div class="alert alert-info" style="margin-bottom:12px">These are sample budget lines so you can see how it looks. Spend added to them isn’t kept. Add your own line below and it saves properly.</div>';
     el.innerHTML = head + stats + (typeof window.vlBudTop === 'function' ? window.vlBudTop(c, lines) : '') + table + spendCard + '<div style="font-size:12px;color:var(--txt3);margin-top:10px">Budget and spend go into this contract’s funder reports.</div>';
     if (typeof window.vlBudAfter === 'function') window.vlBudAfter();
   }
