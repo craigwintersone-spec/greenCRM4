@@ -31,6 +31,7 @@
     S.sql.auto = res[0] !== null && res[1] !== null;
     S.rec = res[0] || []; S.rules = res[1] || [];
     await postFixed();
+    if (typeof isAdviserRole === 'function' && isAdviserRole()) return;        // frontline staff: no money jobs run for them
     if (typeof window.vlDonSyncAuto === 'function') window.vlDonSyncAuto();   // new gifts from connected accounts
     setTimeout(draftThanks, 2500);
     setTimeout(draftComms, 9000);

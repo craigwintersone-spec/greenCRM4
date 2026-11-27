@@ -137,7 +137,12 @@
     return top ? { who: top + '\u2019s', list: P.filter(function (p) { return p.advisor === top; }) } : { who: 'your', list: [] };
   }
   window.vlLens = lens;
-  window.vlSetLens = function (v) { try { sessionStorage.setItem('vl_lens', v); } catch (e) { /* none */ } if (typeof window.runMorningBriefing === 'function') window.runMorningBriefing(); };
+  window.vlSetLens = function (v) {
+    try { sessionStorage.setItem('vl_lens', v); } catch (e) { /* none */ }
+    var cached = null; try { cached = localStorage.getItem(CACHE_KEY()); } catch (e) { /* none */ }
+    if (v === 'manager' && cached && $('mb-body')) { paintChecks(); $('mb-body').innerHTML = cached; return; }
+    if (typeof window.runMorningBriefing === 'function') window.runMorningBriefing();
+  };
 
   // ── 1. Morning briefing checks ───────────────────────────────
   function checks() { return lensChecks(lens()); }
@@ -224,7 +229,8 @@
     var c = checks();
     return { lines: c.length ? c.map(function (x) { return (x.lvl === 'red' ? 'URGENT: ' : '') + x.text; }) : ['none'], count: c.filter(function (x) { return x.lvl !== 'info'; }).length };
   };
-  var DOT = { red: '#B42318', amber: '#B7791F', info: '#1A56DB' };
+  var DOT = { red: '#B42318', amber: '#B7791F', info: '#1A56DB' }, showAll = false;
+  window.vlChecksAll = function () { showAll = true; paintChecks(); };
   function paintChecks() {
     var body = $('mb-body'); if (!body) return;
     var box = $('ao-checks');
@@ -234,10 +240,10 @@
     var title = custom ? custom.title : L === 'frontline' ? 'Today for ' + myPeople().who + ' caseload (' + myPeople().list.filter(function (p) { return p.stage !== 'Closed'; }).length + ' people)' : L === 'trustee' ? 'For trustees: where things stand' : 'Today’s checks';
     box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:4px 0 8px"><div style="font-size:12px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--txt3)">' + esc(title) + '</div>' +
       (canSwitch ? '<select onchange="vlSetLens(this.value)" title="See what each role sees" style="width:auto;font-size:12px;padding:3px 6px">' + [['manager', 'View as manager'], ['frontline', 'View as frontline worker'], ['trustee', 'View as trustee']].concat(window.vlLenses || []).map(function (o) { return '<option value="' + o[0] + '"' + (L === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' : '') + '</div>' +
-      (custom ? custom.html : c.length ? c.map(function (x) {
-        return '<div onclick="go(\'' + x.page + '\')" style="display:flex;gap:10px;align-items:flex-start;padding:7px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;font-size:13px;background:var(--surface,#fff)">' +
+      (custom ? custom.html : c.length ? c.map(function (x, i) {
+        return '<div onclick="go(\'' + x.page + '\')" class="' + (i >= 6 && !showAll && c.length > 8 ? 'ao-more' : '') + '" style="display:' + (i >= 6 && !showAll && c.length > 8 ? 'none' : 'flex') + ';gap:10px;align-items:flex-start;padding:7px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;font-size:13px;background:var(--surface,#fff)">' +
           '<span style="width:8px;height:8px;border-radius:50%;background:' + DOT[x.lvl] + ';margin-top:6px;flex-shrink:0"></span><span>' + esc(x.text) + '</span></div>';
-      }).join('') : '<div style="font-size:13px;color:var(--txt3);margin-bottom:8px">Nothing due or overdue. All clear.</div>') +
+      }).join('') + (c.length > 8 && !showAll ? '<button class="btn btn-ghost btn-sm" style="margin-bottom:8px" onclick="vlChecksAll()">Show ' + (c.length - 6) + ' more</button>' : '') : '<div style="font-size:13px;color:var(--txt3);margin-bottom:8px">Nothing due or overdue. All clear.</div>') +
       (L === 'manager' && typeof window.vlInboxHTML === 'function' ? window.vlInboxHTML() : '');
   }
   window.vlPaintChecks = paintChecks;
@@ -345,6 +351,7 @@
     if ($('ao-ask-btn')) return;
     var b = document.createElement('button'); b.id = 'ao-ask-btn'; b.className = 'no-print'; b.textContent = '✦ Ask Vorlana';
     b.style.cssText = 'position:fixed;right:20px;bottom:20px;z-index:900;background:#1F6F6D;color:#fff;border:0;border-radius:22px;padding:11px 18px;font-weight:600;font-size:14px;box-shadow:0 4px 14px rgba(0,0,0,.18);cursor:pointer';
+    if (window.innerWidth < 700) { b.textContent = '\u2726 Ask'; b.style.padding = '9px 14px'; b.style.right = '12px'; b.style.bottom = '12px'; b.style.opacity = '.94'; }
     b.onclick = function () { var p = $('ao-ask'); p.style.display = p.style.display === 'none' ? 'flex' : 'none'; if (p.style.display === 'flex') $('ao-ask-q').focus(); };
     document.body.appendChild(b);
     var p = document.createElement('div'); p.id = 'ao-ask'; p.className = 'no-print';
@@ -372,7 +379,7 @@
       '\n\nLAST 30 DAYS\n' + factsFor(iso(addDays(new Date(), -30)), today(), { volNames: true, quotes: 3, upcoming: true }) +
       '\n\nALL TIME\n' + factsFor('2000-01-01', today(), { quotes: 0, eventList: 3 }) + (await circFacts(y.getFullYear() + '-01-01', today())) +
       '\n\nDEADLINES AND CHECKS TODAY\n' + (checks().map(function (x) { return x.text; }).join('\n') || 'none') +
-      '\n\nCALENDAR (next 6 months)\n' + calItems().filter(function (x) { return x.date <= iso(addMonths(new Date(), 6)); }).slice(0, 25).map(function (x) { return fmt(x.date) + ': ' + x.what; }).join('\n');
+      (lens() === 'frontline' ? '' : '\n\nCALENDAR (next 6 months)\n' + calItems().filter(function (x) { return x.date <= iso(addMonths(new Date(), 6)); }).slice(0, 25).map(function (x) { return fmt(x.date) + ': ' + x.what; }).join('\n'));
     var sys = 'You are Vorlana, the assistant inside a UK charity\'s records system. Answer the question using ONLY the FACTS provided. Be short and direct: one to four sentences, or a short list. Use **bold** for the key figure. ' +
       'Never invent people, events, figures or dates. Never add up, average or calculate new figures yourself; if the question needs a figure that is not in the facts, say plainly it isn\'t in your records and name the page in Vorlana where it would be (Events, Volunteers, Contracts, Budget, Donations, Reports, Funding calendar). ' +
       'Say which period a figure covers. Use "black and ethnic minority", never "BAME". British English. No headings.';
@@ -603,6 +610,27 @@
     }).join('') + '</tbody></table></div>' : '<div class="card" style="color:var(--txt3)">No donations here yet.</div>';
     el.innerHTML = stats + fundLine + (typeof window.vlDonTop === 'function' ? window.vlDonTop() : '') + form + tabs + table;
     if (typeof window.vlDonAfter === 'function') window.vlDonAfter();
+    foldCards(el);
+  }
+  // the tools on a busy page fold down to their titles; one that is in use, or has something to say, stays open
+  var openCards = {};
+  window.vlDonOpen = function (title) { openCards[title] = true; renderDonations(); };
+  function foldCards(el) {
+    Array.prototype.forEach.call(el.children, function (card) {
+      if (!card.classList || !card.classList.contains('card')) return; var t = card.querySelector('.card-title'); if (!t || card.querySelector('table') && !card.querySelector('#ao-csv')) return;
+      var key = t.textContent.trim(), head = card.firstElementChild, busy = !!card.querySelector('#ao-don-msg, #ao-csv > div, [id^="ao-lk-"], [id^="rc-askt-"]');
+      if (busy) openCards[key] = true;
+      var open = !!openCards[key];
+      Array.prototype.forEach.call(card.children, function (ch) { if (ch !== head) ch.style.display = open ? '' : 'none'; });
+      head.style.cursor = 'pointer'; t.insertAdjacentHTML('beforeend', ' <span style="font-weight:400;color:var(--txt3);font-size:12px">' + (open ? '\u25be' : '\u25b8') + '</span>');
+      if (!open) {
+        head.querySelectorAll('button,label').forEach(function (b) { b.style.display = 'none'; });
+        var nx = head.nextElementSibling, hint = nx && !nx.querySelector('input,select,textarea,button') ? nx.textContent.trim() : (key === 'Add a donation' ? 'Type one in by hand.' : '');
+        if (hint) { t.style.margin = '0'; t.insertAdjacentHTML('afterend', '<div class="ao-hint" style="font-size:12px;color:var(--txt3);margin-top:3px">' + esc(hint.length > 120 ? hint.slice(0, 117) + '\u2026' : hint) + '</div>'); }
+      }
+      head.addEventListener('click', function (e) { if (e.target.closest('button,label,input,a,select')) return; openCards[key] = !open; renderDonations(); });
+      card.style.marginBottom = '10px';
+    });
   }
   window.vlDonShow = function (k) { donShow = k; renderDonations(); };
   window.vlDonAdd = async function () {
@@ -655,7 +683,14 @@
     });
   }
   window.VL_EXTRA_PAGES = { calendar: function () { renderCalendar().then(function () { if (typeof window.vlCalAfter === 'function') window.vlCalAfter(); }); }, budget: function () { renderBudget(); }, donations: function () { renderDonations(); } };
-  function showNav() { window.__aoOn = true; document.querySelectorAll('.nav-btn.ao-only').forEach(function (b) { b.style.display = ''; }); }
+  function showNav() {
+    window.__aoOn = true;
+    var adviser = typeof isAdviserRole === 'function' && isAdviserRole();
+    document.querySelectorAll('.nav-btn.ao-only').forEach(function (b) {
+      var m = (b.getAttribute('onclick') || '').match(/go\('([^']+)'\)/), page = m ? m[1] : '';
+      b.style.display = (!adviser || (typeof pageAllowed === 'function' && pageAllowed(page))) ? '' : 'none';   // frontline staff only see My day
+    });
+  }
 
   function init() {
     if (!on()) return;
@@ -671,7 +706,7 @@
   var tries = 0;
   (function wait() {
     if (typeof currentOrg !== 'undefined' && currentOrg && $('main') && typeof go === 'function' && typeof runAgent === 'function' && (DB.events || []).length + (DB.participants || []).length + (DB.contracts || []).length > 0) return setTimeout(init, 600);
-    if (++tries > 60) { if (typeof currentOrg !== 'undefined' && currentOrg) init(); return; }
+    if (++tries > 14) { if (typeof currentOrg !== 'undefined' && currentOrg) init(); return; }
     setTimeout(wait, 500);
   })();
 

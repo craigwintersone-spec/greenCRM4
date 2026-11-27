@@ -30,6 +30,7 @@
       '<button class="btn btn-p btn-sm" onclick="vlCoDayDone(\'' + id + '\')">Log it and write their report</button></div>' : '';
     var rep = e.report_text ? '<div style="margin-top:8px"><div id="cd-rep-' + id + '" contenteditable="true" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.6;outline:none">' + (typeof aiPanelHTML === 'function' ? aiPanelHTML(e.report_text) : esc(e.report_text)) + '</div>' +
       '<div style="display:flex;gap:6px;margin-top:6px"><button class="btn btn-ghost btn-sm" onclick="vlCopyEl(\'cd-rep-' + id + '\',this)">Copy</button>' + (/^(demo|mem)-/.test(String(e.id)) ? '' : '<button class="btn btn-ai btn-sm" onclick="vlCoSendReport(\'' + id + '\',this)">Email it to ' + esc(e.company) + '</button>') + '</div></div>' : '';
+    if (o && o.kind === 'fund' && !e.day_date) return '';                      // only team days have a day to log
     return done + (e.day_date ? '' : '<div style="margin-top:6px"><button class="btn btn-ghost btn-sm" onclick="vlCoDayForm(\'' + id + '\')">The day has happened</button></div>') + form + '<div id="cd-status-' + id + '" style="font-size:12px;color:var(--txt3);margin-top:4px"></div>' + rep;
   };
   window.vlCoDayForm = function (id) { openDay = String(id); OP().renderCo(); };
