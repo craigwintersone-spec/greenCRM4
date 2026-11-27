@@ -24,7 +24,11 @@
   var uses = function (k) { return typeof orgUses !== 'function' || orgUses(k); };
   var isDemo = function () { return typeof _demoMode !== 'undefined' && _demoMode; };
 
-  function on() { return !!(typeof currentOrg !== 'undefined' && currentOrg && currentOrg.settings && currentOrg.settings.demo_account === true); }
+  // The demo account shows the new features unless they are switched off on this browser for a live demo:
+  // open app.html?labs=off to hide them all, app.html?labs=on to bring them back. Nothing else changes.
+  (function () { try { var m = /[?&]labs=(on|off)\b/.exec(location.search); if (m) { if (m[1] === 'off') localStorage.setItem('vl_labs', 'off'); else localStorage.removeItem('vl_labs'); } } catch (e) { /* private mode */ } })();
+  var labsOff = function () { try { return localStorage.getItem('vl_labs') === 'off'; } catch (e) { return false; } };
+  function on() { return !labsOff() && !!(typeof currentOrg !== 'undefined' && currentOrg && currentOrg.settings && currentOrg.settings.demo_account === true); }
 
   // ── Store for budgets and donations ──────────────────────────
   var S = { don: [], lines: [], spend: [], sql: { don: true, bud: true }, loaded: false, bids: [] };

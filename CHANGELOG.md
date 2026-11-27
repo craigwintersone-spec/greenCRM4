@@ -2,6 +2,7 @@
 Newest first. The Sentinel reads this every morning and logs what shipped in the last 7 days.
 
 ## 2026-11-27
+- Demo account: open app.html?labs=off to hide every new feature on that browser for a live demo, and app.html?labs=on to bring them back
 - Bug sweep of the demo-account features (run the latest ai-office.sql): frontline staff could switch themselves into the manager view of the checks; a frontline worker with nobody assigned was shown a colleague's caseload; the new menu hid pages frontline staff are allowed and showed them a 'Back to mine' link; sample donations, key dates and company offers stayed after demo was turned off; emailing donors, companies and volunteers, and reading money, key-date and company records, is now managers only, on the server and in the database; the setup step no longer hides Contacts; the Dashboard keeps today's checks at the top for everyone; line icons replace emoji in the menu
 - Fixed for all organisations: frontline staff (advisors) were shown menu items for pages they can't open, because an old copy of the menu code was overriding the role check. The menu now only shows the pages each person can reach
 - New menu (demo account only): six sections named for the job (Today, People, Activity, Money, Reports, Settings); a 'Go to…' box that jumps to a page, person, volunteer, contract, event or donor (press / to start typing); counts beside pages showing what's waiting there; and 'View as' on the Dashboard now shows that role's menu too. Other organisations keep the current menu
