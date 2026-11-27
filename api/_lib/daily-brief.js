@@ -62,7 +62,7 @@ function buildChecks(d, now) {
     if (sg.length) out.push({ lvl: 'red', text: `${sg.length} high-risk or safeguarding ${sg.length === 1 ? 'person has' : 'people have'} had no contact for 14+ days` });   // no names by email
   }
   if (uses('volunteers') && (d.hours || []).length) {
-    const from = day(addDays(now, -30)), act = {}; d.hours.forEach(h => { if (String(h.date || h.shift_date || '').slice(0, 10) >= from) act[String(h.volunteer_id)] = 1; });
+    const from = day(addDays(now, -30)), act = {}; d.hours.forEach(h => { if (String(h.session_date || h.date || '').slice(0, 10) >= from) act[String(h.volunteer_id)] = 1; });
     const quiet = (d.volunteers || []).filter(v => (v.status || 'Active') === 'Active' && !act[String(v.id)]);
     if (quiet.length) out.push({ lvl: 'amber', text: `${quiet.length} active volunteer${quiet.length === 1 ? ' has' : 's have'} logged no hours in 30 days` });
   }

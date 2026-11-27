@@ -2,11 +2,15 @@
 //   send_thanks  (signed in)  email a donor their thank-you from the charity and mark the gift thanked
 //   offers       (public)     what charities are offering companies: team days and things to fund
 //   enquire      (public)     a company asks about an offer; saved, and emailed to the charity's managers
+//   give / gave  (public)     pay towards a "something to fund" offer by card, straight into the charity's own Stripe
+//                             account (the one connected for bookings); the gift is saved in donations once Stripe says paid
+//   send_report  (signed in)  email a company its impact report after a team day
 // Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY, APP_URL. Needs ai-office.sql.
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const APP_URL = (process.env.APP_URL || 'https://www.vorlana.com').replace(/\/$/, '');
+const STRIPE_KEY = process.env.STRIPE_SECRET_KEY;
 const RATE = { windowMs: 60 * 1000, max: 30, hits: new Map() };
 
 async function sb(path, opts = {}) {
@@ -15,6 +19,21 @@ async function sb(path, opts = {}) {
   if (!r.ok) throw new Error(`${path.split('?')[0]} ${r.status}: ${typeof b === 'string' ? b : (b && b.message) || ''}`);
   return b;
 }
+function flatten(obj, prefix, out) {
+  out = out || {};
+  Object.keys(obj).forEach(k => { const v = obj[k], key = prefix ? `${prefix}[${k}]` : k; if (v == null) return; if (typeof v === 'object') flatten(v, key, out); else out[key] = String(v); });
+  return out;
+}
+async function stripe(path, params, account) {
+  if (!STRIPE_KEY) throw new Error('Card payments are not set up yet.');
+  const r = await fetch('https://api.stripe.com/v1/' + path, { method: params ? 'POST' : 'GET',
+    headers: Object.assign({ Authorization: 'Bearer ' + STRIPE_KEY, 'Content-Type': 'application/x-www-form-urlencoded' }, account ? { 'Stripe-Account': account } : {}),
+    body: params ? new URLSearchParams(flatten(params)).toString() : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error('Stripe: ' + ((j.error && j.error.message) || r.status));
+  return j;
+}
+const payReady = org => !!(STRIPE_KEY && org && org.settings && org.settings.stripe_account && org.settings.stripe_ready);
 const bad = (res, message, code) => res.status(code || 400).json({ ok: false, error: message });
 const trim = (s, n) => String(s == null ? '' : s).replace(/[\u0000-\u0008\u000b-\u001f]/g, ' ').trim().slice(0, n || 200);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -75,7 +94,7 @@ module.exports = async function handler(req, res) {
       const orgs = ids.length ? await sb(`organisations?id=in.(${ids.join(',')})&select=id,name,brand_color,logo_url,settings,status`) : [];
       const by = {}; (orgs || []).forEach(o => { if (o.status !== 'suspended' && o.settings && o.settings.demo_account === true) by[o.id] = o; });   // demo account only while this is tested
       return res.status(200).json({ ok: true, offers: offers.filter(o => by[o.org_id]).map(o => ({ id: o.id, kind: o.kind, title: o.title, description: o.description || '', date: o.offer_date, places: o.places, amount: o.amount, area: o.area || '', cause: o.cause || '',
-        charity: by[o.org_id].name, colour: by[o.org_id].brand_color || '', logo: by[o.org_id].logo_url || '' })) });
+        charity: by[o.org_id].name, can_pay: o.kind === 'fund' && payReady(by[o.org_id]), colour: by[o.org_id].brand_color || '', logo: by[o.org_id].logo_url || '' })) });
     }
     if (action === 'enquire') {
       if (body.hp) return res.status(200).json({ ok: true });                                 // a bot filled the hidden box
@@ -98,6 +117,43 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
+    if (action === 'give') {
+      if (body.hp) return res.status(200).json({ ok: true });
+      const offer = (await sb(`company_offers?id=eq.${encodeURIComponent(String(body.offer_id || ''))}&open=eq.true&kind=eq.fund&select=id,org_id,title&limit=1`))[0];
+      if (!offer) return bad(res, 'This is no longer open.', 404);
+      const org = (await sb(`organisations?id=eq.${offer.org_id}&select=id,name,settings&limit=1`))[0];
+      if (!payReady(org)) return bad(res, 'This charity can\u2019t take card payments here yet. Use \u201cAsk about funding this\u201d and they\u2019ll reply.');
+      const pence = Math.round((parseFloat(body.amount) || 0) * 100), name = trim(body.name, 120), email = trim(body.email, 254).toLowerCase();
+      if (pence < 100 || pence > 5000000) return bad(res, 'Enter an amount between \u00a31 and \u00a350,000.');
+      if (!name) return bad(res, 'Please add your name or your company\u2019s name.');
+      if (!okEmail(email)) return bad(res, 'Please add an email address for the receipt.');
+      const ga = !!body.gift_aid, house = trim(body.house, 80), postcode = trim(body.postcode, 12).toUpperCase();
+      if (ga && (!house || !postcode)) return bad(res, 'Gift Aid needs your home address: house name or number, and postcode.');
+      const session = await stripe('checkout/sessions', { mode: 'payment', submit_type: 'donate', customer_email: email,
+        line_items: [{ price_data: { currency: 'gbp', unit_amount: pence, product_data: { name: 'Donation to ' + org.name + ': ' + offer.title } }, quantity: 1 }],
+        success_url: `${APP_URL}/companies.html?gave={CHECKOUT_SESSION_ID}&o=${offer.id}`, cancel_url: `${APP_URL}/companies.html`,
+        metadata: { vorlana_donation: offer.id, donor_name: name, gift_aid: ga ? 'yes' : 'no', house, postcode } }, org.settings.stripe_account);
+      return res.status(200).json({ ok: true, url: session.url });
+    }
+    if (action === 'gave') {
+      const offer = (await sb(`company_offers?id=eq.${encodeURIComponent(String(body.offer_id || ''))}&select=id,org_id,title&limit=1`))[0];
+      if (!offer || !/^cs_[A-Za-z0-9_]+$/.test(String(body.session || ''))) return bad(res, 'We couldn\u2019t find that payment.', 404);
+      const org = (await sb(`organisations?id=eq.${offer.org_id}&select=id,name,settings&limit=1`))[0];
+      if (!payReady(org)) return bad(res, 'We couldn\u2019t find that payment.', 404);
+      const s = await stripe('checkout/sessions/' + encodeURIComponent(body.session), null, org.settings.stripe_account);
+      const md = s.metadata || {};
+      if (s.payment_status !== 'paid' || md.vorlana_donation !== offer.id) return bad(res, 'That payment hasn\u2019t gone through.', 402);
+      const amount = (s.amount_total || 0) / 100, email = (s.customer_details && s.customer_details.email) || s.customer_email || null;
+      const saved = await sb('donations?on_conflict=org_id,source,external_id', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
+        body: JSON.stringify([{ org_id: org.id, source: 'vorlana', external_id: s.id, donor_name: trim(md.donor_name, 120) || 'Online donor', donor_email: email, amount, gift_date: new Date((s.created || Date.now() / 1000) * 1000).toISOString().slice(0, 10),
+          method: 'Card (Vorlana)', gift_aid: md.gift_aid === 'yes', donor_house: md.house || null, donor_postcode: md.postcode || null, fund: offer.title, restricted: true, notes: 'Given on the company page' }]) });
+      if (Array.isArray(saved) && saved.length) {                                                // first time we've seen it: tell the charity
+        try { const to = await managerEmails(org.id); if (to.length) await sendMail({ to, fromName: 'Vorlana', subject: `New donation: \u00a3${amount.toLocaleString('en-GB')} for ${offer.title}`,
+          html: shell(`<p><b>${esc(md.donor_name || 'Someone')}</b> has given <b>\u00a3${amount.toLocaleString('en-GB')}</b> towards <b>${esc(offer.title)}</b>${md.gift_aid === 'yes' ? ', with a Gift Aid declaration' : ''}.</p><p>It\u2019s in Donations in <a href="${APP_URL}/app.html">Vorlana</a>, with a thank-you ready to send.</p>`) }); } catch (e) { /* saved either way */ }
+      }
+      return res.status(200).json({ ok: true, charity: org.name, amount, title: offer.title });
+    }
+
     // ── signed in ──
     const user = await userFrom(req); if (!user) return bad(res, 'Please sign in again.', 401);
     const orgId = String(body.org_id || ''); if (!orgId) return bad(res, 'No organisation.');
@@ -114,6 +170,16 @@ module.exports = async function handler(req, res) {
       const now = new Date().toISOString();
       await sb(`donations?id=eq.${d.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ thanked_at: now, thanks_sent_at: now }) });
       return res.status(200).json({ ok: true, thanked_at: now });
+    }
+    if (action === 'send_report') {
+      const text = trim(body.text, 6000); if (text.length < 40) return bad(res, 'The report is empty.');
+      const e = (await sb(`company_enquiries?id=eq.${encodeURIComponent(String(body.enquiry_id || ''))}&org_id=eq.${encodeURIComponent(orgId)}&select=id,company,email&limit=1`))[0];
+      if (!e || !okEmail(e.email || '')) return bad(res, 'There\u2019s no email address for this company.', 404);
+      const org = (await sb(`organisations?id=eq.${encodeURIComponent(orgId)}&select=name&limit=1`))[0] || {};
+      const html = esc(text).split(/\n{2,}/).map(p => /^##\s*/.test(p) ? `<h3 style="color:#1F6F6D;margin:20px 0 6px">${p.replace(/^##\s*/, '')}</h3>` : `<p style="margin:0 0 12px">${p.replace(/\n/g, '<br>').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')}</p>`).join('');
+      await sendMail({ to: [e.email], replyTo: user.email, fromName: org.name || 'Thank you', subject: `Your team\u2019s impact with ${org.name || 'us'}`, html: shell(html) });
+      await sb(`company_enquiries?id=eq.${e.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ report_sent_at: new Date().toISOString() }) });
+      return res.status(200).json({ ok: true });
     }
     return bad(res, 'Unknown action.');
   } catch (e) {

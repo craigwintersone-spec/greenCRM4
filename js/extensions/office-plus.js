@@ -157,7 +157,7 @@
     el.innerHTML = (enq.length ? '<div class="card" style="margin-bottom:14px"><div class="card-title">Enquiries</div>' + enq.map(function (e) { var o = OFF.find(function (x) { return String(x.id) === String(e.offer_id); });
         return '<div style="padding:9px 0;border-top:1px solid var(--border);font-size:13px"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><span><b>' + esc(e.company) + '</b>' + (e.contact_name ? ' · ' + esc(e.contact_name) : '') + (e.people ? ' · ' + e.people + ' people' : '') + ' · about ' + esc(o ? o.title : 'an offer') + '</span>' +
           '<span style="display:flex;gap:6px;align-items:center">' + (e.status === 'new' ? '<span class="badge" style="background:#FEF6E7;color:#B7791F">New</span>' : '<span class="badge" style="background:#E7F6EC;color:#1E7B3C">Replied</span>') + '<a class="btn btn-ghost btn-sm" href="mailto:' + esc(e.email) + '?subject=' + encodeURIComponent('Re: ' + (o ? o.title : 'your enquiry') + ' at ' + a.orgName()) + '">Reply</a>' + (e.status === 'new' ? '<button class="btn btn-p btn-sm" onclick="vlCoReplied(\'' + esc(e.id) + '\')">Mark replied</button>' : '') + '</span></div>' +
-          (e.message ? '<div style="color:var(--txt2);margin-top:4px">' + esc(e.message) + '</div>' : '') + '</div>'; }).join('') + '</div>' : '') +
+          (e.message ? '<div style="color:var(--txt2);margin-top:4px">' + esc(e.message) + '</div>' : '') + (typeof window.vlCoEnqExtra === 'function' ? window.vlCoEnqExtra(e, o) : '') + '</div>'; }).join('') + '</div>' : '') +
       '<div class="card" style="margin-bottom:14px"><div class="card-title">What you’re offering</div>' + (OFF.length ? OFF.map(function (o) {
         return '<div style="padding:9px 0;border-top:1px solid var(--border);font-size:13px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><div style="flex:1;min-width:240px"><b>' + esc(o.title) + '</b> <span class="badge" style="background:' + (o.kind === 'fund' ? '#E8F0FE;color:#1A56DB' : '#E7F6EC;color:#1E7B3C') + '">' + (o.kind === 'fund' ? 'To fund' : 'Team day') + '</span>' +
           '<div style="color:var(--txt3);margin:2px 0">' + esc([o.offer_date ? a.fmt(o.offer_date) : '', o.places ? 'up to ' + o.places + ' people' : '', o.amount ? a.gbp(o.amount) + (o.kind === 'fund' ? '' : ' suggested donation') : '', o.area].filter(Boolean).join(' · ')) + '</div><div style="color:var(--txt2)">' + esc(o.description || '') + '</div></div>' +
@@ -199,5 +199,6 @@
     }
     if (++tries > 120) return; setTimeout(wait, 500);
   })();
+  window.vlOP = { ENQ: function () { return ENQ; }, OFF: function () { return OFF; }, renderCo: renderCo, api: api, upd: upd, addKeyDate: function (row) { return ins('key_dates', row, KD); }, sqlOk: function () { return sqlOk; } };
   if (window.__VORLANA_TEST) window.__opTest = { KD: function () { return KD; }, OFF: function () { return OFF; }, ENQ: function () { return ENQ; }, gaRows: gaRows };
 })();

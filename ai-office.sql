@@ -135,6 +135,13 @@ create table if not exists public.company_enquiries (
   created_at   timestamptz not null default now()
 );
 
+-- after a company's team day: what happened, and the impact report sent to them
+alter table public.company_enquiries add column if not exists day_date       date;
+alter table public.company_enquiries add column if not exists day_people     integer;
+alter table public.company_enquiries add column if not exists day_hours      numeric;
+alter table public.company_enquiries add column if not exists report_text    text;
+alter table public.company_enquiries add column if not exists report_sent_at timestamptz;
+
 alter table public.donations    enable row level security;
 alter table public.key_dates         enable row level security;
 alter table public.company_offers    enable row level security;

@@ -37,6 +37,7 @@
 <body>
 <header><div><img src="logo.png" alt="Vorlana"><span style="color:var(--txt3);font-size:14px">for companies</span></div></header>
 <main>
+  <div id="thanks" style="display:none;background:#E7F6EC;color:#1E7B3C;border-radius:14px;padding:16px 18px;margin-bottom:18px;font-weight:600"></div>
   <h1>Give your team’s time. Back a local charity.</h1>
   <p class="sub">Volunteering days and projects to fund, listed by the charities themselves. Ask about one and the charity replies to you directly. Afterwards you get an impact report with real figures for your CSR reporting.</p>
   <div class="bar">
@@ -60,7 +61,41 @@
   <div class="msg" id="f-msg-out"></div>
 </div></div>
 
+<div class="overlay" id="gv" onclick="if(event.target===this)closeGive()"><div class="modal">
+  <h3 id="g-title" style="margin:0 0 2px"></h3><div class="who" id="g-who"></div>
+  <div class="row"><div><label for="g-amt">Amount (£)</label><input id="g-amt" type="number" min="1" step="1"></div><div><label for="g-name">Your name or company</label><input id="g-name" autocomplete="name"></div></div>
+  <label for="g-email">Email for your receipt</label><input id="g-email" type="email" autocomplete="email">
+  <label style="display:flex;gap:8px;align-items:flex-start;font-weight:400;margin-top:14px"><input type="checkbox" id="g-ga" style="width:auto;margin-top:4px" onchange="document.getElementById('g-addr').style.display=this.checked?'':'none'"><span><b>Giving your own money? Add Gift Aid.</b> I am a UK taxpayer and understand that if I pay less Income Tax and/or Capital Gains Tax than the amount of Gift Aid claimed on all my donations in that tax year, it is my responsibility to pay any difference. (Companies can’t add Gift Aid.)</span></label>
+  <div class="row" id="g-addr" style="display:none"><div><label for="g-house">House name or number</label><input id="g-house" autocomplete="address-line1"></div><div><label for="g-pc">Postcode</label><input id="g-pc" autocomplete="postal-code"></div></div>
+  <input class="hp" id="g-hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+  <div style="display:flex;gap:8px;margin-top:14px"><button id="g-send" onclick="give()">Continue to payment</button><button class="ghost" onclick="closeGive()">Cancel</button></div>
+  <div class="who" style="margin-top:10px">You pay on Stripe’s secure page. The money goes straight to the charity.</div>
+  <div class="msg" id="g-out"></div>
+</div></div>
+
 <script>
+function openGive(id) {
+  current = OFFERS.filter(function (o) { return o.id === id; })[0]; if (!current) return;
+  document.getElementById('g-title').textContent = current.title; document.getElementById('g-who').textContent = current.charity;
+  document.getElementById('g-amt').value = current.amount || ''; document.getElementById('g-out').textContent = ''; document.getElementById('gv').classList.add('open'); document.getElementById('g-amt').focus();
+}
+function closeGive() { document.getElementById('gv').classList.remove('open'); }
+function give() {
+  var v = function (id) { return document.getElementById(id).value.trim(); }, out = document.getElementById('g-out'), btn = document.getElementById('g-send');
+  btn.disabled = true; out.textContent = 'One moment…';
+  fetch('/api/office', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'give', offer_id: current.id, amount: v('g-amt'), name: v('g-name'), email: v('g-email'), gift_aid: document.getElementById('g-ga').checked, house: v('g-house'), postcode: v('g-pc'), hp: v('g-hp') }) })
+    .then(function (r) { return r.json().then(function (j) { if (!r.ok || j.ok === false || !j.url) throw new Error(j.error || 'Something went wrong.'); location.href = j.url; }); })
+    .catch(function (e) { out.textContent = e.message; btn.disabled = false; });
+}
+(function () {
+  var q = new URLSearchParams(location.search), s = q.get('gave'), o = q.get('o'); if (!s || !o) return;
+  fetch('/api/office', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'gave', session: s, offer_id: o }) })
+    .then(function (r) { return r.json(); }).then(function (j) {
+      var t = document.getElementById('thanks'); t.style.display = '';
+      t.textContent = j && j.ok ? 'Thank you. Your £' + Number(j.amount).toLocaleString('en-GB') + ' gift towards ' + j.title + ' has reached ' + j.charity + '. A receipt is on its way from Stripe.' : ((j && j.error) || 'We couldn’t confirm that payment. If money left your account, contact the charity.');
+      history.replaceState(null, '', 'companies.html'); })
+    .catch(function () {});
+})();
 var OFFERS = [], current = null;
 var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
 var fmt = function (d) { return new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' }); };
@@ -73,7 +108,7 @@ function paint() {
   el.innerHTML = rows.map(function (o) {
     var meta = [o.date ? fmt(o.date) : '', o.places ? 'Up to ' + o.places + ' people' : '', o.amount ? gbp(o.amount) + (o.kind === 'fund' ? ' to fund' : ' suggested donation') : '', o.area].filter(Boolean).join(' · ');
     return '<div class="card"><div><span class="tag ' + (o.kind === 'fund' ? 'fund">Project to fund' : 'team">Team volunteering day') + '</span></div><h3>' + esc(o.title) + '</h3><div class="who">' + esc(o.charity) + (o.cause ? ' · ' + esc(o.cause) : '') + '</div>' +
-      (meta ? '<div class="meta">' + esc(meta) + '</div>' : '') + '<div class="desc">' + esc(o.description) + '</div><div style="margin-top:14px"><button onclick="openForm(\'' + esc(o.id) + '\')">' + (o.kind === 'fund' ? 'Ask about funding this' : 'Ask about this day') + '</button></div></div>';
+      (meta ? '<div class="meta">' + esc(meta) + '</div>' : '') + '<div class="desc">' + esc(o.description) + '</div><div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">' + (o.can_pay ? '<button onclick="openGive(\'' + esc(o.id) + '\')">Give now</button>' : '') + '<button' + (o.can_pay ? ' class="ghost"' : '') + ' onclick="openForm(\'' + esc(o.id) + '\')">' + (o.kind === 'fund' ? 'Ask about funding this' : 'Ask about this day') + '</button></div></div>';
   }).join('');
 }
 function openForm(id) {
