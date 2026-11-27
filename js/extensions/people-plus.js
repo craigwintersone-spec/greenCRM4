@@ -90,7 +90,7 @@
   // ── Setup in four steps ───────────────────────────────────────
   var step = 0, W = { areas: {}, dates: {} };
   var AREAS = [['people', 'We support people one to one', ['participants', 'evidence', 'demographics']], ['events', 'We run sessions, groups or events', ['events']], ['volunteers', 'We work with volunteers', ['volunteers']],
-    ['circular', 'We reuse, repair, share food or grow', ['circular']], ['funded', 'We have grants or contracts to report on', ['funders', 'bd']], ['donors', 'We take donations', ['contacts']]];
+    ['circular', 'We reuse, repair, share food or grow', ['circular']], ['funded', 'We have grants or contracts to report on', ['funders', 'bd']]];
   var DATES = ['Charity Commission annual return', 'Annual accounts filing', 'Public liability insurance renewal', 'Safeguarding policy review', 'DBS checks: review who is due'];
   function wiz() {
     var ov = $('pp-wiz'); if (!ov) { ov = document.createElement('div'); ov.id = 'pp-wiz'; ov.className = 'modal-overlay'; ov.innerHTML = '<div class="modal" style="max-width:600px"><div id="pp-wiz-body"></div></div>'; document.body.appendChild(ov); }

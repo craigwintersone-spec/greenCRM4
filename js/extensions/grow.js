@@ -154,7 +154,7 @@
       var c = FOUND.contracts[ticked.c[i]];
       try {
         var fname = c.funder || 'Funder to confirm', funder = (DB.funders || []).find(function (f) { return String(f.name || '').toLowerCase() === fname.toLowerCase(); });
-        if (!funder) { funder = await sbInsert('funders', { name: fname, type: 'Other', contact_name: null, contact_email: null, notes: 'Added from a document' }); await refreshTable('funders'); }
+        if (!funder) { try { funder = await sbInsert('funders', { name: fname, type: 'Other', contact_name: null, contact_email: null, notes: 'Added from a document' }); } catch (e0) { funder = await sbInsert('funders', { name: fname }); } await refreshTable('funders'); }
         var row = { name: c.name, funder: fname, funder_id: funder && funder.id ? String(funder.id) : null, report_type: 'other', value: c.value, target_starts: c.target_starts, target_outcomes: c.target_outcomes, start_date: c.start_date, end_date: c.end_date, status: 'live' };
         if (c.report_every) row.report_every = c.report_every; if (c.report_due_days) row.report_due_days = c.report_due_days;
         var saved;

@@ -76,6 +76,13 @@ async function isMember(user, orgId) {
   const m = await sb(`memberships?user_id=eq.${user.id}&org_id=eq.${encodeURIComponent(orgId)}&status=eq.active&select=role&limit=1`);
   return Array.isArray(m) && m.length > 0;
 }
+async function isManager(user, orgId) {
+  try { const s = await sb(`super_admins?user_id=eq.${user.id}&select=user_id&limit=1`); if (Array.isArray(s) && s.length) return true; } catch (e) { /* no */ }
+  const o = await sb(`organisations?id=eq.${encodeURIComponent(orgId)}&select=owner_id&limit=1`);
+  if (o && o[0] && o[0].owner_id === user.id) return true;
+  const m = await sb(`memberships?user_id=eq.${user.id}&org_id=eq.${encodeURIComponent(orgId)}&status=eq.active&select=role&limit=1`);
+  return Array.isArray(m) && m.length > 0 && /owner|admin|manager|super/i.test(m[0].role || '');
+}
 async function managerEmails(orgId) {
   const ms = await sb(`memberships?org_id=eq.${encodeURIComponent(orgId)}&status=eq.active&role=in.(owner,admin,manager)&select=user_id`);
   const out = [];
@@ -221,6 +228,7 @@ module.exports = async function handler(req, res) {
     const user = await userFrom(req); if (!user) return bad(res, 'Please sign in again.', 401);
     const orgId = String(body.org_id || ''); if (!orgId) return bad(res, 'No organisation.');
     if (!(await isMember(user, orgId))) return bad(res, 'Not allowed.', 403);
+    if (!(await isManager(user, orgId))) return bad(res, 'Only a manager can do this.', 403);            // these actions send email in the organisation's name
 
     if (action === 'send_thanks') {
       const text = trim(body.text, 4000); if (text.length < 20) return bad(res, 'The thank-you is empty.');

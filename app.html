@@ -937,18 +937,7 @@ Accreditations and policies: e.g. Matrix, safeguarding, Cyber Essentials"></text
 <script src="js/demo.js?v=24"></script>
 <script src="js/router.js?v=27"></script>
 
-<!-- Module visibility — shows/hides sidebar items per currentOrg.modules -->
-<script>
-'use strict';
-function applyModules(mods) {
-  mods = mods || {};
-  document.querySelectorAll('#sidebar .nav-btn[data-module]').forEach(function (btn) {
-    var key = btn.getAttribute('data-module');
-    var on = mods[key] !== false; // default ON if not explicitly set to false
-    btn.style.display = on ? '' : 'none';
-  });
-}
-</script>
+<!-- Module and role visibility of sidebar items is handled by applyModules in js/router.js -->
 
 <!-- Entry point -->
 <script src="js/boot.js?v=23"></script>
@@ -1342,18 +1331,18 @@ function applyModules(mods) {
 <script src="js/extensions/contract-forms.js?v=3"></script>
 <script src="js/extensions/historic-import.js?v=46"></script>
 <script src="js/extensions/feedback-funders.js?v=17"></script>
-<script src="js/extensions/nav.js?v=5"></script>
+<script src="js/extensions/nav.js?v=6"></script>
 <script src="js/extensions/dash-trends.js?v=1"></script>
 <script src="js/extensions/bids.js?v=5"></script>
 <script src="js/extensions/org-facts.js?v=4"></script>
 <script src="js/extensions/donations-in.js?v=1"></script>
 <script src="js/extensions/money-auto.js?v=3"></script>
-<script src="js/extensions/office-plus.js?v=2"></script>
-<script src="js/extensions/grow.js?v=4"></script>
+<script src="js/extensions/office-plus.js?v=3"></script>
+<script src="js/extensions/grow.js?v=5"></script>
 <script src="js/extensions/reach.js?v=4"></script>
-<script src="js/extensions/people-plus.js?v=1"></script>
-<script src="js/extensions/menu.js?v=1"></script>
-<script src="js/extensions/ai-office.js?v=7"></script>
+<script src="js/extensions/people-plus.js?v=2"></script>
+<script src="js/extensions/menu.js?v=2"></script>
+<script src="js/extensions/ai-office.js?v=8"></script>
 <script src="js/extensions/one-touch.js?v=1"></script>
 
 <!-- Participant handlers + paperwork persistence -->

@@ -84,7 +84,8 @@
   var lastLens = null;
   function lensMenu() {
     if (!A()) return; var L = A().lens(); if (L === lastLens) return; lastLens = L;
-    var allow = LENS_PAGES[L] || null;
+    var adviser = typeof isAdviserRole === 'function' && isAdviserRole();
+    var allow = adviser ? null : (LENS_PAGES[L] || null);       // real frontline staff keep the pages their organisation gives them
     document.querySelectorAll('#vl-nav .nav-btn').forEach(function (b) { var p = pageOf(b); if (allow && allow.indexOf(p) < 0) b.setAttribute('data-lens-hide', '1'); else b.removeAttribute('data-lens-hide'); });
     var css = $('mn-css'); if (!css) { css = document.createElement('style'); css.id = 'mn-css'; css.textContent = '#vl-nav .nav-btn[data-lens-hide]{display:none !important}#vl-nav .nav-btn{display:flex;align-items:center}'; document.head.appendChild(css); }
     if (typeof window.vlNavSync === 'function') window.vlNavSync();

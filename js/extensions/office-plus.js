@@ -29,6 +29,10 @@
     var a = A(), res = await Promise.all([a.q('key_dates'), a.q('company_offers'), a.q('company_enquiries')]);
     sqlOk = res[0] !== null && res[1] !== null;
     KD = res[0] || []; OFF = res[1] || []; ENQ = res[2] || [];
+    samples();
+  });
+  function samples() {
+    var a = A();
     if (a.isDemo() && !KD.some(function (k) { return k._demo; })) [['Public liability insurance renewal', 18, 12], ['Charity Commission annual return', 64, 12], ['Safeguarding policy review', -6, 12], ['DBS checks: review who is due', 95, 12]].forEach(function (k, i) {
       KD.push({ id: 'demo-kd-' + i, _demo: true, title: k[0], due_date: a.iso(a.addDays(new Date(), k[1])), repeat_months: k[2], done_at: null });
     });
@@ -36,7 +40,13 @@
       OFF.push({ id: 'demo-of-1', _demo: true, kind: 'team_day', title: 'Team day in the community garden', description: 'Bring up to 12 colleagues for a day of planting, path clearing and building raised beds alongside our Wednesday growing group. Tools, gloves and lunch from the garden provided.', offer_date: a.iso(a.addDays(new Date(), 40)), places: 12, amount: 600, area: 'Riverside', cause: 'Community and environment', open: true });
       ENQ.push({ id: 'demo-en-1', _demo: true, offer_id: 'demo-of-1', company: 'Fenmoor Building Society', contact_name: 'Neil Barker', email: 'neil.barker@example.com', people: 10, message: 'We have a volunteering day to use before March. Is the garden day still free?', status: 'new', created_at: new Date().toISOString() });
     }
-  });
+  }
+  // sample rows come and go with the demo switch (called by ai-office.js)
+  window.vlDemoSync = function (on) {
+    if (on) { samples(); return; }
+    var drop = function (L) { for (var i = L.length - 1; i >= 0; i--) if (L[i]._demo) L.splice(i, 1); };
+    drop(KD); drop(OFF); drop(ENQ);
+  };
 
   // ── Gift Aid claim (Donations page) ───────────────────────────
   var claimable = function () { return A().S.don.filter(function (d) { return d.gift_aid && !d.gift_aid_claimed_at && A().n(d.amount) > 0; }); };

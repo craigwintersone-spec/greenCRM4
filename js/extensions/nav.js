@@ -27,6 +27,11 @@
     safeguarding: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>',
     settings: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
     growth: '<path d="m3 17 6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
+    myday: '<rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/>',
+    budget: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+    donations: '<path d="M12 20s-7-4.4-7-9.5A4 4 0 0 1 12 8a4 4 0 0 1 7 2.5C19 15.6 12 20 12 20Z"/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+    companies: '<rect x="4" y="3" width="10" height="18" rx="1.5"/><path d="M14 9h6v12h-6M8 7h2M8 11h2M8 15h2"/>',
     chev: '<path d="m9 6 6 6-6 6"/>'
   };
   // Plain names in the sidebar

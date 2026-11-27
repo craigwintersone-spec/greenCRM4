@@ -33,7 +33,7 @@ async function canUse(user, orgId, managersOnly) {
   if (o && o[0] && o[0].owner_id === user.id) return true;
   const m = await sb(`memberships?user_id=eq.${user.id}&org_id=eq.${encodeURIComponent(orgId)}&status=eq.active&select=role&limit=1`);
   if (!Array.isArray(m) || !m.length) return false;
-  return managersOnly ? /^(owner|admin|manager)$/i.test(m[0].role || '') : true;
+  return managersOnly ? /owner|admin|manager|super/i.test(m[0].role || '') : true;
 }
 
 // ── each provider: check the details, then fetch gifts between two dates ──

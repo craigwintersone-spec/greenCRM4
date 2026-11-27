@@ -41,6 +41,13 @@
     S.loaded = true;
     if (typeof window.vlAOLoaded === 'function') { try { await window.vlAOLoaded(); } catch (e) { console.warn('[ai-office] add-on load', e); } }
   }
+  // sample rows come and go with the demo switch
+  function demoSync() {
+    if (!S.loaded) return;
+    if (isDemo()) addSamples();
+    else if (S.don.some(function (x) { return x._demo; }) || S.lines.some(function (x) { return x._demo; })) { S.don = S.don.filter(function (x) { return !x._demo; }); S.lines = S.lines.filter(function (x) { return !x._demo; }); S.spend = S.spend.filter(function (x) { return !x._demo; }); }
+    if (typeof window.vlDemoSync === 'function') window.vlDemoSync(isDemo());
+  }
   function addSamples() {
     if (!S.don.some(function (d) { return d._demo; })) {
       var donors = [['Margaret Ellis', 50, 'Card', true, '', 300], ['Northgate Rotary Club', 750, 'Bank transfer', false, 'Garden project', 270], ['Tom Okafor', 20, 'Direct debit', true, '', 240],
@@ -123,15 +130,15 @@
   // ── Lenses: the same checks, shown for the person looking ────
   // manager: everything. frontline: my own people and this week's events, no money. trustee: the big picture, no names.
   function lens() {
+    if (typeof isAdviserRole === 'function' && isAdviserRole()) return 'frontline';      // never switchable for frontline staff
     var v = null; try { v = sessionStorage.getItem('vl_lens'); } catch (e) { /* none */ }
-    if (v) return v;
-    return (typeof isAdviserRole === 'function' && isAdviserRole()) ? 'frontline' : 'manager';
+    return v || 'manager';
   }
   // a frontline worker's own caseload: people they own; when trying the lens as a manager, the first adviser's people
   function myPeople() {
     var P = (DB.participants || []), me = (typeof currentUser !== 'undefined' && currentUser && currentUser.id) || null;
     var mine = P.filter(function (p) { return me && p.owner_user_id === me; });
-    if (mine.length) return { who: 'your', list: mine };
+    if (mine.length || (typeof isAdviserRole === 'function' && isAdviserRole())) return { who: 'your', list: mine };
     var names = {}; P.forEach(function (p) { if (p.advisor && p.advisor !== 'Unassigned') names[p.advisor] = (names[p.advisor] || 0) + 1; });
     var top = Object.keys(names).sort(function (a, b) { return names[b] - names[a]; })[0];
     return top ? { who: top + '\u2019s', list: P.filter(function (p) { return p.advisor === top; }) } : { who: 'your', list: [] };
@@ -145,7 +152,7 @@
   };
 
   // ── 1. Morning briefing checks ───────────────────────────────
-  function checks() { return lensChecks(lens()); }
+  function checks() { demoSync(); return lensChecks(lens()); }
   function lensChecks(L) {
     if (L === 'frontline') return frontlineChecks();
     var all = allChecks();
@@ -426,6 +433,7 @@
 
   // ── 3. Funding calendar ───────────────────────────────────────
   function calItems() {
+    demoSync();
     var out = [], t = today(), until = iso(addMonths(new Date(), 13));
     (DB.contracts || []).filter(function (c) { return c.status !== 'closed'; }).forEach(function (c) {
       if ((c.report_every || 'quarter') !== 'off') reportPeriods(c).forEach(function (p) {
@@ -567,6 +575,7 @@
   async function renderBudget() {
     var el = $('ao-bud-body'); if (!el) return;
     if (!S.loaded) await load();
+    demoSync();
     var C = (DB.contracts || []);
     if (!C.length) { el.innerHTML = '<div class="card" style="color:var(--txt3)">Add a contract first, then its budget lines.</div>'; return; }
     if (!budC || !C.some(function (c) { return String(c.id) === String(budC); })) budC = String(C[0].id);
@@ -625,6 +634,7 @@
   async function renderDonations() {
     var el = $('ao-don-body'); if (!el) return;
     if (!S.loaded) await load();
+    demoSync();
     var y = new Date(), fy = (y.getMonth() >= 3 ? y.getFullYear() : y.getFullYear() - 1) + '-04-01';
     var D = S.don.slice().sort(function (a, b) { return String(a.gift_date) < String(b.gift_date) ? 1 : -1; });
     var thisFY = D.filter(function (d) { return String(d.gift_date) >= fy; });
@@ -731,6 +741,7 @@
   function init() {
     if (!on()) return;
     injectPages(); showNav(); askUI(); commsCard(); annualCard(); wrapBriefing();
+    setInterval(function () { var d = $('page-dashboard'); if (d && d.classList.contains('active') && $('ao-checks')) dashLayout(); }, 2000);
     load().then(function () { if ($('page-dashboard') && $('page-dashboard').classList.contains('active')) autoBriefing(); });
     var og = window.go;
     if (typeof og === 'function' && !og._ao) {

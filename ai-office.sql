@@ -188,21 +188,24 @@ alter table public.spend_rules      enable row level security;
 alter table public.budget_lines enable row level security;
 alter table public.budget_spend enable row level security;
 
+-- Access. Money, key dates and company records are for managers (owner, admin, manager) and super admins.
+-- Frontline staff (advisors) can't read or change them, in the app or directly. Same role test as the app (router.js isAdviserRole).
 do $$
 declare t text;
 begin
   foreach t in array array['donations', 'budget_lines', 'budget_spend', 'budget_recurring', 'spend_rules', 'key_dates', 'company_offers', 'company_enquiries'] loop
     execute format('drop policy if exists %I on public.%I', t || '_member_all', t);
+    execute format('drop policy if exists %I on public.%I', t || '_manager_all', t);
     execute format($p$create policy %I on public.%I for all
       using (
-        org_id in (select m.org_id from public.memberships m where m.user_id = auth.uid() and m.status = 'active')
+        org_id in (select m.org_id from public.memberships m where m.user_id = auth.uid() and m.status = 'active' and m.role ~* '(owner|admin|manager)')
         or org_id in (select o.id from public.organisations o where o.owner_id = auth.uid())
         or public.auth_is_super_admin()
       )
       with check (
-        org_id in (select m.org_id from public.memberships m where m.user_id = auth.uid() and m.status = 'active')
+        org_id in (select m.org_id from public.memberships m where m.user_id = auth.uid() and m.status = 'active' and m.role ~* '(owner|admin|manager)')
         or org_id in (select o.id from public.organisations o where o.owner_id = auth.uid())
         or public.auth_is_super_admin()
-      )$p$, t || '_member_all', t);
+      )$p$, t || '_manager_all', t);
   end loop;
 end $$;
